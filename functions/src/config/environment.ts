@@ -1,0 +1,41 @@
+/**
+ * Environment Configuration
+ *
+ * Reads environment variables from Firebase Functions config
+ */
+
+import * as functions from "firebase-functions";
+import {Config} from "../types";
+
+/**
+ * Get application configuration from Firebase Functions config
+ *
+ * @return {Config} Application configuration
+ * @throws {Error} If required configuration is missing
+ */
+export function getConfig(): Config {
+  const config = functions.config();
+
+  // Validate required configurations
+  if (!config.openai?.api_key) {
+    throw new Error("Missing required config: openai.api_key");
+  }
+
+  if (!config.instagram?.account_id) {
+    throw new Error("Missing required config: instagram.account_id");
+  }
+
+  if (!config.instagram?.access_token) {
+    throw new Error("Missing required config: instagram.access_token");
+  }
+
+  return {
+    openai: {
+      apiKey: config.openai.api_key,
+    },
+    instagram: {
+      accountId: config.instagram.account_id,
+      accessToken: config.instagram.access_token,
+    },
+  };
+}
