@@ -1,0 +1,15 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Media queue uploads - herkes okuyabilir, sadece authenticated yazabilir
+    match /media-queue/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null || true; // Development için açık
+    }
+
+    // Temp uploads - geçici dosyalar
+    match /temp/{allPaths=**} {
+      allow read, write: if true; // Development için açık
+    }
+  }
+}

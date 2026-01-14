@@ -5,6 +5,7 @@
  */
 
 import * as functions from "firebase-functions";
+import cors from "cors";
 // Initialize Firebase Admin SDK first
 import "./config/firebase";
 import {REGION, TIMEZONE} from "./config/constants";
@@ -15,9 +16,13 @@ import {
   OpenAIService,
   OpenAIApiError,
   QueueService,
+  UsageService,
 } from "./services";
 import {processNextItem} from "./schedulers";
 import {ProductCategory} from "./types";
+
+// CORS middleware - tüm origin'lere izin ver
+const corsHandler = cors({origin: true});
 
 // Test function - Hello Instagram
 export const helloInstagram = functions
@@ -131,51 +136,53 @@ export const testInstagramPost = testInstagramStory;
  */
 export const validateInstagramToken = functions
   .region(REGION)
-  .https.onRequest(async (request, response) => {
-    try {
-      const config = getConfig();
+  .https.onRequest((request, response) => {
+    corsHandler(request, response, async () => {
+      try {
+        const config = getConfig();
 
-      const instagram = new InstagramService(
-        config.instagram.accountId,
-        config.instagram.accessToken
-      );
+        const instagram = new InstagramService(
+          config.instagram.accountId,
+          config.instagram.accessToken
+        );
 
-      const account = await instagram.validateToken();
+        const account = await instagram.validateToken();
 
-      response.json({
-        success: true,
-        message: "Token is valid!",
-        account: {
-          id: account.id,
-          name: account.name,
-        },
-      });
-    } catch (error) {
-      console.error("[validateInstagramToken] Error:", error);
-
-      if (error instanceof InstagramApiError) {
-        response.status(error.statusCode || 401).json({
-          success: false,
-          error: error.message,
-          errorCode: error.errorCode,
+        response.json({
+          success: true,
+          message: "Token is valid!",
+          account: {
+            id: account.id,
+            name: account.name,
+          },
         });
-        return;
-      }
+      } catch (error) {
+        console.error("[validateInstagramToken] Error:", error);
 
-      if (error instanceof Error && error.message.includes("Missing required")) {
+        if (error instanceof InstagramApiError) {
+          response.status(error.statusCode || 401).json({
+            success: false,
+            error: error.message,
+            errorCode: error.errorCode,
+          });
+          return;
+        }
+
+        if (error instanceof Error && error.message.includes("Missing required")) {
+          response.status(500).json({
+            success: false,
+            error: error.message,
+            hint: "Set config with: firebase functions:config:set instagram.account_id=... instagram.access_token=...",
+          });
+          return;
+        }
+
         response.status(500).json({
           success: false,
-          error: error.message,
-          hint: "Set config with: firebase functions:config:set instagram.account_id=... instagram.access_token=...",
+          error: error instanceof Error ? error.message : "Unknown error",
         });
-        return;
       }
-
-      response.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
+    });
   });
 
 /**
@@ -396,22 +403,52 @@ export const testImageEnhancement = functions
  */
 export const getQueueStats = functions
   .region(REGION)
-  .https.onRequest(async (request, response) => {
-    try {
-      const queue = new QueueService();
-      const stats = await queue.getStats();
+  .https.onRequest((request, response) => {
+    corsHandler(request, response, async () => {
+      try {
+        const queue = new QueueService();
+        const stats = await queue.getStats();
 
-      response.json({
-        success: true,
-        stats: stats,
-      });
-    } catch (error) {
-      console.error("[getQueueStats] Error:", error);
-      response.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
+        response.json({
+          success: true,
+          stats: stats,
+        });
+      } catch (error) {
+        console.error("[getQueueStats] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Get AI Usage Stats
+ * HTTP trigger to view AI API usage and costs
+ */
+export const getUsageStats = functions
+  .region(REGION)
+  .https.onRequest((request, response) => {
+    corsHandler(request, response, async () => {
+      try {
+        const usage = new UsageService();
+        const stats = await usage.getStats();
+        const recentUsage = await usage.getRecentUsage(20);
+
+        response.json({
+          success: true,
+          stats,
+          recent: recentUsage,
+        });
+      } catch (error) {
+        console.error("[getUsageStats] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
   });
 
 /**
@@ -429,52 +466,54 @@ export const getQueueStats = functions
  */
 export const addToQueue = functions
   .region(REGION)
-  .https.onRequest(async (request, response) => {
-    try {
-      if (request.method !== "POST") {
-        response.status(405).json({
-          success: false,
-          error: "Method not allowed. Use POST.",
+  .https.onRequest((request, response) => {
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({
+            success: false,
+            error: "Method not allowed. Use POST.",
+          });
+          return;
+        }
+
+        const {originalUrl, productCategory, productName, caption} = request.body;
+
+        if (!originalUrl) {
+          response.status(400).json({
+            success: false,
+            error: "Missing required field: originalUrl",
+          });
+          return;
+        }
+
+        const queue = new QueueService();
+        const photo = await queue.addToQueue({
+          originalUrl,
+          productCategory: productCategory || "chocolate",
+          productName,
+          caption: caption || "",
+          filename: originalUrl.split("/").pop() || "photo.jpg",
         });
-        return;
-      }
 
-      const {originalUrl, productCategory, productName, caption} = request.body;
-
-      if (!originalUrl) {
-        response.status(400).json({
-          success: false,
-          error: "Missing required field: originalUrl",
+        response.json({
+          success: true,
+          message: "Added to queue",
+          photo: {
+            id: photo.id,
+            originalUrl: photo.originalUrl,
+            productCategory: photo.productCategory,
+            status: photo.status,
+          },
         });
-        return;
+      } catch (error) {
+        console.error("[addToQueue] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
       }
-
-      const queue = new QueueService();
-      const photo = await queue.addToQueue({
-        originalUrl,
-        productCategory: productCategory || "chocolate",
-        productName,
-        caption: caption || "",
-        filename: originalUrl.split("/").pop() || "photo.jpg",
-      });
-
-      response.json({
-        success: true,
-        message: "Added to queue",
-        photo: {
-          id: photo.id,
-          originalUrl: photo.originalUrl,
-          productCategory: photo.productCategory,
-          status: photo.status,
-        },
-      });
-    } catch (error) {
-      console.error("[addToQueue] Error:", error);
-      response.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
+    });
   });
 
 /**
@@ -483,30 +522,32 @@ export const addToQueue = functions
  */
 export const getPendingItems = functions
   .region(REGION)
-  .https.onRequest(async (request, response) => {
-    try {
-      const queue = new QueueService();
-      const items = await queue.getAllPending();
+  .https.onRequest((request, response) => {
+    corsHandler(request, response, async () => {
+      try {
+        const queue = new QueueService();
+        const items = await queue.getAllPending();
 
-      response.json({
-        success: true,
-        count: items.length,
-        items: items.map((item) => ({
-          id: item.id,
-          originalUrl: item.originalUrl,
-          productCategory: item.productCategory,
-          productName: item.productName,
-          status: item.status,
-          uploadedAt: new Date(item.uploadedAt).toISOString(),
-        })),
-      });
-    } catch (error) {
-      console.error("[getPendingItems] Error:", error);
-      response.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
+        response.json({
+          success: true,
+          count: items.length,
+          items: items.map((item) => ({
+            id: item.id,
+            originalUrl: item.originalUrl,
+            productCategory: item.productCategory,
+            productName: item.productName,
+            status: item.status,
+            uploadedAt: new Date(item.uploadedAt).toISOString(),
+          })),
+        });
+      } catch (error) {
+        console.error("[getPendingItems] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
   });
 
 /**
@@ -521,52 +562,54 @@ export const getPendingItems = functions
 export const processQueueItem = functions
   .region(REGION)
   .runWith({timeoutSeconds: 300, memory: "512MB"})
-  .https.onRequest(async (request, response) => {
-    try {
-      const skipEnhancement = request.query.skipEnhancement === "true";
-      const itemId = request.query.itemId as string | undefined;
+  .https.onRequest((request, response) => {
+    corsHandler(request, response, async () => {
+      try {
+        const skipEnhancement = request.query.skipEnhancement === "true";
+        const itemId = request.query.itemId as string | undefined;
 
-      console.log("[processQueueItem] Starting...");
-      console.log("[processQueueItem] Skip enhancement:", skipEnhancement);
-      console.log("[processQueueItem] Item ID:", itemId || "next pending");
+        console.log("[processQueueItem] Starting...");
+        console.log("[processQueueItem] Skip enhancement:", skipEnhancement);
+        console.log("[processQueueItem] Item ID:", itemId || "next pending");
 
-      const result = await processNextItem({
-        skipEnhancement,
-        itemId,
-      });
+        const result = await processNextItem({
+          skipEnhancement,
+          itemId,
+        });
 
-      if (result.skipped) {
+        if (result.skipped) {
+          response.json({
+            success: true,
+            skipped: true,
+            reason: result.skipReason,
+          });
+          return;
+        }
+
+        if (!result.success) {
+          response.status(500).json({
+            success: false,
+            error: result.error,
+            itemId: result.itemId,
+          });
+          return;
+        }
+
         response.json({
           success: true,
-          skipped: true,
-          reason: result.skipReason,
+          message: "Story posted successfully!",
+          itemId: result.itemId,
+          storyId: result.storyId,
+          enhanced: !!result.enhancedUrl,
         });
-        return;
-      }
-
-      if (!result.success) {
+      } catch (error) {
+        console.error("[processQueueItem] Error:", error);
         response.status(500).json({
           success: false,
-          error: result.error,
-          itemId: result.itemId,
+          error: error instanceof Error ? error.message : "Unknown error",
         });
-        return;
       }
-
-      response.json({
-        success: true,
-        message: "Story posted successfully!",
-        itemId: result.itemId,
-        storyId: result.storyId,
-        enhanced: !!result.enhancedUrl,
-      });
-    } catch (error) {
-      console.error("[processQueueItem] Error:", error);
-      response.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
+    });
   });
 
 /**
@@ -611,50 +654,52 @@ export const dailyStoryScheduler = functions
  */
 export const healthCheck = functions
   .region(REGION)
-  .https.onRequest(async (request, response) => {
-    const startTime = Date.now();
-    const checks: Record<string, {status: string; message?: string}> = {};
+  .https.onRequest((request, response) => {
+    corsHandler(request, response, async () => {
+      const startTime = Date.now();
+      const checks: Record<string, {status: string; message?: string}> = {};
 
-    // Check Instagram API
-    try {
-      const config = getConfig();
-      const instagram = new InstagramService(
-        config.instagram.accountId,
-        config.instagram.accessToken
-      );
-      await instagram.validateToken();
-      checks.instagram = {status: "ok"};
-    } catch (error) {
-      checks.instagram = {
-        status: "error",
-        message: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
+      // Check Instagram API
+      try {
+        const config = getConfig();
+        const instagram = new InstagramService(
+          config.instagram.accountId,
+          config.instagram.accessToken
+        );
+        await instagram.validateToken();
+        checks.instagram = {status: "ok"};
+      } catch (error) {
+        checks.instagram = {
+          status: "error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
 
-    // Check Queue
-    try {
-      const queue = new QueueService();
-      const stats = await queue.getStats();
-      checks.queue = {
-        status: "ok",
-        message: `${stats.pending} pending, ${stats.completed} completed`,
-      };
-    } catch (error) {
-      checks.queue = {
-        status: "error",
-        message: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
+      // Check Queue
+      try {
+        const queue = new QueueService();
+        const stats = await queue.getStats();
+        checks.queue = {
+          status: "ok",
+          message: `${stats.pending} pending, ${stats.completed} completed`,
+        };
+      } catch (error) {
+        checks.queue = {
+          status: "error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
 
-    // Overall status
-    const allOk = Object.values(checks).every((c) => c.status === "ok");
-    const duration = Date.now() - startTime;
+      // Overall status
+      const allOk = Object.values(checks).every((c) => c.status === "ok");
+      const duration = Date.now() - startTime;
 
-    response.json({
-      status: allOk ? "healthy" : "degraded",
-      timestamp: new Date().toISOString(),
-      duration: `${duration}ms`,
-      checks,
-      version: "1.0.0",
+      response.json({
+        status: allOk ? "healthy" : "degraded",
+        timestamp: new Date().toISOString(),
+        duration: `${duration}ms`,
+        checks,
+        version: "1.0.0",
+      });
     });
   });

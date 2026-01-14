@@ -290,12 +290,12 @@ export class QueueService {
       originalUrl: data.originalUrl || "",
       enhancedUrl: data.enhancedUrl,
       caption: data.caption || "",
-      uploadedAt: data.uploadedAt instanceof Timestamp
-        ? data.uploadedAt.toMillis()
-        : data.uploadedAt || 0,
-      scheduledTime: data.scheduledTime instanceof Timestamp
-        ? data.scheduledTime.toMillis()
-        : data.scheduledTime,
+      uploadedAt: data.uploadedAt instanceof Timestamp ?
+        data.uploadedAt.toMillis() :
+        data.uploadedAt || 0,
+      scheduledTime: data.scheduledTime instanceof Timestamp ?
+        data.scheduledTime.toMillis() :
+        data.scheduledTime,
       processed: data.processed || false,
       status: data.status || "pending",
       igPostId: data.igPostId,

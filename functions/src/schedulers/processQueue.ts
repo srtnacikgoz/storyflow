@@ -11,7 +11,7 @@
  */
 
 import {Photo} from "../types";
-import {QueueService, InstagramService, OpenAIService} from "../services";
+import {QueueService, InstagramService, OpenAIService, UsageService} from "../services";
 import {getConfig} from "../config/environment";
 
 /**
@@ -99,6 +99,7 @@ export async function processNextItem(
         console.log("[Orchestrator] Starting AI enhancement...");
 
         const openai = new OpenAIService(config.openai.apiKey);
+        const usage = new UsageService();
 
         // Analyze original photo
         console.log("[Orchestrator] Step 3a: Vision analysis...");
@@ -106,6 +107,8 @@ export async function processNextItem(
           item.originalUrl,
           item.productCategory
         );
+        // Log Vision API usage
+        await usage.logVisionUsage(item.id);
 
         // Enhance with DALL-E
         console.log("[Orchestrator] Step 3b: DALL-E enhancement...");
@@ -114,6 +117,8 @@ export async function processNextItem(
           item.productCategory,
           item.productName
         );
+        // Log DALL-E usage
+        await usage.logDalleUsage(item.id, "hd");
 
         finalImageUrl = enhanced.url;
         console.log("[Orchestrator] Enhancement complete");

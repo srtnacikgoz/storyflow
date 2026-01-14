@@ -10,3 +10,6 @@ export * from "./openai";
 
 // Firestore Queue Service
 export * from "./queue";
+
+// Usage Tracking Service
+export * from "./usage";
