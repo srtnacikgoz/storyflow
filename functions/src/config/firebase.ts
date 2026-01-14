@@ -10,8 +10,9 @@ admin.initializeApp();
 // Export Firestore database instance
 export const db = admin.firestore();
 
-// Export Firebase Storage instance
-export const storage = admin.storage();
+// Storage: Lazy loading kullanılıyor - startup timeout önlemi
+// processQueue.ts'de getStorage() ile kullanılır
+// export const storage = admin.storage(); -- KULLANILMIYOR
 
 // Export Firebase Admin namespace
 export {admin};

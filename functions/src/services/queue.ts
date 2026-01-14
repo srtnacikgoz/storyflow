@@ -50,6 +50,10 @@ export class QueueService {
       status: "pending",
       productCategory: data.productCategory || "chocolate",
       createdAt: FieldValue.serverTimestamp(),
+      // AI Enhancement alanları
+      aiModel: data.aiModel || "gemini-flash",
+      styleVariant: data.styleVariant || "lifestyle-moments",
+      faithfulness: data.faithfulness ?? 0.7,
     };
 
     // Only add optional fields if they have values
@@ -79,6 +83,10 @@ export class QueueService {
       optimalTime: data.optimalTime,
       dayPreference: data.dayPreference,
       messageType: data.messageType,
+      // AI Enhancement alanları
+      aiModel: (docData.aiModel as Photo["aiModel"]) || "gemini-flash",
+      styleVariant: (docData.styleVariant as Photo["styleVariant"]) || "lifestyle-moments",
+      faithfulness: (docData.faithfulness as number) ?? 0.7,
     };
 
     return photo;
@@ -136,6 +144,25 @@ export class QueueService {
     const snapshot = await this.collection
       .where("status", "==", "pending")
       .orderBy("uploadedAt", "asc")
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...this.mapDocToPhoto(doc.data()),
+    }));
+  }
+
+  /**
+   * Get all completed items (for archive)
+   * Returns completed items sorted by completion date (newest first)
+   * @param {number} limit - Maximum items to return
+   * @return {Promise<Photo[]>} Completed photos
+   */
+  async getCompletedItems(limit: number = 50): Promise<Photo[]> {
+    const snapshot = await this.collection
+      .where("status", "==", "completed")
+      .orderBy("completedAt", "desc")
+      .limit(limit)
       .get();
 
     return snapshot.docs.map((doc) => ({
@@ -255,6 +282,28 @@ export class QueueService {
   }
 
   /**
+   * Update enhancement status
+   * @param {string} id - Document ID
+   * @param {boolean} isEnhanced - Whether AI enhancement was successful
+   * @param {string} error - Error message if enhancement failed
+   * @return {Promise<void>}
+   */
+  async updateEnhancementStatus(
+    id: string,
+    isEnhanced: boolean,
+    error?: string
+  ): Promise<void> {
+    const updateData: Record<string, unknown> = {
+      isEnhanced,
+    };
+    if (error) {
+      updateData.enhancementError = error;
+    }
+    await this.collection.doc(id).update(updateData);
+    console.log("[Queue] Updated enhancement status:", id, isEnhanced);
+  }
+
+  /**
    * Reset failed items to pending
    * @return {Promise<number>} Number of items reset
    */
@@ -308,6 +357,12 @@ export class QueueService {
       dayPreference: data.dayPreference,
       messageType: data.messageType,
       analytics: data.analytics,
+      // AI Enhancement alanları
+      aiModel: data.aiModel || "gemini-flash",
+      styleVariant: data.styleVariant || "lifestyle-moments",
+      faithfulness: data.faithfulness ?? 0.7,
+      isEnhanced: data.isEnhanced,
+      enhancementError: data.enhancementError,
     };
   }
 }

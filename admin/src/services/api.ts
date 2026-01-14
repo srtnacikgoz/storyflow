@@ -3,6 +3,8 @@ import type {
   QueueStats,
   HealthCheckResponse,
   ProductCategory,
+  AIModel,
+  StyleVariant,
   UsageStats,
   UsageRecord,
 } from "../types";
@@ -82,6 +84,9 @@ class ApiService {
     productCategory: ProductCategory;
     productName?: string;
     caption?: string;
+    aiModel: AIModel;
+    styleVariant: StyleVariant;
+    faithfulness: number;
   }): Promise<QueueItem> {
     const response = await this.fetch<{
       success: boolean;
@@ -148,6 +153,44 @@ class ApiService {
       stats: response.stats,
       recent: response.recent,
     };
+  }
+
+  /**
+   * Tamamlanan (paylaşılan) item'lar - Arşiv
+   */
+  async getCompletedItems(limit: number = 50): Promise<{
+    id: string;
+    originalUrl: string;
+    enhancedUrl?: string;
+    productCategory: string;
+    productName?: string;
+    caption: string;
+    aiModel: string;
+    styleVariant: string;
+    faithfulness: number;
+    isEnhanced?: boolean;
+    storyId?: string;
+    uploadedAt: string;
+  }[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      count: number;
+      items: {
+        id: string;
+        originalUrl: string;
+        enhancedUrl?: string;
+        productCategory: string;
+        productName?: string;
+        caption: string;
+        aiModel: string;
+        styleVariant: string;
+        faithfulness: number;
+        isEnhanced?: boolean;
+        storyId?: string;
+        uploadedAt: string;
+      }[];
+    }>(`getCompletedItems?limit=${limit}`);
+    return response.items;
   }
 }
 

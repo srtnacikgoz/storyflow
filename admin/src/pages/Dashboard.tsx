@@ -53,6 +53,30 @@ export default function Dashboard() {
     );
   }
 
+  // Gemini kullanım tipi renkleri
+  const getUsageTypeColor = (type: string) => {
+    switch (type) {
+      case "gemini-flash":
+        return "bg-blue-500";
+      case "gemini-pro":
+        return "bg-amber-500";
+      default:
+        return "bg-gray-400";
+    }
+  };
+
+  // Gemini kullanım tipi label
+  const getUsageTypeLabel = (type: string) => {
+    switch (type) {
+      case "gemini-flash":
+        return "Gemini Flash";
+      case "gemini-pro":
+        return "Gemini Pro";
+      default:
+        return type;
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -127,7 +151,7 @@ export default function Dashboard() {
       {/* AI Kullanım İstatistikleri */}
       {usageStats && (
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">AI Kullanım & Maliyet</h2>
+          <h2 className="text-lg font-semibold mb-4">Gemini AI Kullanım & Maliyet</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {/* Bugün */}
@@ -135,8 +159,8 @@ export default function Dashboard() {
               <h3 className="text-sm font-medium text-gray-600 mb-2">Bugün</h3>
               <p className="text-2xl font-bold text-gray-900">${usageStats.today.total.toFixed(2)}</p>
               <div className="mt-2 space-y-1 text-sm text-gray-500">
-                <p>Vision: {usageStats.today.vision.count} istek</p>
-                <p>DALL-E: {usageStats.today.dalle.count} görsel</p>
+                <p>Gemini: {usageStats.today.gemini.count} görsel</p>
+                <p className="text-xs text-gray-400">(${usageStats.today.gemini.cost.toFixed(2)})</p>
               </div>
             </div>
 
@@ -145,8 +169,8 @@ export default function Dashboard() {
               <h3 className="text-sm font-medium text-gray-600 mb-2">Bu Ay</h3>
               <p className="text-2xl font-bold text-gray-900">${usageStats.thisMonth.total.toFixed(2)}</p>
               <div className="mt-2 space-y-1 text-sm text-gray-500">
-                <p>Vision: {usageStats.thisMonth.vision.count} istek</p>
-                <p>DALL-E: {usageStats.thisMonth.dalle.count} görsel</p>
+                <p>Gemini: {usageStats.thisMonth.gemini.count} görsel</p>
+                <p className="text-xs text-gray-400">(${usageStats.thisMonth.gemini.cost.toFixed(2)})</p>
               </div>
             </div>
 
@@ -155,8 +179,8 @@ export default function Dashboard() {
               <h3 className="text-sm font-medium text-gray-600 mb-2">Toplam</h3>
               <p className="text-2xl font-bold text-gray-900">${usageStats.allTime.total.toFixed(2)}</p>
               <div className="mt-2 space-y-1 text-sm text-gray-500">
-                <p>Vision: {usageStats.allTime.vision.count} istek</p>
-                <p>DALL-E: {usageStats.allTime.dalle.count} görsel</p>
+                <p>Gemini: {usageStats.allTime.gemini.count} görsel</p>
+                <p className="text-xs text-gray-400">(${usageStats.allTime.gemini.cost.toFixed(2)})</p>
               </div>
             </div>
           </div>
@@ -172,9 +196,8 @@ export default function Dashboard() {
                     className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm"
                   >
                     <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${
-                        usage.type === "vision" ? "bg-purple-500" : "bg-pink-500"
-                      }`} />
+                      <span className={`w-2 h-2 rounded-full ${getUsageTypeColor(usage.type)}`} />
+                      <span className="text-gray-500 text-xs">{getUsageTypeLabel(usage.type)}</span>
                       <span className="text-gray-700">{usage.description}</span>
                     </div>
                     <span className="text-gray-500">${usage.cost.toFixed(2)}</span>
@@ -187,7 +210,7 @@ export default function Dashboard() {
           {/* Maliyet Bilgisi */}
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-400">
-              Birim maliyetler: Vision API $0.01/istek, DALL-E 3 HD $0.08/görsel
+              Birim maliyetler: Gemini Flash $0.01/görsel, Gemini Pro $0.04/görsel
             </p>
           </div>
         </div>
@@ -207,7 +230,7 @@ export default function Dashboard() {
             onClick={() => api.processQueueItem({ skipEnhancement: false })}
             className="btn-secondary"
           >
-            Story Paylaş (AI Enhanced)
+            Story Paylaş (Gemini AI)
           </button>
           <button onClick={loadData} className="btn-secondary">
             Yenile

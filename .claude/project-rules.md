@@ -67,6 +67,13 @@ Bir özellik kodlanmadan önce şeması planlanır. Ancak karmaşıklık, ekip �
 - Büyük işler "chunk"lara bölünür
 - Her session başında ilgili dökümanlar okunur
 
+### ⚠️ KRİTİK KURAL: Plan Dışına Çıkma Yasağı
+**Claude, planlanan dışında herhangi bir şeyi kendi kararıyla uygulayamaz.**
+- Plan dosyasında belirtilen model, API veya yaklaşım değiştirilemez
+- Eğer plandaki bir şey mümkün görünmüyorsa, ÖNCE kullanıcıya danışılmalı
+- "Bu çalışmıyor, ben şunu kullanayım" gibi kararlar YASAKTIR
+- Herhangi bir belirsizlik durumunda kullanıcıya sorulmalı
+
 ### Hafıza Yönetimi
 Her session başında şu dosyalar kontrol edilir:
 - `hedefler.md` - Proje hedefleri ve durum

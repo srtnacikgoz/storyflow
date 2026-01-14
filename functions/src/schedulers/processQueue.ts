@@ -4,15 +4,25 @@
  *
  * Main workflow:
  * 1. Get next pending item from queue
- * 2. (Optional) Analyze with Vision API
- * 3. (Optional) Enhance with DALL-E 3
- * 4. Post to Instagram as Story
- * 5. Update queue status
+ * 2. (Optional) Enhance with Gemini img2img
+ * 3. Post to Instagram as Story
+ * 4. Update queue status
  */
 
 import {Photo} from "../types";
-import {QueueService, InstagramService, OpenAIService, UsageService} from "../services";
+import {QueueService, InstagramService, UsageService} from "../services";
+// GeminiService: Dynamic import - startup timeout önlemi
+// import {GeminiService} from "../services/gemini"; -- KULLANILMIYOR
 import {getConfig} from "../config/environment";
+import {buildPrompt} from "../prompts";
+import {getStorage} from "firebase-admin/storage";
+// Node 20+ built-in fetch kullanılıyor - node-fetch'e gerek yok
+
+// Gemini lazy loader - sadece kullanıldığında yüklenir
+async function getGeminiService() {
+  const {GeminiService} = await import("../services/gemini");
+  return GeminiService;
+}
 
 /**
  * Process options
@@ -93,42 +103,104 @@ export async function processNextItem(
 
     // Step 3: Determine final image URL
     let finalImageUrl = item.originalUrl;
+    let isEnhanced = false;
+    let enhancementError: string | undefined;
 
-    if (!options.skipEnhancement && item.productCategory) {
+    // AI enhancement logic
+    const shouldEnhance = !options.skipEnhancement && item.aiModel !== "none";
+
+    if (shouldEnhance) {
       try {
-        console.log("[Orchestrator] Starting AI enhancement...");
+        console.log("[Orchestrator] Starting Gemini enhancement...");
+        console.log("[Orchestrator] Model:", item.aiModel);
+        console.log("[Orchestrator] Style:", item.styleVariant);
+        console.log("[Orchestrator] Faithfulness:", item.faithfulness);
 
-        const openai = new OpenAIService(config.openai.apiKey);
+        // Model seçimi: gemini-flash → gemini-2.5-flash-image, gemini-pro → gemini-3-pro-image-preview
+        const modelMap: Record<string, "gemini-2.5-flash-image" | "gemini-3-pro-image-preview"> = {
+          "gemini-flash": "gemini-2.5-flash-image",
+          "gemini-pro": "gemini-3-pro-image-preview",
+        };
+        const selectedModel = modelMap[item.aiModel] || "gemini-2.5-flash-image";
+
+        // GeminiService'i dynamic import ile yükle (startup timeout önlemi)
+        const GeminiServiceClass = await getGeminiService();
+        const gemini = new GeminiServiceClass({
+          apiKey: config.gemini.apiKey,
+          model: selectedModel,
+        });
+
         const usage = new UsageService();
 
-        // Analyze original photo
-        console.log("[Orchestrator] Step 3a: Vision analysis...");
-        const analysis = await openai.analyzePhoto(
-          item.originalUrl,
-          item.productCategory
-        );
-        // Log Vision API usage
-        await usage.logVisionUsage(item.id);
+        // Download original image
+        console.log("[Orchestrator] Downloading original image...");
+        const imageResponse = await fetch(item.originalUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to download image: ${imageResponse.status}`);
+        }
+        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+        const base64Image = imageBuffer.toString("base64");
 
-        // Enhance with DALL-E
-        console.log("[Orchestrator] Step 3b: DALL-E enhancement...");
-        const enhanced = await openai.enhancePhoto(
-          analysis.analysis,
+        // Determine mime type
+        const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+
+        // Build prompt
+        const {prompt, negativePrompt} = buildPrompt(
           item.productCategory,
+          item.styleVariant,
           item.productName
         );
-        // Log DALL-E usage
-        await usage.logDalleUsage(item.id, "hd");
 
-        finalImageUrl = enhanced.url;
-        console.log("[Orchestrator] Enhancement complete");
-      } catch (enhanceError) {
-        console.error("[Orchestrator] Enhancement failed:", enhanceError);
+        // Transform with Gemini
+        console.log("[Orchestrator] Transforming with Gemini...");
+        const result = await gemini.transformImage(base64Image, contentType, {
+          prompt,
+          negativePrompt,
+          faithfulness: item.faithfulness,
+          aspectRatio: "9:16",
+          // Caption varsa görsele yazı olarak ekle
+          textOverlay: item.caption || undefined,
+        });
+
+        // Upload enhanced image to Firebase Storage
+        console.log("[Orchestrator] Uploading enhanced image...");
+        const bucket = getStorage().bucket();
+        const enhancedPath = `enhanced/${item.id}_${Date.now()}.png`;
+        const file = bucket.file(enhancedPath);
+
+        await file.save(Buffer.from(result.imageBase64, "base64"), {
+          metadata: {
+            contentType: result.mimeType,
+          },
+        });
+
+        // Make file public and get URL
+        await file.makePublic();
+        finalImageUrl = `https://storage.googleapis.com/${bucket.name}/${enhancedPath}`;
+
+        // Log usage - model tipini de gönder
+        const usageModelType = item.aiModel === "gemini-pro" ? "gemini-pro" : "gemini-flash";
+        await usage.logGeminiUsage(item.id, result.cost, usageModelType);
+
+        isEnhanced = true;
+        console.log("[Orchestrator] Gemini enhancement complete");
+      } catch (error) {
+        console.error("[Orchestrator] Gemini enhancement failed:", error);
         console.log("[Orchestrator] Falling back to original image");
+        enhancementError = error instanceof Error ? error.message : "Unknown error";
         // Continue with original image if enhancement fails
       }
     } else {
       console.log("[Orchestrator] Skipping enhancement, using original image");
+    }
+
+    // Update enhancement status in queue
+    if (shouldEnhance) {
+      try {
+        await queue.updateEnhancementStatus(item.id, isEnhanced, enhancementError);
+      } catch (updateError) {
+        console.error("[Orchestrator] Failed to update enhancement status:", updateError);
+      }
     }
 
     // Step 4: Post to Instagram

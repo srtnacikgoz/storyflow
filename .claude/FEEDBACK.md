@@ -48,3 +48,29 @@ Bu dosya proje ile ilgili hataları, geri bildirimleri, iyileştirme önerilerin
 - **Tarih:** 2026-01-14
 - **Açıklama:** Firebase `functions.config()` API Mart 2026'da kaldırılacak. Environment variables için `.env` dosyası veya Secret Manager'a geçiş yapılmalı.
 - **Referans:** https://firebase.google.com/docs/functions/config-env#migrate-to-dotenv
+
+---
+
+## [DECISION-001] Tasarım Kararları ve Gelecek Planları
+- **Kategori:** decision
+- **Tarih:** 2026-01-14
+- **Durum:** documented
+
+### Paylaşım Zamanı (Akıllı Zamanlama)
+- **Mevcut:** Sabit saat (09:00) - Demo amaçlı
+- **Plan:** Araştırmalar sonucu tespit edilen en ideal saatlere göre dinamik zamanlama
+- **Not:** Kısa süre içinde dinamik hale getirilecek
+
+### Caption (Açıklama Metni)
+- **Karar:** AI'ye bırakılmayacak, manuel girilecek
+- **Gerekçe:** İşletme hesabı için tüm paylaşımların kontrollü olması gerekiyor
+- **Risk:** AI caption üretimi işletme için uygunsuz içerik riski taşır
+
+### Tetikleme Mekanizması (Depo/Klasör Mantığı)
+- **Karar:** "Klasöre atınca otomatik paylaş" modeli KULLANILMAYACAK
+- **Gerekçe:** Klasöre atınca paylaşım = direkt Instagram'a atmakla aynı efor
+- **Plan:** Depo mantığı - Görsel havuzu oluşturulacak
+  - Görseller bir depoda (klasör/storage) birikecek
+  - Sıralı şekilde otomatik seçilecek
+  - Belirlenen saatlerde otomatik paylaşılacak
+  - Kullanıcı sadece depoyu doldurur, sistem gerisini halleder

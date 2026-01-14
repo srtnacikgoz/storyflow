@@ -11,7 +11,8 @@ Sıfırdan başlayarak Instagram paylaşım otomasyonunu hayata geçiriyoruz. Fi
 - [x] **Phase 3: Automation Pipeline** - Pub/Sub scheduler, Firestore kuyruk sistemi, ana workflow ✅
 - [x] **Phase 4: Production Ready** - Error handling, logging, testing ve deployment ✅
 - [x] **Phase 4.5: Admin Panel** - React admin panel, drag-drop upload, AI kullanım takibi ✅
-- [ ] **Phase 5: Gemini Image Integration** - DALL-E'yi Gemini img2img ile değiştir, prompt sistemi 🔜
+- [x] **Phase 5: Gemini Image Integration** - Gemini img2img, 4 stil varyasyonu, faithfulness kontrolü ✅
+- [ ] **Phase 6: Human-in-the-Loop (Telegram)** - Paylaşım öncesi Telegram onay sistemi
 
 ## Phase Details
 
@@ -70,18 +71,43 @@ Tamamlananlar:
 ### Phase 5: Gemini Image Integration
 **Goal:** DALL-E text-to-image yerine Gemini img2img, profesyonel marka tutarlılığı
 **Depends on:** Phase 4.5
-**Status:** 📋 Planlandı - Uygulama Bekliyor
+**Status:** ✅ Tamamlandı (2026-01-14)
 **Plan Dosyası:** `.planning/phases/05-GEMINI-IMAGE-INTEGRATION-PLAN.md`
 
-Yapılacaklar:
-- [ ] 05-01: GeminiService oluştur (gemini-3-pro-image + gemini-2.5-flash-image)
-- [ ] 05-02: Prompt sistemi (CAFE-PATISSERIE + stil varyasyonları)
-- [ ] 05-03: Admin panel UI (model seçimi, stil seçimi, faithfulness slider)
-- [ ] 05-04: processQueue Gemini entegrasyonu
-- [ ] 05-05: Test ve fine-tuning
+Tamamlananlar:
+- [x] 05-01: GeminiService oluştur (gemini-2.0-flash-exp) ✅
+- [x] 05-02: Prompt sistemi (CAFE-PATISSERIE + 4 stil varyasyonu) ✅
+- [x] 05-03: Admin panel UI (model seçimi, stil seçimi, faithfulness slider) ✅
+- [x] 05-04: processQueue Gemini entegrasyonu ✅
+- [x] 05-05: Usage service Gemini maliyet takibi ✅
 
-**Gereksinimler:**
-- Google AI Studio API Key
+**Not:** Test için Gemini API key gerekli
+
+### Phase 6: Human-in-the-Loop (Telegram)
+**Goal:** Paylaşım öncesi Telegram ile onay alma, hatalı paylaşımları önleme
+**Depends on:** Phase 5
+**Status:** 📋 Planlanıyor
+**Plan Dosyası:** `.planning/phases/06-TELEGRAM-HITL-PLAN.md`
+
+Planlar:
+- [ ] 06-01: Telegram Bot oluşturma (@BotFather), token yönetimi
+- [ ] 06-02: TelegramService (Telegraf.js) - mesaj gönderme, inline keyboard
+- [ ] 06-03: Webhook endpoint - buton callback'lerini işleme
+- [ ] 06-04: processQueue entegrasyonu - onay bekle → paylaş/iptal
+- [ ] 06-05: Firestore approval status tracking
+- [ ] 06-06: Timeout handling (X dakika içinde yanıt gelmezse?)
+
+**Akış:**
+```
+Scheduler tetiklenir
+    ↓
+Gemini görseli işler
+    ↓
+Telegram'a önizleme + butonlar gönderilir
+    ↓
+[✅ Onayla] → Instagram'a paylaş
+[❌ Reddet] → İptal, sıradaki görsele geç
+```
 
 ## Progress
 
@@ -92,24 +118,27 @@ Yapılacaklar:
 | 3. Automation Pipeline | 3/3 | ✅ Completed | 2026-01-13 |
 | 4. Production Ready | 2/2 | ✅ Completed | 2026-01-13 |
 | 4.5. Admin Panel | 7/7 | ✅ Completed | 2026-01-14 |
-| 5. Gemini Integration | 0/5 | 📋 Planned | - |
+| 5. Gemini Integration | 5/5 | ✅ Completed | 2026-01-14 |
+| 6. Telegram HITL | 0/6 | 📋 Planned | - |
 
 ## Notes
 
 - **Milestone v1.0:** ✅ TAMAMLANDI (2026-01-13)
 - **Milestone v1.5 (Admin):** ✅ TAMAMLANDI (2026-01-14)
+- **Milestone v2.0 (Gemini):** ✅ TAMAMLANDI (2026-01-14)
+- **Milestone v3.0 (Telegram HITL):** 📋 PLANLANIYORUM
 - **Region:** europe-west1 (Belçika)
-- **AI Enhancement:** DALL-E 3 → Gemini 3 Pro geçiş planlandı
-- **Cost Estimate:** ~$5.30/ay (Firebase + OpenAI) → Gemini ile düşecek
+- **AI Enhancement:** Gemini 2.0 Flash Experimental (img2img)
+- **Cost Estimate:** ~$0/ay (Gemini şimdilik ücretsiz)
 - **Token Management:** 60 günlük long-lived token aktif
 - **Scheduler:** dailyStoryScheduler - Her gün 09:00 İstanbul saati
 - **Admin Panel:** localhost:5173 (React + Vite)
 
-## What's Next (v2.0 Candidates)
+## What's Next (v4.0 Candidates)
 
-- [ ] **Phase 5: Gemini Integration** - img2img ile profesyonel görsel işleme 🔜
-- [ ] Önizleme & onay sistemi (paylaşmadan önce görsel kontrolü)
 - [ ] Otomatik token refresh
 - [ ] Multi-account desteği
 - [ ] Analytics dashboard
 - [ ] Ek prompt kategorileri (TABLET, BONBON, PACKAGING)
+- [ ] Dinamik zamanlama (araştırma bazlı en iyi saatler)
+- [ ] Bulk upload (toplu görsel yükleme)

@@ -17,10 +17,6 @@ export function getConfig(): Config {
   const config = functions.config();
 
   // Validate required configurations
-  if (!config.openai?.api_key) {
-    throw new Error("Missing required config: openai.api_key");
-  }
-
   if (!config.instagram?.account_id) {
     throw new Error("Missing required config: instagram.account_id");
   }
@@ -29,13 +25,17 @@ export function getConfig(): Config {
     throw new Error("Missing required config: instagram.access_token");
   }
 
+  if (!config.gemini?.api_key) {
+    throw new Error("Missing required config: gemini.api_key");
+  }
+
   return {
-    openai: {
-      apiKey: config.openai.api_key,
-    },
     instagram: {
       accountId: config.instagram.account_id,
       accessToken: config.instagram.access_token,
+    },
+    gemini: {
+      apiKey: config.gemini.api_key,
     },
   };
 }

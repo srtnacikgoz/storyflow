@@ -13,13 +13,20 @@ import {getConfig} from "./config/environment";
 import {
   InstagramService,
   InstagramApiError,
-  OpenAIService,
-  OpenAIApiError,
   QueueService,
   UsageService,
 } from "./services";
-import {processNextItem} from "./schedulers";
-import {ProductCategory} from "./types";
+// processNextItem: Dynamic import - startup timeout önlemi
+// firebase-admin/storage ve diğer ağır modüller sadece kullanılınca yüklenir
+
+/**
+ * Lazy loader for processNextItem
+ * Startup timeout'unu önlemek için scheduler modülü ilk kullanımda yüklenir
+ */
+async function getProcessNextItem() {
+  const {processNextItem} = await import("./schedulers");
+  return processNextItem;
+}
 
 // CORS middleware - tüm origin'lere izin ver
 const corsHandler = cors({origin: true});
@@ -186,218 +193,6 @@ export const validateInstagramToken = functions
   });
 
 /**
- * Test Vision Analysis
- * HTTP trigger for testing OpenAI Vision API
- *
- * Usage:
- * GET ?imageUrl=https://example.com/photo.jpg&category=chocolate
- *
- * Categories: viennoiserie, coffee, chocolate, small-desserts,
- *             slice-cakes, big-cakes, profiterole, special-orders
- */
-export const testVisionAnalysis = functions
-  .region(REGION)
-  .runWith({timeoutSeconds: 60}) // Vision API can be slow
-  .https.onRequest(async (request, response) => {
-    try {
-      // Get parameters
-      const imageUrl = request.query.imageUrl as string;
-      const category = request.query.category as ProductCategory | undefined;
-
-      if (!imageUrl) {
-        response.status(400).json({
-          success: false,
-          error: "Missing required parameter: imageUrl",
-          usage: "GET ?imageUrl=https://example.com/photo.jpg&category=chocolate",
-          categories: [
-            "viennoiserie", "coffee", "chocolate", "small-desserts",
-            "slice-cakes", "big-cakes", "profiterole", "special-orders",
-          ],
-        });
-        return;
-      }
-
-      // Validate URL format
-      try {
-        new URL(imageUrl);
-      } catch {
-        response.status(400).json({
-          success: false,
-          error: "Invalid imageUrl format. Must be a valid URL.",
-        });
-        return;
-      }
-
-      // Get config
-      const config = getConfig();
-
-      // Create OpenAI service instance
-      const openai = new OpenAIService(config.openai.apiKey);
-
-      // Analyze photo
-      console.log("[testVisionAnalysis] Starting analysis...");
-      const startTime = Date.now();
-      const result = await openai.analyzePhoto(imageUrl, category);
-      const duration = Date.now() - startTime;
-
-      response.json({
-        success: true,
-        message: "Analysis completed!",
-        duration: `${duration}ms`,
-        imageUrl: imageUrl,
-        category: category || "general",
-        analysis: result.analysis,
-        suggestions: result.suggestions,
-      });
-    } catch (error) {
-      console.error("[testVisionAnalysis] Error:", error);
-
-      if (error instanceof OpenAIApiError) {
-        response.status(error.statusCode || 500).json({
-          success: false,
-          error: error.message,
-          errorType: error.errorType,
-        });
-        return;
-      }
-
-      // Config errors (missing API keys)
-      if (error instanceof Error && error.message.includes("Missing required")) {
-        response.status(500).json({
-          success: false,
-          error: error.message,
-          hint: "Set config with: firebase functions:config:set openai.api_key=sk-...",
-        });
-        return;
-      }
-
-      response.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-      });
-    }
-  });
-
-/**
- * Test Image Enhancement (Full Pipeline)
- * HTTP trigger for testing Vision analysis + DALL-E enhancement
- *
- * Usage:
- * GET ?imageUrl=https://example.com/photo.jpg&category=chocolate
- *
- * This runs the full enhancement pipeline:
- * 1. Vision API analyzes the original photo
- * 2. DALL-E 3 generates an enhanced version
- *
- * Cost: ~$0.09 per test (Vision $0.01 + DALL-E $0.08)
- */
-export const testImageEnhancement = functions
-  .region(REGION)
-  .runWith({timeoutSeconds: 120}) // DALL-E can take up to 60s
-  .https.onRequest(async (request, response) => {
-    try {
-      // Get parameters
-      const imageUrl = request.query.imageUrl as string;
-      const category = (request.query.category as ProductCategory) || "chocolate";
-      const productName = request.query.productName as string | undefined;
-
-      if (!imageUrl) {
-        response.status(400).json({
-          success: false,
-          error: "Missing required parameter: imageUrl",
-          usage: "GET ?imageUrl=...&category=chocolate&productName=Optional",
-          categories: [
-            "viennoiserie", "coffee", "chocolate", "small-desserts",
-            "slice-cakes", "big-cakes", "profiterole", "special-orders",
-          ],
-          estimatedCost: "$0.09 per enhancement",
-        });
-        return;
-      }
-
-      // Validate URL format
-      try {
-        new URL(imageUrl);
-      } catch {
-        response.status(400).json({
-          success: false,
-          error: "Invalid imageUrl format. Must be a valid URL.",
-        });
-        return;
-      }
-
-      // Get config
-      const config = getConfig();
-
-      // Create OpenAI service instance
-      const openai = new OpenAIService(config.openai.apiKey);
-
-      // Step 1: Analyze photo with Vision API
-      console.log("[testImageEnhancement] Step 1: Vision analysis...");
-      const analysisStart = Date.now();
-      const analysis = await openai.analyzePhoto(imageUrl, category);
-      const analysisDuration = Date.now() - analysisStart;
-      console.log("[testImageEnhancement] Analysis done:", analysisDuration, "ms");
-
-      // Step 2: Enhance photo with DALL-E 3
-      console.log("[testImageEnhancement] Step 2: DALL-E enhancement...");
-      const enhanceStart = Date.now();
-      const enhanced = await openai.enhancePhoto(
-        analysis.analysis,
-        category,
-        productName
-      );
-      const enhanceDuration = Date.now() - enhanceStart;
-      console.log("[testImageEnhancement] Enhancement done:", enhanceDuration, "ms");
-
-      const totalDuration = analysisDuration + enhanceDuration;
-
-      response.json({
-        success: true,
-        message: "Enhancement pipeline completed!",
-        timing: {
-          analysis: `${analysisDuration}ms`,
-          enhancement: `${enhanceDuration}ms`,
-          total: `${totalDuration}ms`,
-        },
-        original: imageUrl,
-        category: category,
-        productName: productName || null,
-        analysis: analysis.analysis,
-        enhanced: enhanced.url,
-        revisedPrompt: enhanced.revisedPrompt,
-        estimatedCost: "$0.09",
-      });
-    } catch (error) {
-      console.error("[testImageEnhancement] Error:", error);
-
-      if (error instanceof OpenAIApiError) {
-        response.status(error.statusCode || 500).json({
-          success: false,
-          error: error.message,
-          errorType: error.errorType,
-        });
-        return;
-      }
-
-      // Config errors (missing API keys)
-      if (error instanceof Error && error.message.includes("Missing required")) {
-        response.status(500).json({
-          success: false,
-          error: error.message,
-          hint: "Set config: firebase functions:config:set openai.api_key=sk-...",
-        });
-        return;
-      }
-
-      response.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  });
-
-/**
  * Get Queue Stats
  * HTTP trigger to view queue statistics
  */
@@ -461,7 +256,10 @@ export const getUsageStats = functions
  *   "originalUrl": "https://example.com/photo.jpg",
  *   "productCategory": "chocolate",
  *   "productName": "Bitter Çikolata",
- *   "caption": "Optional caption"
+ *   "caption": "Optional caption",
+ *   "aiModel": "gemini-flash",
+ *   "styleVariant": "lifestyle-moments",
+ *   "faithfulness": 0.7
  * }
  */
 export const addToQueue = functions
@@ -477,7 +275,15 @@ export const addToQueue = functions
           return;
         }
 
-        const {originalUrl, productCategory, productName, caption} = request.body;
+        const {
+          originalUrl,
+          productCategory,
+          productName,
+          caption,
+          aiModel,
+          styleVariant,
+          faithfulness,
+        } = request.body;
 
         if (!originalUrl) {
           response.status(400).json({
@@ -494,6 +300,9 @@ export const addToQueue = functions
           productName,
           caption: caption || "",
           filename: originalUrl.split("/").pop() || "photo.jpg",
+          aiModel: aiModel || "gemini-flash",
+          styleVariant: styleVariant || "lifestyle-moments",
+          faithfulness: faithfulness ?? 0.7,
         });
 
         response.json({
@@ -551,6 +360,48 @@ export const getPendingItems = functions
   });
 
 /**
+ * Get Completed Items (Archive)
+ * HTTP trigger to view completed/posted queue items
+ * Shows original, enhanced URLs and captions for verification
+ */
+export const getCompletedItems = functions
+  .region(REGION)
+  .https.onRequest((request, response) => {
+    corsHandler(request, response, async () => {
+      try {
+        const limit = parseInt(request.query.limit as string) || 50;
+        const queue = new QueueService();
+        const items = await queue.getCompletedItems(limit);
+
+        response.json({
+          success: true,
+          count: items.length,
+          items: items.map((item) => ({
+            id: item.id,
+            originalUrl: item.originalUrl,
+            enhancedUrl: item.enhancedUrl,
+            productCategory: item.productCategory,
+            productName: item.productName,
+            caption: item.caption,
+            aiModel: item.aiModel,
+            styleVariant: item.styleVariant,
+            faithfulness: item.faithfulness,
+            isEnhanced: item.isEnhanced,
+            storyId: item.igPostId,
+            uploadedAt: new Date(item.uploadedAt).toISOString(),
+          })),
+        });
+      } catch (error) {
+        console.error("[getCompletedItems] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
  * Process Queue Item (Manual Trigger)
  * HTTP trigger to manually process next item in queue
  *
@@ -572,6 +423,8 @@ export const processQueueItem = functions
         console.log("[processQueueItem] Skip enhancement:", skipEnhancement);
         console.log("[processQueueItem] Item ID:", itemId || "next pending");
 
+        // Lazy load processNextItem
+        const processNextItem = await getProcessNextItem();
         const result = await processNextItem({
           skipEnhancement,
           itemId,
@@ -623,13 +476,15 @@ export const dailyStoryScheduler = functions
   .runWith({timeoutSeconds: 300, memory: "512MB"})
   .pubsub.schedule("0 9 * * *") // Every day at 09:00
   .timeZone(TIMEZONE) // Europe/Istanbul
-  .onRun(async (context) => {
+  .onRun(async () => {
     console.log("[Scheduler] Daily story scheduler triggered");
     console.log("[Scheduler] Time:", new Date().toISOString());
 
     try {
+      // Lazy load processNextItem
+      const processNextItem = await getProcessNextItem();
       const result = await processNextItem({
-        skipEnhancement: true, // Use original images for stories
+        skipEnhancement: false, // AI enhancement açık
       });
 
       if (result.skipped) {

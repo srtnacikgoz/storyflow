@@ -4,6 +4,23 @@
  */
 
 /**
+ * AI Model Types for Image Enhancement
+ * - gemini-flash: Gemini 2.5 Flash Image (hızlı, $0.01/görsel)
+ * - gemini-pro: Gemini 3 Pro Image Preview (kaliteli, $0.04/görsel)
+ * - none: AI işleme yok
+ */
+export type AIModel = "gemini-flash" | "gemini-pro" | "none";
+
+/**
+ * Style Variants for Image Transformation
+ */
+export type StyleVariant =
+  | "pure-minimal"
+  | "lifestyle-moments"
+  | "rustic-warmth"
+  | "french-elegance";
+
+/**
  * Product Categories
  */
 export type ProductCategory =
@@ -66,6 +83,13 @@ export interface Photo {
   productSubType?: string; // "3-ball", "10-ball", "wedding-cake", etc.
   productName?: string; // "Antep Fıstıklı Çikolata", "Frambuazlı Macaron"
 
+  // AI ENHANCEMENT SETTINGS
+  aiModel: AIModel; // "gemini-flash" | "none"
+  styleVariant: StyleVariant; // "pure-minimal" | "lifestyle-moments" | etc.
+  faithfulness: number; // 0.0 - 1.0 (orijinale sadakat)
+  isEnhanced?: boolean; // AI ile işlendi mi?
+  enhancementError?: string; // AI hata mesajı (varsa)
+
   // SMART SCHEDULING
   targetAudience?: TargetAudience;
   optimalTime?: string; // Manuel override (HH:MM format)
@@ -103,31 +127,15 @@ export interface PostAnalytics {
 }
 
 /**
- * OpenAI Vision Response
- */
-export interface OpenAIVisionResponse {
-  analysis: string;
-  suggestions: string;
-}
-
-/**
- * OpenAI Image Response
- */
-export interface OpenAIImageResponse {
-  url: string;
-  revisedPrompt?: string;
-}
-
-/**
  * Application Configuration
  */
 export interface Config {
-  openai: {
-    apiKey: string;
-  };
   instagram: {
     accountId: string;
     accessToken: string;
+  };
+  gemini: {
+    apiKey: string;
   };
 }
 

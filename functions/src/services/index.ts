@@ -5,8 +5,11 @@
 // Instagram Graph API Service
 export * from "./instagram";
 
-// OpenAI API Service (Vision + DALL-E)
-export * from "./openai";
+// Gemini AI Service (img2img)
+// NOT: Gemini burada export EDİLMİYOR!
+// Cloud Functions startup timeout'unu önlemek için
+// Gemini sadece processQueue.ts'de lazy import edilir:
+// import {GeminiService} from "../services/gemini";
 
 // Firestore Queue Service
 export * from "./queue";

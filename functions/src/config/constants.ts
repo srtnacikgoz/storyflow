@@ -8,14 +8,6 @@ import {ScheduleRule} from "../types";
 export const REGION = "europe-west1";
 export const TIMEZONE = "Europe/Istanbul";
 
-// OpenAI Models
-export const OPENAI_MODEL_VISION = "gpt-4o";
-export const OPENAI_MODEL_DALLE = "dall-e-3";
-
-// DALL-E Configuration (Story format: 9:16 aspect ratio)
-export const DALLE_SIZE = "1024x1792"; // Closest to 1080x1920 (9:16)
-export const DALLE_QUALITY = "hd";
-
 /**
  * Product Schedule Rules
  * Akıllı zamanlama: Hangi ürün hangi saatte paylaşılmalı?
@@ -167,68 +159,3 @@ export const MESSAGE_TEMPLATES = {
   ],
 };
 
-/**
- * DALL-E 3 Enhancement Prompts
- * Kategori-spesifik görsel iyileştirme prompt'ları
- */
-export const DALLE_ENHANCEMENT_PROMPTS = {
-  // Base template for all products
-  "base": `Create a professional, high-quality food photography image.
-Enhancement requirements:
-- Premium, luxurious atmosphere
-- Professional studio lighting (soft, warm tones)
-- Rich, vibrant colors that look appetizing
-- Instagram-optimized composition (square format)
-- Editorial food photography style
-- Clean, elegant background
-Style: Gourmet food photography, editorial quality, hedonistic appeal`,
-
-  // Category-specific enhancements
-  "viennoiserie": `Golden, flaky texture clearly visible
-Steam effect suggesting freshly baked warmth
-Morning light ambiance, cozy breakfast setting
-Buttery, crispy layers highlighted
-Rustic wooden surface or marble background`,
-
-  "coffee": `Steam rising from the cup
-Rich crema texture visible on espresso
-Cozy, warm atmosphere
-Soft morning or afternoon light
-Ceramic cup on natural surface`,
-
-  "chocolate": `Glossy, mirror-like finish on chocolates
-Rich, deep cocoa color tones
-Luxury presentation on dark surface
-Subtle reflections showing premium quality
-Elegant arrangement suggesting artisan craft`,
-
-  "small-desserts": `Delicate details and intricate decorations visible
-Vibrant, jewel-like colors
-Elegant plating on white porcelain
-Soft, diffused lighting
-Miniature perfection emphasized`,
-
-  "slice-cakes": `Cross-section clearly showing all layers
-Texture detail of each component visible
-Beautiful plating with sauce drizzle
-Fork nearby suggesting ready to enjoy
-Side angle showing height and layers`,
-
-  "big-cakes": `Impressive full cake presentation
-Decorative details highlighted
-Celebration mood with soft bokeh background
-Dramatic lighting emphasizing grandeur
-Space for viewer imagination`,
-
-  "profiterole": `Cream texture peeking through pastry
-Chocolate sauce drizzle in motion or pooled
-Elegant tower or pyramid arrangement
-Dark chocolate contrast with cream
-Indulgent, rich presentation`,
-
-  "special-orders": `Unique artistic design showcased
-Custom elements highlighted
-Premium quality evident
-Creative composition
-Artistic, one-of-a-kind presentation`,
-};

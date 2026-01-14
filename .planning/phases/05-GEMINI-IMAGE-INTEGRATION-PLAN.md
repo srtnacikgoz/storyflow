@@ -1,7 +1,7 @@
 # Phase 5: Gemini Image Integration Plan
 
 **Tarih:** 2026-01-14
-**Status:** Planlandı - Uygulama Bekliyor
+**Status:** ✅ Tamamlandı
 **Öncelik:** Yüksek
 
 ---
@@ -41,8 +41,10 @@ Orijinal Fotoğraf → Gemini + Prompt → AYNI Ürün + Yeni Stil
 
 | Model | API ID | Fiyat | Kullanım |
 |-------|--------|-------|----------|
-| Gemini 3 Pro Image | `gemini-3-pro-image` | $0.04/görsel | Final kalite |
+| Gemini 3 Pro Image | `gemini-3-pro-image-preview` | $0.04/görsel | Final kalite |
 | Gemini 2.5 Flash Image | `gemini-2.5-flash-image` | $0.01/görsel | Test/günlük |
+
+**Not:** `imageFaithfulness` parametresi API'de mevcut değil, prompt ile kontrol ediliyor.
 
 **Authentication:**
 - Development: Google AI Studio API Key
@@ -870,4 +872,4 @@ firebase functions:config:set gemini.api_key="YOUR_GOOGLE_AI_STUDIO_KEY"
 ---
 
 **Son Güncelleme:** 2026-01-14
-**Durum:** Uygulama Bekliyor
+**Durum:** ✅ Tamamlandı

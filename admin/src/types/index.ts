@@ -12,6 +12,19 @@ export type ProductCategory =
   | "profiterole"
   | "special-orders";
 
+// AI Model seçenekleri
+// - gemini-flash: Gemini 2.5 Flash Image (hızlı, $0.01/görsel)
+// - gemini-pro: Gemini 3 Pro Image Preview (kaliteli, $0.04/görsel)
+// - none: AI işleme yok
+export type AIModel = "gemini-flash" | "gemini-pro" | "none";
+
+// Stil varyantları
+export type StyleVariant =
+  | "pure-minimal"
+  | "lifestyle-moments"
+  | "rustic-warmth"
+  | "french-elegance";
+
 // Kuyruk item'ı
 export interface QueueItem {
   id: string;
@@ -26,6 +39,12 @@ export interface QueueItem {
   publishedAt?: number;
   storyId?: string;
   error?: string;
+  // AI Enhancement alanları
+  aiModel: AIModel;
+  styleVariant: StyleVariant;
+  faithfulness: number;
+  isEnhanced?: boolean;
+  enhancementError?: string;
 }
 
 // Kuyruk istatistikleri
@@ -61,16 +80,19 @@ export interface UsageStats {
   today: {
     vision: { count: number; cost: number };
     dalle: { count: number; cost: number };
+    gemini: { count: number; cost: number };
     total: number;
   };
   thisMonth: {
     vision: { count: number; cost: number };
     dalle: { count: number; cost: number };
+    gemini: { count: number; cost: number };
     total: number;
   };
   allTime: {
     vision: { count: number; cost: number };
     dalle: { count: number; cost: number };
+    gemini: { count: number; cost: number };
     total: number;
   };
 }
@@ -78,7 +100,7 @@ export interface UsageStats {
 // Kullanım kaydı
 export interface UsageRecord {
   id?: string;
-  type: "vision" | "dalle" | "instagram_post";
+  type: "vision" | "dalle" | "instagram_post" | "gemini-flash" | "gemini-pro";
   cost: number;
   description: string;
   itemId?: string;
