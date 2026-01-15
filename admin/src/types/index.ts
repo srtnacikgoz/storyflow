@@ -1,5 +1,8 @@
 // Kuyruk item durumu
-export type QueueStatus = "pending" | "processing" | "completed" | "failed";
+export type QueueStatus = "pending" | "processing" | "scheduled" | "completed" | "failed";
+
+// Zamanlama modu
+export type SchedulingMode = "immediate" | "scheduled" | "optimal";
 
 // Ürün kategorileri
 export type ProductCategory =
@@ -45,12 +48,21 @@ export interface QueueItem {
   faithfulness: number;
   isEnhanced?: boolean;
   enhancementError?: string;
+  // Caption template alanları
+  captionTemplateId?: string;
+  captionTemplateName?: string;
+  captionVariables?: Record<string, string>;
+  // Scheduling alanları
+  schedulingMode: SchedulingMode;
+  scheduledFor?: number; // Timestamp
+  scheduledDayHour?: string; // "2_15" formatı
 }
 
 // Kuyruk istatistikleri
 export interface QueueStats {
   pending: number;
   processing: number;
+  scheduled: number;
   completed: number;
   failed: number;
   total: number;
@@ -106,4 +118,98 @@ export interface UsageRecord {
   itemId?: string;
   timestamp: number;
   date: string;
+}
+
+// ==========================================
+// Caption Template Types
+// ==========================================
+
+// Değişken tipleri
+export type TemplateVariableType = "auto" | "text" | "select";
+
+// Şablon değişkeni
+export interface TemplateVariable {
+  key: string;
+  label: string;
+  type: TemplateVariableType;
+  required: boolean;
+  defaultValue?: string;
+  options?: string[]; // type: "select" için
+  autoSource?: string; // type: "auto" için (Photo field adı)
+}
+
+// Caption şablonu
+export interface CaptionTemplate {
+  id: string;
+  name: string;
+  description: string;
+  categories: (ProductCategory | "all")[];
+  tags: string[];
+  template: string; // "Sade'den {productName}"
+  variables: TemplateVariable[];
+  isActive: boolean;
+  isDefault: boolean;
+  priority: number;
+  createdAt: number;
+  updatedAt: number;
+  usageCount: number;
+}
+
+// Şablon oluşturma/güncelleme input'u
+export type CaptionTemplateInput = Omit<
+  CaptionTemplate,
+  "id" | "createdAt" | "updatedAt" | "usageCount"
+>;
+
+// Render edilmiş caption
+export interface RenderedCaption {
+  templateId: string;
+  templateName: string;
+  caption: string;
+  variables: Record<string, string>;
+}
+
+// ==========================================
+// Best Time to Post Types (Phase 8)
+// ==========================================
+
+// Güven seviyesi
+export type ConfidenceLevel = "low" | "medium" | "high";
+
+// Zaman slot önerisi
+export interface TimeSlotRecommendation {
+  day: string; // "tuesday"
+  dayTr: string; // "Salı"
+  dayIndex: number; // 0-6
+  hour: number; // 14
+  hourFormatted: string; // "14:00"
+  score: number; // 87
+  confidence: ConfidenceLevel;
+  basedOnPosts: number;
+  avgEngagement?: number;
+}
+
+// Heatmap verisi
+export interface TimeHeatmap {
+  [dayIndex: number]: {
+    [hour: number]: number;
+  };
+}
+
+// Best Times API yanıtı
+export interface BestTimesResponse {
+  recommendations: TimeSlotRecommendation[];
+  heatmap: TimeHeatmap;
+  totalPosts: number;
+  dataQuality: ConfidenceLevel;
+  lastUpdated: number;
+}
+
+// Post analytics istatistikleri
+export interface PostAnalyticsStats {
+  totalPosts: number;
+  postsWithEngagement: number;
+  avgEngagementRate: number;
+  mostActiveDay: string;
+  mostActiveHour: number;
 }

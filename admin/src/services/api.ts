@@ -5,8 +5,15 @@ import type {
   ProductCategory,
   AIModel,
   StyleVariant,
+  SchedulingMode,
   UsageStats,
   UsageRecord,
+  CaptionTemplate,
+  CaptionTemplateInput,
+  RenderedCaption,
+  BestTimesResponse,
+  TimeSlotRecommendation,
+  PostAnalyticsStats,
 } from "../types";
 
 // Firebase Functions base URL
@@ -87,6 +94,13 @@ class ApiService {
     aiModel: AIModel;
     styleVariant: StyleVariant;
     faithfulness: number;
+    // Caption template alanları
+    captionTemplateId?: string;
+    captionTemplateName?: string;
+    captionVariables?: Record<string, string>;
+    // Scheduling alanları
+    schedulingMode?: SchedulingMode;
+    scheduledFor?: number; // Timestamp
   }): Promise<QueueItem> {
     const response = await this.fetch<{
       success: boolean;
@@ -99,7 +113,38 @@ class ApiService {
   }
 
   /**
-   * Kuyruk item'ını işle (manuel trigger)
+   * Kuyruk item'ını işle (Telegram onaylı)
+   * Önce Telegram'a gönderir, onay sonrası Instagram'a paylaşır
+   */
+  async processQueueWithApproval(options?: {
+    skipEnhancement?: boolean;
+    itemId?: string;
+  }): Promise<{
+    success: boolean;
+    skipped?: boolean;
+    reason?: string;
+    itemId?: string;
+    message?: string;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.skipEnhancement) {
+      params.append("skipEnhancement", "true");
+    }
+    if (options?.itemId) {
+      params.append("itemId", options.itemId);
+    }
+
+    const queryString = params.toString();
+    const endpoint = queryString
+      ? `processQueueWithApproval?${queryString}`
+      : "processQueueWithApproval";
+
+    return this.fetch(endpoint);
+  }
+
+  /**
+   * Kuyruk item'ını işle (Telegram onaysız - doğrudan paylaş)
+   * @deprecated Telegram onaylı versiyon tercih edilmeli
    */
   async processQueueItem(options?: {
     skipEnhancement?: boolean;
@@ -191,6 +236,201 @@ class ApiService {
       }[];
     }>(`getCompletedItems?limit=${limit}`);
     return response.items;
+  }
+
+  // ==========================================
+  // Queue CRUD Methods
+  // ==========================================
+
+  /**
+   * Kuyruk item'ını ID ile getir
+   */
+  async getQueueItem(id: string): Promise<QueueItem> {
+    const response = await this.fetch<{
+      success: boolean;
+      item: QueueItem;
+    }>(`getQueueItem?id=${id}`);
+    return response.item;
+  }
+
+  /**
+   * Kuyruk item'ını sil
+   */
+  async deleteQueueItem(id: string): Promise<void> {
+    await this.fetch(`deleteQueueItem?id=${id}`, {
+      method: "POST",
+    });
+  }
+
+  /**
+   * Kuyruk item'ını güncelle
+   */
+  async updateQueueItem(
+    id: string,
+    updates: {
+      productName?: string;
+      productCategory?: ProductCategory;
+      caption?: string;
+      aiModel?: AIModel;
+      styleVariant?: StyleVariant;
+      faithfulness?: number;
+      captionTemplateId?: string;
+      captionTemplateName?: string;
+      captionVariables?: Record<string, string>;
+      schedulingMode?: SchedulingMode;
+      scheduledFor?: number;
+      scheduledDayHour?: string;
+    }
+  ): Promise<QueueItem> {
+    const response = await this.fetch<{
+      success: boolean;
+      item: QueueItem;
+    }>(`updateQueueItem?id=${id}`, {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+    return response.item;
+  }
+
+  // ==========================================
+  // Caption Template Methods
+  // ==========================================
+
+  /**
+   * Tüm şablonları getir (admin - inactive dahil)
+   */
+  async getTemplates(): Promise<CaptionTemplate[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      count: number;
+      templates: CaptionTemplate[];
+    }>("getTemplates?includeInactive=true");
+    return response.templates;
+  }
+
+  /**
+   * Tek şablon getir
+   */
+  async getTemplate(id: string): Promise<CaptionTemplate> {
+    const response = await this.fetch<{
+      success: boolean;
+      template: CaptionTemplate;
+    }>(`getTemplate?id=${id}`);
+    return response.template;
+  }
+
+  /**
+   * Yeni şablon oluştur
+   */
+  async createTemplate(input: CaptionTemplateInput): Promise<CaptionTemplate> {
+    const response = await this.fetch<{
+      success: boolean;
+      template: CaptionTemplate;
+    }>("createTemplate", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return response.template;
+  }
+
+  /**
+   * Şablon güncelle
+   */
+  async updateTemplate(
+    id: string,
+    updates: Partial<CaptionTemplateInput>
+  ): Promise<CaptionTemplate> {
+    const response = await this.fetch<{
+      success: boolean;
+      template: CaptionTemplate;
+    }>(`updateTemplate?id=${id}`, {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+    return response.template;
+  }
+
+  /**
+   * Şablon sil
+   */
+  async deleteTemplate(id: string): Promise<void> {
+    await this.fetch(`deleteTemplate?id=${id}`, {
+      method: "POST",
+    });
+  }
+
+  /**
+   * Caption önizleme
+   */
+  async previewCaption(
+    templateId: string,
+    values?: Record<string, string>,
+    photoContext?: { productName?: string }
+  ): Promise<RenderedCaption> {
+    const response = await this.fetch<{
+      success: boolean;
+      preview: RenderedCaption;
+    }>("previewCaption", {
+      method: "POST",
+      body: JSON.stringify({ templateId, values, photoContext }),
+    });
+    return response.preview;
+  }
+
+  /**
+   * Varsayılan şablonları seed et
+   */
+  async seedTemplates(): Promise<number> {
+    const response = await this.fetch<{
+      success: boolean;
+      created: number;
+    }>("seedTemplates", {
+      method: "POST",
+    });
+    return response.created;
+  }
+
+  // ==========================================
+  // Best Time to Post Methods (Phase 8)
+  // ==========================================
+
+  /**
+   * En iyi paylaşım zamanlarını getir
+   */
+  async getBestTimes(count: number = 5): Promise<BestTimesResponse> {
+    const response = await this.fetch<{
+      success: boolean;
+    } & BestTimesResponse>(`getBestTimes?count=${count}`);
+    return {
+      recommendations: response.recommendations,
+      heatmap: response.heatmap,
+      totalPosts: response.totalPosts,
+      dataQuality: response.dataQuality,
+      lastUpdated: response.lastUpdated,
+    };
+  }
+
+  /**
+   * Bugün için en iyi zamanı getir
+   */
+  async getBestTimeToday(): Promise<TimeSlotRecommendation | null> {
+    const response = await this.fetch<{
+      success: boolean;
+      recommendation: TimeSlotRecommendation | null;
+      message?: string;
+    }>("getBestTimeToday");
+    return response.recommendation;
+  }
+
+  /**
+   * Post analytics istatistiklerini getir
+   */
+  async getPostAnalyticsStats(): Promise<PostAnalyticsStats> {
+    const response = await this.fetch<{
+      success: boolean;
+      stats: PostAnalyticsStats;
+    }>("getPostAnalyticsStats");
+    return response.stats;
   }
 }
 

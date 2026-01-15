@@ -12,7 +12,7 @@ Sıfırdan başlayarak Instagram paylaşım otomasyonunu hayata geçiriyoruz. Fi
 - [x] **Phase 4: Production Ready** - Error handling, logging, testing ve deployment ✅
 - [x] **Phase 4.5: Admin Panel** - React admin panel, drag-drop upload, AI kullanım takibi ✅
 - [x] **Phase 5: Gemini Image Integration** - Gemini img2img, 4 stil varyasyonu, faithfulness kontrolü ✅
-- [ ] **Phase 6: Human-in-the-Loop (Telegram)** - Paylaşım öncesi Telegram onay sistemi
+- [x] **Phase 6: Human-in-the-Loop (Telegram)** - Paylaşım öncesi Telegram onay sistemi ✅
 
 ## Phase Details
 
@@ -86,16 +86,18 @@ Tamamlananlar:
 ### Phase 6: Human-in-the-Loop (Telegram)
 **Goal:** Paylaşım öncesi Telegram ile onay alma, hatalı paylaşımları önleme
 **Depends on:** Phase 5
-**Status:** 📋 Planlanıyor
+**Status:** ✅ Tamamlandı (2026-01-15)
 **Plan Dosyası:** `.planning/phases/06-TELEGRAM-HITL-PLAN.md`
 
-Planlar:
-- [ ] 06-01: Telegram Bot oluşturma (@BotFather), token yönetimi
-- [ ] 06-02: TelegramService (Telegraf.js) - mesaj gönderme, inline keyboard
-- [ ] 06-03: Webhook endpoint - buton callback'lerini işleme
-- [ ] 06-04: processQueue entegrasyonu - onay bekle → paylaş/iptal
-- [ ] 06-05: Firestore approval status tracking
-- [ ] 06-06: Timeout handling (X dakika içinde yanıt gelmezse?)
+Tamamlananlar:
+- [x] 06-01: Telegram Bot oluşturma (@BotFather), token yönetimi ✅
+- [x] 06-02: TelegramService (Telegraf.js) - mesaj gönderme, inline keyboard ✅
+- [x] 06-03: Webhook endpoint - buton callback'lerini işleme ✅
+- [x] 06-04: processQueue entegrasyonu - onay bekle → paylaş/iptal ✅
+- [x] 06-05: Firestore approval status tracking ✅
+- [x] 06-06: Timeout handling (15 dakika default, otomatik iptal) ✅
+
+**Not:** Telegram bot token ve chat ID gerekli (kurulum talimatları aşağıda)
 
 **Akış:**
 ```
@@ -119,26 +121,77 @@ Telegram'a önizleme + butonlar gönderilir
 | 4. Production Ready | 2/2 | ✅ Completed | 2026-01-13 |
 | 4.5. Admin Panel | 7/7 | ✅ Completed | 2026-01-14 |
 | 5. Gemini Integration | 5/5 | ✅ Completed | 2026-01-14 |
-| 6. Telegram HITL | 0/6 | 📋 Planned | - |
+| 6. Telegram HITL | 6/6 | ✅ Completed | 2026-01-15 |
+| 7. Caption Templates | 7/7 | ✅ Completed | 2026-01-15 |
+| 8. Best Time to Post | 6/6 | ✅ Completed | 2026-01-15 |
 
 ## Notes
 
 - **Milestone v1.0:** ✅ TAMAMLANDI (2026-01-13)
 - **Milestone v1.5 (Admin):** ✅ TAMAMLANDI (2026-01-14)
 - **Milestone v2.0 (Gemini):** ✅ TAMAMLANDI (2026-01-14)
-- **Milestone v3.0 (Telegram HITL):** 📋 PLANLANIYORUM
+- **Milestone v3.0 (Telegram HITL):** ✅ TAMAMLANDI (2026-01-15)
+- **Milestone v4.0 (Caption Templates):** ✅ TAMAMLANDI (2026-01-15)
+- **Milestone v5.0 (Best Time to Post):** ✅ TAMAMLANDI (2026-01-15)
 - **Region:** europe-west1 (Belçika)
 - **AI Enhancement:** Gemini 2.0 Flash Experimental (img2img)
 - **Cost Estimate:** ~$0/ay (Gemini şimdilik ücretsiz)
 - **Token Management:** 60 günlük long-lived token aktif
 - **Scheduler:** dailyStoryScheduler - Her gün 09:00 İstanbul saati
 - **Admin Panel:** localhost:5173 (React + Vite)
+- **Telegram HITL:** Onay sistemi aktif (15 dk timeout)
 
-## What's Next (v4.0 Candidates)
+### Phase 7: Caption Template System
+**Goal:** Önceden tanımlı, güncellenebilir caption şablonları
+**Depends on:** Phase 6
+**Status:** ✅ Tamamlandı (2026-01-15)
+**Plan Dosyası:** `.planning/phases/07-CAPTION-TEMPLATE-SYSTEM-PLAN.md`
 
-- [ ] Otomatik token refresh
-- [ ] Multi-account desteği
-- [ ] Analytics dashboard
-- [ ] Ek prompt kategorileri (TABLET, BONBON, PACKAGING)
-- [ ] Dinamik zamanlama (araştırma bazlı en iyi saatler)
-- [ ] Bulk upload (toplu görsel yükleme)
+Tamamlananlar:
+- [x] 07-01: Types (CaptionTemplate, TemplateVariable) ✅
+- [x] 07-02: CaptionTemplateService (CRUD + render) ✅
+- [x] 07-03: API endpoints (getTemplates, create, update, delete, preview) ✅
+- [x] 07-04: Seed data (8 varsayılan şablon) ✅
+- [x] 07-05: Admin panel Templates sayfası ✅
+- [x] 07-06: Upload flow'a entegrasyon ✅
+- [x] 07-07: Telegram preview güncelleme ✅
+
+**Şablonlar:**
+- Minimal, Sade Klasik, Sade Özel Ürünlerinden
+- Mevsimsel, Yeni Ürün, Malzeme Vurgusu
+- Özel Gün, Emoji Only
+
+### Phase 8: Best Time to Post (Hibrit Sistem)
+**Goal:** Geçmiş paylaşım verilerini analiz ederek optimal zaman önerisi
+**Depends on:** Phase 7
+**Status:** ✅ Tamamlandı (2026-01-15)
+**Plan Dosyası:** `.planning/phases/08-BEST-TIME-TO-POST-PLAN.md`
+
+Tamamlananlar:
+- [x] 08-01: Types & Service Altyapısı ✅
+- [x] 08-02: Analytics Recording (paylaşım sonrası kayıt) ✅
+- [x] 08-03: Scoring Algorithm (hibrit skor hesaplama) ✅
+- [x] 08-04: API Endpoints (getBestTimes, getTimeHeatmap) ✅
+- [x] 08-05: Admin Panel - Best Times Sayfası ✅
+- [x] 08-06: Scheduler Entegrasyonu ✅
+
+**Özellikler:**
+- Default araştırma verisi (Sprout Social, Buffer, Later, Hootsuite)
+- Geçmiş paylaşım engagement analizi
+- Haftalık heatmap görselleştirme
+- Confidence level (veri miktarına göre)
+- Hibrit skor: araştırma verisi + tarihsel engagement (ağırlıklı ortalama)
+
+**Scheduler:** processScheduledPosts - Her 15 dakikada zamanlanmış postları kontrol eder
+
+**Zamanlama Modları:**
+- immediate: Onay sonrası hemen paylaş
+- optimal: Araştırma verilerine göre en iyi saatte paylaş
+- scheduled: Manuel tarih/saat seçimi
+
+## What's Next (v5.0 Candidates)
+
+- [ ] Smart Retry Logic (3 deneme)
+- [ ] Analytics Dashboard
+- [ ] Content Calendar
+- [ ] Docker Support

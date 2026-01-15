@@ -300,3 +300,212 @@ export async function processAllPending(
     results,
   };
 }
+
+// ==========================================
+// TELEGRAM APPROVAL WORKFLOW (Phase 6)
+// ==========================================
+
+/**
+ * Process result for approval workflow
+ */
+export interface ApprovalProcessResult {
+  success: boolean;
+  itemId?: string;
+  enhancedUrl?: string;
+  telegramMessageId?: number;
+  error?: string;
+  skipped?: boolean;
+  skipReason?: string;
+}
+
+/**
+ * Process next item and send to Telegram for approval
+ * Does NOT post to Instagram - that happens after user approval
+ *
+ * @param {ProcessOptions} options - Processing options
+ * @return {Promise<ApprovalProcessResult>} Process result
+ */
+export async function processWithApproval(
+  options: ProcessOptions = {}
+): Promise<ApprovalProcessResult> {
+  const config = getConfig();
+  const queue = new QueueService();
+
+  console.log("[Orchestrator] Starting approval workflow...");
+
+  try {
+    // Step 1: Get item to process
+    let item: Photo | null;
+
+    if (options.itemId) {
+      item = await queue.getById(options.itemId);
+      if (!item) {
+        return {
+          success: false,
+          error: `Item not found: ${options.itemId}`,
+        };
+      }
+      if (item.status !== "pending") {
+        return {
+          success: false,
+          skipped: true,
+          skipReason: `Item status is ${item.status}, not pending`,
+        };
+      }
+    } else {
+      item = await queue.getNextPending();
+    }
+
+    if (!item) {
+      console.log("[Orchestrator] No pending items in queue");
+      return {
+        success: true,
+        skipped: true,
+        skipReason: "No pending items in queue",
+      };
+    }
+
+    console.log("[Orchestrator] Processing item for approval:", item.id);
+    console.log("[Orchestrator] Category:", item.productCategory);
+
+    // Step 2: Mark as processing
+    await queue.markAsProcessing(item.id);
+
+    // Step 3: Determine final image URL (with optional enhancement)
+    let finalImageUrl = item.originalUrl;
+    let isEnhanced = false;
+    let enhancementError: string | undefined;
+
+    const shouldEnhance = !options.skipEnhancement && item.aiModel !== "none";
+
+    if (shouldEnhance) {
+      try {
+        console.log("[Orchestrator] Starting Gemini enhancement...");
+
+        const modelMap: Record<string, "gemini-2.5-flash-image" | "gemini-3-pro-image-preview"> = {
+          "gemini-flash": "gemini-2.5-flash-image",
+          "gemini-pro": "gemini-3-pro-image-preview",
+        };
+        const selectedModel = modelMap[item.aiModel] || "gemini-2.5-flash-image";
+
+        const GeminiServiceClass = await getGeminiService();
+        const gemini = new GeminiServiceClass({
+          apiKey: config.gemini.apiKey,
+          model: selectedModel,
+        });
+
+        const usage = new UsageService();
+
+        // Download original image
+        const imageResponse = await fetch(item.originalUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to download image: ${imageResponse.status}`);
+        }
+        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+        const base64Image = imageBuffer.toString("base64");
+        const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+
+        // Build prompt
+        const {prompt, negativePrompt} = buildPrompt(
+          item.productCategory,
+          item.styleVariant,
+          item.productName
+        );
+
+        // Transform with Gemini
+        console.log("[Orchestrator] Transforming with Gemini...");
+        const result = await gemini.transformImage(base64Image, contentType, {
+          prompt,
+          negativePrompt,
+          faithfulness: item.faithfulness,
+          aspectRatio: "9:16",
+          textOverlay: item.caption || undefined,
+        });
+
+        // Upload enhanced image to Firebase Storage
+        const bucket = getStorage().bucket();
+        const enhancedPath = `enhanced/${item.id}_${Date.now()}.png`;
+        const file = bucket.file(enhancedPath);
+
+        await file.save(Buffer.from(result.imageBase64, "base64"), {
+          metadata: {contentType: result.mimeType},
+        });
+
+        await file.makePublic();
+        finalImageUrl = `https://storage.googleapis.com/${bucket.name}/${enhancedPath}`;
+
+        // Log usage
+        const usageModelType = item.aiModel === "gemini-pro" ? "gemini-pro" : "gemini-flash";
+        await usage.logGeminiUsage(item.id, result.cost, usageModelType);
+
+        isEnhanced = true;
+        console.log("[Orchestrator] Gemini enhancement complete");
+      } catch (error) {
+        console.error("[Orchestrator] Gemini enhancement failed:", error);
+        enhancementError = error instanceof Error ? error.message : "Unknown error";
+        // Continue with original image
+      }
+    }
+
+    // Update enhancement status
+    if (shouldEnhance) {
+      await queue.updateEnhancementStatus(item.id, isEnhanced, enhancementError);
+    }
+
+    // Step 4: Send to Telegram for approval (instead of posting to Instagram)
+    console.log("[Orchestrator] Sending to Telegram for approval...");
+
+    // Lazy import TelegramService
+    const {TelegramService} = await import("../services/telegram");
+    const {getTelegramConfig} = await import("../config/environment");
+
+    const telegramConfig = getTelegramConfig();
+    const telegram = new TelegramService(telegramConfig);
+
+    // Update item with enhanced URL before sending to Telegram
+    const itemForApproval: Photo = {
+      ...item,
+      enhancedUrl: isEnhanced ? finalImageUrl : undefined,
+    };
+
+    const telegramMessageId = await telegram.sendApprovalRequest(
+      itemForApproval,
+      finalImageUrl
+    );
+
+    // Step 5: Mark as awaiting approval
+    await queue.markAsAwaitingApproval(
+      item.id,
+      telegramMessageId,
+      isEnhanced ? finalImageUrl : undefined
+    );
+
+    console.log("[Orchestrator] Sent to Telegram, awaiting approval");
+
+    return {
+      success: true,
+      itemId: item.id,
+      enhancedUrl: isEnhanced ? finalImageUrl : undefined,
+      telegramMessageId,
+    };
+  } catch (error) {
+    console.error("[Orchestrator] Approval workflow failed:", error);
+
+    if (options.itemId) {
+      try {
+        await queue.markAsFailed(
+          options.itemId,
+          error instanceof Error ? error.message : "Unknown error"
+        );
+      } catch (updateError) {
+        console.error("[Orchestrator] Failed to update status:", updateError);
+      }
+    }
+
+    return {
+      success: false,
+      itemId: options.itemId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}

@@ -4,6 +4,8 @@ import Dashboard from "./pages/Dashboard";
 import Queue from "./pages/Queue";
 import AddPhoto from "./pages/AddPhoto";
 import Archive from "./pages/Archive";
+import Templates from "./pages/Templates";
+import BestTimes from "./pages/BestTimes";
 import Settings from "./pages/Settings";
 
 function App() {
@@ -15,6 +17,8 @@ function App() {
           <Route path="queue" element={<Queue />} />
           <Route path="add" element={<AddPhoto />} />
           <Route path="archive" element={<Archive />} />
+          <Route path="templates" element={<Templates />} />
+          <Route path="best-times" element={<BestTimes />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

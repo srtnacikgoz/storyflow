@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "../config/firebase";
 
@@ -12,6 +12,7 @@ export default function ImageUpload({ onUploadComplete, onError }: ImageUploadPr
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [preview, setPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
     // Dosya tipi kontrolü
@@ -83,16 +84,16 @@ export default function ImageUpload({ onUploadComplete, onError }: ImageUploadPr
   };
 
   const handleClick = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        handleFile(file);
-      }
-    };
-    input.click();
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFile(file);
+    }
+    // Input'u sıfırla ki aynı dosya tekrar seçilebilsin
+    e.target.value = "";
   };
 
   const clearPreview = () => {
@@ -102,6 +103,15 @@ export default function ImageUpload({ onUploadComplete, onError }: ImageUploadPr
 
   return (
     <div className="space-y-4">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
+
       {/* Drop Zone */}
       <div
         onClick={!isUploading && !preview ? handleClick : undefined}

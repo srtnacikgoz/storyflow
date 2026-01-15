@@ -150,7 +150,7 @@ export class GeminiService {
         fit: "inside",
         withoutEnlargement: true,
       })
-      .png({ quality: 90 })
+      .png({quality: 90})
       .toBuffer();
   }
 
@@ -227,7 +227,7 @@ CREATIVE MODE (${Math.round(faithfulness * 100)}%):
             data: optimizedBase64,
           },
         },
-        { text: fullPrompt },
+        {text: fullPrompt},
       ]);
 
       const response = result.response;
@@ -277,7 +277,7 @@ CREATIVE MODE (${Math.round(faithfulness * 100)}%):
       // Maliyet hesapla
       const cost = GeminiService.COSTS[this.model] || 0.0;
 
-      console.log(`[GeminiService] Image generated successfully`);
+      console.log("[GeminiService] Image generated successfully");
 
       return {
         imageBase64: inlineData.data,

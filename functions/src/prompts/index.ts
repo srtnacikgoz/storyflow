@@ -3,9 +3,9 @@
  * Kategori ve stil bazlı prompt oluşturma
  */
 
-import { CAFE_PATISSERIE_PROMPT, StyleVariant } from "./cafe-patisserie";
+import {CAFE_PATISSERIE_PROMPT, StyleVariant} from "./cafe-patisserie";
 
-export { StyleVariant } from "./cafe-patisserie";
+export {StyleVariant} from "./cafe-patisserie";
 
 /**
  * Prompt oluşturma sonucu
@@ -20,7 +20,7 @@ export interface PromptResult {
  * @param category - Ürün kategorisi (şimdilik sadece cafe-patisserie)
  * @param style - Stil varyantı
  * @param productName - Ürün adı (opsiyonel)
- * @returns Prompt ve negative prompt
+ * @return Prompt ve negative prompt
  */
 export function buildPrompt(
   category: string,

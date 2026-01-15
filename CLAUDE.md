@@ -41,6 +41,29 @@ Her oturum başında aşağıdaki dosyaları **sırasıyla oku ve uygula**:
 - Tamamlanan ve bekleyen planlar
 - Bağımlılıklar
 
+### 5. Zihinsel Algoritma İnşası (Zorunlu)
+```
+zihinsel-algoritma-inşası.md
+```
+- **Tetikleyici:** `REPO-FIRST`
+- GitHub araştırma metodolojisi
+- Kritik eşikler: Genesis, The Wall, The Void
+- Kalite değerlendirme piramidi
+- Gelişmiş arama sözdizimi
+- Güvenlik kontrol listesi
+
+### 6. Risk ve Dayanıklılık Planı (Zorunlu)
+```
+Risk-ve-Dayanıklılık-Planı.md
+```
+- **Tetikleyici:** `RISK-CHECK`
+- Anti-Fragile yazılım geliştirme
+- Risk değerlendirme matrisi
+- Bağımlılık analizi protokolü
+- Fallback stratejileri (Multi-Provider, Circuit Breaker, Cache-First)
+- Monitoring ve alerting
+- Vendor lock-in azaltma
+
 ---
 
 ## İş Tamamlama Kuralları
@@ -93,25 +116,38 @@ Bir görev veya phase tamamlandığında:
 
 ```
 /
-├── CLAUDE.md              # Bu dosya
+├── CLAUDE.md                         # Bu dosya (ana konfigürasyon)
+├── zihinsel-algoritma-inşası.md      # GitHub araştırma SOP (REPO-FIRST)
+├── Risk-ve-Dayanıklılık-Planı.md     # Anti-Fragile SOP (RISK-CHECK)
 ├── .claude/
-│   ├── project-rules.md   # Detaylı kurallar
-│   ├── kişiselbağlam.md   # İletişim tercihleri
-│   └── FEEDBACK.md        # Bug/improvement takibi
+│   ├── project-rules.md              # Detaylı kurallar
+│   ├── kişiselbağlam.md              # İletişim tercihleri
+│   └── FEEDBACK.md                   # Bug/improvement takibi
 ├── .planning/
-│   ├── ROADMAP.md         # Ana yol haritası
-│   ├── BRIEF.md           # Proje özeti
-│   └── phases/            # Phase planları
-├── functions/             # Firebase Cloud Functions
-└── admin/                 # Admin panel (Frontend)
+│   ├── ROADMAP.md                    # Ana yol haritası
+│   ├── BRIEF.md                      # Proje özeti
+│   └── phases/                       # Phase planları
+├── functions/                        # Firebase Cloud Functions
+└── admin/                            # Admin panel (Frontend)
 ```
 
 ---
 
 ## Hatırlatmalar
 
-1. **Her oturumda** yukarıdaki 4 dosyayı oku
+1. **Her oturumda** yukarıdaki 6 dosyayı oku ve uygula
 2. **Her iş bitiminde** ROADMAP'i güncelle
 3. **Bug bulduğunda** FEEDBACK.md'ye ekle
 4. **Yeni özellik tamamlandığında** checkbox'ı işaretle `[x]`
 5. **Commit atarken** project-rules.md formatına uy
+6. **Yeni konu/teknolojiye başlarken** `REPO-FIRST` protokolünü uygula
+7. **Yeni bağımlılık eklerken** `RISK-CHECK` protokolünü uygula
+
+---
+
+## Tetikleyiciler (SOP)
+
+| Tetikleyici | Dosya | Ne Zaman Kullan? |
+|-------------|-------|------------------|
+| `REPO-FIRST` | zihinsel-algoritma-inşası.md | Yeni konu, tıkanma, derinleşme |
+| `RISK-CHECK` | Risk-ve-Dayanıklılık-Planı.md | Yeni bağımlılık, mimari karar |

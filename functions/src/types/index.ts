@@ -63,6 +63,24 @@ export type DayPreference =
   | "any"; // Her gün uygun
 
 /**
+ * Approval Status for Human-in-the-Loop
+ */
+export type ApprovalStatus =
+  | "none" // Henüz onay istenmedi
+  | "awaiting" // Telegram'da onay bekliyor
+  | "approved" // Kullanıcı onayladı
+  | "rejected" // Kullanıcı reddetti
+  | "timeout"; // Zaman aşımı (otomatik iptal)
+
+/**
+ * Scheduling Mode
+ * - immediate: Telegram onayından sonra hemen paylaş
+ * - scheduled: Belirli bir tarih/saatte paylaş
+ * - optimal: Sistem en iyi zamanı seçsin
+ */
+export type SchedulingMode = "immediate" | "scheduled" | "optimal";
+
+/**
  * Photo/Post Data
  */
 export interface Photo {
@@ -72,9 +90,13 @@ export interface Photo {
   enhancedUrl?: string;
   caption: string;
   uploadedAt: number;
-  scheduledTime?: number;
   processed: boolean;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "pending" | "processing" | "awaiting_approval" | "scheduled" | "completed" | "failed" | "rejected";
+
+  // SCHEDULING (Phase 8)
+  schedulingMode: SchedulingMode; // "immediate" | "scheduled" | "optimal"
+  scheduledFor?: number; // Timestamp - scheduled/optimal modunda paylaşım zamanı
+  scheduledDayHour?: string; // "2_15" formatı (Salı 15:00) - optimal mod için
   igPostId?: string;
   error?: string;
 
@@ -98,6 +120,18 @@ export interface Photo {
 
   // ANALYTICS (Post sonrası dolacak)
   analytics?: PostAnalytics;
+
+  // TELEGRAM APPROVAL (Human-in-the-Loop)
+  approvalStatus?: ApprovalStatus;
+  approvalRequestedAt?: number; // Timestamp
+  approvalRespondedAt?: number; // Timestamp
+  telegramMessageId?: number; // Telegram mesaj ID (düzenleme için)
+  rejectionReason?: string; // Kullanıcı red sebebi yazdıysa
+
+  // CAPTION TEMPLATE (Phase 7)
+  captionTemplateId?: string; // Seçilen şablon ID
+  captionTemplateName?: string; // Şablon adı (log için)
+  captionVariables?: Record<string, string>; // Değişken değerleri
 }
 
 /**
@@ -137,6 +171,20 @@ export interface Config {
   gemini: {
     apiKey: string;
   };
+  telegram?: {
+    botToken: string;
+    chatId: string;
+    approvalTimeout: number; // Dakika cinsinden (default: 15)
+  };
+}
+
+/**
+ * Telegram Config (ayrı export)
+ */
+export interface TelegramConfig {
+  botToken: string;
+  chatId: string;
+  approvalTimeout: number;
 }
 
 /**
@@ -147,4 +195,209 @@ export interface ScheduleRule {
   weekend: string[]; // ["09:00", "09:30"]
   message: string; // Default message template
   targetAudience?: TargetAudience;
+}
+
+// ==========================================
+// CAPTION TEMPLATE SYSTEM (Phase 7)
+// ==========================================
+
+/**
+ * Template Variable Types
+ * - auto: Otomatik doldurulur (Photo field'dan)
+ * - text: Kullanıcı manuel girer
+ * - select: Önceden tanımlı listeden seçer
+ */
+export type TemplateVariableType = "auto" | "text" | "select";
+
+/**
+ * Template Variable Definition
+ * Şablondaki {variable} placeholder'larını tanımlar
+ */
+export interface TemplateVariable {
+  key: string; // "productName", "season", "customNote"
+  label: string; // UI'da gösterilecek etiket
+  type: TemplateVariableType;
+  required: boolean;
+  defaultValue?: string;
+  options?: string[]; // type: "select" için seçenekler
+  autoSource?: string; // type: "auto" için kaynak field (Photo interface'den)
+}
+
+/**
+ * Caption Template
+ * Firestore: caption-templates koleksiyonu
+ */
+export interface CaptionTemplate {
+  id: string;
+
+  // Temel Bilgiler
+  name: string; // "Minimal", "Mevsimsel", "Hikaye"
+  description: string; // Admin için açıklama
+
+  // Kategori & Etiketler
+  categories: (ProductCategory | "all")[]; // Hangi kategorilerde kullanılabilir
+  tags: string[]; // ["seasonal", "launch", "classic"]
+
+  // Template İçeriği
+  template: string; // "Sade'den {productName}\n{seasonalNote}"
+  variables: TemplateVariable[];
+
+  // Ayarlar
+  isActive: boolean; // Aktif/Pasif
+  isDefault: boolean; // Kategori için varsayılan mı?
+  priority: number; // Sıralama (düşük = önce gösterilir)
+
+  // Meta
+  createdAt: number;
+  updatedAt: number;
+  usageCount: number; // Kaç kez kullanıldı (analytics)
+}
+
+/**
+ * Rendered Caption Result
+ * Template + variables birleştirilmiş sonuç
+ */
+export interface RenderedCaption {
+  templateId: string;
+  templateName: string;
+  caption: string; // Final rendered caption
+  variables: Record<string, string>; // Kullanılan değişkenler
+}
+
+/**
+ * Caption Template Input (Create/Update)
+ * id ve meta fieldlar hariç
+ */
+export type CaptionTemplateInput = Omit<
+  CaptionTemplate,
+  "id" | "createdAt" | "updatedAt" | "usageCount"
+>;
+
+// ==========================================
+// BEST TIME TO POST SYSTEM (Phase 8)
+// ==========================================
+
+/**
+ * Day of Week (0 = Pazar, 6 = Cumartesi)
+ */
+export type DayOfWeekIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/**
+ * Day names in Turkish
+ */
+export const DAY_NAMES: Record<DayOfWeekIndex, string> = {
+  0: "Pazar",
+  1: "Pazartesi",
+  2: "Salı",
+  3: "Çarşamba",
+  4: "Perşembe",
+  5: "Cuma",
+  6: "Cumartesi",
+};
+
+/**
+ * Day names in English (for API)
+ */
+export const DAY_NAMES_EN: Record<DayOfWeekIndex, string> = {
+  0: "sunday",
+  1: "monday",
+  2: "tuesday",
+  3: "wednesday",
+  4: "thursday",
+  5: "friday",
+  6: "saturday",
+};
+
+/**
+ * Confidence Level for Recommendations
+ */
+export type ConfidenceLevel = "low" | "medium" | "high";
+
+/**
+ * Post Analytics Record (Firestore: post-analytics)
+ * Her paylaşım için analitik verisi
+ */
+export interface PostAnalyticsRecord {
+  id: string;
+  photoId: string;
+  storyId?: string;
+
+  // Zaman bilgileri
+  postedAt: number; // Timestamp
+  dayOfWeek: DayOfWeekIndex;
+  hourOfDay: number; // 0-23
+
+  // Engagement metrikleri (opsiyonel, sonradan güncellenebilir)
+  impressions?: number;
+  reach?: number;
+  likes?: number;
+  comments?: number;
+  saves?: number;
+  shares?: number;
+
+  // Hesaplanan metrik
+  engagementRate?: number; // (likes + comments + saves) / reach * 100
+
+  // Meta
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
+ * Time Score (Cache: time-scores)
+ * Her gün/saat kombinasyonu için skor
+ */
+export interface TimeScore {
+  id: string; // "day_hour" formatı (örn: "1_14")
+  dayOfWeek: DayOfWeekIndex;
+  hourOfDay: number;
+
+  // Skorlar (0-100)
+  defaultScore: number; // Araştırma verisinden
+  historicalScore: number; // Geçmiş veriden
+  combinedScore: number; // Ağırlıklı ortalama
+
+  // Meta
+  postCount: number; // Bu slot'taki toplam paylaşım
+  avgEngagement: number; // Ortalama engagement rate
+  confidence: ConfidenceLevel;
+  lastCalculated: number; // Timestamp
+}
+
+/**
+ * Time Slot Recommendation
+ * En iyi paylaşım zamanı önerisi
+ */
+export interface TimeSlotRecommendation {
+  day: string; // "tuesday"
+  dayTr: string; // "Salı"
+  dayIndex: DayOfWeekIndex;
+  hour: number; // 14
+  hourFormatted: string; // "14:00"
+  score: number; // 87
+  confidence: ConfidenceLevel;
+  basedOnPosts: number; // Bu slot'taki veri sayısı
+  avgEngagement?: number;
+}
+
+/**
+ * Heatmap Data
+ * Haftalık saat bazlı skor matrisi
+ */
+export interface TimeHeatmap {
+  // day index -> hour -> score
+  [dayIndex: number]: {
+    [hour: number]: number;
+  };
+}
+
+/**
+ * Best Times Response
+ */
+export interface BestTimesResponse {
+  recommendations: TimeSlotRecommendation[];
+  heatmap: TimeHeatmap;
+  totalPosts: number;
+  dataQuality: ConfidenceLevel;
+  lastUpdated: number;
 }

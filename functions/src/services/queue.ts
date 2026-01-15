@@ -63,6 +63,16 @@ export class QueueService {
     if (data.optimalTime) docData.optimalTime = data.optimalTime;
     if (data.dayPreference) docData.dayPreference = data.dayPreference;
     if (data.messageType) docData.messageType = data.messageType;
+    // Caption template alanları
+    if (data.captionTemplateId) docData.captionTemplateId = data.captionTemplateId;
+    if (data.captionTemplateName) {
+      docData.captionTemplateName = data.captionTemplateName;
+    }
+    if (data.captionVariables) docData.captionVariables = data.captionVariables;
+    // Scheduling alanları
+    docData.schedulingMode = data.schedulingMode || "immediate";
+    if (data.scheduledFor) docData.scheduledFor = data.scheduledFor;
+    if (data.scheduledDayHour) docData.scheduledDayHour = data.scheduledDayHour;
 
     const docRef = await this.collection.add(docData);
 
@@ -87,6 +97,14 @@ export class QueueService {
       aiModel: (docData.aiModel as Photo["aiModel"]) || "gemini-flash",
       styleVariant: (docData.styleVariant as Photo["styleVariant"]) || "lifestyle-moments",
       faithfulness: (docData.faithfulness as number) ?? 0.7,
+      // Caption template alanları
+      captionTemplateId: data.captionTemplateId,
+      captionTemplateName: data.captionTemplateName,
+      captionVariables: data.captionVariables,
+      // Scheduling alanları
+      schedulingMode: (docData.schedulingMode as Photo["schedulingMode"]) || "immediate",
+      scheduledFor: data.scheduledFor,
+      scheduledDayHour: data.scheduledDayHour,
     };
 
     return photo;
@@ -250,19 +268,92 @@ export class QueueService {
   }
 
   /**
+   * Update item in queue
+   * Only allows updating pending items
+   * @param {string} id - Document ID
+   * @param {Partial<Photo>} data - Fields to update
+   * @return {Promise<Photo | null>} Updated photo or null if not found
+   */
+  async update(id: string, data: Partial<Photo>): Promise<Photo | null> {
+    const doc = await this.collection.doc(id).get();
+
+    if (!doc.exists) {
+      console.log("[Queue] Update failed - item not found:", id);
+      return null;
+    }
+
+    const currentData = doc.data()!;
+
+    // Sadece pending, failed veya rejected durumundaki öğeler güncellenebilir
+    const editableStatuses = ["pending", "failed", "rejected"];
+    if (!editableStatuses.includes(currentData.status)) {
+      console.log("[Queue] Update failed - item not editable:", id, currentData.status);
+      throw new Error(`Bu öğe düzenlenemez. Mevcut durum: ${currentData.status}`);
+    }
+
+    // Güncellenebilir alanlar
+    const updateData: Record<string, unknown> = {};
+
+    if (data.productName !== undefined) updateData.productName = data.productName;
+    if (data.productCategory !== undefined) {
+      updateData.productCategory = data.productCategory;
+    }
+    if (data.caption !== undefined) updateData.caption = data.caption;
+    if (data.aiModel !== undefined) updateData.aiModel = data.aiModel;
+    if (data.styleVariant !== undefined) updateData.styleVariant = data.styleVariant;
+    if (data.faithfulness !== undefined) updateData.faithfulness = data.faithfulness;
+    if (data.captionTemplateId !== undefined) {
+      updateData.captionTemplateId = data.captionTemplateId;
+    }
+    if (data.captionTemplateName !== undefined) {
+      updateData.captionTemplateName = data.captionTemplateName;
+    }
+    if (data.captionVariables !== undefined) {
+      updateData.captionVariables = data.captionVariables;
+    }
+    if (data.schedulingMode !== undefined) {
+      updateData.schedulingMode = data.schedulingMode;
+    }
+    if (data.scheduledFor !== undefined) updateData.scheduledFor = data.scheduledFor;
+    if (data.scheduledDayHour !== undefined) {
+      updateData.scheduledDayHour = data.scheduledDayHour;
+    }
+
+    // Failed/rejected durumundan pending'e çevir
+    if (currentData.status !== "pending") {
+      updateData.status = "pending";
+      updateData.error = FieldValue.delete();
+    }
+
+    updateData.updatedAt = FieldValue.serverTimestamp();
+
+    await this.collection.doc(id).update(updateData);
+    console.log("[Queue] Updated item:", id);
+
+    // Güncel veriyi döndür
+    const updatedDoc = await this.collection.doc(id).get();
+    return {
+      id: updatedDoc.id,
+      ...this.mapDocToPhoto(updatedDoc.data()!),
+    };
+  }
+
+  /**
    * Get queue statistics
    * @return {Promise<object>} Queue stats
    */
   async getStats(): Promise<{
     pending: number;
     processing: number;
+    scheduled: number;
     completed: number;
     failed: number;
     total: number;
   }> {
-    const [pending, processing, completed, failed] = await Promise.all([
+    const [pending, processing, scheduled, completed, failed] = await Promise.all([
       this.collection.where("status", "==", "pending").count().get(),
       this.collection.where("status", "==", "processing").count().get(),
+      this.collection.where("status", "==", "scheduled").count().get(),
       this.collection.where("status", "==", "completed").count().get(),
       this.collection.where("status", "==", "failed").count().get(),
     ]);
@@ -270,12 +361,13 @@ export class QueueService {
     const stats = {
       pending: pending.data().count,
       processing: processing.data().count,
+      scheduled: scheduled.data().count,
       completed: completed.data().count,
       failed: failed.data().count,
       total: 0,
     };
 
-    stats.total = stats.pending + stats.processing +
+    stats.total = stats.pending + stats.processing + stats.scheduled +
       stats.completed + stats.failed;
 
     return stats;
@@ -326,6 +418,146 @@ export class QueueService {
     return snapshot.size;
   }
 
+  // ==========================================
+  // TELEGRAM APPROVAL METHODS (Phase 6)
+  // ==========================================
+
+  /**
+   * Mark item as awaiting approval
+   * Called after Gemini processing, before sending to Telegram
+   * @param {string} id - Document ID
+   * @param {number} telegramMessageId - Telegram message ID
+   * @param {string} enhancedUrl - Enhanced image URL
+   * @return {Promise<void>}
+   */
+  async markAsAwaitingApproval(
+    id: string,
+    telegramMessageId: number,
+    enhancedUrl?: string
+  ): Promise<void> {
+    const updateData: Record<string, unknown> = {
+      status: "awaiting_approval",
+      approvalStatus: "awaiting",
+      approvalRequestedAt: Date.now(),
+      telegramMessageId: telegramMessageId,
+    };
+
+    // Eğer enhanced URL varsa kaydet
+    if (enhancedUrl) {
+      updateData.enhancedUrl = enhancedUrl;
+    }
+
+    await this.collection.doc(id).update(updateData);
+    console.log("[Queue] Marked as awaiting approval:", id);
+  }
+
+  /**
+   * Mark item as approved
+   * Called when user clicks approve button in Telegram
+   * @param {string} id - Document ID
+   * @return {Promise<void>}
+   */
+  async markAsApproved(id: string): Promise<void> {
+    await this.collection.doc(id).update({
+      approvalStatus: "approved",
+      approvalRespondedAt: Date.now(),
+    });
+    console.log("[Queue] Marked as approved:", id);
+  }
+
+  /**
+   * Mark item as rejected
+   * Called when user clicks reject button in Telegram
+   * @param {string} id - Document ID
+   * @param {string} reason - Optional rejection reason
+   * @return {Promise<void>}
+   */
+  async markAsRejected(id: string, reason?: string): Promise<void> {
+    const updateData: Record<string, unknown> = {
+      status: "rejected",
+      approvalStatus: "rejected",
+      approvalRespondedAt: Date.now(),
+    };
+
+    if (reason) {
+      updateData.rejectionReason = reason;
+    }
+
+    await this.collection.doc(id).update(updateData);
+    console.log("[Queue] Marked as rejected:", id);
+  }
+
+  /**
+   * Mark item for regeneration
+   * Resets to pending so it can be processed again
+   * @param {string} id - Document ID
+   * @return {Promise<void>}
+   */
+  async markForRegeneration(id: string): Promise<void> {
+    await this.collection.doc(id).update({
+      status: "pending",
+      approvalStatus: "none",
+      approvalRequestedAt: FieldValue.delete(),
+      approvalRespondedAt: FieldValue.delete(),
+      telegramMessageId: FieldValue.delete(),
+      enhancedUrl: FieldValue.delete(),
+      isEnhanced: FieldValue.delete(),
+      enhancementError: FieldValue.delete(),
+    });
+    console.log("[Queue] Marked for regeneration:", id);
+  }
+
+  /**
+   * Mark item as timeout
+   * Called when approval timeout is reached
+   * @param {string} id - Document ID
+   * @return {Promise<void>}
+   */
+  async markAsTimeout(id: string): Promise<void> {
+    await this.collection.doc(id).update({
+      status: "rejected",
+      approvalStatus: "timeout",
+      approvalRespondedAt: Date.now(),
+      rejectionReason: "Zaman aşımı - otomatik iptal",
+    });
+    console.log("[Queue] Marked as timeout:", id);
+  }
+
+  /**
+   * Get items awaiting approval
+   * @return {Promise<Photo[]>} Items awaiting approval
+   */
+  async getAwaitingApproval(): Promise<Photo[]> {
+    const snapshot = await this.collection
+      .where("status", "==", "awaiting_approval")
+      .orderBy("approvalRequestedAt", "asc")
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...this.mapDocToPhoto(doc.data()),
+    }));
+  }
+
+  /**
+   * Get timed out items (awaiting approval past timeout)
+   * @param {number} timeoutMinutes - Timeout in minutes
+   * @return {Promise<Photo[]>} Timed out items
+   */
+  async getTimedOutItems(timeoutMinutes: number): Promise<Photo[]> {
+    const timeoutThreshold = Date.now() - (timeoutMinutes * 60 * 1000);
+
+    const snapshot = await this.collection
+      .where("status", "==", "awaiting_approval")
+      .where("approvalRequestedAt", "<", timeoutThreshold)
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...this.mapDocToPhoto(doc.data()),
+    }));
+  }
+
   /**
    * Map Firestore document to Photo type
    * @param {FirebaseFirestore.DocumentData} data - Document data
@@ -342,9 +574,6 @@ export class QueueService {
       uploadedAt: data.uploadedAt instanceof Timestamp ?
         data.uploadedAt.toMillis() :
         data.uploadedAt || 0,
-      scheduledTime: data.scheduledTime instanceof Timestamp ?
-        data.scheduledTime.toMillis() :
-        data.scheduledTime,
       processed: data.processed || false,
       status: data.status || "pending",
       igPostId: data.igPostId,
@@ -363,6 +592,74 @@ export class QueueService {
       faithfulness: data.faithfulness ?? 0.7,
       isEnhanced: data.isEnhanced,
       enhancementError: data.enhancementError,
+      // Telegram approval alanları
+      approvalStatus: data.approvalStatus,
+      approvalRequestedAt: data.approvalRequestedAt,
+      approvalRespondedAt: data.approvalRespondedAt,
+      telegramMessageId: data.telegramMessageId,
+      rejectionReason: data.rejectionReason,
+      // Caption template alanları
+      captionTemplateId: data.captionTemplateId,
+      captionTemplateName: data.captionTemplateName,
+      captionVariables: data.captionVariables,
+      // Scheduling alanları
+      schedulingMode: data.schedulingMode || "immediate",
+      scheduledFor: data.scheduledFor,
+      scheduledDayHour: data.scheduledDayHour,
     };
+  }
+
+  // ==========================================
+  // SCHEDULING METHODS (Phase 8)
+  // ==========================================
+
+  /**
+   * Mark item as scheduled (waiting for scheduled time)
+   * @param {string} id - Document ID
+   * @param {number} scheduledFor - Timestamp when to post
+   * @return {Promise<void>}
+   */
+  async markAsScheduled(id: string, scheduledFor: number): Promise<void> {
+    await this.collection.doc(id).update({
+      status: "scheduled",
+      scheduledFor: scheduledFor,
+    });
+    console.log("[Queue] Marked as scheduled:", id, new Date(scheduledFor).toISOString());
+  }
+
+  /**
+   * Get scheduled posts that are due (scheduledFor <= now)
+   * @return {Promise<Photo[]>} Due scheduled posts
+   */
+  async getDueScheduledPosts(): Promise<Photo[]> {
+    const now = Date.now();
+
+    const snapshot = await this.collection
+      .where("status", "==", "scheduled")
+      .where("scheduledFor", "<=", now)
+      .orderBy("scheduledFor", "asc")
+      .limit(10)
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...this.mapDocToPhoto(doc.data()),
+    }));
+  }
+
+  /**
+   * Get all scheduled posts (for display)
+   * @return {Promise<Photo[]>} All scheduled posts
+   */
+  async getScheduledPosts(): Promise<Photo[]> {
+    const snapshot = await this.collection
+      .where("status", "==", "scheduled")
+      .orderBy("scheduledFor", "asc")
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...this.mapDocToPhoto(doc.data()),
+    }));
   }
 }
