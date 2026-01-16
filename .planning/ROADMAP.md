@@ -126,6 +126,7 @@ Telegram'a önizleme + butonlar gönderilir
 | 8. Best Time to Post | 6/6 | ✅ Completed | 2026-01-15 |
 | 9. Analytics Dashboard | 5/5 | ✅ Completed | 2026-01-16 |
 | 10. Content Calendar | 6/6 | ✅ Completed | 2026-01-16 |
+| 11. Photo Prompt Studio | 5/5 | ✅ Completed | 2026-01-16 |
 
 ## Notes
 
@@ -137,6 +138,7 @@ Telegram'a önizleme + butonlar gönderilir
 - **Milestone v5.0 (Best Time to Post):** ✅ TAMAMLANDI (2026-01-15)
 - **Milestone v5.5 (Analytics Dashboard):** ✅ TAMAMLANDI (2026-01-16)
 - **Milestone v6.0 (Content Calendar):** ✅ TAMAMLANDI (2026-01-16)
+- **Milestone v6.5 (Photo Prompt Studio):** ✅ TAMAMLANDI (2026-01-16)
 - **Region:** europe-west1 (Belçika)
 - **AI Enhancement:** Gemini 2.0 Flash Experimental (img2img)
 - **Cost Estimate:** ~$0/ay (Gemini şimdilik ücretsiz)
@@ -235,6 +237,28 @@ Tamamlananlar:
 - Boş slota tıklayarak pending item seçme
 - Hover'da item detayları
 - Hafta navigasyonu (önceki/sonraki/bugün)
+
+### Phase 11: Photo Prompt Studio Integration
+**Goal:** İki projeyi birleştirerek uçtan uca otomatik görsel içerik üretim sistemi
+**Depends on:** Phase 10
+**Status:** ✅ Tamamlandı (2026-01-16)
+
+Tamamlananlar:
+- [x] 11-01: Types güncelleme (customPrompt, studioAnalysis) ✅
+- [x] 11-02: receivePromptFromStudio API endpoint ✅
+- [x] 11-03: processQueue customPrompt desteği ✅
+- [x] 11-04: Claude Code Skills (4 skill) ✅
+- [x] 11-05: KURALLAR.md entegrasyonu ✅
+
+**Özellikler:**
+- Photo Prompt Studio'dan prompt alma API
+- Custom prompt ve negative prompt desteği
+- Görsel analiz verileri (studioAnalysis)
+- 4 Claude Code Skill: photo-orchestrator, visual-analyzer, prompt-writer, instagram-bridge
+- KURALLAR.md ile nörogastronomi prensipleri
+
+**API Endpoint:** POST /receivePromptFromStudio
+**Auth:** x-api-key header
 
 ## What's Next (v7.0 Candidates)
 

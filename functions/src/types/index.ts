@@ -132,6 +132,14 @@ export interface Photo {
   captionTemplateId?: string; // Seçilen şablon ID
   captionTemplateName?: string; // Şablon adı (log için)
   captionVariables?: Record<string, string>; // Değişken değerleri
+
+  // PHOTO PROMPT STUDIO INTEGRATION (Phase 11)
+  source?: "admin-panel" | "photo-prompt-studio"; // Kaynak sistem
+  customPrompt?: string; // Studio'dan gelen ana prompt
+  customNegativePrompt?: string; // Studio'dan gelen negative prompt
+  promptPlatform?: "gemini" | "dalle" | "midjourney"; // Prompt platformu
+  promptFormat?: "1:1" | "4:5" | "9:16"; // Görsel formatı
+  studioAnalysis?: StudioAnalysis; // Görsel analiz verileri
 }
 
 /**
@@ -195,6 +203,72 @@ export interface ScheduleRule {
   weekend: string[]; // ["09:00", "09:30"]
   message: string; // Default message template
   targetAudience?: TargetAudience;
+}
+
+// ==========================================
+// PHOTO PROMPT STUDIO INTEGRATION (Phase 11)
+// ==========================================
+
+/**
+ * Studio Analysis Data
+ * Photo Prompt Studio'dan gelen görsel analiz verileri
+ */
+export interface StudioAnalysis {
+  productType: string; // "tiramisu", "croissant", "macaron"
+  dominantColors: string[]; // ["#5D4037", "#F5F5DC", "#3E2723"]
+  hasTypography: boolean; // Görsel üzerinde metin var mı?
+  suggestedStyle: string; // "lifestyle-moments", "pure-minimal"
+  suggestedLight?: string; // "SIDE_LIGHT", "BACK_LIGHT"
+  suggestedAction?: string; // "DIP", "CUT", "POUR"
+  container?: {
+    type: string; // "glass", "plate", "box"
+    shape?: string; // "rectangular", "round"
+    material?: string; // "transparent", "ceramic"
+  };
+}
+
+/**
+ * Prompt Studio Request (API endpoint için)
+ */
+export interface PromptStudioRequest {
+  // Görsel bilgisi
+  imageUrl: string;
+
+  // Analiz sonuçları
+  analysis?: StudioAnalysis;
+
+  // Prompt bilgileri
+  prompt: {
+    main: string;
+    negative?: string;
+    platform?: "gemini" | "dalle" | "midjourney";
+    format?: "1:1" | "4:5" | "9:16";
+  };
+
+  // Ayarlar
+  settings?: {
+    category?: ProductCategory;
+    styleVariant?: StyleVariant;
+    faithfulness?: number;
+    captionTemplateId?: string;
+    schedulingMode?: SchedulingMode;
+    scheduledTime?: string; // ISO date string
+  };
+
+  // Meta
+  productName?: string;
+  notes?: string;
+}
+
+/**
+ * Prompt Studio Response
+ */
+export interface PromptStudioResponse {
+  success: boolean;
+  message: string;
+  itemId?: string;
+  status?: string;
+  error?: string;
 }
 
 // ==========================================

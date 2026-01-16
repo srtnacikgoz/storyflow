@@ -144,20 +144,46 @@ export async function processNextItem(
         // Determine mime type
         const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
 
-        // Build prompt
-        const {prompt, negativePrompt} = buildPrompt(
-          item.productCategory,
-          item.styleVariant,
-          item.productName
-        );
+        // Build prompt - Photo Prompt Studio'dan geliyorsa customPrompt kullan
+        let prompt: string;
+        let negativePrompt: string;
+
+        if (item.customPrompt) {
+          // Photo Prompt Studio'dan gelen custom prompt
+          console.log("[Orchestrator] Using custom prompt from Photo Prompt Studio");
+          prompt = item.customPrompt;
+          negativePrompt = item.customNegativePrompt || "";
+        } else {
+          // Varsayılan prompt builder
+          const builtPrompt = buildPrompt(
+            item.productCategory,
+            item.styleVariant,
+            item.productName
+          );
+          prompt = builtPrompt.prompt;
+          negativePrompt = builtPrompt.negativePrompt;
+        }
 
         // Transform with Gemini
         console.log("[Orchestrator] Transforming with Gemini...");
+
+        // Gemini desteklenen aspect ratio'lar: 1:1, 9:16, 16:9, 4:3, 3:4
+        // 4:5 desteklenmiyor, en yakın alternatif 3:4
+        const aspectRatioMap: Record<string, "1:1" | "9:16" | "16:9" | "4:3" | "3:4"> = {
+          "1:1": "1:1",
+          "4:5": "3:4", // Instagram feed -> en yakın alternatif
+          "9:16": "9:16",
+          "16:9": "16:9",
+          "4:3": "4:3",
+          "3:4": "3:4",
+        };
+        const mappedAspectRatio = aspectRatioMap[item.promptFormat || "9:16"] || "9:16";
+
         const result = await gemini.transformImage(base64Image, contentType, {
           prompt,
           negativePrompt,
           faithfulness: item.faithfulness,
-          aspectRatio: "9:16",
+          aspectRatio: mappedAspectRatio,
           // Caption varsa görsele yazı olarak ekle
           textOverlay: item.caption || undefined,
         });
@@ -405,20 +431,46 @@ export async function processWithApproval(
         const base64Image = imageBuffer.toString("base64");
         const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
 
-        // Build prompt
-        const {prompt, negativePrompt} = buildPrompt(
-          item.productCategory,
-          item.styleVariant,
-          item.productName
-        );
+        // Build prompt - Photo Prompt Studio'dan geliyorsa customPrompt kullan
+        let prompt: string;
+        let negativePrompt: string;
+
+        if (item.customPrompt) {
+          // Photo Prompt Studio'dan gelen custom prompt
+          console.log("[Orchestrator] Using custom prompt from Photo Prompt Studio");
+          prompt = item.customPrompt;
+          negativePrompt = item.customNegativePrompt || "";
+        } else {
+          // Varsayılan prompt builder
+          const builtPrompt = buildPrompt(
+            item.productCategory,
+            item.styleVariant,
+            item.productName
+          );
+          prompt = builtPrompt.prompt;
+          negativePrompt = builtPrompt.negativePrompt;
+        }
 
         // Transform with Gemini
         console.log("[Orchestrator] Transforming with Gemini...");
+
+        // Gemini desteklenen aspect ratio'lar: 1:1, 9:16, 16:9, 4:3, 3:4
+        // 4:5 desteklenmiyor, en yakın alternatif 3:4
+        const aspectRatioMap2: Record<string, "1:1" | "9:16" | "16:9" | "4:3" | "3:4"> = {
+          "1:1": "1:1",
+          "4:5": "3:4", // Instagram feed -> en yakın alternatif
+          "9:16": "9:16",
+          "16:9": "16:9",
+          "4:3": "4:3",
+          "3:4": "3:4",
+        };
+        const mappedAspectRatio2 = aspectRatioMap2[item.promptFormat || "9:16"] || "9:16";
+
         const result = await gemini.transformImage(base64Image, contentType, {
           prompt,
           negativePrompt,
           faithfulness: item.faithfulness,
-          aspectRatio: "9:16",
+          aspectRatio: mappedAspectRatio2,
           textOverlay: item.caption || undefined,
         });
 

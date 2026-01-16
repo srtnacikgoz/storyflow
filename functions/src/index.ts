@@ -1738,3 +1738,143 @@ export const getCalendarData = functions
       }
     });
   });
+
+// ==========================================
+// PHOTO PROMPT STUDIO API (Phase 11)
+// ==========================================
+
+// Receive Prompt from Photo Prompt Studio
+export const receivePromptFromStudio = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      // Sadece POST kabul et
+      if (request.method !== "POST") {
+        response.status(405).json({
+          success: false,
+          message: "Method not allowed",
+          error: "Only POST requests are accepted",
+        });
+        return;
+      }
+
+      // API Key kontrolü
+      const apiKey = request.headers["x-api-key"] as string;
+      const validApiKey = process.env.PROMPT_STUDIO_API_KEY ||
+        functions.config().promptstudio?.api_key ||
+        "dev-api-key-change-in-production";
+
+      if (!apiKey || apiKey !== validApiKey) {
+        console.warn("[PromptStudio] Invalid API key attempt");
+        response.status(401).json({
+          success: false,
+          message: "Unauthorized",
+          error: "Invalid or missing API key",
+        });
+        return;
+      }
+
+      try {
+        await initFirebase();
+        const {getFirestore, FieldValue} = await import("firebase-admin/firestore");
+        const db = getFirestore();
+
+        const data = request.body;
+
+        // Zorunlu alan kontrolü
+        if (!data.imageUrl) {
+          response.status(400).json({
+            success: false,
+            message: "Validation error",
+            error: "Missing required field: imageUrl",
+          });
+          return;
+        }
+
+        if (!data.prompt?.main) {
+          response.status(400).json({
+            success: false,
+            message: "Validation error",
+            error: "Missing required field: prompt.main",
+          });
+          return;
+        }
+
+        // Varsayılan değerler
+        const category = data.settings?.category || "small-desserts";
+        const styleVariant = data.settings?.styleVariant || "pure-minimal";
+        const faithfulness = data.settings?.faithfulness ?? 0.7;
+        const schedulingMode = data.settings?.schedulingMode || "optimal";
+
+        const now = Date.now();
+
+        // Dosya adını URL'den çıkar
+        const urlParts = data.imageUrl.split("/");
+        const filename = urlParts[urlParts.length - 1].split("?")[0] || `studio-${now}.jpg`;
+
+        const docData = {
+          // Temel bilgiler
+          filename,
+          originalUrl: data.imageUrl,
+          productName: data.productName || data.analysis?.productType || "Photo Prompt Studio",
+          productCategory: category,
+          caption: "",
+
+          // Photo Prompt Studio özel alanları
+          source: "photo-prompt-studio",
+          customPrompt: data.prompt.main,
+          customNegativePrompt: data.prompt.negative || null,
+          promptPlatform: data.prompt.platform || "gemini",
+          promptFormat: data.prompt.format || "9:16",
+          studioAnalysis: data.analysis || null,
+          notes: data.notes || null,
+
+          // AI ayarları
+          aiModel: "gemini-flash",
+          styleVariant,
+          faithfulness,
+          isEnhanced: false,
+
+          // Caption template
+          captionTemplateId: data.settings?.captionTemplateId || null,
+
+          // Zamanlama
+          schedulingMode,
+          scheduledFor: data.settings?.scheduledTime
+            ? new Date(data.settings.scheduledTime).getTime()
+            : null,
+
+          // Durum
+          status: "pending",
+          processed: false,
+          approvalStatus: "none",
+
+          // Timestamps
+          uploadedAt: now,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        };
+
+        const docRef = await db.collection("media-queue").add(docData);
+
+        console.log(`[PromptStudio] New item added: ${docRef.id}`);
+        console.log(`[PromptStudio] Source: photo-prompt-studio`);
+        console.log(`[PromptStudio] Product: ${docData.productName}`);
+
+        response.status(201).json({
+          success: true,
+          message: "Prompt received and queued successfully",
+          itemId: docRef.id,
+          status: "pending",
+        });
+      } catch (error) {
+        console.error("[PromptStudio] Error:", error);
+        response.status(500).json({
+          success: false,
+          message: "Internal server error",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
