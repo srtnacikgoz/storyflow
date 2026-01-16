@@ -124,6 +124,8 @@ Telegram'a önizleme + butonlar gönderilir
 | 6. Telegram HITL | 6/6 | ✅ Completed | 2026-01-15 |
 | 7. Caption Templates | 7/7 | ✅ Completed | 2026-01-15 |
 | 8. Best Time to Post | 6/6 | ✅ Completed | 2026-01-15 |
+| 9. Analytics Dashboard | 5/5 | ✅ Completed | 2026-01-16 |
+| 10. Content Calendar | 6/6 | ✅ Completed | 2026-01-16 |
 
 ## Notes
 
@@ -133,6 +135,8 @@ Telegram'a önizleme + butonlar gönderilir
 - **Milestone v3.0 (Telegram HITL):** ✅ TAMAMLANDI (2026-01-15)
 - **Milestone v4.0 (Caption Templates):** ✅ TAMAMLANDI (2026-01-15)
 - **Milestone v5.0 (Best Time to Post):** ✅ TAMAMLANDI (2026-01-15)
+- **Milestone v5.5 (Analytics Dashboard):** ✅ TAMAMLANDI (2026-01-16)
+- **Milestone v6.0 (Content Calendar):** ✅ TAMAMLANDI (2026-01-16)
 - **Region:** europe-west1 (Belçika)
 - **AI Enhancement:** Gemini 2.0 Flash Experimental (img2img)
 - **Cost Estimate:** ~$0/ay (Gemini şimdilik ücretsiz)
@@ -189,9 +193,52 @@ Tamamlananlar:
 - optimal: Araştırma verilerine göre en iyi saatte paylaş
 - scheduled: Manuel tarih/saat seçimi
 
-## What's Next (v5.0 Candidates)
+### Phase 9: Analytics Dashboard
+**Goal:** Paylaşım istatistikleri, kategori/model/stil dağılımları, trend grafikleri
+**Depends on:** Phase 8
+**Status:** ✅ Tamamlandı (2026-01-16)
+
+Tamamlananlar:
+- [x] 09-01: Types (AnalyticsSummary, CategoryStats, DailyTrend, vb.) ✅
+- [x] 09-02: AnalyticsService (Firestore aggregations) ✅
+- [x] 09-03: API endpoints (getAnalyticsDashboard, getAnalyticsSummary) ✅
+- [x] 09-04: Admin panel Analytics sayfası ✅
+- [x] 09-05: Date range filter (today, week, month, all) ✅
+
+**Özellikler:**
+- Özet kartlar (toplam paylaşım, haftalık, onay oranı, kuyruk)
+- Günlük trend sparkline (son 30 gün)
+- Kategori dağılımı (pie legend)
+- AI Model kullanımı dağılımı
+- Stil tercihleri dağılımı
+- Şablon kullanım istatistikleri
+- Haftalık gün dağılımı (bar chart)
+- Saatlik dağılım (bar chart)
+
+### Phase 10: Content Calendar
+**Goal:** Takvim görünümünde paylaşımları yönetme, drag-drop zamanlama
+**Depends on:** Phase 9
+**Status:** ✅ Tamamlandı (2026-01-16)
+
+Tamamlananlar:
+- [x] 10-01: Calendar types (CalendarItem, CalendarHeatmap, CalendarData) ✅
+- [x] 10-02: getCalendarData API endpoint ✅
+- [x] 10-03: Calendar.tsx sayfası (haftalık görünüm) ✅
+- [x] 10-04: Heatmap overlay (Best Times skorları) ✅
+- [x] 10-05: Drag-drop rescheduling ✅
+- [x] 10-06: Quick schedule modal ✅
+
+**Özellikler:**
+- Haftalık takvim görünümü (08:00-22:00)
+- Best Times heatmap (yeşil = en iyi zaman)
+- Drag-drop ile item'ı başka güne/saate taşıma
+- Boş slota tıklayarak pending item seçme
+- Hover'da item detayları
+- Hafta navigasyonu (önceki/sonraki/bugün)
+
+## What's Next (v7.0 Candidates)
 
 - [ ] Smart Retry Logic (3 deneme)
-- [ ] Analytics Dashboard
-- [ ] Content Calendar
 - [ ] Docker Support
+- [ ] Multi-Account Support
+- [ ] A/B Testing for Captions

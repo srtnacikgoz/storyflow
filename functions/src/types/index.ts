@@ -401,3 +401,123 @@ export interface BestTimesResponse {
   dataQuality: ConfidenceLevel;
   lastUpdated: number;
 }
+
+// ==========================================
+// ANALYTICS DASHBOARD (Phase 9)
+// ==========================================
+
+/**
+ * Tarih aralığı filtresi
+ */
+export type DateRange = "today" | "week" | "month" | "all";
+
+/**
+ * Genel özet istatistikler
+ */
+export interface AnalyticsSummary {
+  // Paylaşım sayıları
+  totalPosts: number;
+  postsToday: number;
+  postsThisWeek: number;
+  postsThisMonth: number;
+
+  // Ortalamalar
+  avgPostsPerDay: number;
+  avgPostsPerWeek: number;
+
+  // Kuyruk durumu
+  pendingCount: number;
+  scheduledCount: number;
+  failedCount: number;
+
+  // Onay oranları
+  approvedCount: number;
+  rejectedCount: number;
+  timeoutCount: number;
+  approvalRate: number; // 0-100%
+
+  // Son güncelleme
+  lastPostAt?: number;
+  calculatedAt: number;
+}
+
+/**
+ * Kategori bazlı istatistik
+ */
+export interface CategoryStats {
+  category: ProductCategory;
+  categoryLabel: string;
+  count: number;
+  percentage: number;
+}
+
+/**
+ * AI Model kullanım istatistiği
+ */
+export interface AIModelStats {
+  model: AIModel;
+  modelLabel: string;
+  count: number;
+  percentage: number;
+}
+
+/**
+ * Stil kullanım istatistiği
+ */
+export interface StyleStats {
+  style: StyleVariant;
+  styleLabel: string;
+  count: number;
+  percentage: number;
+}
+
+/**
+ * Şablon kullanım istatistiği
+ */
+export interface TemplateStats {
+  templateId: string;
+  templateName: string;
+  count: number;
+  percentage: number;
+}
+
+/**
+ * Günlük paylaşım trendi
+ */
+export interface DailyTrend {
+  date: string; // "2026-01-15"
+  dateLabel: string; // "15 Oca"
+  count: number;
+}
+
+/**
+ * Saatlik dağılım
+ */
+export interface HourlyDistribution {
+  hour: number; // 0-23
+  hourLabel: string; // "09:00"
+  count: number;
+}
+
+/**
+ * Haftalık gün dağılımı
+ */
+export interface DayDistribution {
+  dayIndex: DayOfWeekIndex;
+  dayLabel: string; // "Pazartesi"
+  count: number;
+}
+
+/**
+ * Tam Analytics Response
+ */
+export interface AnalyticsDashboard {
+  summary: AnalyticsSummary;
+  categoryBreakdown: CategoryStats[];
+  aiModelBreakdown: AIModelStats[];
+  styleBreakdown: StyleStats[];
+  templateBreakdown: TemplateStats[];
+  dailyTrend: DailyTrend[];
+  hourlyDistribution: HourlyDistribution[];
+  dayDistribution: DayDistribution[];
+}

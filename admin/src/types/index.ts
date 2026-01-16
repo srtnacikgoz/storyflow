@@ -213,3 +213,127 @@ export interface PostAnalyticsStats {
   mostActiveDay: string;
   mostActiveHour: number;
 }
+
+// ==========================================
+// Analytics Dashboard Types (Phase 9)
+// ==========================================
+
+// Tarih aralığı filtresi
+export type DateRange = "today" | "week" | "month" | "all";
+
+// Genel özet istatistikler
+export interface AnalyticsSummary {
+  totalPosts: number;
+  postsToday: number;
+  postsThisWeek: number;
+  postsThisMonth: number;
+  avgPostsPerDay: number;
+  avgPostsPerWeek: number;
+  pendingCount: number;
+  scheduledCount: number;
+  failedCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  timeoutCount: number;
+  approvalRate: number;
+  lastPostAt?: number;
+  calculatedAt: number;
+}
+
+// Kategori istatistiği
+export interface CategoryStats {
+  category: ProductCategory;
+  categoryLabel: string;
+  count: number;
+  percentage: number;
+}
+
+// AI Model istatistiği
+export interface AIModelStats {
+  model: AIModel;
+  modelLabel: string;
+  count: number;
+  percentage: number;
+}
+
+// Stil istatistiği
+export interface StyleStats {
+  style: StyleVariant;
+  styleLabel: string;
+  count: number;
+  percentage: number;
+}
+
+// Şablon istatistiği
+export interface TemplateStats {
+  templateId: string;
+  templateName: string;
+  count: number;
+  percentage: number;
+}
+
+// Günlük trend
+export interface DailyTrend {
+  date: string;
+  dateLabel: string;
+  count: number;
+}
+
+// Saatlik dağılım
+export interface HourlyDistribution {
+  hour: number;
+  hourLabel: string;
+  count: number;
+}
+
+// Gün dağılımı
+export interface DayDistribution {
+  dayIndex: number;
+  dayLabel: string;
+  count: number;
+}
+
+// Tam dashboard yanıtı
+export interface AnalyticsDashboard {
+  summary: AnalyticsSummary;
+  categoryBreakdown: CategoryStats[];
+  aiModelBreakdown: AIModelStats[];
+  styleBreakdown: StyleStats[];
+  templateBreakdown: TemplateStats[];
+  dailyTrend: DailyTrend[];
+  hourlyDistribution: HourlyDistribution[];
+  dayDistribution: DayDistribution[];
+}
+
+// ==========================================
+// Content Calendar Types (Phase 10)
+// ==========================================
+
+// Takvim görünüm modu
+export type CalendarView = "week" | "month";
+
+// Takvim item'ı (basitleştirilmiş QueueItem)
+export interface CalendarItem {
+  id: string;
+  originalUrl: string;
+  productName?: string;
+  productCategory: ProductCategory;
+  caption: string;
+  scheduledFor?: number;
+  schedulingMode: SchedulingMode;
+  status: QueueStatus;
+}
+
+// Heatmap verisi (gün ve saat bazlı skorlar)
+export interface CalendarHeatmap {
+  [dayIndex: number]: {
+    [hour: number]: number;
+  };
+}
+
+// Calendar API yanıtı
+export interface CalendarData {
+  items: CalendarItem[];
+  pendingItems: CalendarItem[];
+  heatmap: CalendarHeatmap;
+}

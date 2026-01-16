@@ -14,6 +14,10 @@ import type {
   BestTimesResponse,
   TimeSlotRecommendation,
   PostAnalyticsStats,
+  DateRange,
+  AnalyticsDashboard,
+  AnalyticsSummary,
+  CalendarData,
 } from "../types";
 
 // Firebase Functions base URL
@@ -431,6 +435,77 @@ class ApiService {
       stats: PostAnalyticsStats;
     }>("getPostAnalyticsStats");
     return response.stats;
+  }
+
+  // ==========================================
+  // Analytics Dashboard Methods (Phase 9)
+  // ==========================================
+
+  /**
+   * Tam analytics dashboard verisini getir
+   */
+  async getAnalyticsDashboard(range: DateRange = "all"): Promise<AnalyticsDashboard> {
+    const response = await this.fetch<{
+      success: boolean;
+      range: string;
+    } & AnalyticsDashboard>(`getAnalyticsDashboard?range=${range}`);
+    return {
+      summary: response.summary,
+      categoryBreakdown: response.categoryBreakdown,
+      aiModelBreakdown: response.aiModelBreakdown,
+      styleBreakdown: response.styleBreakdown,
+      templateBreakdown: response.templateBreakdown,
+      dailyTrend: response.dailyTrend,
+      hourlyDistribution: response.hourlyDistribution,
+      dayDistribution: response.dayDistribution,
+    };
+  }
+
+  /**
+   * Sadece özet istatistikleri getir
+   */
+  async getAnalyticsSummary(): Promise<AnalyticsSummary> {
+    const response = await this.fetch<{
+      success: boolean;
+      summary: AnalyticsSummary;
+    }>("getAnalyticsSummary");
+    return response.summary;
+  }
+
+  // ==========================================
+  // Content Calendar Methods (Phase 10)
+  // ==========================================
+
+  /**
+   * Takvim verisi getir (zamanlanmış + pending items + heatmap)
+   */
+  async getCalendarData(start?: number, end?: number): Promise<CalendarData> {
+    const params = new URLSearchParams();
+    if (start) params.append("start", start.toString());
+    if (end) params.append("end", end.toString());
+
+    const queryString = params.toString();
+    const endpoint = queryString ? `getCalendarData?${queryString}` : "getCalendarData";
+
+    const response = await this.fetch<{
+      success: boolean;
+    } & CalendarData>(endpoint);
+
+    return {
+      items: response.items,
+      pendingItems: response.pendingItems,
+      heatmap: response.heatmap,
+    };
+  }
+
+  /**
+   * Item'ı yeniden zamanla (drag-drop için)
+   */
+  async rescheduleItem(id: string, scheduledFor: number): Promise<QueueItem> {
+    return this.updateQueueItem(id, {
+      schedulingMode: "scheduled",
+      scheduledFor,
+    });
   }
 }
 

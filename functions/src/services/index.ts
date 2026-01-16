@@ -25,3 +25,9 @@ export * from "./usage";
 
 // Caption Template Service (Phase 7)
 export * from "./captionTemplate";
+
+// Analytics Dashboard Service (Phase 9)
+// NOT: Analytics burada export EDİLMİYOR!
+// Cloud Functions startup timeout'unu önlemek için
+// Analytics sadece ihtiyaç duyulduğunda lazy import edilir:
+// import {AnalyticsService} from "../services/analytics";

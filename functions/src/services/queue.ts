@@ -629,37 +629,77 @@ export class QueueService {
 
   /**
    * Get scheduled posts that are due (scheduledFor <= now)
+   * Hem "scheduled" hem "pending" status'ündeki zamanlanmış item'ları kontrol eder
    * @return {Promise<Photo[]>} Due scheduled posts
    */
   async getDueScheduledPosts(): Promise<Photo[]> {
     const now = Date.now();
 
-    const snapshot = await this.collection
-      .where("status", "==", "scheduled")
-      .where("scheduledFor", "<=", now)
-      .orderBy("scheduledFor", "asc")
-      .limit(10)
-      .get();
+    // Hem scheduled hem pending olanları kontrol et
+    // (çünkü bazı item'lar pending olarak kalabilir)
+    const [scheduledSnapshot, pendingSnapshot] = await Promise.all([
+      this.collection
+        .where("status", "==", "scheduled")
+        .where("scheduledFor", "<=", now)
+        .orderBy("scheduledFor", "asc")
+        .limit(10)
+        .get(),
+      this.collection
+        .where("status", "==", "pending")
+        .where("scheduledFor", "<=", now)
+        .orderBy("scheduledFor", "asc")
+        .limit(10)
+        .get(),
+    ]);
 
-    return snapshot.docs.map((doc) => ({
+    const scheduledPosts = scheduledSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...this.mapDocToPhoto(doc.data()),
     }));
+
+    const pendingPosts = pendingSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...this.mapDocToPhoto(doc.data()),
+    }));
+
+    // Birleştir ve scheduledFor'a göre sırala
+    return [...scheduledPosts, ...pendingPosts]
+      .sort((a, b) => (a.scheduledFor || 0) - (b.scheduledFor || 0))
+      .slice(0, 10);
   }
 
   /**
    * Get all scheduled posts (for display)
+   * scheduledFor değeri olan tüm pending/scheduled item'ları döndürür
    * @return {Promise<Photo[]>} All scheduled posts
    */
   async getScheduledPosts(): Promise<Photo[]> {
-    const snapshot = await this.collection
-      .where("status", "==", "scheduled")
-      .orderBy("scheduledFor", "asc")
-      .get();
+    // Hem scheduled hem pending + scheduledFor olanları çek
+    const [scheduledSnapshot, pendingSnapshot] = await Promise.all([
+      this.collection
+        .where("status", "==", "scheduled")
+        .orderBy("scheduledFor", "asc")
+        .get(),
+      this.collection
+        .where("status", "==", "pending")
+        .orderBy("scheduledFor", "asc")
+        .get(),
+    ]);
 
-    return snapshot.docs.map((doc) => ({
+    const scheduledPosts = scheduledSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...this.mapDocToPhoto(doc.data()),
     }));
+
+    // Sadece scheduledFor değeri olan pending item'ları dahil et
+    const pendingPosts = pendingSnapshot.docs
+      .filter((doc) => doc.data().scheduledFor)
+      .map((doc) => ({
+        id: doc.id,
+        ...this.mapDocToPhoto(doc.data()),
+      }));
+
+    return [...scheduledPosts, ...pendingPosts]
+      .sort((a, b) => (a.scheduledFor || 0) - (b.scheduledFor || 0));
   }
 }

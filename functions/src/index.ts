@@ -1586,3 +1586,155 @@ export const updateEngagementMetrics = functions
       }
     });
   });
+
+// ==========================================
+// ANALYTICS DASHBOARD API (Phase 9)
+// ==========================================
+
+// Lazy load Analytics Service
+const getAnalyticsService = async () => {
+  await initFirebase();
+  const {AnalyticsService} = await import("./services/analytics");
+  return AnalyticsService;
+};
+
+// Get Full Analytics Dashboard
+export const getAnalyticsDashboard = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const range = (request.query.range as string) || "all";
+        const validRanges = ["today", "week", "month", "all"];
+
+        if (!validRanges.includes(range)) {
+          response.status(400).json({
+            success: false,
+            error: `Invalid range. Valid: ${validRanges.join(", ")}`,
+          });
+          return;
+        }
+
+        const AnalyticsService = await getAnalyticsService();
+        const analytics = new AnalyticsService();
+        const dashboard = await analytics.getDashboard(range as "today" | "week" | "month" | "all");
+
+        response.json({
+          success: true,
+          range,
+          ...dashboard,
+        });
+      } catch (error) {
+        console.error("[getAnalyticsDashboard] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+// Get Analytics Summary Only
+export const getAnalyticsSummary = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const AnalyticsService = await getAnalyticsService();
+        const analytics = new AnalyticsService();
+        const summary = await analytics.getSummary();
+
+        response.json({
+          success: true,
+          summary,
+        });
+      } catch (error) {
+        console.error("[getAnalyticsSummary] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+// ==========================================
+// CONTENT CALENDAR API (Phase 10)
+// ==========================================
+
+// Get Calendar Data (scheduled items + pending items + heatmap)
+export const getCalendarData = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        await initFirebase();
+
+        // Query parameters
+        const startParam = request.query.start as string;
+        const endParam = request.query.end as string;
+
+        const startTimestamp = startParam ? parseInt(startParam) : Date.now();
+        const endTimestamp = endParam ?
+          parseInt(endParam) :
+          startTimestamp + (7 * 24 * 60 * 60 * 1000); // Default: 1 hafta
+
+        // Firestore queries
+        const QueueService = await getQueueService();
+        const queueService = new QueueService();
+        const TimeScoreService = await getTimeScoreService();
+        const timeScoreService = new TimeScoreService();
+
+        // Zamanlanmış item'ları çek
+        const allScheduled = await queueService.getScheduledPosts();
+        const scheduledItems = allScheduled.filter((item) => {
+          if (!item.scheduledFor) return false;
+          return item.scheduledFor >= startTimestamp && item.scheduledFor <= endTimestamp;
+        });
+
+        // Pending item'ları çek (quick schedule için)
+        const allPending = await queueService.getAllPending();
+        const pendingItems = allPending.filter((item) => !item.scheduledFor);
+
+        // Heatmap verisini al
+        const bestTimes = await timeScoreService.getBestTimes(24);
+
+        // Response formatla
+        const formatItem = (item: {
+          id: string;
+          originalUrl: string;
+          productName?: string;
+          productCategory: string;
+          caption: string;
+          scheduledFor?: number;
+          schedulingMode: string;
+          status: string;
+        }) => ({
+          id: item.id,
+          originalUrl: item.originalUrl,
+          productName: item.productName,
+          productCategory: item.productCategory,
+          caption: item.caption,
+          scheduledFor: item.scheduledFor,
+          schedulingMode: item.schedulingMode,
+          status: item.status,
+        });
+
+        response.json({
+          success: true,
+          items: scheduledItems.map(formatItem),
+          pendingItems: pendingItems.slice(0, 20).map(formatItem),
+          heatmap: bestTimes.heatmap,
+        });
+      } catch (error) {
+        console.error("[getCalendarData] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });

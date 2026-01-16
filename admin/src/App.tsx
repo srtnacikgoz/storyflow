@@ -6,6 +6,8 @@ import AddPhoto from "./pages/AddPhoto";
 import Archive from "./pages/Archive";
 import Templates from "./pages/Templates";
 import BestTimes from "./pages/BestTimes";
+import Analytics from "./pages/Analytics";
+import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 
 function App() {
@@ -19,6 +21,8 @@ function App() {
           <Route path="archive" element={<Archive />} />
           <Route path="templates" element={<Templates />} />
           <Route path="best-times" element={<BestTimes />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="calendar" element={<Calendar />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
