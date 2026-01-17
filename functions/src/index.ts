@@ -964,9 +964,9 @@ export const processScheduledPosts = functions
 
             const messageId = await telegram.sendApprovalRequest(updatedPost, imageUrl);
 
-            // Durumu güncelle
+            // Durumu güncelle - telegramWebhook "awaiting_approval" bekliyor
             await queue.update(post.id, {
-              status: "processing",
+              status: "awaiting_approval",
               approvalStatus: "awaiting",
               approvalRequestedAt: Date.now(),
               telegramMessageId: messageId,
