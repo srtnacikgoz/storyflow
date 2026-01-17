@@ -76,6 +76,11 @@ async function getProcessWithApproval() {
   return processWithApproval;
 }
 
+async function getGeminiService() {
+  const {GeminiService} = await import("./services/gemini");
+  return GeminiService;
+}
+
 async function getTimeScoreService() {
   await initFirebase();
   const {TimeScoreService} = await import("./services/timeScore");
@@ -834,7 +839,10 @@ export const processScheduledPosts = functions
 
       // Gemini için
       const GeminiService = await getGeminiService();
-      const gemini = new GeminiService();
+      const gemini = new GeminiService({apiKey: config.gemini.apiKey});
+
+      // Storage için
+      const {getStorage} = await import("firebase-admin/storage");
 
       for (const post of duePosts) {
         console.log("[Scheduled Processor] Processing:", post.id);
@@ -888,11 +896,17 @@ export const processScheduledPosts = functions
               aspectRatio,
             });
 
-            if (!result.success || !result.imageUrl) {
-              throw new Error(result.error || "Gemini enhancement failed");
-            }
+            // Firebase Storage'a yükle
+            const bucket = getStorage().bucket();
+            const enhancedPath = `enhanced/${post.id}_${Date.now()}.png`;
+            const file = bucket.file(enhancedPath);
 
-            imageUrl = result.imageUrl;
+            await file.save(Buffer.from(result.imageBase64, "base64"), {
+              metadata: {contentType: result.mimeType},
+            });
+
+            await file.makePublic();
+            imageUrl = `https://storage.googleapis.com/${bucket.name}/${enhancedPath}`;
 
             // Enhanced URL'i kaydet
             await queue.update(post.id, {
@@ -940,19 +954,20 @@ export const processScheduledPosts = functions
               continue;
             }
 
-            // Onay mesajı gönder
-            const caption = post.caption || post.productName || "Sade Patisserie";
-            const messageId = await telegram.sendApprovalRequest(
-              imageUrl,
-              caption,
-              post.id,
-              post.productCategory
-            );
+            // Onay mesajı gönder - post objesini ve enhanced URL'i gönder
+            // Önce post'u güncelleyelim ki caption vs. doğru olsun
+            const updatedPost = {
+              ...post,
+              enhancedUrl: imageUrl,
+              caption: post.caption || post.productName || "Sade Patisserie",
+            };
+
+            const messageId = await telegram.sendApprovalRequest(updatedPost, imageUrl);
 
             // Durumu güncelle
             await queue.update(post.id, {
               status: "processing",
-              approvalStatus: "pending",
+              approvalStatus: "awaiting",
               approvalRequestedAt: Date.now(),
               telegramMessageId: messageId,
               enhancedUrl: imageUrl,
