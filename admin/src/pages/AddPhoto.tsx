@@ -94,10 +94,17 @@ export default function AddPhoto() {
             setTemplateVariables(item.captionVariables);
           }
 
-          // Zamanlanmış tarih
+          // Zamanlanmış tarih (local timezone'da göster)
           if (item.scheduledFor) {
             const date = new Date(item.scheduledFor);
-            setScheduledDateTime(date.toISOString().slice(0, 16));
+            // toISOString() UTC döndürür, datetime-local ise local time bekler
+            // Bu yüzden manuel format oluşturuyoruz
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, "0");
+            const day = String(date.getDate()).padStart(2, "0");
+            const hours = String(date.getHours()).padStart(2, "0");
+            const minutes = String(date.getMinutes()).padStart(2, "0");
+            setScheduledDateTime(`${year}-${month}-${day}T${hours}:${minutes}`);
           }
 
           // Onay ayarı
