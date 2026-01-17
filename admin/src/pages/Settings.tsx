@@ -78,20 +78,20 @@ export default function Settings() {
 
       {/* Scheduler Info */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Otomatik Paylaşım</h2>
+        <h2 className="text-lg font-semibold mb-4">Zamanlanmış Paylaşım</h2>
 
         <div className="space-y-3">
           <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
-            <span className="text-gray-600">Zamanlama</span>
-            <span className="font-medium">Her gün 09:00</span>
+            <span className="text-gray-600">Kontrol Sıklığı</span>
+            <span className="font-medium">Her 15 dakika</span>
           </div>
           <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
             <span className="text-gray-600">Timezone</span>
             <span className="font-medium">Europe/Istanbul</span>
           </div>
           <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
-            <span className="text-gray-600">AI Enhancement</span>
-            <span className="font-medium">Opsiyonel</span>
+            <span className="text-gray-600">Varsayılan Onay</span>
+            <span className="font-medium">Telegram ile</span>
           </div>
         </div>
       </div>

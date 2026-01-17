@@ -246,7 +246,7 @@ export const addToQueue = functions
           aiModel, styleVariant, faithfulness,
           captionTemplateId, captionTemplateName, captionVariables,
           // Scheduling alanları
-          schedulingMode, scheduledFor,
+          schedulingMode, scheduledFor, skipApproval,
         } = request.body;
 
         if (!originalUrl) {
@@ -301,6 +301,8 @@ export const addToQueue = functions
           schedulingMode: schedulingMode || "immediate",
           scheduledFor: finalScheduledFor,
           scheduledDayHour,
+          // Onay ayarı
+          skipApproval: skipApproval || false,
         });
 
         response.json({
@@ -517,39 +519,6 @@ export const healthCheck = functions
         version: "3.0.0",
       });
     });
-  });
-
-// ==========================================
-// SCHEDULER FUNCTIONS
-// ==========================================
-
-// Daily Story Scheduler (09:00 Istanbul)
-export const dailyStoryScheduler = functions
-  .region(REGION)
-  .runWith({timeoutSeconds: 300, memory: "512MB"})
-  .pubsub.schedule("0 9 * * *")
-  .timeZone(TIMEZONE)
-  .onRun(async () => {
-    console.log("[Scheduler] Daily story scheduler triggered");
-
-    try {
-      const processNextItem = await getProcessNextItem();
-      const result = await processNextItem({skipEnhancement: false});
-
-      if (result.skipped) {
-        console.log("[Scheduler] Skipped:", result.skipReason);
-        return;
-      }
-
-      if (!result.success) {
-        console.error("[Scheduler] Failed:", result.error);
-        return;
-      }
-
-      console.log("[Scheduler] Success! Story ID:", result.storyId);
-    } catch (error) {
-      console.error("[Scheduler] Error:", error);
-    }
   });
 
 // ==========================================
@@ -823,9 +792,11 @@ export const checkApprovalTimeouts = functions
 // ==========================================
 // SCHEDULED POST PROCESSOR
 // Her 15 dakikada zamanlanmış postları kontrol et
+// Zamanı gelen postları: Gemini ile işle → skipApproval'a göre paylaş veya onay bekle
 // ==========================================
 export const processScheduledPosts = functions
   .region(REGION)
+  .runWith({timeoutSeconds: 540, memory: "1GB"})
   .pubsub.schedule("*/15 * * * *")
   .timeZone(TIMEZONE)
   .onRun(async () => {
@@ -852,7 +823,7 @@ export const processScheduledPosts = functions
         config.instagram.accessToken
       );
 
-      // Telegram bildirimi için
+      // Telegram için
       let telegram: InstanceType<Awaited<ReturnType<typeof getTelegramService>>> | null = null;
       const telegramConfigured = await isTelegramConfiguredLazy();
       if (telegramConfigured) {
@@ -861,31 +832,134 @@ export const processScheduledPosts = functions
         telegram = new TelegramService(telegramConfig);
       }
 
+      // Gemini için
+      const GeminiService = await getGeminiService();
+      const gemini = new GeminiService();
+
       for (const post of duePosts) {
         console.log("[Scheduled Processor] Processing:", post.id);
 
         try {
-          const imageUrl = post.enhancedUrl || post.originalUrl;
-          const caption = post.caption || post.productName || "Sade Patisserie";
+          let imageUrl = post.enhancedUrl || "";
+          const skipEnhancement = post.aiModel === "none";
 
-          const story = await instagram.createStory(imageUrl, caption);
-          await queue.markAsCompleted(post.id, imageUrl, story.id);
+          // 1. Gemini ile işleme (eğer henüz işlenmemişse ve AI açıksa)
+          if (!post.enhancedUrl && !skipEnhancement) {
+            console.log("[Scheduled Processor] Enhancing with Gemini...");
 
-          // Analitik kaydı
-          try {
-            const TimeScoreService = await getTimeScoreService();
-            const timeScore = new TimeScoreService();
-            await timeScore.recordPost(post.id, story.id, Date.now());
-          } catch (analyticsError) {
-            console.error("[Scheduled Processor] Analytics error:", analyticsError);
+            // Görseli indir
+            const imageResponse = await fetch(post.originalUrl);
+            if (!imageResponse.ok) {
+              throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+            }
+            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+            const base64Image = imageBuffer.toString("base64");
+            const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+
+            // Prompt oluştur
+            const {buildPrompt} = await import("./prompts");
+            let prompt: string;
+            let negativePrompt: string;
+
+            if (post.customPrompt) {
+              prompt = post.customPrompt;
+              negativePrompt = post.customNegativePrompt || "";
+            } else {
+              const builtPrompt = buildPrompt(
+                post.productCategory,
+                post.styleVariant,
+                post.productName
+              );
+              prompt = builtPrompt.prompt;
+              negativePrompt = builtPrompt.negativePrompt;
+            }
+
+            // Aspect ratio mapping
+            const aspectRatioMap: Record<string, "1:1" | "9:16" | "16:9" | "4:3" | "3:4"> = {
+              "1:1": "1:1", "4:5": "3:4", "9:16": "9:16", "16:9": "16:9", "4:3": "4:3", "3:4": "3:4",
+            };
+            const aspectRatio = aspectRatioMap[post.promptFormat || "9:16"] || "9:16";
+
+            // Gemini ile işle
+            const result = await gemini.transformImage(base64Image, contentType, {
+              prompt,
+              negativePrompt,
+              faithfulness: post.faithfulness,
+              aspectRatio,
+            });
+
+            if (!result.success || !result.imageUrl) {
+              throw new Error(result.error || "Gemini enhancement failed");
+            }
+
+            imageUrl = result.imageUrl;
+
+            // Enhanced URL'i kaydet
+            await queue.update(post.id, {
+              enhancedUrl: imageUrl,
+              isEnhanced: true,
+            });
+
+            console.log("[Scheduled Processor] Enhanced successfully");
+          } else if (!post.enhancedUrl && skipEnhancement) {
+            imageUrl = post.originalUrl;
           }
 
-          // Telegram bildirimi
-          if (telegram) {
-            await telegram.sendConfirmation(true, post.id, story.id);
-          }
+          // 2. skipApproval kontrolü
+          const skipApproval = post.skipApproval === true;
 
-          console.log("[Scheduled Processor] Posted:", post.id, "->", story.id);
+          if (skipApproval) {
+            // Onaysız direkt paylaş
+            console.log("[Scheduled Processor] Posting directly (skipApproval=true)");
+
+            const caption = post.caption || post.productName || "Sade Patisserie";
+            const story = await instagram.createStory(imageUrl, caption);
+            await queue.markAsCompleted(post.id, imageUrl, story.id);
+
+            // Analitik kaydı
+            try {
+              const TimeScoreService = await getTimeScoreService();
+              const timeScore = new TimeScoreService();
+              await timeScore.recordPost(post.id, story.id, Date.now());
+            } catch (analyticsError) {
+              console.error("[Scheduled Processor] Analytics error:", analyticsError);
+            }
+
+            // Telegram bildirim (paylaşıldı)
+            if (telegram) {
+              await telegram.sendConfirmation(true, post.id, story.id);
+            }
+
+            console.log("[Scheduled Processor] Posted:", post.id, "->", story.id);
+          } else {
+            // Telegram onayı gerekli
+            console.log("[Scheduled Processor] Sending to Telegram for approval");
+
+            if (!telegram) {
+              console.warn("[Scheduled Processor] Telegram not configured, skipping approval");
+              continue;
+            }
+
+            // Onay mesajı gönder
+            const caption = post.caption || post.productName || "Sade Patisserie";
+            const messageId = await telegram.sendApprovalRequest(
+              imageUrl,
+              caption,
+              post.id,
+              post.productCategory
+            );
+
+            // Durumu güncelle
+            await queue.update(post.id, {
+              status: "processing",
+              approvalStatus: "pending",
+              approvalRequestedAt: Date.now(),
+              telegramMessageId: messageId,
+              enhancedUrl: imageUrl,
+            });
+
+            console.log("[Scheduled Processor] Approval request sent:", post.id);
+          }
         } catch (postError) {
           console.error("[Scheduled Processor] Post failed:", post.id, postError);
           await queue.markAsFailed(
@@ -1360,7 +1434,7 @@ export const updateQueueItem = functions
           productName, productCategory, caption,
           aiModel, styleVariant, faithfulness,
           captionTemplateId, captionTemplateName, captionVariables,
-          schedulingMode, scheduledFor, scheduledDayHour,
+          schedulingMode, scheduledFor, scheduledDayHour, skipApproval,
         } = request.body;
 
         const QueueService = await getQueueService();
@@ -1379,6 +1453,7 @@ export const updateQueueItem = functions
           schedulingMode,
           scheduledFor,
           scheduledDayHour,
+          skipApproval,
         });
 
         if (!updatedItem) {

@@ -71,9 +71,9 @@ export default function Calendar() {
     try {
       const { start, end } = getWeekRange(currentDate);
       const data = await api.getCalendarData(start.getTime(), end.getTime());
-      setItems(data.items);
-      setPendingItems(data.pendingItems);
-      setHeatmap(data.heatmap);
+      setItems(data.items || []);
+      setPendingItems(data.pendingItems || []);
+      setHeatmap(data.heatmap || {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veriler yüklenemedi");
     } finally {

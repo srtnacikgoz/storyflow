@@ -127,6 +127,7 @@ export interface Photo {
   approvalRespondedAt?: number; // Timestamp
   telegramMessageId?: number; // Telegram mesaj ID (düzenleme için)
   rejectionReason?: string; // Kullanıcı red sebebi yazdıysa
+  skipApproval?: boolean; // true ise Telegram onayı atlanır, direkt paylaşılır
 
   // CAPTION TEMPLATE (Phase 7)
   captionTemplateId?: string; // Seçilen şablon ID

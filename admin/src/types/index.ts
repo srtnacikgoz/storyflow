@@ -56,6 +56,8 @@ export interface QueueItem {
   schedulingMode: SchedulingMode;
   scheduledFor?: number; // Timestamp
   scheduledDayHour?: string; // "2_15" formatı
+  // Onay ayarları
+  skipApproval?: boolean; // true ise Telegram onayı atlanır
 }
 
 // Kuyruk istatistikleri

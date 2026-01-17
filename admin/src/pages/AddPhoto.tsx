@@ -66,6 +66,7 @@ export default function AddPhoto() {
   const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>("immediate");
   const [scheduledDateTime, setScheduledDateTime] = useState("");
   const [bestTimeToday, setBestTimeToday] = useState<TimeSlotRecommendation | null>(null);
+  const [skipApproval, setSkipApproval] = useState(false);
 
   // Edit mode: Item'ı yükle
   useEffect(() => {
@@ -97,6 +98,11 @@ export default function AddPhoto() {
           if (item.scheduledFor) {
             const date = new Date(item.scheduledFor);
             setScheduledDateTime(date.toISOString().slice(0, 16));
+          }
+
+          // Onay ayarı
+          if (item.skipApproval) {
+            setSkipApproval(item.skipApproval);
           }
         } catch (err) {
           setError(err instanceof Error ? err.message : "Öğe yüklenemedi");
@@ -222,6 +228,7 @@ export default function AddPhoto() {
             : undefined,
           schedulingMode,
           scheduledFor,
+          skipApproval: schedulingMode !== "immediate" ? skipApproval : undefined,
         });
       } else {
         // Yeni ekleme modu
@@ -240,6 +247,7 @@ export default function AddPhoto() {
             : undefined,
           schedulingMode,
           scheduledFor,
+          skipApproval: schedulingMode !== "immediate" ? skipApproval : undefined,
         });
       }
 
@@ -706,6 +714,25 @@ export default function AddPhoto() {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Skip Approval Checkbox - Sadece zamanlanmış modlarda göster */}
+        {schedulingMode !== "immediate" && (
+          <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
+            <input
+              type="checkbox"
+              id="skipApproval"
+              checked={skipApproval}
+              onChange={(e) => setSkipApproval(e.target.checked)}
+              className="mt-1 h-4 w-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue"
+            />
+            <label htmlFor="skipApproval" className="flex-1 cursor-pointer">
+              <span className="font-medium text-gray-900">Onaysız Paylaş</span>
+              <p className="text-sm text-gray-500 mt-0.5">
+                İşaretlenirse Telegram onayı beklenmeden otomatik paylaşılır
+              </p>
+            </label>
           </div>
         )}
 
