@@ -5,8 +5,8 @@ Otomatik Instagram paylaşım sistemi. Her gün belirlenen saatte kuyruktaki fot
 ## Özellikler
 
 - ✅ Günlük otomatik Instagram paylaşımı (her gün 09:00)
-- ✅ OpenAI Vision ile fotoğraf analizi
-- ✅ DALL-E 3 ile profesyonel görsel iyileştirme
+- ✅ Google Gemini Vision ile fotoğraf analizi
+- ✅ Google Gemini (Imagen 3 / Pro) ile görsel iyileştirme
 - ✅ Firebase Cloud Functions (serverless)
 - ✅ Firestore ile kuyruk yönetimi
 - ✅ Instagram Graph API entegrasyonu
@@ -18,18 +18,19 @@ Otomatik Instagram paylaşım sistemi. Her gün belirlenen saatte kuyruktaki fot
 - **Database:** Firestore
 - **Storage:** Firebase Cloud Storage
 - **Scheduler:** Google Cloud Pub/Sub Scheduler
-- **AI Services:** OpenAI (GPT-4 Vision + DALL-E 3)
+- **AI Services:** Google Gemini (1.5 Flash Vision + Pro/Imagen)
 - **Social Media:** Instagram Graph API
 
 ## Maliyet
 
-**Aylık Tahmini Maliyet:** ~$5.20/ay
+**Aylık Tahmini Maliyet:** ~$3.50/ay
 
 - Firebase: ~$2.60
-- OpenAI Vision: ~$0.30
-- DALL-E 3: ~$2.40
+- Gemini Flash: ~$0.10 (Düşük maliyetli analiz)
+- Gemini Pro/Imagen: ~$0.80 (Görsel üretimi)
 
-**Maliyet optimizasyonu ile $2.40/ay'a düşürülebilir** (DALL-E ve Vision kaldırılırsa)
+**Maliyet optimizasyonu ile daha da düşürülebilir** 
+
 
 ## Proje Yapısı
 
@@ -198,33 +199,33 @@ firebase functions:config:set instagram.access_token="NEW_TOKEN"
 firebase deploy --only functions
 ```
 
-## OpenAI API Kurulumu
+## Google Gemini API Kurulumu
 
 ### 1. API Key Alma
 
-1. [platform.openai.com](https://platform.openai.com) adresine gidin
-2. Settings → API Keys → Create new secret key
-3. Key'i güvenli bir yere kaydedin (tekrar görüntülenemez!)
+1. [aistudio.google.com](https://aistudio.google.com) adresine gidin
+2. "Get API key" butonuna tıklayın
+3. "Create API key in new project" seçeneğini kullanın
+4. Key'i güvenli bir yere kaydedin
 
 ### 2. Billing Setup
 
-- OpenAI API ücretli bir servistir
-- Billing → Add payment method ile kredi kartı ekleyin
-- Usage limits belirleyin (aylık $10 limit önerilir)
+- Google AI Studio şu an için belirli limitlere kadar ücretsizdir (Free Tier)
+- Yüksek kullanım için Pay-as-you-go hesabı gerekebilir
 
 ### 3. Firebase Config'e Ekleme
 
 ```bash
-firebase functions:config:set openai.api_key="sk-proj-..."
+firebase functions:config:set gemini.api_key="AIzaSy..."
 ```
 
-### 4. Maliyet Tahmini
+### 4. Maliyet Tahmini (Pay-as-you-go)
 
-| Servis | Birim Fiyat | Günlük | Aylık |
-|--------|-------------|--------|-------|
-| GPT-4 Vision | $0.01/image | $0.01 | ~$0.30 |
-| DALL-E 3 HD | $0.08/image | $0.08 | ~$2.40 |
-| **Toplam** | | $0.09 | **~$2.70** |
+| Servis | Model | Birim Fiyat | Günlük | Aylık |
+|--------|-------|-------------|--------|-------|
+| Vision Analiz | Gemini 1.5 Flash | Ücretsiz / Çok Düşük | $0.00 | ~$0.10 |
+| Görsel Üretim | Imagen 3 / Pro | $0.04/image | $0.04 | ~$1.20 |
+| **Toplam** | | | $0.04 | **~$1.30** |
 
 ## Test Functions
 

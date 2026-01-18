@@ -105,6 +105,7 @@ class ApiService {
     // Scheduling alanları
     schedulingMode?: SchedulingMode;
     scheduledFor?: number; // Timestamp
+    skipApproval?: boolean;
   }): Promise<QueueItem> {
     const response = await this.fetch<{
       success: boolean;
@@ -284,6 +285,7 @@ class ApiService {
       schedulingMode?: SchedulingMode;
       scheduledFor?: number;
       scheduledDayHour?: string;
+      skipApproval?: boolean;
     }
   ): Promise<QueueItem> {
     const response = await this.fetch<{

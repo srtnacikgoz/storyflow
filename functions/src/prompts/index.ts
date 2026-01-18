@@ -3,9 +3,14 @@
  * Kategori ve stil bazlı prompt oluşturma
  */
 
-import {CAFE_PATISSERIE_PROMPT, StyleVariant} from "./cafe-patisserie";
+import { PromptStyle } from "./types";
+import { CROISSANT_PROMPT } from "./templates/croissant";
+import { PASTA_PROMPT } from "./templates/pasta";
+import { CHOCOLATE_PROMPT } from "./templates/chocolate";
+import { MACARON_PROMPT } from "./templates/macaron";
+import { COFFEE_PROMPT } from "./templates/coffee";
 
-export {StyleVariant} from "./cafe-patisserie";
+export * from "./types";
 
 /**
  * Prompt oluşturma sonucu
@@ -17,25 +22,48 @@ export interface PromptResult {
 
 /**
  * Prompt oluştur
- * @param category - Ürün kategorisi (şimdilik sadece cafe-patisserie)
+ * @param category - Ürün kategorisi
  * @param style - Stil varyantı
  * @param productName - Ürün adı (opsiyonel)
  * @return Prompt ve negative prompt
  */
 export function buildPrompt(
   category: string,
-  style: StyleVariant,
+  style: string,
   productName?: string
 ): PromptResult {
-  // Şimdilik sadece cafe-patisserie kategorisi var
-  const base = CAFE_PATISSERIE_PROMPT;
-
-  let prompt = base.base;
-
-  // Stil ekle
-  if (base.styles[style]) {
-    prompt += `\n\n${base.styles[style]}`;
+  // Şablon seç
+  let template;
+  switch (category) {
+    case "croissant":
+      template = CROISSANT_PROMPT;
+      break;
+    case "pasta":
+      template = PASTA_PROMPT;
+      break;
+    case "chocolate":
+      template = CHOCOLATE_PROMPT;
+      break;
+    case "macaron":
+      template = MACARON_PROMPT;
+      break;
+    case "coffee":
+      template = COFFEE_PROMPT;
+      break;
+    default:
+      template = PASTA_PROMPT; // Varsayılan fallback
   }
+
+  // Stil seç (varsayılan: modern)
+  const selectedStyle = (style in template.styles ? style : "modern") as PromptStyle;
+  const stylePrompt = template.styles[selectedStyle];
+
+  // Ana prompt ile stili birleştir
+  // Base prompt'taki [STİL PROMPT] placeholder'ı varsa değiştir, yoksa sona ekle
+  let prompt = template.base;
+
+  // Base prompt genellikle generic bir giriş içerir, stili ekleyelim
+  prompt += `\n\n${stylePrompt}`;
 
   // Ürün adı varsa ekle
   if (productName) {
@@ -44,38 +72,44 @@ export function buildPrompt(
 
   return {
     prompt,
-    negativePrompt: base.negative,
+    negativePrompt: template.negative,
   };
 }
 
 /**
  * Tüm stil varyantlarını döndür
+ * Kategoriden bağımsız genel stiller veya kategoriye özel stiller eklenebilir
  */
 export function getStyleVariants(): Array<{
-  id: StyleVariant;
+  id: PromptStyle;
   name: string;
   description: string;
 }> {
   return [
     {
-      id: "pure-minimal",
-      name: "Pure Minimal",
-      description: "Maksimum negatif alan, sade",
+      id: "modern",
+      name: "Modern Studio",
+      description: "Clean, bright, minimalist",
     },
     {
-      id: "lifestyle-moments",
-      name: "Lifestyle",
-      description: "Sıcak, insan dokunuşu",
+      id: "rustic",
+      name: "Rustic Lifestyle",
+      description: "Warm, wood, artisanal",
     },
     {
-      id: "rustic-warmth",
-      name: "Rustic",
-      description: "Ahşap, doğal dokular",
+      id: "social",
+      name: "Social Flat Lay",
+      description: "Trendy, pop colors, grid",
     },
     {
-      id: "french-elegance",
-      name: "French",
-      description: "Şık, zarif sunum",
+      id: "luxury",
+      name: "Luxury Premium",
+      description: "Elegant, high-end, dark/gold",
+    },
+    {
+      id: "lifestyle",
+      name: "Lifestyle Moment",
+      description: "Cozy, human touch, pairing",
     },
   ];
 }
