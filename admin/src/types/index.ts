@@ -339,3 +339,187 @@ export interface CalendarData {
   pendingItems: CalendarItem[];
   heatmap: CalendarHeatmap;
 }
+
+// ==========================================
+// Orchestrator Types (Phase 12)
+// ==========================================
+
+// Asset kategorileri
+export type AssetCategory = "products" | "props" | "furniture";
+
+// Ürün tipleri (orchestrator için)
+export type OrchestratorProductType =
+  | "croissants"
+  | "pastas"
+  | "chocolates"
+  | "macarons"
+  | "coffees";
+
+// Prop tipleri
+export type PropType = "plates" | "cups" | "cutlery" | "napkins";
+
+// Mobilya tipleri
+export type FurnitureType = "tables" | "chairs" | "decor";
+
+// Asset
+export interface OrchestratorAsset {
+  id: string;
+  category: AssetCategory;
+  subType: string;
+  filename: string;
+  storageUrl: string;
+  thumbnailUrl?: string;
+  visualProperties?: {
+    dominantColors: string[];
+    style: string;
+    material?: string;
+    shape?: string;
+  };
+  usageCount: number;
+  lastUsedAt?: number;
+  tags: string[];
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Zaman dilimi kuralı
+export interface TimeSlotRule {
+  id: string;
+  startHour: number;
+  endHour: number;
+  daysOfWeek: number[];
+  productTypes: OrchestratorProductType[];
+  allowPairing?: boolean;
+  pairingWith?: OrchestratorProductType[];
+  scenarioPreference?: string[];
+  isActive: boolean;
+  priority: number;
+}
+
+// Planlanmış slot durumu
+export type ScheduledSlotStatus =
+  | "pending"
+  | "generating"
+  | "awaiting_approval"
+  | "approved"
+  | "published"
+  | "failed";
+
+// Planlanmış slot
+export interface ScheduledSlot {
+  id: string;
+  scheduledTime: number;
+  timeSlotRuleId: string;
+  status: ScheduledSlotStatus;
+  pipelineResult?: PipelineResult;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Pipeline aşaması
+export type PipelineStage =
+  | "asset_selection"
+  | "scenario_selection"
+  | "prompt_optimization"
+  | "image_generation"
+  | "quality_control"
+  | "content_creation"
+  | "telegram_approval"
+  | "publishing";
+
+// Pipeline durumu
+export interface PipelineStatus {
+  currentStage: PipelineStage;
+  completedStages: PipelineStage[];
+  failedStage?: PipelineStage;
+  error?: string;
+  startedAt: number;
+  updatedAt: number;
+}
+
+// Pipeline sonucu
+export interface PipelineResult {
+  id?: string;
+  status: PipelineStatus;
+  assetSelection?: {
+    product: OrchestratorAsset;
+    plate?: OrchestratorAsset;
+    cup?: OrchestratorAsset;
+    table?: OrchestratorAsset;
+    selectionReasoning: string;
+  };
+  scenarioSelection?: {
+    scenarioId: string;
+    scenarioName: string;
+    reasoning: string;
+    includesHands: boolean;
+    handStyle?: string;
+    composition: string;
+  };
+  optimizedPrompt?: {
+    mainPrompt: string;
+    negativePrompt: string;
+    customizations: string[];
+    aspectRatio: string;
+    faithfulness: number;
+  };
+  generatedImage?: {
+    imageBase64: string;
+    mimeType: string;
+    storageUrl?: string;
+    model: string;
+    cost: number;
+    generatedAt: number;
+    attemptNumber: number;
+  };
+  qualityControl?: {
+    passed: boolean;
+    score: number;
+    evaluation: {
+      productAccuracy: number;
+      composition: number;
+      lighting: number;
+      realism: number;
+      instagramReadiness: number;
+    };
+    feedback: string;
+    improvementSuggestions?: string[];
+    shouldRegenerate: boolean;
+    regenerationHints?: string;
+  };
+  contentPackage?: {
+    caption: string;
+    captionAlternatives?: string[];
+    hashtags: string[];
+    generatedAt: number;
+  };
+  telegramMessageId?: number;
+  approvalStatus?: "pending" | "approved" | "rejected" | "regenerate";
+  approvalRespondedAt?: number;
+  publishedAt?: number;
+  instagramPostId?: string;
+  totalCost: number;
+  startedAt: number;
+  completedAt?: number;
+  totalDuration?: number;
+}
+
+// Orchestrator dashboard istatistikleri
+export interface OrchestratorDashboardStats {
+  assets: {
+    total: number;
+    byCategory: Record<string, number>;
+  };
+  rules: {
+    total: number;
+  };
+  slots: {
+    total: number;
+    byStatus: Record<string, number>;
+  };
+  pipeline: {
+    totalRuns: number;
+    totalCost: string;
+  };
+}

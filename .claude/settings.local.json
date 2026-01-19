@@ -24,7 +24,16 @@
       "Bash(git add:*)",
       "Bash(git stash:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nperf: Split Firebase functions into two codebases for faster cold starts\n\n- Created functions-api codebase for lightweight CRUD/query operations \\(20 functions\\)\n- Kept heavy functions \\(AI, Instagram, Telegram\\) in main functions codebase \\(14 functions\\)\n- Fixed scheduled posts bug: posts now require Telegram approval before publishing\n- Added safety check for approvalStatus in processScheduledPosts\n- Updated firebase.json with dual codebase configuration\n- Memory: 1GB for heavy, 512MB for light functions\n- Merged upstream changes including receivePromptFromStudio endpoint\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(find:*)",
+      "Bash(firebase firestore:get:*)",
+      "Bash(firebase functions:log:*)",
+      "Bash(firebase functions:secrets:set:*)",
+      "Bash(printf:*)",
+      "Bash(grep:*)",
+      "Bash(node -e:*)",
+      "Bash(ls:*)",
+      "Bash(gcloud firestore documents update:*)"
     ]
   }
 }

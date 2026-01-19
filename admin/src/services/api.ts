@@ -18,6 +18,12 @@ import type {
   AnalyticsDashboard,
   AnalyticsSummary,
   CalendarData,
+  // Orchestrator types
+  OrchestratorAsset,
+  TimeSlotRule,
+  ScheduledSlot,
+  PipelineResult,
+  OrchestratorDashboardStats,
 } from "../types";
 
 // Firebase Functions base URL
@@ -508,6 +514,249 @@ class ApiService {
       schedulingMode: "scheduled",
       scheduledFor,
     });
+  }
+
+  // ==========================================
+  // Orchestrator - Asset Management
+  // ==========================================
+
+  /**
+   * Asset'leri listele
+   */
+  async listAssets(filters?: {
+    category?: string;
+    subType?: string;
+    isActive?: boolean;
+  }): Promise<OrchestratorAsset[]> {
+    const params = new URLSearchParams();
+    if (filters?.category) params.append("category", filters.category);
+    if (filters?.subType) params.append("subType", filters.subType);
+    if (filters?.isActive !== undefined) params.append("isActive", String(filters.isActive));
+
+    const queryString = params.toString();
+    const endpoint = queryString ? `listAssets?${queryString}` : "listAssets";
+
+    const response = await this.fetch<{
+      success: boolean;
+      data: OrchestratorAsset[];
+      count: number;
+    }>(endpoint);
+    return response.data;
+  }
+
+  /**
+   * Yeni asset ekle
+   */
+  async createAsset(asset: Omit<OrchestratorAsset, "id" | "usageCount" | "isActive" | "createdAt" | "updatedAt">): Promise<OrchestratorAsset> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: OrchestratorAsset;
+    }>("createAsset", {
+      method: "POST",
+      body: JSON.stringify(asset),
+    });
+    return response.data;
+  }
+
+  /**
+   * Asset güncelle
+   */
+  async updateAsset(id: string, updates: Partial<OrchestratorAsset>): Promise<void> {
+    await this.fetch(`updateAsset?id=${id}`, {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  /**
+   * Asset sil (soft delete)
+   */
+  async deleteAsset(id: string): Promise<void> {
+    await this.fetch(`deleteAsset?id=${id}`, {
+      method: "POST",
+    });
+  }
+
+  // ==========================================
+  // Orchestrator - Time Slot Rules
+  // ==========================================
+
+  /**
+   * Zaman kurallarını listele
+   */
+  async listTimeSlotRules(): Promise<TimeSlotRule[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: TimeSlotRule[];
+      count: number;
+    }>("listTimeSlotRules");
+    return response.data;
+  }
+
+  /**
+   * Yeni zaman kuralı ekle
+   */
+  async createTimeSlotRule(rule: Omit<TimeSlotRule, "id" | "isActive">): Promise<TimeSlotRule> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: TimeSlotRule;
+    }>("createTimeSlotRule", {
+      method: "POST",
+      body: JSON.stringify(rule),
+    });
+    return response.data;
+  }
+
+  /**
+   * Zaman kuralı güncelle
+   */
+  async updateTimeSlotRule(id: string, updates: Partial<TimeSlotRule>): Promise<void> {
+    await this.fetch(`updateTimeSlotRule?id=${id}`, {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  /**
+   * Zaman kuralı sil
+   */
+  async deleteTimeSlotRule(id: string): Promise<void> {
+    await this.fetch(`deleteTimeSlotRule?id=${id}`, {
+      method: "POST",
+    });
+  }
+
+  // ==========================================
+  // Orchestrator - Pipeline
+  // ==========================================
+
+  /**
+   * Scheduler'ı manuel tetikle
+   */
+  async triggerOrchestratorScheduler(): Promise<{
+    triggered: number;
+    skipped: number;
+    errors: string[];
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        triggered: number;
+        skipped: number;
+        errors: string[];
+      };
+    }>("triggerOrchestratorScheduler");
+    return response.data;
+  }
+
+  /**
+   * Belirli kural için pipeline başlat
+   */
+  async triggerOrchestratorPipeline(ruleId: string): Promise<string> {
+    const response = await this.fetch<{
+      success: boolean;
+      message: string;
+      slotId: string;
+    }>(`triggerOrchestratorPipeline?ruleId=${ruleId}`);
+    return response.slotId;
+  }
+
+  /**
+   * Hemen içerik üret (pipeline tamamlanana kadar bekler)
+   */
+  async orchestratorGenerateNow(productType: string): Promise<{
+    success: boolean;
+    message: string;
+    slotId: string;
+    duration?: number;
+    error?: string;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      message: string;
+      slotId: string;
+      duration?: number;
+      error?: string;
+    }>("orchestratorGenerateNow", {
+      method: "POST",
+      body: JSON.stringify({ productType }),
+    });
+    return response;
+  }
+
+  /**
+   * Tek bir slot'un detaylarını getir (polling için)
+   */
+  async getScheduledSlot(slotId: string): Promise<{
+    id: string;
+    status: string;
+    currentStage?: string;
+    stageIndex?: number;
+    totalStages?: number;
+    error?: string;
+  } | null> {
+    const response = await this.fetch<{
+      success: boolean;
+      slot: {
+        id: string;
+        status: string;
+        currentStage?: string;
+        stageIndex?: number;
+        totalStages?: number;
+        error?: string;
+      } | null;
+    }>(`getScheduledSlot?slotId=${slotId}`);
+    return response.slot;
+  }
+
+  // ==========================================
+  // Orchestrator - Status & Stats
+  // ==========================================
+
+  /**
+   * Scheduled slot'ları listele
+   */
+  async listScheduledSlots(options?: {
+    status?: string;
+    limit?: number;
+  }): Promise<ScheduledSlot[]> {
+    const params = new URLSearchParams();
+    if (options?.status) params.append("status", options.status);
+    if (options?.limit) params.append("limit", String(options.limit));
+
+    const queryString = params.toString();
+    const endpoint = queryString ? `listScheduledSlots?${queryString}` : "listScheduledSlots";
+
+    const response = await this.fetch<{
+      success: boolean;
+      data: ScheduledSlot[];
+      count: number;
+    }>(endpoint);
+    return response.data;
+  }
+
+  /**
+   * Pipeline sonuçlarını listele
+   */
+  async listPipelineResults(limit?: number): Promise<PipelineResult[]> {
+    const endpoint = limit ? `listPipelineResults?limit=${limit}` : "listPipelineResults";
+    const response = await this.fetch<{
+      success: boolean;
+      data: PipelineResult[];
+      count: number;
+    }>(endpoint);
+    return response.data;
+  }
+
+  /**
+   * Orchestrator dashboard istatistikleri
+   */
+  async getOrchestratorDashboardStats(): Promise<OrchestratorDashboardStats> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: OrchestratorDashboardStats;
+    }>("getOrchestratorDashboardStats");
+    return response.data;
   }
 }
 

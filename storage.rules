@@ -11,5 +11,11 @@ service firebase.storage {
     match /temp/{allPaths=**} {
       allow read, write: if true; // Development için açık
     }
+
+    // Orchestrator assets - ürün, aksesuar, mobilya görselleri
+    match /orchestrator-assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // Development için açık
+    }
   }
 }

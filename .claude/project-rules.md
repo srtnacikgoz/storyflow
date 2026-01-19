@@ -6,6 +6,7 @@
 
 ## 📑 İçindekiler
 
+0. [CRUD Bütünlüğü Kuralı (Kritik)](#0-crud-bütünlüğü-kuralı-kritik)
 1. [Temel Felsefe (Pragmatik SDUI)](#1-temel-felsefe-pragmatik-sdui)
 2. [AI Team Collaboration & Governance](#2-ai-team-collaboration--governance)
 3. [Kritik İş Akışı ve Test Standartları](#3-kritik-iş-akışı-ve-test-standartları)
@@ -16,6 +17,39 @@
 8. [Git & Versiyon Kontrol](#8-git--versiyon-kontrol)
 9. [Kurumsal Kimlik](#9-kurumsal-kimlik)
 10. [Güncelleme Günlüğü](#10-güncelleme-günlüğü)
+
+---
+
+## 🔄 0. CRUD Bütünlüğü Kuralı (Kritik)
+
+> **Her yeni özellik veya modül eklendiğinde, CRUD operasyonlarının tamamı düşünülmelidir.**
+
+### Checklist (Yeni Özellik Eklerken)
+
+| Katman | Create | Read | Update | Delete |
+|--------|--------|------|--------|--------|
+| **Firestore Rules** | ✓ | ✓ | ✓ | ✓ |
+| **Storage Rules** | ✓ (upload) | ✓ (download) | ✓ (overwrite) | ✓ |
+| **API Endpoints** | POST | GET | PUT/PATCH | DELETE |
+| **Frontend UI** | Add form | List/Detail | Edit form | Delete btn |
+
+### Örnek: Yeni Klasör/Modül Eklerken
+```typescript
+// ❌ Yanlış - Sadece Firestore'u düşünmek
+// orchestrator-assets koleksiyonu eklendi ama...
+
+// ✅ Doğru - Tüm katmanları düşünmek
+// 1. Firestore rules → orchestrator-assets için CRUD izinleri
+// 2. Storage rules → orchestrator-assets/ klasörü için upload/download izni
+// 3. API → CRUD endpointleri (create, list, update, delete)
+// 4. Frontend → Asset ekleme, listeleme, düzenleme, silme UI
+```
+
+### Sık Unutulan Yerler
+- **Firebase Storage rules** (yeni klasör = yeni rule)
+- **Firestore indexes** (karmaşık sorgular için)
+- **API rate limiting** (yeni endpoint = limit kontrolü)
+- **Frontend error states** (CRUD başarısız olursa UI feedback)
 
 ---
 

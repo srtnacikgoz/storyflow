@@ -9,6 +9,10 @@ import BestTimes from "./pages/BestTimes";
 import Analytics from "./pages/Analytics";
 import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
+// Orchestrator pages
+import OrchestratorDashboard from "./pages/OrchestratorDashboard";
+import Assets from "./pages/Assets";
+import TimeSlots from "./pages/TimeSlots";
 
 function App() {
   return (
@@ -24,6 +28,10 @@ function App() {
           <Route path="analytics" element={<Analytics />} />
           <Route path="calendar" element={<Calendar />} />
           <Route path="settings" element={<Settings />} />
+          {/* Orchestrator routes */}
+          <Route path="orchestrator" element={<OrchestratorDashboard />} />
+          <Route path="assets" element={<Assets />} />
+          <Route path="time-slots" element={<TimeSlots />} />
         </Route>
       </Routes>
     </BrowserRouter>
