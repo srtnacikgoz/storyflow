@@ -7,6 +7,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { ClaudeService } from "./claudeService";
 import { GeminiService } from "../services/gemini";
+import { TelegramService } from "../services/telegram";
 import {
   Asset,
   ProductType,
@@ -65,6 +66,7 @@ export class Orchestrator {
   private storage: ReturnType<typeof getStorage>;
   private claude: ClaudeService;
   private gemini: GeminiService;
+  private telegram: TelegramService;
   private config: OrchestratorConfig;
 
   constructor(config: OrchestratorConfig) {
@@ -74,7 +76,12 @@ export class Orchestrator {
     this.claude = new ClaudeService(config.claudeApiKey, config.claudeModel);
     this.gemini = new GeminiService({
       apiKey: config.geminiApiKey,
-      model: config.geminiModel as "gemini-2.5-flash-image" | "gemini-3-pro-image-preview",
+      model: config.geminiModel as "gemini-2.0-flash-exp" | "gemini-1.5-pro" | "gemini-3-pro-image-preview",
+    });
+    this.telegram = new TelegramService({
+      botToken: config.telegramBotToken,
+      chatId: config.telegramChatId,
+      approvalTimeout: config.approvalTimeout,
     });
   }
 
@@ -206,31 +213,67 @@ export class Orchestrator {
         generationAttempt++;
         console.log(`[Orchestrator] Generation attempt ${generationAttempt}/${this.config.maxRetries}`);
 
-        // Ürün görselini yükle
-        const productImageBase64 = await this.loadImageAsBase64(result.assetSelection.product.storageUrl);
+        try {
+          // Ürün görselini yükle
+          const productUrl = result.assetSelection.product.storageUrl;
+          console.log(`[Orchestrator] ASSET DEBUG: Selected product: ${result.assetSelection.product.filename}`);
+          console.log(`[Orchestrator] ASSET DEBUG: Product URL: ${productUrl}`);
+          console.log(`[Orchestrator] ASSET DEBUG: Product ID: ${result.assetSelection.product.id}`);
 
-        // Gemini ile görsel üret
-        const geminiResult = await this.gemini.transformImage(
-          productImageBase64,
-          "image/png",
-          {
-            prompt: result.optimizedPrompt.mainPrompt,
-            negativePrompt: result.optimizedPrompt.negativePrompt,
-            faithfulness: result.optimizedPrompt.faithfulness,
-            aspectRatio: result.optimizedPrompt.aspectRatio,
+          const productImageBase64 = await this.loadImageAsBase64(productUrl);
+          console.log(`[Orchestrator] ASSET DEBUG: Loaded image size: ${productImageBase64.length} chars (base64)`);
+
+          // Load reference images (plate, table, cup) if selected
+          const referenceImages: Array<{ base64: string; mimeType: string; label: string }> = [];
+
+          if (result.assetSelection.plate?.storageUrl) {
+            console.log(`[Orchestrator] Loading plate: ${result.assetSelection.plate.filename}`);
+            const plateBase64 = await this.loadImageAsBase64(result.assetSelection.plate.storageUrl);
+            referenceImages.push({ base64: plateBase64, mimeType: "image/png", label: "plate" });
           }
-        );
 
-        generatedImage = {
-          imageBase64: geminiResult.imageBase64,
-          mimeType: geminiResult.mimeType,
-          model: geminiResult.model,
-          cost: geminiResult.cost,
-          generatedAt: Date.now(),
-          attemptNumber: generationAttempt,
-        };
+          if (result.assetSelection.table?.storageUrl) {
+            console.log(`[Orchestrator] Loading table: ${result.assetSelection.table.filename}`);
+            const tableBase64 = await this.loadImageAsBase64(result.assetSelection.table.storageUrl);
+            referenceImages.push({ base64: tableBase64, mimeType: "image/png", label: "table" });
+          }
 
-        totalCost += geminiResult.cost;
+          if (result.assetSelection.cup?.storageUrl) {
+            console.log(`[Orchestrator] Loading cup: ${result.assetSelection.cup.filename}`);
+            const cupBase64 = await this.loadImageAsBase64(result.assetSelection.cup.storageUrl);
+            referenceImages.push({ base64: cupBase64, mimeType: "image/png", label: "cup" });
+          }
+
+          console.log(`[Orchestrator] Sending ${referenceImages.length} reference images to Gemini`);
+
+          // Gemini ile görsel üret
+          const geminiResult = await this.gemini.transformImage(
+            productImageBase64,
+            "image/png",
+            {
+              prompt: result.optimizedPrompt.mainPrompt,
+              negativePrompt: result.optimizedPrompt.negativePrompt,
+              faithfulness: result.optimizedPrompt.faithfulness,
+              aspectRatio: result.optimizedPrompt.aspectRatio,
+              referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+            }
+          );
+
+          generatedImage = {
+            imageBase64: geminiResult.imageBase64,
+            mimeType: geminiResult.mimeType,
+            model: geminiResult.model,
+            cost: geminiResult.cost,
+            generatedAt: Date.now(),
+            attemptNumber: generationAttempt,
+          };
+
+          totalCost += geminiResult.cost;
+        } catch (genError) {
+          console.error(`[Orchestrator] Generation attempt ${generationAttempt} failed:`, genError);
+          // Hata oluştu, bir sonraki denemeye geç
+          continue;
+        }
 
         // ==========================================
         // STAGE 5: QUALITY CONTROL
@@ -241,6 +284,7 @@ export class Orchestrator {
 
         const qcResponse = await this.claude.evaluateImage(
           generatedImage.imageBase64,
+          generatedImage.mimeType,
           result.scenarioSelection,
           result.assetSelection.product
         );
@@ -356,18 +400,28 @@ export class Orchestrator {
   }> {
     const assetsRef = this.db.collection("assets");
 
-    const [products, plates, cups, tables] = await Promise.all([
+    // Support both English and Turkish category/subType names
+    const [products, plates, cups, tables, tablesAlt] = await Promise.all([
       assetsRef.where("category", "==", "products").where("subType", "==", productType).where("isActive", "==", true).get(),
       assetsRef.where("category", "==", "props").where("subType", "==", "plates").where("isActive", "==", true).get(),
       assetsRef.where("category", "==", "props").where("subType", "==", "cups").where("isActive", "==", true).get(),
       assetsRef.where("category", "==", "furniture").where("subType", "==", "tables").where("isActive", "==", true).get(),
+      // Alternative: Turkish terms
+      assetsRef.where("category", "==", "Mobilya").where("subType", "==", "Masa").where("isActive", "==", true).get(),
     ]);
+
+    const allTables = [
+      ...tables.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      ...tablesAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+    ];
+
+    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}`);
 
     return {
       products: products.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       plates: plates.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       cups: cups.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
-      tables: tables.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      tables: allTables,
     };
   }
 
@@ -533,7 +587,9 @@ COMPOSITION:
    */
   private async saveImageToStorage(imageBase64: string, mimeType: string): Promise<string> {
     const bucket = this.storage.bucket();
-    const filename = `generated/${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
+    // Use correct extension based on MIME type
+    const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/gif" ? "gif" : "png";
+    const filename = `generated/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
     const file = bucket.file(filename);
 
     const buffer = Buffer.from(imageBase64, "base64");
@@ -547,39 +603,122 @@ COMPOSITION:
   /**
    * Telegram onay mesajı gönder
    */
-  private async sendTelegramApproval(result: PipelineResult): Promise<number> {
-    // Telegram servisini import et ve mesaj gönder
-    // Bu kısım mevcut telegram.ts ile entegre edilecek
+  public async sendTelegramApproval(result: PipelineResult): Promise<number> {
+    if (!result.generatedImage || !result.generatedImage.storageUrl) {
+      throw new Error("Cannot send approval without generated image URL");
+    }
 
-    const caption = result.contentPackage?.caption || "";
-    const hashtags = result.contentPackage?.hashtags?.join(" ") || "";
-    const music = result.contentPackage?.musicAsset?.filename || "Önerilmedi";
-    const score = result.qualityControl?.score || 0;
-    const cost = result.totalCost.toFixed(4);
+    // Storage URL'i public URL'e veya signed URL'e çevir
+    // Telegram'ın erişebilmesi için signed URL oluştur
+    const bucket = this.storage.bucket();
+    console.log(`[Orchestrator] Bucket: ${bucket.name}, StorageURL: ${result.generatedImage.storageUrl}`);
 
-    const message = `
-🎨 *Yeni İçerik Hazır*
+    // GS URL'den path'i çıkarırken dikkatli olalım
+    let filePath = result.generatedImage.storageUrl;
+    if (filePath.startsWith(`gs://${bucket.name}/`)) {
+      filePath = filePath.replace(`gs://${bucket.name}/`, "");
+    } else if (filePath.startsWith("gs://")) {
+      // Farklı bir bucket veya format olabilir, manuel parse edelim
+      const parts = filePath.split("gs://")[1].split("/");
+      parts.shift(); // bucket ismini at
+      filePath = parts.join("/");
+    }
 
-📝 *Caption:*
-${caption}
+    const file = bucket.file(filePath);
+    console.log(`[Orchestrator] FilePath: ${filePath}`);
 
-#️⃣ *Hashtags:*
-${hashtags}
+    // Generate accessible URL for Telegram
+    // Strategy 1: Firebase Download Token (Preferred)
+    let imageUrl = "";
 
-🎵 *Müzik:* ${music}
+    try {
+      // Try to get/create download token
+      const [metadata] = await file.getMetadata();
+      let token = metadata.metadata?.firebaseStorageDownloadTokens;
 
-📊 *Kalite Skoru:* ${score}/10
-💰 *Maliyet:* $${cost}
+      if (!token) {
+        // Create new token
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { randomUUID } = require("crypto");
+          token = randomUUID();
+        } catch (e) {
+          // Fallback for older node versions or if crypto fails
+          token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+        }
 
-*Senaryo:* ${result.scenarioSelection?.scenarioName}
-*Ürün:* ${result.assetSelection?.product.filename}
-`;
+        // Check token validity
+        if (!token) {
+          throw new Error("Token generation failed");
+        }
 
-    // TODO: Gerçek Telegram entegrasyonu
-    console.log("[Orchestrator] Telegram message:", message);
+        await file.setMetadata({
+          metadata: {
+            firebaseStorageDownloadTokens: token,
+          },
+        });
+      }
 
-    // Placeholder - gerçek messageId dönecek
-    return Date.now();
+      const encodedPath = encodeURIComponent(filePath).replace(/\//g, "%2F");
+      imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
+
+      console.log(`[Orchestrator] Generated Download URL: ${imageUrl}`);
+    } catch (urlError) {
+      console.error("[Orchestrator] URL Generation failed:", urlError);
+      // Fallback: Don't crash, just send text
+      // But sendApprovalRequest expects image... 
+      // We will let it try with signedUrl if we haven't tried
+      try {
+        const [signedUrl] = await file.getSignedUrl({
+          action: "read",
+          expires: Date.now() + 3600 * 1000,
+        });
+        imageUrl = signedUrl;
+      } catch (signError) {
+        console.error("[Orchestrator] Signed URL also failed:", signError);
+        throw new Error("Could not generate any accessible URL for image");
+      }
+    }
+
+    // Create a safe, unique ID for Telegram callback_data
+    // Format: job_{timestamp}_{random} (no dots, no slashes)
+    const shortId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    // Save to photos queue so Telegram callback handler can find it
+    const photoItem = {
+      id: shortId,
+      filename: result.assetSelection?.product.filename || "image.png",
+      originalUrl: result.assetSelection?.product.storageUrl || "",
+      enhancedUrl: imageUrl, // The generated image URL
+      uploadedAt: Date.now(),
+      processed: true,
+      status: "awaiting_approval",
+      schedulingMode: "immediate",
+      productName: result.assetSelection?.product.filename || "Ürün",
+      productCategory: result.assetSelection?.product.category || "special-orders",
+      captionTemplateName: result.scenarioSelection?.scenarioName,
+      caption: result.contentPackage?.caption || "",
+      styleVariant: result.assetSelection?.product.visualProperties?.style || "lifestyle-moments",
+      aiModel: "gemini-pro",
+      faithfulness: result.optimizedPrompt?.faithfulness || 0.7,
+      // Store reference to pipeline result
+      pipelineResultId: shortId, // Reference to this item
+      generatedStorageUrl: result.generatedImage.storageUrl,
+    };
+
+    // Save to photos collection with the short ID as document ID
+    await this.db.collection("media-queue").doc(shortId).set(photoItem);
+    console.log(`[Orchestrator] Saved photo to queue with ID: ${shortId}`);
+
+    const messageId = await this.telegram.sendApprovalRequest(
+      {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...photoItem as any,
+      },
+      imageUrl
+    );
+
+    return messageId;
   }
 
   /**

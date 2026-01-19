@@ -6,7 +6,7 @@
  * Uses direct HTTP calls instead of Telegraf for faster cold starts
  */
 
-import {TelegramConfig, Photo} from "../types";
+import { TelegramConfig, Photo } from "../types";
 
 const TELEGRAM_API_BASE = "https://api.telegram.org/bot";
 
@@ -54,11 +54,17 @@ export class TelegramService {
   private async callApi<T>(method: string, params: object): Promise<T> {
     const response = await fetch(`${this.apiBase}/${method}`, {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
 
-    const data = await response.json() as {ok: boolean; result: T; description?: string};
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(`[Telegram] HTTP Error ${response.status}: ${text}`);
+      throw new Error(`Telegram API HTTP error: ${response.status}`);
+    }
+
+    const data = await response.json() as { ok: boolean; result: T; description?: string };
 
     if (!data.ok) {
       throw new Error(`Telegram API error: ${data.description || "Unknown error"}`);
@@ -80,17 +86,17 @@ export class TelegramService {
     const inlineKeyboard = {
       inline_keyboard: [
         [
-          {text: "✅ Onayla", callback_data: `approve_${item.id}`},
-          {text: "❌ Reddet", callback_data: `reject_${item.id}`},
+          { text: "✅ Onayla", callback_data: `approve_${item.id}` },
+          { text: "❌ Reddet", callback_data: `reject_${item.id}` },
         ],
         [
-          {text: "🔄 Yeniden Oluştur", callback_data: `regenerate_${item.id}`},
+          { text: "🔄 Yeniden Oluştur", callback_data: `regenerate_${item.id}` },
         ],
       ],
     };
 
     try {
-      const result = await this.callApi<{message_id: number}>("sendPhoto", {
+      const result = await this.callApi<{ message_id: number }>("sendPhoto", {
         chat_id: this.chatId,
         photo: enhancedUrl,
         caption: caption,
@@ -102,6 +108,18 @@ export class TelegramService {
       return result.message_id;
     } catch (error) {
       console.error("[Telegram] Failed to send approval request:", error);
+
+      // Fallback: Send text message with link for debugging
+      try {
+        await this.callApi("sendMessage", {
+          chat_id: this.chatId,
+          text: `⚠️ <b>Görsel Gönderilemedi</b>\n\nTelegram API görseli kabul etmedi. Link üzerinden kontrol edebilirsiniz:\n\n🔗 <a href="${enhancedUrl}">Görsel Linki</a>\n\nHata: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`,
+          parse_mode: "HTML",
+        });
+      } catch (fallbackError) {
+        console.error("[Telegram] Fallback message also failed:", fallbackError);
+      }
+
       throw error;
     }
   }
@@ -412,6 +430,6 @@ export class TelegramService {
       return null;
     }
 
-    return {action, itemId};
+    return { action, itemId };
   }
 }

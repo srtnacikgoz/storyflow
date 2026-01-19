@@ -67,11 +67,31 @@ export const telegramWebhook = functions
             const queue = new QueueService();
             const telegram = new TelegramService(telegramConfig);
 
-            const item = await queue.getById(parsed.itemId);
+            console.log(`[Telegram Webhook] Looking for item: ${parsed.itemId} in queue`);
+            let item = await queue.getById(parsed.itemId);
 
             if (!item) {
-                console.error("[Telegram Webhook] Item not found:", parsed.itemId);
-                await telegram.sendError("Görsel bulunamadı", parsed.itemId);
+                console.error("[Telegram Webhook] Item via QueueService not found:", parsed.itemId);
+
+                // FALLBACK: Check 'photos' collection (legacy support)
+                try {
+                    const db = await import("firebase-admin/firestore").then(m => m.getFirestore());
+                    const legacyDoc = await db.collection("photos").doc(parsed.itemId).get();
+                    if (legacyDoc.exists) {
+                        console.log("[Telegram Webhook] FOUND in legacy 'photos' collection!");
+                        // We found it, but QueueService can't handle it. We need to handle it manually or migration.
+                        // For now, let's just error but log it was found there.
+                        await telegram.sendError("Hata: Görsel eski koleksiyonda (photos) kaldı. Lütfen yeniden oluşturun.", parsed.itemId);
+                        response.status(404).json({ error: "Item in legacy collection" });
+                        return;
+                    } else {
+                        console.log("[Telegram Webhook] Not found in legacy 'photos' either.");
+                    }
+                } catch (e) {
+                    console.error("[Telegram Webhook] Fallback check failed:", e);
+                }
+
+                await telegram.sendError(`Görsel bulunamadı (ID: ${parsed.itemId})`, parsed.itemId);
                 response.status(404).json({ error: "Item not found" });
                 return;
             }

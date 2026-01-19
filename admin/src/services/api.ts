@@ -685,6 +685,25 @@ class ApiService {
   }
 
   /**
+   * Telegram bildirimini tekrar gönder
+   */
+  async orchestratorResendTelegram(slotId: string): Promise<{
+    success: boolean;
+    message: string;
+    messageId?: number;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      message: string;
+      messageId?: number;
+    }>("orchestratorResendTelegram", {
+      method: "POST",
+      body: JSON.stringify({ slotId }),
+    });
+    return response;
+  }
+
+  /**
    * Tek bir slot'un detaylarını getir (polling için)
    */
   async getScheduledSlot(slotId: string): Promise<{

@@ -79,7 +79,6 @@ Seçim kriterleri:
 2. STİL TUTARLILIĞI: Modern/rustic/minimal tarzlar karışmamalı
 3. ZAMAN UYUMU: Sabah için aydınlık, akşam için sıcak tonlar
 4. KULLANIM ROTASYONU: Az kullanılmış asset'lere öncelik ver
-5. MÜZİK UYUMU: Mood'a uygun müzik seç
 
 JSON formatında yanıt ver.`;
 
@@ -92,41 +91,41 @@ MEVCUT ASSET'LER:
 
 ÜRÜNLER:
 ${JSON.stringify(availableAssets.products.map((a: Asset) => ({
-  id: a.id,
-  filename: a.filename,
-  colors: a.visualProperties?.dominantColors,
-  style: a.visualProperties?.style,
-  usageCount: a.usageCount,
-  tags: a.tags
-})), null, 2)}
+      id: a.id,
+      filename: a.filename,
+      colors: a.visualProperties?.dominantColors,
+      style: a.visualProperties?.style,
+      usageCount: a.usageCount,
+      tags: a.tags
+    })), null, 2)}
 
 TABAKLAR:
 ${JSON.stringify(availableAssets.plates.map((a: Asset) => ({
-  id: a.id,
-  filename: a.filename,
-  colors: a.visualProperties?.dominantColors,
-  material: a.visualProperties?.material,
-  style: a.visualProperties?.style,
-  usageCount: a.usageCount
-})), null, 2)}
+      id: a.id,
+      filename: a.filename,
+      colors: a.visualProperties?.dominantColors,
+      material: a.visualProperties?.material,
+      style: a.visualProperties?.style,
+      usageCount: a.usageCount
+    })), null, 2)}
 
 FİNCANLAR:
 ${JSON.stringify(availableAssets.cups.map((a: Asset) => ({
-  id: a.id,
-  filename: a.filename,
-  colors: a.visualProperties?.dominantColors,
-  style: a.visualProperties?.style,
-  usageCount: a.usageCount
-})), null, 2)}
+      id: a.id,
+      filename: a.filename,
+      colors: a.visualProperties?.dominantColors,
+      style: a.visualProperties?.style,
+      usageCount: a.usageCount
+    })), null, 2)}
 
 MASALAR:
 ${JSON.stringify(availableAssets.tables.map((a: Asset) => ({
-  id: a.id,
-  filename: a.filename,
-  material: a.visualProperties?.material,
-  style: a.visualProperties?.style,
-  usageCount: a.usageCount
-})), null, 2)}
+      id: a.id,
+      filename: a.filename,
+      material: a.visualProperties?.material,
+      style: a.visualProperties?.style,
+      usageCount: a.usageCount
+    })), null, 2)}
 
 Yanıt formatı:
 {
@@ -300,6 +299,7 @@ Yanıt formatı:
    */
   async evaluateImage(
     imageBase64: string,
+    mimeType: string,
     expectedScenario: ScenarioSelection,
     originalProduct: Asset
   ): Promise<ClaudeResponse<QualityControlResult>> {
@@ -352,7 +352,8 @@ Görseli değerlendir ve JSON formatında yanıt ver:
               type: "image",
               source: {
                 type: "base64",
-                media_type: "image/png",
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                media_type: mimeType as any,
                 data: imageBase64,
               },
             },
@@ -458,8 +459,7 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
     "caption 2...",
     "caption 3..."
   ],
-  "hashtags": ["#sadepatisserie", "#antalya", ...],
-  "musicSuggestion": "Müzik önerisi (varsa)..."
+  "hashtags": ["#sadepatisserie", "#antalya", ...]
 }`;
 
     try {
@@ -489,7 +489,7 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
           caption: content.captions[0],
           captionAlternatives: content.captions.slice(1),
           hashtags: content.hashtags,
-          musicSuggestion: content.musicSuggestion,
+          // musicSuggestion kaldırıldı
           generatedAt: Date.now(),
         },
         tokensUsed,

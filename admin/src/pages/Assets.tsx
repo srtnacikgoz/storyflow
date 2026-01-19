@@ -51,7 +51,10 @@ export default function Assets() {
     setLoading(true);
     setError(null);
     try {
-      const filters = selectedCategory !== "all" ? { category: selectedCategory } : undefined;
+      const filters = {
+        ...(selectedCategory !== "all" ? { category: selectedCategory } : {}),
+        isActive: true
+      };
       const data = await api.listAssets(filters);
       setAssets(data);
     } catch (err) {
@@ -96,11 +99,10 @@ export default function Assets() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setSelectedCategory("all")}
-          className={`px-4 py-2 rounded-xl transition-colors ${
-            selectedCategory === "all"
+          className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === "all"
               ? "bg-brand-blue text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
+            }`}
         >
           Tümü ({assets.length})
         </button>
@@ -108,11 +110,10 @@ export default function Assets() {
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`px-4 py-2 rounded-xl transition-colors ${
-              selectedCategory === cat
+            className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === cat
                 ? "bg-brand-blue text-white"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
+              }`}
           >
             {CATEGORY_LABELS[cat]} ({groupedAssets[cat]?.length || 0})
           </button>
@@ -204,9 +205,8 @@ function AssetCard({
               {CATEGORY_LABELS[asset.category as AssetCategory]} / {SUBTYPE_LABELS[asset.subType] || asset.subType}
             </p>
           </div>
-          <span className={`px-2 py-0.5 rounded-full text-xs ${
-            asset.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-          }`}>
+          <span className={`px-2 py-0.5 rounded-full text-xs ${asset.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+            }`}>
             {asset.isActive ? "Aktif" : "Pasif"}
           </span>
         </div>

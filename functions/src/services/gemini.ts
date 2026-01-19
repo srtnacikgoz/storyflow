@@ -26,33 +26,33 @@ async function getGeminiSDK() {
 
 // Güvenlik ayarlarını runtime'da oluştur (lazy load sonrası)
 async function getSafetySettings() {
-  const {HarmCategory, HarmBlockThreshold} = await getGeminiSDK();
+  const { HarmCategory, HarmBlockThreshold } = await getGeminiSDK();
   return [
     {
       category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
     },
     {
       category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
     },
     {
       category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
     },
     {
       category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
     },
   ];
 }
 
 /**
  * Gemini model tipleri
- * - gemini-2.5-flash-image: Hızlı, test/günlük kullanım ($0.01/görsel)
- * - gemini-3-pro-image-preview: Yüksek kalite, final paylaşımlar ($0.04/görsel)
+ * - gemini-2.0-flash-exp: Hızlı, deneysel
+ * - gemini-1.5-pro: Yüksek kalite, kararlı sürüm
  */
-export type GeminiModel = "gemini-2.5-flash-image" | "gemini-3-pro-image-preview";
+export type GeminiModel = "gemini-2.0-flash-exp" | "gemini-1.5-pro" | "gemini-2.5-flash-image" | "gemini-3-pro-image-preview";
 
 /**
  * Gemini config
@@ -71,6 +71,7 @@ export interface ImageTransformOptions {
   faithfulness?: number; // 0.0 - 1.0 (varsayılan: 0.7)
   aspectRatio?: "1:1" | "9:16" | "16:9" | "4:3" | "3:4";
   textOverlay?: string; // Görsel üzerine yazılacak metin (opsiyonel)
+  referenceImages?: Array<{ base64: string; mimeType: string; label: string }>; // Ek referans görseller (tabak, masa vb.)
 }
 
 /**
@@ -119,9 +120,11 @@ export class GeminiService {
   /**
    * Maliyet sabitleri (USD per image)
    */
-  static readonly COSTS: Record<GeminiModel, number> = {
-    "gemini-2.5-flash-image": 0.01, // Test/günlük kullanım
-    "gemini-3-pro-image-preview": 0.04, // Final kalite
+  static readonly COSTS: Record<string, number> = {
+    "gemini-2.0-flash-exp": 0.01,
+    "gemini-1.5-pro": 0.04,
+    "gemini-2.5-flash-image": 0.01,
+    "gemini-3-pro-image-preview": 0.04,
   };
 
   constructor(config: GeminiConfig) {
@@ -134,7 +137,7 @@ export class GeminiService {
    */
   private async getClient() {
     if (!this.client) {
-      const {GoogleGenerativeAI} = await getGeminiSDK();
+      const { GoogleGenerativeAI } = await getGeminiSDK();
       this.client = new GoogleGenerativeAI(this.apiKey);
     }
     return this.client;
@@ -150,7 +153,7 @@ export class GeminiService {
         fit: "inside",
         withoutEnlargement: true,
       })
-      .png({quality: 90})
+      .png({ quality: 90 })
       .toBuffer();
   }
 
@@ -204,8 +207,38 @@ CREATIVE MODE (${Math.round(faithfulness * 100)}%):
 - Creative styling and atmospheric changes are encouraged`;
     }
 
-    // Full prompt oluştur
-    let fullPrompt = options.prompt + faithfulnessInstruction;
+    // IMG2IMG EDIT PREFIX - Gemini'a bu görseli düzenlemesini açıkça söyle
+    let editPrefix = `EDIT THIS IMAGE. Multiple reference images are attached.
+The FIRST image is the MAIN PRODUCT (pastry/croissant/cake) - this MUST appear in the output exactly as shown.
+`;
+
+    // Add reference image instructions if they exist
+    if (options.referenceImages && options.referenceImages.length > 0) {
+      editPrefix += `The following additional reference images are also attached and should be used in the scene:
+`;
+      for (const ref of options.referenceImages) {
+        editPrefix += `- A ${ref.label.toUpperCase()} image - use this exact ${ref.label} in the scene
+`;
+      }
+    }
+
+    editPrefix += `
+Your task is to COMPOSE a scene using ALL the attached reference images.
+CRITICAL INSTRUCTION: You MUST use the provided reference images EXACTLY as they are.
+1. The PRODUCT from the first image MUST appear exactly as shown.
+2. If a PLATE reference is provided, you MUST use that EXACT plate. Do NOT generate a different plate.
+3. If a TABLE reference is provided, you MUST use that EXACT table surface/texture. Do NOT change the table color or material.
+4. If a CUP reference is provided, you MUST use that EXACT cup.
+
+This is a COMPOSITION task. Do NOT generate new props if references are provided. Use the provided assets to build the scene.
+STRICTLY ADHERE TO THE COLORS AND MATERIALS OF THE REFERENCE IMAGES.
+For example, if the table reference is gray, the table in the output MUST be gray. If the plate has a gold rim, the output plate MUST have a gold rim.
+
+SCENE DIRECTION:
+`;
+
+    // Full prompt oluştur - edit prefix ilk sırada
+    let fullPrompt = editPrefix + options.prompt + faithfulnessInstruction;
 
     // Text overlay varsa prompt'a ekle
     if (options.textOverlay) {
@@ -217,18 +250,40 @@ CREATIVE MODE (${Math.round(faithfulness * 100)}%):
       fullPrompt += `\n\nAVOID: ${options.negativePrompt}`;
     }
 
+    // Metin yanıtını engellemek için kesin talimat
+    fullPrompt += "\n\nCRITICAL: Edit the image and return ONLY the edited image. Do not provide any text. The product in your output MUST be the same product from the input image.";
+
     try {
       console.log(`[GeminiService] Generating with model: ${this.model}`);
 
-      const result = await genModel.generateContent([
+      // Build content array with main image + reference images
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const contentParts: any[] = [
         {
           inlineData: {
             mimeType: mimeType || "image/png",
             data: optimizedBase64,
           },
         },
-        {text: fullPrompt},
-      ]);
+      ];
+
+      // Add reference images if provided (plate, table, cup)
+      if (options.referenceImages && options.referenceImages.length > 0) {
+        console.log(`[GeminiService] Adding ${options.referenceImages.length} reference images`);
+        for (const refImg of options.referenceImages) {
+          contentParts.push({
+            inlineData: {
+              mimeType: refImg.mimeType || "image/png",
+              data: refImg.base64,
+            },
+          });
+        }
+      }
+
+      // Add prompt at the end
+      contentParts.push({ text: fullPrompt });
+
+      const result = await genModel.generateContent(contentParts);
 
       const response = result.response;
 

@@ -26,7 +26,7 @@ async function getOrchestratorConfig(claudeKey?: string): Promise<OrchestratorCo
     claudeApiKey: claudeKey || claudeApiKey.value() || "",
     claudeModel: "claude-sonnet-4-20250514",
     geminiApiKey: config.gemini.apiKey,
-    geminiModel: "gemini-2.0-flash-exp",
+    geminiModel: "gemini-3-pro-image-preview",
     qualityThreshold: 7,
     maxRetries: 3,
     telegramBotToken: config.telegram?.botToken || "",
@@ -482,8 +482,81 @@ export const orchestratorGenerateNow = functions
             duration: result.duration,
           });
         }
+        // ... (previous)
       } catch (error) {
         console.error("[orchestratorGenerateNow] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Telegram bildirimini tekrar gönder (manuel tetikleme)
+ */
+export const orchestratorResendTelegram = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 60, secrets: [claudeApiKey] })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const { slotId } = request.body as { slotId: string };
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        // Slot'u getir
+        const slotDoc = await db.collection("scheduled-slots").doc(slotId).get();
+        if (!slotDoc.exists) {
+          response.status(404).json({ success: false, error: "Slot not found" });
+          return;
+        }
+
+        const slot = slotDoc.data();
+        if (!slot?.pipelineResult) {
+          response.status(400).json({ success: false, error: "Slot does not have pipeline result" });
+          return;
+        }
+
+        // Config ve Orchestrator başlat
+        const config = await getOrchestratorConfig();
+        // Orchestrator'ı doğrudan import edip kullanmamız lazım (Wrapper'sız)
+        // Imports kısmına eklememiz gerekebilir veya dinamik import
+        // Type sorunu yaşamamak için any cast veya import düzeltmesi
+
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { Orchestrator } = require("../orchestrator/orchestrator");
+        const orchestrator = new Orchestrator(config);
+
+        const messageId = await orchestrator.sendTelegramApproval(slot.pipelineResult);
+
+        // Slot'u güncelle
+        await db.collection("scheduled-slots").doc(slotId).update({
+          telegramMessageId: messageId,
+          updatedAt: Date.now(),
+        });
+
+        response.json({
+          success: true,
+          message: "Telegram notification resent",
+          messageId,
+        });
+
+      } catch (error) {
+        console.error("[orchestratorResendTelegram] Error:", error);
         response.status(500).json({
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

@@ -265,8 +265,8 @@ export default function OrchestratorDashboard() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
             <h3 className="text-lg font-semibold mb-4">
               {progressInfo?.status === "failed" ? "Üretim Başarısız" :
-               progressInfo?.status === "awaiting_approval" ? "Üretim Tamamlandı!" :
-               "İçerik Üretiliyor..."}
+                progressInfo?.status === "awaiting_approval" ? "Üretim Tamamlandı!" :
+                  "İçerik Üretiliyor..."}
             </h3>
 
             {/* Progress Bar */}
@@ -279,11 +279,10 @@ export default function OrchestratorDashboard() {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
-                  className={`h-3 rounded-full transition-all duration-500 ${
-                    progressInfo?.status === "failed" ? "bg-red-500" :
-                    progressInfo?.status === "awaiting_approval" ? "bg-green-500" :
-                    "bg-brand-blue"
-                  }`}
+                  className={`h-3 rounded-full transition-all duration-500 ${progressInfo?.status === "failed" ? "bg-red-500" :
+                      progressInfo?.status === "awaiting_approval" ? "bg-green-500" :
+                        "bg-brand-blue"
+                    }`}
                   style={{
                     width: `${progressInfo ? (progressInfo.stageIndex / progressInfo.totalStages) * 100 : 0}%`,
                   }}
@@ -302,12 +301,11 @@ export default function OrchestratorDashboard() {
                 return (
                   <div
                     key={key}
-                    className={`flex items-center gap-2 text-sm ${
-                      isDone ? "text-green-600" :
-                      isFailed ? "text-red-600" :
-                      isCurrent ? "text-brand-blue font-medium" :
-                      "text-gray-400"
-                    }`}
+                    className={`flex items-center gap-2 text-sm ${isDone ? "text-green-600" :
+                        isFailed ? "text-red-600" :
+                          isCurrent ? "text-brand-blue font-medium" :
+                            "text-gray-400"
+                      }`}
                   >
                     {isDone ? (
                       <span className="w-5 h-5 flex items-center justify-center bg-green-100 rounded-full text-xs">✓</span>
@@ -532,9 +530,37 @@ export default function OrchestratorDashboard() {
                       {new Date(slot.scheduledTime).toLocaleString("tr-TR")}
                     </p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${colors.bg} ${colors.text}`}>
-                    {STATUS_LABELS[slot.status] || slot.status}
-                  </span>
+
+                  <div className="flex items-center gap-3">
+                    {/* Resend Notification Button */}
+                    {slot.status === "awaiting_approval" && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Telegram bildirimi tekrar gönderilsin mi?")) return;
+                          try {
+                            setLoading(true);
+                            await api.orchestratorResendTelegram(slot.id);
+                            alert("Bildirim gönderildi!");
+                          } catch (err) {
+                            alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen hata"));
+                          } finally {
+                            setLoading(false);
+                            loadData();
+                          }
+                        }}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Telegram Bildirimini Tekrar Gönder"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      </button>
+                    )}
+
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${colors.bg} ${colors.text}`}>
+                      {STATUS_LABELS[slot.status] || slot.status}
+                    </span>
+                  </div>
                 </div>
               );
             })}
