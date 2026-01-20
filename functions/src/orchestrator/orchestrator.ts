@@ -82,12 +82,16 @@ export class Orchestrator {
 
   /**
    * Tam pipeline'ı çalıştır
+   * @param productType - Urun tipi
+   * @param timeSlotRule - Zaman kurali
    * @param onProgress - Her aşamada çağrılan callback (opsiyonel)
+   * @param slotId - scheduled-slots koleksiyonundaki ID (Telegram callback icin)
    */
   async runPipeline(
     productType: ProductType,
     timeSlotRule: TimeSlotRule,
-    onProgress?: (stage: string, stageIndex: number, totalStages: number) => Promise<void>
+    onProgress?: (stage: string, stageIndex: number, totalStages: number) => Promise<void>,
+    slotId?: string
   ): Promise<PipelineResult> {
     const TOTAL_STAGES = 7; // asset, scenario, prompt, image, quality, content, telegram
     const startedAt = Date.now();
@@ -105,6 +109,7 @@ export class Orchestrator {
       status,
       totalCost: 0,
       startedAt,
+      slotId, // scheduled-slots referansi - Telegram callback icin
     };
 
     try {
@@ -786,6 +791,8 @@ NEGATIVE REQUIREMENTS:
       // Store reference to pipeline result
       pipelineResultId: shortId, // Reference to this item
       generatedStorageUrl: result.generatedImage.storageUrl,
+      // Orchestrator slot referansi - Telegram callback'te scheduled-slots güncellemesi için
+      slotId: result.slotId,
     };
 
     // Save to photos collection with the short ID as document ID

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import type { QueueItem } from "../types";
+import { useLoadingOperation } from "../contexts/LoadingContext";
 
 // Kategori label'ları
 const categoryLabels: Record<string, string> = {
@@ -57,7 +58,12 @@ export default function Queue() {
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Global loading hooks
+  const { execute: executeDelete } = useLoadingOperation("queue-delete");
+  const { execute: executeProcess } = useLoadingOperation("queue-process");
 
   useEffect(() => {
     loadItems();
@@ -79,12 +85,18 @@ export default function Queue() {
   const processItem = async (itemId: string, skipEnhancement: boolean) => {
     setProcessing(itemId);
     try {
-      // Telegram onaylı paylaşım - önce Telegram'a gider, onay sonrası Instagram'a
-      await api.processQueueWithApproval({ itemId, skipEnhancement });
-      // Listeyi yenile
-      await loadItems();
+      const message = skipEnhancement
+        ? "Telegram'a gonderiliyor..."
+        : "AI ile isleniyor ve Telegram'a gonderiliyor...";
+
+      await executeProcess(async () => {
+        // Telegram onaylı paylaşım - önce Telegram'a gider, onay sonrası Instagram'a
+        await api.processQueueWithApproval({ itemId, skipEnhancement });
+        // Listeyi yenile
+        await loadItems();
+      }, message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "İşlem başarısız");
+      setError(err instanceof Error ? err.message : "Islem basarisiz");
     } finally {
       setProcessing(null);
     }
@@ -95,12 +107,17 @@ export default function Queue() {
   };
 
   const handleDelete = async (itemId: string) => {
+    setDeleting(itemId);
     try {
-      await api.deleteQueueItem(itemId);
-      setDeleteConfirm(null);
-      await loadItems();
+      await executeDelete(async () => {
+        await api.deleteQueueItem(itemId);
+        setDeleteConfirm(null);
+        await loadItems();
+      }, "Siliniyor...");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Silme işlemi başarısız");
+      setError(err instanceof Error ? err.message : "Silme islemi basarisiz");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -328,15 +345,17 @@ export default function Queue() {
                         <span className="text-sm text-red-600">Emin misiniz?</span>
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="text-sm px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                          disabled={deleting === item.id}
+                          className="text-sm px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Sil
+                          {deleting === item.id ? "Siliniyor..." : "Sil"}
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
-                          className="text-sm px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                          disabled={deleting === item.id}
+                          className="text-sm px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
                         >
-                          İptal
+                          Iptal
                         </button>
                       </div>
                     ) : (
@@ -344,7 +363,7 @@ export default function Queue() {
                         onClick={() => setDeleteConfirm(item.id)}
                         className="text-sm px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
                       >
-                        🗑️ Sil
+                        Sil
                       </button>
                     )}
                   </>

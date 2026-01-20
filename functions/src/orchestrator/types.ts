@@ -368,6 +368,9 @@ export interface PipelineResult {
   approvalStatus?: "pending" | "approved" | "rejected" | "regenerate";
   approvalRespondedAt?: number;
 
+  // Orchestrator scheduled-slots referansı
+  slotId?: string;
+
   // Final
   publishedAt?: number;
   instagramPostId?: string;

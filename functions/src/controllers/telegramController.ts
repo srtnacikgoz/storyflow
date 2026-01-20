@@ -1,4 +1,5 @@
 import * as functions from "firebase-functions";
+import { getFirestore } from "firebase-admin/firestore";
 import {
     isTelegramConfiguredLazy,
     getTelegramConfigLazy,
@@ -158,6 +159,24 @@ export const telegramWebhook = functions
                             await telegram.updateApprovalMessage(item.telegramMessageId, "approved");
                         }
 
+                        // Orchestrator scheduled-slots güncellemesi
+                        // slotId varsa, scheduled-slots koleksiyonundaki durumu da güncelle
+                        if (item.slotId) {
+                            try {
+                                const db = getFirestore();
+                                await db.collection("scheduled-slots").doc(item.slotId).update({
+                                    status: "completed",
+                                    igPostId: story.id,
+                                    completedAt: Date.now(),
+                                    updatedAt: Date.now(),
+                                });
+                                console.log("[Telegram Webhook] scheduled-slots updated:", item.slotId);
+                            } catch (slotError) {
+                                // Slot güncelleme hatası ana akışı etkilemesin
+                                console.error("[Telegram Webhook] scheduled-slots update failed:", slotError);
+                            }
+                        }
+
                         // Best Time to Post - Analitik kaydı
                         try {
                             const TimeScoreService = await getTimeScoreService();
@@ -180,6 +199,22 @@ export const telegramWebhook = functions
                             instagramError instanceof Error ? instagramError.message : "Instagram hatası",
                             parsed.itemId
                         );
+
+                        // Orchestrator scheduled-slots hata güncellemesi
+                        if (item.slotId) {
+                            try {
+                                const db = getFirestore();
+                                await db.collection("scheduled-slots").doc(item.slotId).update({
+                                    status: "failed",
+                                    error: instagramError instanceof Error ? instagramError.message : "Instagram error",
+                                    failedAt: Date.now(),
+                                    updatedAt: Date.now(),
+                                });
+                                console.log("[Telegram Webhook] scheduled-slots failed:", item.slotId);
+                            } catch (slotError) {
+                                console.error("[Telegram Webhook] scheduled-slots fail update failed:", slotError);
+                            }
+                        }
                     }
                     break;
                 }
@@ -193,19 +228,42 @@ export const telegramWebhook = functions
                     if (item.telegramMessageId) {
                         await telegram.updateApprovalMessage(item.telegramMessageId, "rejected");
                     }
+
+                    // Orchestrator scheduled-slots güncellemesi
+                    if (item.slotId) {
+                        try {
+                            const db = getFirestore();
+                            await db.collection("scheduled-slots").doc(item.slotId).update({
+                                status: "rejected",
+                                rejectedAt: Date.now(),
+                                updatedAt: Date.now(),
+                            });
+                            console.log("[Telegram Webhook] scheduled-slots rejected:", item.slotId);
+                        } catch (slotError) {
+                            console.error("[Telegram Webhook] scheduled-slots reject update failed:", slotError);
+                        }
+                    }
                     break;
                 }
 
                 case "regenerate": {
                     console.log("[Telegram Webhook] Regenerating item:", parsed.itemId);
 
-                    // Eski mesajı güncelle
+                    // ATOMIC LOCK: Race condition önleme
+                    // Birden fazla callback aynı anda gelirse sadece ilki işlenir
+                    const lockAcquired = await queue.tryMarkForRegeneration(parsed.itemId);
+
+                    if (!lockAcquired) {
+                        console.log("[Telegram Webhook] Regeneration already in progress, skipping duplicate:", parsed.itemId);
+                        // Telegram'a hemen yanıt ver - duplicate callback
+                        response.status(200).json({ ok: true, message: "Already regenerating" });
+                        return;
+                    }
+
+                    // Eski mesajı güncelle (lock alındıktan sonra)
                     if (item.telegramMessageId) {
                         await telegram.updateApprovalMessage(item.telegramMessageId, "regenerate");
                     }
-
-                    // Item'ı yeniden işleme için hazırla
-                    await queue.markForRegeneration(parsed.itemId);
 
                     // Otomatik yeniden işle
                     try {
@@ -216,16 +274,17 @@ export const telegramWebhook = functions
                         });
 
                         if (result.success) {
-                            console.log("[Telegram Webhook] Regeneration started:", parsed.itemId);
+                            console.log("[Telegram Webhook] Regeneration completed:", parsed.itemId);
                             // Yeni görsel Telegram'a gönderildi, kullanıcı yeni onay bekleyecek
                         } else {
+                            console.error("[Telegram Webhook] Regeneration failed:", result.error);
                             await telegram.sendError(
                                 result.error || "Yeniden oluşturma başarısız",
                                 parsed.itemId
                             );
                         }
                     } catch (regenError) {
-                        console.error("[Telegram Webhook] Regeneration failed:", regenError);
+                        console.error("[Telegram Webhook] Regeneration error:", regenError);
                         await telegram.sendError(
                             regenError instanceof Error ? regenError.message : "Yeniden oluşturma hatası",
                             parsed.itemId

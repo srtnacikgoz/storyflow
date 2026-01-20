@@ -1,8 +1,35 @@
 # Claude Code Proje Konfigürasyonu
 
+> **🔒 KURAL SİSTEMİ AKTİF:** Bu projede `.claude/rules/` klasöründeki kurallar **otomatik yüklenir** ve `rules-enforcer.js` hook'u ile **oturum boyunca zorunlu kılınır**. Kuralları görmezden gelme - hook sistemi hatırlatacak.
+
+---
+
+## ⚡ Otomatik Yüklenen Kurallar
+
+`.claude/rules/` klasöründeki tüm `.md` dosyaları **Claude Code tarafından otomatik okunur** ve her oturumda context'e eklenir. Bu kurallar **her zaman geçerlidir**.
+
+### Aktif Kural Dosyaları (Otomatik Yüklenen):
+| Dosya | İçerik | Öncelik |
+|-------|--------|---------|
+| `Iron-Rules.md` | Temel güvenlik ve iş akışı kuralları | 🔴 Kritik |
+| `PROJE-KURALLARI.md` | Kod standartları, mimari, git kuralları | 🔴 Kritik |
+| `BIREYSEL-ISTEKLER.md` | Kullanıcı iletişim tercihleri | 🟢 Normal |
+
+> **Not:** Bu dosyalar `.claude/rules/` içinde olduğu için Claude Code bunları otomatik olarak her conversation başında yükler.
+
+### İsteğe Bağlı Referanslar (Manuel Okunur):
+| Dosya | İçerik | Ne Zaman Oku? |
+|-------|--------|---------------|
+| `KURALLAR.md` | Görsel üretim kuralları (prompt yazımı) | Görsel/prompt çalışırken |
+| `ORCHESTRATOR.md` | AI orchestrator senaryoları ve çeşitlilik | Orchestrator geliştirirken |
+
+> **Not:** Bu dosyalar `.claude/references/` içinde. Token tasarrufu için her oturumda yüklenmez. Gerektiğinde `Read` ile okunur.
+
+---
+
 ## Oturum Başlangıç Protokolü
 
-Her oturum başında aşağıdaki dosyaları **sırasıyla oku ve uygula**:
+Otomatik yüklenen kuralların yanı sıra, aşağıdaki dosyaları **sırasıyla oku ve uygula**:
 
 ### 1. Proje Kuralları (Zorunlu)
 ```
@@ -120,8 +147,21 @@ Bir görev veya phase tamamlandığında:
 ├── zihinsel-algoritma-inşası.md      # GitHub araştırma SOP (REPO-FIRST)
 ├── Risk-ve-Dayanıklılık-Planı.md     # Anti-Fragile SOP (RISK-CHECK)
 ├── .claude/
-│   ├── project-rules.md              # Detaylı kurallar
+│   ├── rules/                        # ⚡ OTOMATİK YÜKLENEN KURALLAR
+│   │   ├── Iron-Rules.md             # Temel güvenlik kuralları
+│   │   ├── PROJE-KURALLARI.md        # Kod standartları, mimari
+│   │   └── BIREYSEL-ISTEKLER.md      # İletişim tercihleri
+│   ├── references/                   # 📖 İSTEĞE BAĞLI REFERANSLAR
+│   │   ├── KURALLAR.md               # Görsel üretim kuralları
+│   │   └── ORCHESTRATOR.md           # Orchestrator senaryoları
+│   ├── hooks/                        # Otomatik hook scriptleri
+│   │   ├── rules-enforcer.js         # ⚡ KURAL ZORLAMA (her oturumda çalışır)
+│   │   ├── orchestrator-sync.js      # ORCHESTRATOR.md değişince çalışır
+│   │   └── validate-config.js        # Deploy öncesi validasyon
+│   ├── skills/                       # Claude Code skills
+│   ├── project-rules.md              # Detaylı kod kuralları
 │   ├── kişiselbağlam.md              # İletişim tercihleri
+│   ├── settings.local.json           # Hook ve permission ayarları
 │   └── FEEDBACK.md                   # Bug/improvement takibi
 ├── .planning/
 │   ├── ROADMAP.md                    # Ana yol haritası
@@ -136,12 +176,60 @@ Bir görev veya phase tamamlandığında:
 ## Hatırlatmalar
 
 1. **Her oturumda** yukarıdaki 6 dosyayı oku ve uygula
-2. **Her iş bitiminde** ROADMAP'i güncelle
-3. **Bug bulduğunda** FEEDBACK.md'ye ekle
-4. **Yeni özellik tamamlandığında** checkbox'ı işaretle `[x]`
-5. **Commit atarken** project-rules.md formatına uy
-6. **Yeni konu/teknolojiye başlarken** `REPO-FIRST` protokolünü uygula
-7. **Yeni bağımlılık eklerken** `RISK-CHECK` protokolünü uygula
+2. **`.claude/rules/` kuralları** otomatik yüklenir - her zaman uygula
+3. **Her iş bitiminde** ROADMAP'i güncelle
+4. **Bug bulduğunda** FEEDBACK.md'ye ekle
+5. **Yeni özellik tamamlandığında** checkbox'ı işaretle `[x]`
+6. **Commit atarken** project-rules.md formatına uy
+7. **Yeni konu/teknolojiye başlarken** `REPO-FIRST` protokolünü uygula
+8. **Yeni bağımlılık eklerken** `RISK-CHECK` protokolünü uygula
+9. **Görsel üretirken** `.claude/references/KURALLAR.md` oku ve uygula
+10. **Orchestrator çalışırken** `.claude/references/ORCHESTRATOR.md` oku ve uygula
+
+---
+
+## Hooks Sistemi (Kural Zorlama)
+
+`.claude/hooks/` klasöründeki scriptler **otomatik çalışır** ve kuralların uygulanmasını garanti eder.
+
+### Ana Hook: rules-enforcer.js
+
+| Mod | Tetikleyici | Ne Yapar |
+|-----|-------------|----------|
+| `session-start` | **Her mesajda** (UserPromptSubmit) | Tüm kuralları yükler, hızlı hatırlatma gösterir |
+| `pre-write` | Dosya yazmadan önce (PreToolUse Write) | Yazma kurallarını hatırlatır |
+| `pre-bash` | `rm` komutu öncesi (PreToolUse Bash) | Tehlikeli komutları engeller |
+| `pre-deploy` | Deploy öncesi (PreToolUse Bash) | Kontrol listesi gösterir |
+| `reminder` | Dosya okuma sonrası (PostToolUse Read) | Rastgele kural hatırlatması |
+
+### Diğer Hook'lar
+
+| Hook | Tetikleyici | Ne Yapar |
+|------|-------------|----------|
+| `orchestrator-sync.js` | ORCHESTRATOR.md değişince | Kuralları parse edip JSON'a çevirir |
+| `validate-config.js` | Deploy öncesi | Konfigürasyon doğrulaması |
+
+### Konfigürasyon
+
+Hook'lar `settings.local.json` içinde tanımlanır:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{ "command": "rules-enforcer.js session-start" }],
+    "PreToolUse": [
+      { "matcher": "Write", "command": "rules-enforcer.js pre-write" },
+      { "matcher": "Bash(firebase deploy*)", "command": "rules-enforcer.js pre-deploy" },
+      { "matcher": "Bash(rm *)", "command": "rules-enforcer.js pre-bash" }
+    ],
+    "PostToolUse": [
+      { "matcher": "Read", "command": "rules-enforcer.js reminder" }
+    ]
+  }
+}
+```
+
+> **Önemli:** Bu sistem sayesinde kurallar her oturumda otomatik yüklenir ve oturum boyunca hatırlatılır.
 
 ---
 
@@ -151,3 +239,16 @@ Bir görev veya phase tamamlandığında:
 |-------------|-------|------------------|
 | `REPO-FIRST` | zihinsel-algoritma-inşası.md | Yeni konu, tıkanma, derinleşme |
 | `RISK-CHECK` | Risk-ve-Dayanıklılık-Planı.md | Yeni bağımlılık, mimari karar |
+
+---
+
+## Kural Ekleme Rehberi
+
+Yeni kural eklemek için:
+
+1. `.claude/rules/` klasörüne `.md` dosyası ekle
+2. Dosya adı açıklayıcı olsun (örn: `YENI-KURAL.md`)
+3. İçerikte kuralları açık ve net yaz
+4. Claude Code bir sonraki oturumda otomatik yükleyecek
+
+> **Önemli:** `rules/` klasöründeki her `.md` dosyası Claude Code context'ine otomatik eklenir.

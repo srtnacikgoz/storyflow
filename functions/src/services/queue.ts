@@ -155,12 +155,17 @@ export class QueueService {
   }
 
   /**
-   * Get all pending items
-   * @return {Promise<Photo[]>} All pending photos
+   * Get all active queue items (pending, processing, awaiting_approval, scheduled)
+   * Bu fonksiyon kuyruk sayfasinda gosterilecek tum aktif item'lari dondurur
+   * @return {Promise<Photo[]>} All active photos
    */
   async getAllPending(): Promise<Photo[]> {
+    // Aktif durumlar: pending, processing, awaiting_approval, scheduled
+    const activeStatuses = ["pending", "processing", "awaiting_approval", "scheduled"];
+
+    // Firestore 'in' query ile birden fazla status sorgula
     const snapshot = await this.collection
-      .where("status", "==", "pending")
+      .where("status", "in", activeStatuses)
       .orderBy("uploadedAt", "asc")
       .get();
 
@@ -505,6 +510,61 @@ export class QueueService {
       enhancementError: FieldValue.delete(),
     });
     console.log("[Queue] Marked for regeneration:", id);
+  }
+
+  /**
+   * Try to mark item for regeneration atomically (with transaction)
+   * Prevents duplicate regeneration from concurrent Telegram callbacks
+   * @param {string} id - Document ID
+   * @return {Promise<boolean>} true if successfully marked, false if already being processed
+   */
+  async tryMarkForRegeneration(id: string): Promise<boolean> {
+    const docRef = this.collection.doc(id);
+
+    try {
+      const success = await this.db.runTransaction(async (transaction) => {
+        const doc = await transaction.get(docRef);
+
+        if (!doc.exists) {
+          console.log("[Queue] tryMarkForRegeneration - item not found:", id);
+          return false;
+        }
+
+        const data = doc.data()!;
+
+        // Sadece awaiting_approval durumundaysa işle
+        // Bu, race condition'ı önler - ilk callback status'ü değiştirir,
+        // sonraki callback'ler bu kontrolde takılır
+        if (data.status !== "awaiting_approval") {
+          console.log("[Queue] tryMarkForRegeneration - already processing:", id, data.status);
+          return false;
+        }
+
+        // Atomic olarak pending'e çevir
+        transaction.update(docRef, {
+          status: "pending",
+          approvalStatus: "regenerating", // Özel flag - yeniden oluşturuluyor
+          approvalRequestedAt: FieldValue.delete(),
+          approvalRespondedAt: FieldValue.delete(),
+          telegramMessageId: FieldValue.delete(),
+          enhancedUrl: FieldValue.delete(),
+          isEnhanced: FieldValue.delete(),
+          enhancementError: FieldValue.delete(),
+          regenerationStartedAt: Date.now(), // Debug için
+        });
+
+        return true;
+      });
+
+      if (success) {
+        console.log("[Queue] Successfully marked for regeneration (atomic):", id);
+      }
+
+      return success;
+    } catch (error) {
+      console.error("[Queue] tryMarkForRegeneration transaction failed:", error);
+      return false;
+    }
   }
 
   /**

@@ -44,11 +44,19 @@ Bu dosya proje ile ilgili hataları, geri bildirimleri, iyileştirme önerilerin
 ## [BUG-002] Telegram "Yeniden Oluştur" 6 Görsel Sorunu
 - **Kategori:** bug
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** closed
 - **Tarih:** 2026-01-20
+- **Çözüm Tarihi:** 2026-01-20
 - **Açıklama:** Telegram'a gelen görsel için "yeniden oluştur" denildiğinde 6 tane yeniden görsel oluşturuyor ve hiçbiri paylaşılabilir veya silinebilir değil.
 - **Etki:** Kullanıcı deneyimini ciddi şekilde bozuyor
-- **Öneri:** Pipeline yeniden tetikleme mantığı kontrol edilmeli, duplicate prevention eklenmeli
+- **Kök Neden:** Race condition - Telegram birden fazla callback gönderdiğinde (hızlı tıklama veya retry) her callback aynı anda `item.status !== "awaiting_approval"` kontrolünü geçiyordu ve paralel `processWithApproval` çağrıları yapılıyordu.
+- **Çözüm:**
+  1. `queue.ts`'e `tryMarkForRegeneration()` fonksiyonu eklendi - Firestore transaction ile atomic status kontrolü
+  2. `telegramController.ts`'de regenerate case güncellendi - ilk callback lock alıyor, sonrakiler reddediliyor
+  3. Yeni `approvalStatus: "regenerating"` flag eklendi
+- **Dosyalar:**
+  - `functions/src/services/queue.ts` (tryMarkForRegeneration eklendi)
+  - `functions/src/controllers/telegramController.ts` (regenerate case güncellendi)
 
 ---
 

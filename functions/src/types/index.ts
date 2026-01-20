@@ -100,6 +100,9 @@ export interface Photo {
   igPostId?: string;
   error?: string;
 
+  // ORCHESTRATOR INTEGRATION
+  slotId?: string; // scheduled-slots koleksiyonundaki referans ID
+
   // PRODUCT INFORMATION
   productCategory: ProductCategory;
   productSubType?: string; // "3-ball", "10-ball", "wedding-cake", etc.

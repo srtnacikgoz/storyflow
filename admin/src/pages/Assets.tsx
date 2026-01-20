@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
 import type { OrchestratorAsset, AssetCategory } from "../types";
+import { useLoadingOperation } from "../contexts/LoadingContext";
 
 // Kategori etiketleri
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
@@ -43,6 +44,10 @@ export default function Assets() {
   const [selectedCategory, setSelectedCategory] = useState<AssetCategory | "all">("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Global loading hook
+  const { execute: executeDelete } = useLoadingOperation("asset-delete");
 
   useEffect(() => {
     loadAssets();
@@ -59,19 +64,24 @@ export default function Assets() {
       const data = await api.listAssets(filters);
       setAssets(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Veri yüklenemedi");
+      setError(err instanceof Error ? err.message : "Veri yuklenemedi");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bu görseli silmek istediğinizden emin misiniz?")) return;
+    if (!confirm("Bu gorseli silmek istediginizden emin misiniz?")) return;
+    setDeletingId(id);
     try {
-      await api.deleteAsset(id);
-      loadAssets();
+      await executeDelete(async () => {
+        await api.deleteAsset(id);
+        await loadAssets();
+      }, "Gorsel siliniyor...");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Silme hatası");
+      alert(err instanceof Error ? err.message : "Silme hatasi");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -180,6 +190,7 @@ export default function Assets() {
                   key={asset.id}
                   asset={asset}
                   onDelete={() => handleDelete(asset.id)}
+                  isDeleting={deletingId === asset.id}
                 />
               ))}
             </div>
@@ -259,9 +270,10 @@ export default function Assets() {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button
                             onClick={() => handleDelete(asset.id)}
-                            className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors"
+                            disabled={deletingId === asset.id}
+                            className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            Sil
+                            {deletingId === asset.id ? "Siliniyor..." : "Sil"}
                           </button>
                         </td>
                       </tr>
@@ -288,13 +300,15 @@ export default function Assets() {
   );
 }
 
-// Asset kartı
+// Asset karti
 function AssetCard({
   asset,
   onDelete,
+  isDeleting,
 }: {
   asset: OrchestratorAsset;
   onDelete: () => void;
+  isDeleting?: boolean;
 }) {
   return (
     <div className="card hover:shadow-md transition-shadow">
@@ -361,9 +375,10 @@ function AssetCard({
         <div className="flex gap-2 pt-2 border-t border-gray-100">
           <button
             onClick={onDelete}
-            className="text-red-500 hover:text-red-700 text-sm"
+            disabled={isDeleting}
+            className="text-red-500 hover:text-red-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Sil
+            {isDeleting ? "Siliniyor..." : "Sil"}
           </button>
         </div>
       </div>

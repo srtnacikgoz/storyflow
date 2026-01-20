@@ -270,8 +270,8 @@ export class OrchestratorScheduler {
         });
       };
 
-      // Pipeline çalıştır (progress callback ile)
-      const result = await orchestrator.runPipeline(productType, rule, onProgress);
+      // Pipeline çalıştır (progress callback ile, slotId ile)
+      const result = await orchestrator.runPipeline(productType, rule, onProgress, slotId);
 
       // Slot'u güncelle (undefined değerleri temizle)
       await this.db.collection("scheduled-slots").doc(slotId).update({
