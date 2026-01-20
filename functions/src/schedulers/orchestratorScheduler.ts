@@ -16,6 +16,7 @@ export const orchestratorScheduler = onSchedule(
     {
         schedule: "*/15 * * * *", // Every 15 minutes
         timeZone: "Europe/Istanbul",
+        region: "europe-west1",
         retryCount: 3,
         memory: "1GiB", // Using 1GB to be safe with image processing if needed
         secrets: [claudeApiKey],

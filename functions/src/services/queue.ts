@@ -6,8 +6,8 @@
  * Collection: media-queue
  */
 
-import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
-import {Photo, ProductCategory} from "../types";
+import { getFirestore, Timestamp, FieldValue } from "firebase-admin/firestore";
+import { Photo, ProductCategory } from "../types";
 
 const COLLECTION_NAME = "media-queue";
 
@@ -559,6 +559,14 @@ export class QueueService {
   }
 
   /**
+   * Helper to remove undefined values from object
+   */
+  private removeUndefined(obj: Record<string, any>): Record<string, any> {
+    Object.keys(obj).forEach(key => obj[key] === undefined && delete obj[key]);
+    return obj;
+  }
+
+  /**
    * Map Firestore document to Photo type
    * @param {FirebaseFirestore.DocumentData} data - Document data
    * @return {Omit<Photo, "id">} Photo without ID
@@ -566,7 +574,7 @@ export class QueueService {
   private mapDocToPhoto(
     data: FirebaseFirestore.DocumentData
   ): Omit<Photo, "id"> {
-    return {
+    const photo = {
       filename: data.filename || "",
       originalUrl: data.originalUrl || "",
       enhancedUrl: data.enhancedUrl,
@@ -607,6 +615,8 @@ export class QueueService {
       scheduledFor: data.scheduledFor,
       scheduledDayHour: data.scheduledDayHour,
     };
+
+    return this.removeUndefined(photo) as Omit<Photo, "id">;
   }
 
   // ==========================================

@@ -13,6 +13,7 @@ import Settings from "./pages/Settings";
 import OrchestratorDashboard from "./pages/OrchestratorDashboard";
 import Assets from "./pages/Assets";
 import TimeSlots from "./pages/TimeSlots";
+import OrchestratorRules from "./pages/OrchestratorRules";
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
           <Route path="orchestrator" element={<OrchestratorDashboard />} />
           <Route path="assets" element={<Assets />} />
           <Route path="time-slots" element={<TimeSlots />} />
+          <Route path="orchestrator-rules" element={<OrchestratorRules />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -13,6 +13,8 @@ import {
   ContentPackage,
   ClaudeResponse,
   ProductType,
+  EffectiveRules,
+  HandStyleId,
 } from "./types";
 
 // Lazy load Anthropic SDK
@@ -55,7 +57,7 @@ export class ClaudeService {
   // ==========================================
 
   /**
-   * En uygun asset kombinasyonunu seç
+   * En uygun asset kombinasyonunu seç (genişletilmiş - tüm asset tipleri)
    */
   async selectAssets(
     productType: ProductType,
@@ -64,11 +66,19 @@ export class ClaudeService {
       plates: Asset[];
       cups: Asset[];
       tables: Asset[];
+      decor: Asset[];
+      pets: Asset[];
+      environments: Asset[];
     },
     timeOfDay: string,
-    mood: string
+    mood: string,
+    effectiveRules?: EffectiveRules
   ): Promise<ClaudeResponse<AssetSelection>> {
     const client = this.getClient();
+
+    // Köpek dahil edilmeli mi?
+    const shouldIncludePet = effectiveRules?.shouldIncludePet || false;
+    const blockedTables = effectiveRules?.blockedTables || [];
 
     const systemPrompt = `Sen bir görsel içerik direktörüsün. Sade Patisserie için Instagram içerikleri hazırlıyorsun.
 
@@ -79,6 +89,9 @@ Seçim kriterleri:
 2. STİL TUTARLILIĞI: Modern/rustic/minimal tarzlar karışmamalı
 3. ZAMAN UYUMU: Sabah için aydınlık, akşam için sıcak tonlar
 4. KULLANIM ROTASYONU: Az kullanılmış asset'lere öncelik ver
+5. ÇEŞİTLİLİK: ${blockedTables.length > 0 ? `Bu masaları SEÇME (son kullanılmış): ${blockedTables.join(", ")}` : "Masaları rotasyonla kullan"}
+6. KÖPEK: ${shouldIncludePet ? "Bu sefer KÖPEK DAHİL ET (uygun senaryo için)" : "Köpek dahil etme"}
+7. DEKORASYON: Cozy senaryolarda bitki veya kitap eklenebilir
 
 JSON formatında yanıt ver.`;
 
@@ -86,6 +99,7 @@ JSON formatında yanıt ver.`;
 Ürün tipi: ${productType}
 Zaman: ${timeOfDay}
 Mood: ${mood}
+${shouldIncludePet ? "⭐ KÖPEK DAHİL ET (15 üretimdir köpek yok)" : ""}
 
 MEVCUT ASSET'LER:
 
@@ -127,13 +141,42 @@ ${JSON.stringify(availableAssets.tables.map((a: Asset) => ({
       usageCount: a.usageCount
     })), null, 2)}
 
+DEKORASYON (bitki, kitap, vb.):
+${JSON.stringify(availableAssets.decor.map((a: Asset) => ({
+      id: a.id,
+      filename: a.filename,
+      style: a.visualProperties?.style,
+      tags: a.tags,
+      usageCount: a.usageCount
+    })), null, 2)}
+
+EVCİL HAYVANLAR:
+${JSON.stringify(availableAssets.pets.map((a: Asset) => ({
+      id: a.id,
+      filename: a.filename,
+      tags: a.tags,
+      usageCount: a.usageCount
+    })), null, 2)}
+
+MEKAN/ORTAM:
+${JSON.stringify(availableAssets.environments.map((a: Asset) => ({
+      id: a.id,
+      filename: a.filename,
+      tags: a.tags,
+      usageCount: a.usageCount
+    })), null, 2)}
+
 Yanıt formatı:
 {
   "productId": "...",
   "plateId": "..." veya null,
   "cupId": "..." veya null,
   "tableId": "..." veya null,
-  "reasoning": "Seçim gerekçesi..."
+  "decorId": "..." veya null,
+  "petId": "..." veya null (${shouldIncludePet ? "KÖPEK SEÇ!" : "null bırak"}),
+  "environmentId": "..." veya null,
+  "reasoning": "Seçim gerekçesi...",
+  "petReason": "${shouldIncludePet ? "Neden bu köpek seçildi..." : "Neden köpek dahil edilmedi..."}"
 }`;
 
     try {
@@ -157,11 +200,14 @@ Yanıt formatı:
 
       const selection = JSON.parse(jsonMatch[0]);
 
-      // Asset'leri bul
+      // Asset'leri bul (genişletilmiş)
       const product = availableAssets.products.find((a: Asset) => a.id === selection.productId);
       const plate = selection.plateId ? availableAssets.plates.find((a: Asset) => a.id === selection.plateId) : undefined;
       const cup = selection.cupId ? availableAssets.cups.find((a: Asset) => a.id === selection.cupId) : undefined;
       const table = selection.tableId ? availableAssets.tables.find((a: Asset) => a.id === selection.tableId) : undefined;
+      const decor = selection.decorId ? availableAssets.decor.find((a: Asset) => a.id === selection.decorId) : undefined;
+      const pet = selection.petId ? availableAssets.pets.find((a: Asset) => a.id === selection.petId) : undefined;
+      const environment = selection.environmentId ? availableAssets.environments.find((a: Asset) => a.id === selection.environmentId) : undefined;
 
       if (!product) {
         throw new Error("Seçilen ürün bulunamadı");
@@ -176,7 +222,12 @@ Yanıt formatı:
           plate,
           cup,
           table,
+          decor,
+          pet,
+          environment,
           selectionReasoning: selection.reasoning,
+          includesPet: !!pet,
+          petReason: selection.petReason,
         },
         tokensUsed,
         cost: this.calculateCost(response.usage.input_tokens, response.usage.output_tokens),
@@ -197,15 +248,25 @@ Yanıt formatı:
   // ==========================================
 
   /**
-   * En uygun senaryoyu seç
+   * En uygun senaryoyu seç (çeşitlilik kuralları ile)
    */
   async selectScenario(
     productType: ProductType,
     timeOfDay: string,
     selectedAssets: AssetSelection,
-    availableScenarios: Array<{ id: string; name: string; description: string; includesHands: boolean }>
+    availableScenarios: Array<{ id: string; name: string; description: string; includesHands: boolean }>,
+    effectiveRules?: EffectiveRules
   ): Promise<ClaudeResponse<ScenarioSelection>> {
     const client = this.getClient();
+
+    // Çeşitlilik kurallarını al
+    const blockedHandStyles = effectiveRules?.blockedHandStyles || [];
+    const blockedCompositions = effectiveRules?.blockedCompositions || [];
+    const handStyles = effectiveRules?.staticRules.handStyles || [];
+    const shouldIncludePet = effectiveRules?.shouldIncludePet || false;
+
+    // Kullanılabilir el stilleri (bloklanmamış olanlar)
+    const availableHandStyles = handStyles.filter(hs => !blockedHandStyles.includes(hs.id));
 
     const systemPrompt = `Sen bir içerik stratejistisin. Instagram için en etkili senaryoyu seçiyorsun.
 
@@ -213,29 +274,47 @@ Seçim kriterleri:
 1. ÜRÜN UYUMU: Senaryo ürün tipine uygun olmalı
 2. ZAMAN UYUMU: Sabah senaryoları sabah için, akşam senaryoları akşam için
 3. ASSET UYUMU: Seçilen masa/tabak/fincan senaryoya uymalı
-4. ÇEŞİTLİLİK: Son paylaşımlardan farklı senaryo seç
+4. ÇEŞİTLİLİK: Son paylaşımlardan FARKLI senaryo ve kompozisyon seç
 5. ETKİLEŞİM: Yüksek etkileşim potansiyeli olan senaryolar öncelikli
+6. KÖPEK: ${shouldIncludePet ? "Köpek dahil edildi, KÖPEK UYUMLU senaryo seç (kahve-kosesi, yarim-kaldi, cam-kenari)" : "Köpek yok, herhangi senaryo uygun"}
+
+ÖNEMLİ ÇEŞİTLİLİK KURALLARI:
+- ${blockedHandStyles.length > 0 ? `Bu el stillerini KULLANMA (son kullanılmış): ${blockedHandStyles.join(", ")}` : "Tüm el stilleri kullanılabilir"}
+- ${blockedCompositions.length > 0 ? `Bu kompozisyonları KULLANMA (son kullanılmış): ${blockedCompositions.join(", ")}` : "Tüm kompozisyonlar kullanılabilir"}
 
 JSON formatında yanıt ver.`;
 
     const userPrompt = `
 Ürün: ${productType}
 Zaman: ${timeOfDay}
+${shouldIncludePet ? "⭐ KÖPEK SEÇİLDİ - Köpek uyumlu senaryo seç!" : ""}
 
 Seçilen Asset'ler:
 - Ürün: ${selectedAssets.product.filename} (stil: ${selectedAssets.product.visualProperties?.style})
 - Tabak: ${selectedAssets.plate?.filename || "yok"}
 - Fincan: ${selectedAssets.cup?.filename || "yok"}
 - Masa: ${selectedAssets.table?.filename} (malzeme: ${selectedAssets.table?.visualProperties?.material})
+- Dekorasyon: ${selectedAssets.decor?.filename || "yok"}
+- Köpek: ${selectedAssets.pet?.filename || "yok"}
 
 MEVCUT SENARYOLAR:
 ${JSON.stringify(availableScenarios, null, 2)}
+
+KULLANILABILIR EL STİLLERİ (el içeren senaryo seçersen bunlardan birini seç):
+${JSON.stringify(availableHandStyles.map(hs => ({
+  id: hs.id,
+  name: hs.name,
+  description: hs.description,
+  nailPolish: hs.nailPolish,
+  accessories: hs.accessories
+})), null, 2)}
 
 Yanıt formatı:
 {
   "scenarioId": "...",
   "reasoning": "Neden bu senaryo...",
-  "handStyle": "elegant" | "bohemian" | "minimal" | null,
+  "handStyle": "${availableHandStyles.length > 0 ? availableHandStyles.map(h => h.id).join('" | "') : "null"}" veya null (el yoksa),
+  "compositionId": "bottom-right | bottom-left | top-corner | center-hold | product-front | overhead | ..." (senaryo varyantı),
   "compositionNotes": "Kompozisyon için özel notlar..."
 }`;
 
@@ -264,6 +343,11 @@ Yanıt formatı:
         throw new Error("Seçilen senaryo bulunamadı");
       }
 
+      // El stili detaylarını bul (varsa)
+      const selectedHandStyle = selection.handStyle
+        ? handStyles.find(hs => hs.id === selection.handStyle)
+        : undefined;
+
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
 
       return {
@@ -273,7 +357,9 @@ Yanıt formatı:
           scenarioName: scenario.name,
           reasoning: selection.reasoning,
           includesHands: scenario.includesHands,
-          handStyle: selection.handStyle || undefined,
+          handStyle: selection.handStyle as HandStyleId || undefined,
+          handStyleDetails: selectedHandStyle,
+          compositionId: selection.compositionId || "default",
           composition: selection.compositionNotes,
         },
         tokensUsed,
@@ -295,7 +381,7 @@ Yanıt formatı:
   // ==========================================
 
   /**
-   * Üretilen görseli değerlendir
+   * Üretilen görseli değerlendir (duplikasyon kontrolü dahil)
    */
   async evaluateImage(
     imageBase64: string,
@@ -314,6 +400,13 @@ Değerlendirme kriterleri (her biri 1-10):
 4. GERÇEKÇİLİK: Yapay görünüyor mu, gerçek fotoğraf gibi mi?
 5. INSTAGRAM HAZIRLIĞI: Direkt paylaşılabilir mi?
 
+⚠️ KRİTİK DUPLİKASYON KONTROLÜ:
+- Görselde BİRDEN FAZLA AYNI ÜRÜN var mı? (2 kruvasan, 2 pasta, vb.)
+- Görselde BİRDEN FAZLA FİNCAN/BARDAK var mı?
+- Görselde BİRDEN FAZLA TABAK var mı?
+
+Duplikasyon tespit edilirse: overallScore = 0, shouldRegenerate = true
+
 Minimum geçme skoru: 7/10 (ortalama)
 
 JSON formatında yanıt ver.`;
@@ -326,6 +419,13 @@ El var mı: ${expectedScenario.includesHands ? "Evet - " + expectedScenario.hand
 Orijinal ürün: ${originalProduct.filename}
 Ürün renkleri: ${originalProduct.visualProperties?.dominantColors?.join(", ")}
 
+⚠️ ÖNCELİKLİ KONTROL - DUPLİKASYON:
+1. Görselde kaç adet ana ürün (pasta/kruvasan/çikolata) var? (SADECE 1 OLMALI)
+2. Görselde kaç adet kahve fincanı/bardak var? (SADECE 1 OLMALI veya HİÇ)
+3. Görselde kaç adet tabak var? (SADECE 1 OLMALI)
+
+Eğer herhangi birinden birden fazla varsa, bu KRİTİK HATA'dır!
+
 Görseli değerlendir ve JSON formatında yanıt ver:
 {
   "productAccuracy": 1-10,
@@ -333,11 +433,17 @@ Görseli değerlendir ve JSON formatında yanıt ver:
   "lighting": 1-10,
   "realism": 1-10,
   "instagramReadiness": 1-10,
-  "overallScore": 1-10,
+  "overallScore": 1-10 (duplikasyon varsa 0),
+  "duplicateCheck": {
+    "productCount": sayı (1 olmalı),
+    "cupCount": sayı (0 veya 1 olmalı),
+    "plateCount": sayı (1 olmalı),
+    "hasDuplication": true/false
+  },
   "feedback": "Genel değerlendirme...",
   "issues": ["sorun1", "sorun2"] veya [],
-  "shouldRegenerate": true/false,
-  "regenerationHints": "Eğer yeniden üretilecekse, ne değişmeli..."
+  "shouldRegenerate": true/false (duplikasyon varsa MUTLAKA true),
+  "regenerationHints": "Eğer yeniden üretilecekse, ne değişmeli... (duplikasyon varsa: ONLY ONE product, ONLY ONE cup)"
 }`;
 
     try {
@@ -378,11 +484,43 @@ Görseli değerlendir ve JSON formatında yanıt ver:
       const evaluation = JSON.parse(jsonMatch[0]);
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
 
+      // Duplikasyon kontrolü
+      const hasDuplication = evaluation.duplicateCheck?.hasDuplication ||
+        (evaluation.duplicateCheck?.productCount > 1) ||
+        (evaluation.duplicateCheck?.cupCount > 1) ||
+        (evaluation.duplicateCheck?.plateCount > 1);
+
+      // Duplikasyon varsa otomatik olarak fail et
+      const finalScore = hasDuplication ? 0 : evaluation.overallScore;
+      const shouldRegenerate = hasDuplication || evaluation.shouldRegenerate;
+
+      // Duplikasyon uyarısını issues'a ekle
+      const issues = [...(evaluation.issues || [])];
+      if (hasDuplication) {
+        if (evaluation.duplicateCheck?.productCount > 1) {
+          issues.unshift(`KRİTİK: ${evaluation.duplicateCheck.productCount} adet ürün tespit edildi (1 olmalı)`);
+        }
+        if (evaluation.duplicateCheck?.cupCount > 1) {
+          issues.unshift(`KRİTİK: ${evaluation.duplicateCheck.cupCount} adet fincan tespit edildi (max 1 olmalı)`);
+        }
+        if (evaluation.duplicateCheck?.plateCount > 1) {
+          issues.unshift(`KRİTİK: ${evaluation.duplicateCheck.plateCount} adet tabak tespit edildi (1 olmalı)`);
+        }
+      }
+
+      // Regeneration hints güncelle
+      let regenerationHints = evaluation.regenerationHints || "";
+      if (hasDuplication && !regenerationHints.includes("ONLY ONE")) {
+        regenerationHints = "CRITICAL: ONLY ONE product, ONLY ONE cup, ONLY ONE plate. NO duplicates. " + regenerationHints;
+      }
+
+      console.log(`[ClaudeService] QC Result - Score: ${finalScore}, Duplication: ${hasDuplication}, Regenerate: ${shouldRegenerate}`);
+
       return {
         success: true,
         data: {
-          passed: evaluation.overallScore >= 7,
-          score: evaluation.overallScore,
+          passed: finalScore >= 7 && !hasDuplication,
+          score: finalScore,
           evaluation: {
             productAccuracy: evaluation.productAccuracy,
             composition: evaluation.composition,
@@ -390,10 +528,12 @@ Görseli değerlendir ve JSON formatında yanıt ver:
             realism: evaluation.realism,
             instagramReadiness: evaluation.instagramReadiness,
           },
-          feedback: evaluation.feedback,
-          improvementSuggestions: evaluation.issues,
-          shouldRegenerate: evaluation.shouldRegenerate,
-          regenerationHints: evaluation.regenerationHints,
+          feedback: hasDuplication
+            ? `DUPLİKASYON TESPİT EDİLDİ! ${evaluation.feedback}`
+            : evaluation.feedback,
+          improvementSuggestions: issues,
+          shouldRegenerate,
+          regenerationHints,
         },
         tokensUsed,
         cost: this.calculateCost(response.usage.input_tokens, response.usage.output_tokens),
@@ -525,8 +665,9 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
 Optimizasyon kuralları:
 1. Asset özelliklerini prompt'a dahil et (renk, malzeme, stil)
 2. Senaryo gereksinimlerini güçlendir
-3. Gerçekçilik için detay ekle
-4. Negative prompt'u güçlendir
+3. ZORUNLU KURAL: Referans assetler ve senaryo dışında HİÇBİR EŞYA (abajur, vazo, çiçek, sandalye vb.) EKLEME. Minimalist kal.
+4. Sadece "Asset" listesinde verilen eşyaları kullan.
+5. Negative prompt'u güçlendir (özellikle "lampshade", "vase", "flowers", "clutter" ekle).
 
 Kısa ve etkili ol.`;
 

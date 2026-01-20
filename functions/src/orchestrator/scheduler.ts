@@ -11,6 +11,8 @@ import {
   ProductType,
   OrchestratorConfig,
   ScheduledSlot,
+  ProductionHistoryEntry,
+  PipelineResult,
 } from "./types";
 import { TimeScoreService } from "../services/timeScore";
 import { DayOfWeekIndex } from "../types";
@@ -65,9 +67,13 @@ export class OrchestratorScheduler {
     errors: string[];
   }> {
     const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentDay = now.getDay() as DayOfWeekIndex; // 0 = Pazar
+
+    // TRT (Europe/Istanbul) zamanını al
+    const trtNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Istanbul" }));
+
+    const currentHour = trtNow.getHours();
+    const currentMinute = trtNow.getMinutes();
+    const currentDay = trtNow.getDay() as DayOfWeekIndex; // 0 = Pazar
 
     console.log(`[Scheduler] Checking slots for day ${currentDay}, time ${currentHour}:${currentMinute}`);
 
@@ -277,6 +283,9 @@ export class OrchestratorScheduler {
         updatedAt: Date.now(),
       });
 
+      // Üretim geçmişine kaydet (çeşitlilik takibi için)
+      await this.saveProductionHistory(result, productType);
+
       console.log(`[Scheduler] Pipeline completed for slot ${slotId}`);
 
     } catch (error) {
@@ -369,6 +378,105 @@ export class OrchestratorScheduler {
       };
     }
   }
+  // ==========================================
+  // PRODUCTION HISTORY TRACKING
+  // ==========================================
+
+  /**
+   * Üretim geçmişine yeni kayıt ekle
+   * Bu bilgi çeşitlilik kuralları için kullanılır
+   */
+  private async saveProductionHistory(
+    result: PipelineResult,
+    productType: ProductType
+  ): Promise<void> {
+    try {
+      const entry: ProductionHistoryEntry = {
+        timestamp: Date.now(),
+        scenarioId: result.scenarioSelection?.scenarioId || "unknown",
+        compositionId: result.scenarioSelection?.compositionId || "default",
+        tableId: result.assetSelection?.table?.id,
+        handStyleId: result.scenarioSelection?.handStyle,
+        includesPet: result.assetSelection?.includesPet || false,
+        productType,
+      };
+
+      // Firestore'a kaydet
+      await this.db.collection("production-history").add(entry);
+
+      console.log(`[Scheduler] Production history saved - scenario: ${entry.scenarioId}, pet: ${entry.includesPet}`);
+
+      // Eski kayıtları temizle (son 50'yi tut)
+      await this.cleanupOldHistory();
+    } catch (error) {
+      console.error("[Scheduler] Failed to save production history:", error);
+      // Hata durumunda pipeline'ı durdurma
+    }
+  }
+
+  /**
+   * Eski üretim geçmişi kayıtlarını temizle (son 50'yi tut)
+   */
+  private async cleanupOldHistory(): Promise<void> {
+    try {
+      const snapshot = await this.db
+        .collection("production-history")
+        .orderBy("timestamp", "desc")
+        .offset(50)
+        .limit(100)
+        .get();
+
+      if (snapshot.empty) return;
+
+      const batch = this.db.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+      console.log(`[Scheduler] Cleaned up ${snapshot.docs.length} old history entries`);
+    } catch (error) {
+      console.error("[Scheduler] Failed to cleanup history:", error);
+    }
+  }
+
+  /**
+   * Son N üretimin geçmişini al
+   */
+  async getRecentHistory(limit: number = 15): Promise<ProductionHistoryEntry[]> {
+    const snapshot = await this.db
+      .collection("production-history")
+      .orderBy("timestamp", "desc")
+      .limit(limit)
+      .get();
+
+    return snapshot.docs.map(doc => doc.data() as ProductionHistoryEntry);
+  }
+
+  /**
+   * Köpek kullanım istatistiklerini al
+   */
+  async getPetUsageStats(recentCount: number = 15): Promise<{
+    petUsageCount: number;
+    lastPetUsage?: number;
+    shouldIncludePet: boolean;
+  }> {
+    const history = await this.getRecentHistory(recentCount);
+
+    const petEntries = history.filter(e => e.includesPet);
+    const petUsageCount = petEntries.length;
+    const lastPetUsage = petEntries.length > 0 ? petEntries[0].timestamp : undefined;
+
+    // Köpek dahil edilmeli mi? (Son 15 üretimde hiç köpek yoksa)
+    const shouldIncludePet = petUsageCount === 0;
+
+    console.log(`[Scheduler] Pet stats - used: ${petUsageCount}/${recentCount}, shouldInclude: ${shouldIncludePet}`);
+
+    return {
+      petUsageCount,
+      lastPetUsage,
+      shouldIncludePet,
+    };
+  }
+
   /**
    * Takılı kalan veya zaman aşımına uğrayan işleri kontrol et
    */

@@ -1,4 +1,30 @@
 {
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/orchestrator-sync.js",
+            "statusMessage": "ORCHESTRATOR.md sync ediliyor..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/validate-config.js",
+            "statusMessage": "Deploy öncesi validasyon..."
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(git pull:*)",
@@ -38,7 +64,8 @@
       "Bash(git push)",
       "Bash(firebase functions:list:*)",
       "Bash(npm run deploy:*)",
-      "Bash(NODE_OPTIONS='--max-old-space-size=8192' FUNCTIONS_DISCOVERY_TIMEOUT=120000 firebase deploy:*)"
+      "Bash(NODE_OPTIONS='--max-old-space-size=8192' FUNCTIONS_DISCOVERY_TIMEOUT=120000 firebase deploy:*)",
+      "Bash(firebase functions:delete:*)"
     ]
   }
 }

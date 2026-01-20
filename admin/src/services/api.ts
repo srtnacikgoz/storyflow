@@ -841,6 +841,133 @@ class ApiService {
       body: JSON.stringify({ slotId, caption, hashtags }),
     });
   }
+
+  // ==========================================
+  // Orchestrator - Config & Variation Rules
+  // ==========================================
+
+  /**
+   * Orchestrator config'i getir (çeşitlilik kuralları)
+   */
+  async getOrchestratorConfig(): Promise<{
+    variationRules: {
+      scenarioGap: number;
+      tableGap: number;
+      handStyleGap: number;
+      compositionGap: number;
+      petFrequency: number;
+      similarityThreshold: number;
+    };
+    weeklyThemes: Record<string, {
+      mood: string;
+      scenarios: string[];
+      petAllowed?: boolean;
+    }>;
+    assetPriorities: {
+      underusedBoost: number;
+      lastUsedPenalty: number;
+    };
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        variationRules: {
+          scenarioGap: number;
+          tableGap: number;
+          handStyleGap: number;
+          compositionGap: number;
+          petFrequency: number;
+          similarityThreshold: number;
+        };
+        weeklyThemes: Record<string, {
+          mood: string;
+          scenarios: string[];
+          petAllowed?: boolean;
+        }>;
+        assetPriorities: {
+          underusedBoost: number;
+          lastUsedPenalty: number;
+        };
+      };
+    }>("getVariationConfig");
+    return response.data;
+  }
+
+  /**
+   * Orchestrator config'i güncelle
+   */
+  async updateOrchestratorConfig(updates: {
+    variationRules?: {
+      scenarioGap?: number;
+      tableGap?: number;
+      handStyleGap?: number;
+      compositionGap?: number;
+      petFrequency?: number;
+      similarityThreshold?: number;
+    };
+    weeklyThemes?: Record<string, {
+      mood: string;
+      scenarios: string[];
+      petAllowed?: boolean;
+    }>;
+    assetPriorities?: {
+      underusedBoost?: number;
+      lastUsedPenalty?: number;
+    };
+  }): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateVariationConfig", {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  /**
+   * Üretim geçmişini getir (çeşitlilik takibi için)
+   */
+  async getProductionHistory(limit: number = 15): Promise<{
+    id: string;
+    timestamp: number;
+    scenarioId: string;
+    compositionId: string;
+    tableId?: string;
+    handStyleId?: string;
+    includesPet: boolean;
+    productType: string;
+  }[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        id: string;
+        timestamp: number;
+        scenarioId: string;
+        compositionId: string;
+        tableId?: string;
+        handStyleId?: string;
+        includesPet: boolean;
+        productType: string;
+      }[];
+    }>(`getProductionHistory?limit=${limit}`);
+    return response.data;
+  }
+
+  /**
+   * Köpek kullanım istatistiğini getir
+   */
+  async getPetUsageStats(): Promise<{
+    lastPetUsage: number | null;
+    productionsSincePet: number;
+    nextPetDue: boolean;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        lastPetUsage: number | null;
+        productionsSincePet: number;
+        nextPetDue: boolean;
+      };
+    }>("getPetUsageStats");
+    return response.data;
+  }
 }
 
 // Singleton instance

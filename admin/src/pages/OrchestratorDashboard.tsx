@@ -75,7 +75,7 @@ export default function OrchestratorDashboard() {
   const [statusFilter, setStatusFilter] = useState<ScheduledSlotStatus | "all">("all");
 
   // Grid boyutu
-  const [gridSize, setGridSize] = useState<GridSize>("normal");
+  const [gridSize, _setGridSize] = useState<GridSize>("normal");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
   // Üretim
@@ -787,7 +787,7 @@ export default function OrchestratorDashboard() {
                           <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
                             {statusConfig.icon} {statusConfig.label}
                           </span>
-                          {slot.currentStage && slot.status !== "completed" && slot.status !== "failed" && slot.status !== "awaiting_approval" && (
+                          {slot.currentStage && slot.status !== "published" && slot.status !== "failed" && slot.status !== "awaiting_approval" && (
                             <div className="text-xs text-gray-400 mt-1">{STAGE_LABELS[slot.currentStage] || slot.currentStage}</div>
                           )}
                         </td>

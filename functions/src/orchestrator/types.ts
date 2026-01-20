@@ -44,6 +44,15 @@ export type FurnitureType =
   | "decor";      // Vazolar, bitkiler
 
 /**
+ * Özel asset tipleri
+ */
+export type SpecialAssetType =
+  | "pets"        // Köpek, kedi
+  | "environments" // Mekan, pencere, dış alan
+  | "books"       // Kitaplar
+  | "plants";     // Bitkiler
+
+/**
  * Müzik kategorileri
  */
 export type MusicMood =
@@ -196,8 +205,53 @@ export interface AssetSelection {
   table?: Asset;
   music?: Asset;
 
+  // Genişletilmiş asset'ler
+  decor?: Asset;          // Dekorasyon (bitki, kitap, vb.)
+  pet?: Asset;            // Köpek, kedi
+  environment?: Asset;    // Mekan referansı
+
   // Claude'un seçim gerekçesi
   selectionReasoning: string;
+
+  // Çeşitlilik bilgisi
+  includesPet: boolean;
+  petReason?: string;     // Neden köpek dahil/hariç
+}
+
+/**
+ * El stilleri
+ */
+export type HandStyleId = "elegant" | "bohemian" | "minimal" | "trendy" | "sporty";
+
+/**
+ * El stili tanımı
+ */
+export interface HandStyle {
+  id: HandStyleId;
+  name: string;
+  description: string;
+  nailPolish: string;
+  accessories: string;
+  tattoo: string;
+}
+
+/**
+ * Kompozisyon varyantı
+ */
+export interface CompositionVariant {
+  id: string;
+  description: string;
+}
+
+/**
+ * Senaryo tanımı
+ */
+export interface Scenario {
+  id: string;
+  name: string;
+  description: string;
+  includesHands: boolean;
+  compositions: CompositionVariant[];
 }
 
 /**
@@ -212,7 +266,9 @@ export interface ScenarioSelection {
 
   // Senaryo parametreleri
   includesHands: boolean;
-  handStyle?: "elegant" | "bohemian" | "minimal";
+  handStyle?: HandStyleId;
+  handStyleDetails?: HandStyle;
+  compositionId: string;
   composition: string;
 }
 
@@ -378,4 +434,118 @@ export interface OrchestratorConfig {
   // Zamanlama
   timezone: string;               // "Europe/Istanbul"
   scheduleBuffer: number;         // Dakika önce hazırla (default: 30)
+}
+
+// ==========================================
+// VARIATION & RULES TYPES
+// ==========================================
+
+/**
+ * Çeşitlilik kuralları
+ */
+export interface VariationRules {
+  scenarioGap: number;          // Aynı senaryo min kaç üretim sonra (default: 3)
+  tableGap: number;             // Aynı masa min kaç üretim sonra (default: 2)
+  handStyleGap: number;         // Aynı el stili min kaç üretim sonra (default: 4)
+  compositionGap: number;       // Aynı kompozisyon min kaç üretim sonra (default: 5)
+  petFrequency: number;         // Köpek her kaç üretimde bir (default: 15)
+  outdoorFrequency: number;     // Dış mekan her kaç üretimde bir (default: 10)
+  wabiSabiFrequency: number;    // Wabi-sabi her kaç üretimde bir (default: 5)
+  similarityThreshold: number;  // Max benzerlik % (default: 50)
+}
+
+/**
+ * Haftalık tema
+ */
+export interface WeeklyTheme {
+  mood: string;
+  scenarios: string[];
+  petAllowed: boolean;
+}
+
+/**
+ * Zaman-mood eşleştirmesi
+ */
+export interface TimeMoodMapping {
+  startHour: number;
+  endHour: number;
+  mood: string;
+  lightPreference: string;
+  suggestedScenarios: string[];
+  notes: string;
+}
+
+/**
+ * Asset kişiliği
+ */
+export interface AssetPersonality {
+  assetId: string;
+  assetName: string;
+  personality: string;
+  mood: string;
+  compatibleScenarios: string[];
+}
+
+/**
+ * Üretim geçmişi kaydı
+ */
+export interface ProductionHistoryEntry {
+  timestamp: number;
+  scenarioId: string;
+  compositionId: string;
+  tableId?: string;
+  handStyleId?: string;
+  includesPet: boolean;
+  productType: ProductType;
+}
+
+/**
+ * Son üretim geçmişi (çeşitlilik kontrolü için)
+ */
+export interface RecentHistory {
+  entries: ProductionHistoryEntry[];
+  petUsageCount: number;        // Son N üretimde köpek kaç kez kullanıldı
+  lastPetUsage?: number;        // Son köpek kullanım timestamp'i
+}
+
+/**
+ * Dinamik konfigürasyon (Firestore'dan)
+ */
+export interface DynamicConfig {
+  variationRules: VariationRules;
+  weeklyThemes: Record<string, WeeklyTheme>;
+  timeMoodMappings: TimeMoodMapping[];
+  assetPriorities: {
+    underusedBoost: number;     // Az kullanılan asset'e çarpan
+    lastUsedPenalty: number;    // Son kullanılan asset'e ceza
+  };
+  updatedAt: number;
+}
+
+/**
+ * Orchestrator kuralları (ORCHESTRATOR.md'den parse edilir)
+ */
+export interface OrchestratorRules {
+  scenarios: Scenario[];
+  handStyles: HandStyle[];
+  assetPersonalities: AssetPersonality[];
+  absoluteRules: string[];      // Mutlak kurallar listesi
+  version: string;
+  parsedAt: number;
+}
+
+/**
+ * Birleştirilmiş etkili kurallar
+ */
+export interface EffectiveRules {
+  staticRules: OrchestratorRules;
+  dynamicConfig: DynamicConfig;
+  recentHistory: RecentHistory;
+
+  // Hesaplanmış değerler
+  shouldIncludePet: boolean;
+  blockedScenarios: string[];   // Son N üretimde kullanılan
+  blockedTables: string[];
+  blockedHandStyles: string[];
+  blockedCompositions: string[];
 }

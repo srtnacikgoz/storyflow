@@ -8,6 +8,7 @@ import { getStorage } from "firebase-admin/storage";
 import { ClaudeService } from "./claudeService";
 import { GeminiService } from "../services/gemini";
 import { TelegramService } from "../services/telegram";
+import { RulesService } from "./rulesService";
 import {
   Asset,
   ProductType,
@@ -44,19 +45,7 @@ function removeUndefined<T>(obj: T): T {
   return obj;
 }
 
-// Senaryo tanımları (lifestyle-scenarios'dan)
-const SCENARIOS = [
-  { id: "zarif-tutma", name: "Zarif Tutma", description: "Bakımlı el ürün tutuyor", includesHands: true },
-  { id: "kahve-ani", name: "Kahve Anı", description: "İki el fincan tutuyor, ürün yanında", includesHands: true },
-  { id: "hediye-acilisi", name: "Hediye Açılışı", description: "El kutu açıyor", includesHands: true },
-  { id: "ilk-dilim", name: "İlk Dilim", description: "El çatalla pasta alıyor", includesHands: true },
-  { id: "cam-kenari", name: "Cam Kenarı", description: "Pencere önü, şehir manzarası", includesHands: false },
-  { id: "mermer-zarafet", name: "Mermer Zarafet", description: "Mermer yüzey, altın detaylar", includesHands: false },
-  { id: "kahve-kosesi", name: "Kahve Köşesi", description: "Rahat köşe, kitap yanında", includesHands: false },
-  { id: "yarim-kaldi", name: "Yarım Kaldı", description: "Isırık alınmış, yarı dolu fincan", includesHands: false },
-  { id: "paylasim", name: "Paylaşım", description: "İki tabak, karşılıklı oturma", includesHands: false },
-  { id: "paket-servis", name: "Paket Servis", description: "Kraft torba, takeaway kahve", includesHands: false },
-];
+// Senaryolar artık RulesService'den yükleniyor
 
 /**
  * Full Orchestrator Service
@@ -67,6 +56,7 @@ export class Orchestrator {
   private claude: ClaudeService;
   private gemini: GeminiService;
   private telegram: TelegramService;
+  private rulesService: RulesService;
   private config: OrchestratorConfig;
 
   constructor(config: OrchestratorConfig) {
@@ -83,6 +73,7 @@ export class Orchestrator {
       chatId: config.telegramChatId,
       approvalTimeout: config.approvalTimeout,
     });
+    this.rulesService = new RulesService();
   }
 
   // ==========================================
@@ -118,6 +109,13 @@ export class Orchestrator {
 
     try {
       // ==========================================
+      // PRE-STAGE: Kuralları yükle (tüm aşamalar için)
+      // ==========================================
+      console.log("[Orchestrator] Loading effective rules...");
+      const effectiveRules = await this.rulesService.getEffectiveRules();
+      console.log(`[Orchestrator] Rules loaded - shouldIncludePet: ${effectiveRules.shouldIncludePet}, blockedScenarios: ${effectiveRules.blockedScenarios.length}`);
+
+      // ==========================================
       // STAGE 1: ASSET SELECTION
       // ==========================================
       console.log("[Orchestrator] Stage 1: Asset Selection");
@@ -132,7 +130,8 @@ export class Orchestrator {
         productType,
         assets,
         timeOfDay,
-        mood
+        mood,
+        effectiveRules  // Çeşitlilik kurallarını gönder (köpek dahil mi, bloklu masalar, vb.)
       );
 
       if (!assetResponse.success || !assetResponse.data) {
@@ -143,6 +142,8 @@ export class Orchestrator {
       totalCost += assetResponse.cost;
       status.completedStages.push("asset_selection");
 
+      console.log(`[Orchestrator] Asset selection complete - Pet included: ${result.assetSelection.includesPet}`);
+
       // ==========================================
       // STAGE 2: SCENARIO SELECTION
       // ==========================================
@@ -150,15 +151,39 @@ export class Orchestrator {
       status.currentStage = "scenario_selection";
       if (onProgress) await onProgress("scenario_selection", 2, TOTAL_STAGES);
 
-      const filteredScenarios = timeSlotRule.scenarioPreference
-        ? SCENARIOS.filter(s => timeSlotRule.scenarioPreference!.includes(s.id))
-        : SCENARIOS;
+      // Senaryolar kurallardan alınıyor (zaten yüklendi)
+      const allScenarios = effectiveRules.staticRules.scenarios;
+
+      // Senaryo filtreleme: TimeSlotRule tercihi + bloklanmış senaryolar
+      let filteredScenarios = timeSlotRule.scenarioPreference
+        ? allScenarios.filter(s => timeSlotRule.scenarioPreference!.includes(s.id))
+        : allScenarios;
+
+      // Bloklanmış senaryoları çıkar (son N üretimde kullanılanlar)
+      filteredScenarios = filteredScenarios.filter(
+        s => !effectiveRules.blockedScenarios.includes(s.id)
+      );
+
+      // Eğer tüm senaryolar bloklanmışsa, en az kullanılmış olanı seç
+      if (filteredScenarios.length === 0) {
+        console.log("[Orchestrator] All scenarios blocked, using full list");
+        filteredScenarios = allScenarios;
+      }
+
+      // Claude için basitleştirilmiş senaryo listesi
+      const scenariosForClaude = filteredScenarios.map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        includesHands: s.includesHands,
+      }));
 
       const scenarioResponse = await this.claude.selectScenario(
         productType,
         timeOfDay,
         result.assetSelection,
-        filteredScenarios
+        scenariosForClaude,
+        effectiveRules  // Çeşitlilik kurallarını da gönder
       );
 
       if (!scenarioResponse.success || !scenarioResponse.data) {
@@ -390,24 +415,49 @@ export class Orchestrator {
   // ==========================================
 
   /**
-   * Mevcut asset'leri yükle
+   * Mevcut asset'leri yükle (genişletilmiş - tüm asset tipleri)
    */
   private async loadAvailableAssets(productType: ProductType): Promise<{
     products: Asset[];
     plates: Asset[];
     cups: Asset[];
     tables: Asset[];
+    decor: Asset[];
+    pets: Asset[];
+    environments: Asset[];
   }> {
     const assetsRef = this.db.collection("assets");
 
-    // Support both English and Turkish category/subType names
-    const [products, plates, cups, tables, tablesAlt] = await Promise.all([
+    // Tüm asset tiplerini paralel yükle
+    const [
+      products,
+      plates,
+      cups,
+      tables,
+      tablesAlt,
+      decor,
+      decorAlt,
+      pets,
+      environments,
+    ] = await Promise.all([
+      // Ürünler
       assetsRef.where("category", "==", "products").where("subType", "==", productType).where("isActive", "==", true).get(),
+      // Tabaklar
       assetsRef.where("category", "==", "props").where("subType", "==", "plates").where("isActive", "==", true).get(),
+      // Fincanlar
       assetsRef.where("category", "==", "props").where("subType", "==", "cups").where("isActive", "==", true).get(),
+      // Masalar (İngilizce)
       assetsRef.where("category", "==", "furniture").where("subType", "==", "tables").where("isActive", "==", true).get(),
-      // Alternative: Turkish terms
+      // Masalar (Türkçe)
       assetsRef.where("category", "==", "Mobilya").where("subType", "==", "Masa").where("isActive", "==", true).get(),
+      // Dekorasyon (İngilizce)
+      assetsRef.where("category", "==", "furniture").where("subType", "==", "decor").where("isActive", "==", true).get(),
+      // Dekorasyon (Türkçe) - bitkiler, kitaplar
+      assetsRef.where("category", "==", "Aksesuar").where("isActive", "==", true).get(),
+      // Evcil hayvanlar (köpek)
+      assetsRef.where("category", "==", "pets").where("isActive", "==", true).get(),
+      // Mekan/ortam görselleri
+      assetsRef.where("category", "==", "environments").where("isActive", "==", true).get(),
     ]);
 
     const allTables = [
@@ -415,21 +465,36 @@ export class Orchestrator {
       ...tablesAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     ];
 
-    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}`);
+    const allDecor = [
+      ...decor.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      ...decorAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+    ];
+
+    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}`);
 
     return {
       products: products.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       plates: plates.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       cups: cups.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       tables: allTables,
+      decor: allDecor,
+      pets: pets.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      environments: environments.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     };
   }
 
   /**
-   * Günün zamanını belirle
+   * Günün zamanını belirle (TRT - Europe/Istanbul)
    */
   private getTimeOfDay(): string {
-    const hour = new Date().getHours();
+    // TRT saatine göre saati al
+    const hourStr = new Date().toLocaleString("en-US", {
+      timeZone: "Europe/Istanbul",
+      hour: "numeric",
+      hour12: false
+    });
+    const hour = parseInt(hourStr);
+
     if (hour >= 6 && hour < 11) return "morning";
     if (hour >= 11 && hour < 14) return "noon";
     if (hour >= 14 && hour < 17) return "afternoon";
@@ -491,23 +556,38 @@ LIGHTING:
 
       "kahve-ani": `Using uploaded image as reference for the pastry.
 
-Lifestyle Instagram story with pastry from reference as hero in foreground, feminine hands holding latte cup in soft focus behind.
+CRITICAL ABSOLUTE RULES (NEVER VIOLATE):
+- ONLY ONE PASTRY in the image (the one from reference)
+- ONLY ONE COFFEE CUP (Sade branded ceramic cup, in background)
+- NO duplicate products - if you see 2 pastries, REJECT
+- NO duplicate cups - if you see 2 cups, REJECT
+- The pastry from reference MUST be the ONLY food item
 
-SCENE CONTEXT:
-- White/grey marble table surface visible
-- Coffee cup in soft focus background
-- Small white plate as base
+Lifestyle Instagram story with SINGLE pastry from reference as hero.
 
-HAND STYLING:
-- Both hands gently cupping ceramic latte cup
-- Nude or soft pink nail polish
-- Small minimalist finger tattoos
-- Simple silver rings, thin chain bracelet
+SCENE COMPOSITION:
+- FOREGROUND (55%): Single pastry on small plate, SHARP FOCUS
+- BACKGROUND (35%): Feminine hands cupping ONE Sade coffee cup, SOFT FOCUS
+- DEPTH: Shallow DOF separates product from hands
 
-COMPOSITION:
-- Pastry as HERO in foreground (55%, sharp focus)
-- Hands holding coffee in background (35%, soft focus)
-- Shallow depth of field
+TABLE SURFACE:
+- White/grey marble visible
+- Clean, minimal props
+
+HAND STYLING (background, soft focus):
+- Both hands gently cupping the ceramic cup
+- Hands should be BEHIND the product, out of focus
+- Simple elegant styling (nude polish, minimal rings)
+
+LIGHTING:
+- Soft natural side light from left
+- Warm golden tones on product
+- Product is the STAR, hands are supporting element
+
+NEGATIVE REQUIREMENTS:
+- NO second pastry or food item
+- NO second cup or mug
+- NO cluttered composition
 
 9:16 vertical for Instagram Stories. 8K photorealistic.`,
     };
