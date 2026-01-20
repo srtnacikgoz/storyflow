@@ -41,6 +41,31 @@ Bu dosya proje ile ilgili hataları, geri bildirimleri, iyileştirme önerilerin
 
 ---
 
+## [BUG-002] Telegram "Yeniden Oluştur" 6 Görsel Sorunu
+- **Kategori:** bug
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-20
+- **Açıklama:** Telegram'a gelen görsel için "yeniden oluştur" denildiğinde 6 tane yeniden görsel oluşturuyor ve hiçbiri paylaşılabilir veya silinebilir değil.
+- **Etki:** Kullanıcı deneyimini ciddi şekilde bozuyor
+- **Öneri:** Pipeline yeniden tetikleme mantığı kontrol edilmeli, duplicate prevention eklenmeli
+
+---
+
+## [TODO-003] Orchestrator Çeşitlilik Kuralları Endpoint Test
+- **Kategori:** todo
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-20
+- **Açıklama:** Yeni eklenen çeşitlilik kuralları endpoint'leri test edilmeli:
+  - `getVariationConfig`
+  - `updateVariationConfig`
+  - `getProductionHistory`
+  - `getPetUsageStats`
+- **Not:** Admin Panel UI sayfası (`/orchestrator-rules`) deploy edildi ama gerçek ortamda test edilmedi
+
+---
+
 ## [TODO-002] functions.config() Migration
 - **Kategori:** todo
 - **Öncelik:** medium
