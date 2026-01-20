@@ -762,3 +762,405 @@ export const getOrchestratorDashboardStats = functions
       }
     });
   });
+
+// ==========================================
+// SLOT CRUD OPERATIONS
+// ==========================================
+
+/**
+ * Slot'un tam detaylarını getir (pipelineResult dahil)
+ */
+export const getSlotDetail = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const slotId = request.query.slotId as string;
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        const doc = await db.collection("scheduled-slots").doc(slotId).get();
+
+        if (!doc.exists) {
+          response.status(404).json({
+            success: false,
+            error: "Slot not found",
+          });
+          return;
+        }
+
+        response.json({
+          success: true,
+          data: { id: doc.id, ...doc.data() },
+        });
+      } catch (error) {
+        console.error("[getSlotDetail] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Slot sil (hard delete)
+ */
+export const deleteScheduledSlot = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "DELETE" && request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use DELETE or POST" });
+          return;
+        }
+
+        const slotId = request.query.slotId as string || request.body?.slotId;
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        await db.collection("scheduled-slots").doc(slotId).delete();
+
+        response.json({
+          success: true,
+          message: "Slot deleted",
+        });
+      } catch (error) {
+        console.error("[deleteScheduledSlot] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Başarısız slot'u yeniden dene
+ */
+export const retrySlot = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 540, memory: "1GB", secrets: [claudeApiKey] })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const slotId = request.body?.slotId;
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        // Slot'u getir
+        const slotDoc = await db.collection("scheduled-slots").doc(slotId).get();
+        if (!slotDoc.exists) {
+          response.status(404).json({ success: false, error: "Slot not found" });
+          return;
+        }
+
+        const slot = slotDoc.data();
+        if (slot?.status !== "failed") {
+          response.status(400).json({
+            success: false,
+            error: "Only failed slots can be retried",
+          });
+          return;
+        }
+
+        // Slot'un timeSlotRuleId'sinden kural bilgisi al
+        const ruleId = slot.timeSlotRuleId;
+        if (!ruleId) {
+          response.status(400).json({
+            success: false,
+            error: "Slot has no associated rule",
+          });
+          return;
+        }
+
+        // Slot'u sıfırla
+        await db.collection("scheduled-slots").doc(slotId).update({
+          status: "pending",
+          error: null,
+          pipelineResult: null,
+          currentStage: null,
+          stageIndex: null,
+          totalStages: null,
+          updatedAt: Date.now(),
+        });
+
+        // Pipeline'ı yeniden başlat
+        const config = await getOrchestratorConfig();
+        const scheduler = new OrchestratorScheduler(config);
+        await scheduler.triggerManually(ruleId);
+
+        response.json({
+          success: true,
+          message: "Slot retry initiated",
+        });
+      } catch (error) {
+        console.error("[retrySlot] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Slot'u dashboard'dan onayla
+ */
+export const approveSlot = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 120, secrets: [claudeApiKey] })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const slotId = request.body?.slotId;
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        // Slot'u getir
+        const slotDoc = await db.collection("scheduled-slots").doc(slotId).get();
+        if (!slotDoc.exists) {
+          response.status(404).json({ success: false, error: "Slot not found" });
+          return;
+        }
+
+        const slot = slotDoc.data();
+        if (slot?.status !== "awaiting_approval") {
+          response.status(400).json({
+            success: false,
+            error: "Only slots awaiting approval can be approved",
+          });
+          return;
+        }
+
+        // Onay işlemi - Instagram'a yayınla
+        const config = await getOrchestratorConfig();
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { Orchestrator } = require("../orchestrator/orchestrator");
+        const orchestrator = new Orchestrator(config);
+
+        // Instagram'a yayınla
+        const publishResult = await orchestrator.publishToInstagram(slot.pipelineResult);
+
+        // Slot'u güncelle
+        await db.collection("scheduled-slots").doc(slotId).update({
+          status: "published",
+          "pipelineResult.approvalStatus": "approved",
+          "pipelineResult.approvalRespondedAt": Date.now(),
+          "pipelineResult.publishedAt": Date.now(),
+          "pipelineResult.instagramPostId": publishResult?.id,
+          updatedAt: Date.now(),
+        });
+
+        response.json({
+          success: true,
+          message: "Slot approved and published",
+        });
+      } catch (error) {
+        console.error("[approveSlot] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Slot'u dashboard'dan reddet
+ */
+export const rejectSlot = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const slotId = request.body?.slotId;
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        // Slot'u getir
+        const slotDoc = await db.collection("scheduled-slots").doc(slotId).get();
+        if (!slotDoc.exists) {
+          response.status(404).json({ success: false, error: "Slot not found" });
+          return;
+        }
+
+        const slot = slotDoc.data();
+        if (slot?.status !== "awaiting_approval") {
+          response.status(400).json({
+            success: false,
+            error: "Only slots awaiting approval can be rejected",
+          });
+          return;
+        }
+
+        // Slot'u güncelle
+        await db.collection("scheduled-slots").doc(slotId).update({
+          status: "failed",
+          "pipelineResult.approvalStatus": "rejected",
+          "pipelineResult.approvalRespondedAt": Date.now(),
+          error: "Rejected from dashboard",
+          updatedAt: Date.now(),
+        });
+
+        response.json({
+          success: true,
+          message: "Slot rejected",
+        });
+      } catch (error) {
+        console.error("[rejectSlot] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Slot caption'ını güncelle
+ */
+export const updateSlotCaption = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const { slotId, caption, hashtags } = request.body;
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        // Slot'u getir
+        const slotDoc = await db.collection("scheduled-slots").doc(slotId).get();
+        if (!slotDoc.exists) {
+          response.status(404).json({ success: false, error: "Slot not found" });
+          return;
+        }
+
+        // Sadece caption ve hashtag'i güncelle
+        const updates: Record<string, unknown> = {
+          updatedAt: Date.now(),
+        };
+
+        if (caption !== undefined) {
+          updates["pipelineResult.contentPackage.caption"] = caption;
+        }
+        if (hashtags !== undefined) {
+          updates["pipelineResult.contentPackage.hashtags"] = hashtags;
+        }
+
+        await db.collection("scheduled-slots").doc(slotId).update(updates);
+
+        response.json({
+          success: true,
+          message: "Caption updated",
+        });
+      } catch (error) {
+        console.error("[updateSlotCaption] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+// ==========================================
+// SCHEDULED FUNCTIONS (Otomatik Tetikleme)
+// ==========================================
+
+const TIMEZONE = "Europe/Istanbul";
+
+/**
+ * Orchestrator Scheduler - Otomatik Zaman Kuralı İşleyici
+ * Her 15 dakikada bir çalışır ve time-slot-rules'daki aktif kuralları kontrol eder.
+ * Zamanı gelen kurallar için otomatik olarak içerik üretim pipeline'ı başlatır.
+ */
+export const orchestratorScheduledTrigger = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 300, memory: "512MB", secrets: [claudeApiKey] })
+  .pubsub.schedule("*/15 * * * *")
+  .timeZone(TIMEZONE)
+  .onRun(async () => {
+    console.log("[OrchestratorScheduler] Running automatic check...");
+
+    try {
+      const config = await getOrchestratorConfig();
+      const scheduler = new OrchestratorScheduler(config);
+
+      const result = await scheduler.checkAndTrigger();
+
+      console.log("[OrchestratorScheduler] Result:", JSON.stringify(result));
+
+      if (result.errors.length > 0) {
+        console.error("[OrchestratorScheduler] Errors:", result.errors);
+      }
+
+      return null;
+    } catch (error) {
+      console.error("[OrchestratorScheduler] Fatal error:", error);
+      throw error;
+    }
+  });

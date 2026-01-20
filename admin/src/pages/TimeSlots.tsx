@@ -4,34 +4,97 @@ import type { TimeSlotRule, OrchestratorProductType } from "../types";
 
 // Gün isimleri
 const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+const DAY_NAMES_SHORT = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
 
-// Ürün tipi etiketleri
-const PRODUCT_LABELS: Record<OrchestratorProductType, string> = {
-  croissants: "Kruvasan",
-  pastas: "Pasta",
-  chocolates: "Çikolata",
-  macarons: "Makaron",
-  coffees: "Kahve",
+// Ürün tipi etiketleri ve emojileri
+const PRODUCT_CONFIG: Record<OrchestratorProductType, { label: string; emoji: string }> = {
+  croissants: { label: "Kruvasan", emoji: "🥐" },
+  pastas: { label: "Pasta", emoji: "🍰" },
+  chocolates: { label: "Çikolata", emoji: "🍫" },
+  macarons: { label: "Makaron", emoji: "🧁" },
+  coffees: { label: "Kahve", emoji: "☕" },
 };
 
+// Zaman dilimi isimleri
+const getTimeSlotName = (startHour: number): string => {
+  if (startHour >= 6 && startHour < 11) return "Sabah";
+  if (startHour >= 11 && startHour < 14) return "Öğle";
+  if (startHour >= 14 && startHour < 17) return "Öğleden Sonra";
+  if (startHour >= 17 && startHour < 21) return "Akşam";
+  return "Gece";
+};
+
+// TimeScore verileri (backend ile senkron - araştırma verilerine dayalı)
+const DAY_HOUR_SCORES: Record<number, Record<number, number>> = {
+  0: { 7: 35, 8: 40, 9: 45, 10: 50, 11: 55, 12: 55, 13: 55, 14: 65, 15: 70, 16: 80, 17: 75, 18: 65 },
+  1: { 7: 45, 8: 55, 9: 60, 10: 65, 11: 70, 12: 72, 13: 82, 14: 80, 15: 88, 16: 90, 17: 90, 18: 85 },
+  2: { 7: 70, 8: 65, 9: 70, 10: 75, 11: 88, 12: 90, 13: 88, 14: 90, 15: 95, 16: 95, 17: 92, 18: 85 },
+  3: { 7: 50, 8: 60, 9: 65, 10: 72, 11: 85, 12: 88, 13: 85, 14: 90, 15: 92, 16: 88, 17: 85, 18: 80 },
+  4: { 7: 50, 8: 58, 9: 65, 10: 72, 11: 85, 12: 85, 13: 82, 14: 88, 15: 90, 16: 88, 17: 95, 18: 92 },
+  5: { 7: 45, 8: 55, 9: 62, 10: 75, 11: 80, 12: 82, 13: 80, 14: 85, 15: 88, 16: 85, 17: 78, 18: 65 },
+  6: { 7: 35, 8: 42, 9: 48, 10: 58, 11: 62, 12: 65, 13: 62, 14: 68, 15: 70, 16: 68, 17: 65, 18: 72 },
+};
+
+// En iyi saati hesapla
+const findBestHourInRange = (startHour: number, endHour: number, dayOfWeek: number): { hour: number; score: number } => {
+  let bestHour = startHour;
+  let bestScore = 0;
+
+  const dayScores = DAY_HOUR_SCORES[dayOfWeek] || {};
+
+  for (let hour = startHour; hour < endHour; hour++) {
+    const score = dayScores[hour] || 50;
+    if (score > bestScore) {
+      bestScore = score;
+      bestHour = hour;
+    }
+  }
+
+  return { hour: bestHour, score: bestScore };
+};
+
+// Skor rengini belirle
+const getScoreColor = (score: number): string => {
+  if (score >= 85) return "text-green-600 bg-green-50";
+  if (score >= 70) return "text-blue-600 bg-blue-50";
+  if (score >= 50) return "text-amber-600 bg-amber-50";
+  return "text-gray-600 bg-gray-50";
+};
+
+// Scheduled slots tipi
+interface ScheduledSlot {
+  id: string;
+  timeSlotRuleId: string;
+  scheduledTime: number;
+  status: string;
+  createdAt: number;
+}
 
 export default function TimeSlots() {
   const [rules, setRules] = useState<TimeSlotRule[]>([]);
+  const [slots, setSlots] = useState<ScheduledSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRule, setEditingRule] = useState<TimeSlotRule | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+
+  const today = new Date().getDay();
 
   useEffect(() => {
-    loadRules();
+    loadData();
   }, []);
 
-  const loadRules = async () => {
+  const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.listTimeSlotRules();
-      setRules(data);
+      const [rulesData, slotsData] = await Promise.all([
+        api.listTimeSlotRules(),
+        api.listScheduledSlots({ limit: 50 }).catch(() => []),
+      ]);
+      setRules(rulesData);
+      setSlots(slotsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
@@ -43,7 +106,7 @@ export default function TimeSlots() {
     if (!confirm("Bu kuralı silmek istediğinizden emin misiniz?")) return;
     try {
       await api.deleteTimeSlotRule(id);
-      loadRules();
+      loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Silme hatası");
     }
@@ -52,19 +115,28 @@ export default function TimeSlots() {
   const handleToggleActive = async (rule: TimeSlotRule) => {
     try {
       await api.updateTimeSlotRule(rule.id, { isActive: !rule.isActive });
-      loadRules();
+      loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Güncelleme hatası");
     }
   };
 
   const handleTrigger = async (ruleId: string) => {
+    if (!confirm("Bu kural için şimdi içerik üretilsin mi?")) return;
     try {
-      const slotId = await api.triggerOrchestratorPipeline(ruleId);
-      alert(`Pipeline başlatıldı! Slot ID: ${slotId}`);
+      await api.triggerOrchestratorPipeline(ruleId);
+      alert(`İçerik üretimi başlatıldı!\n\nTelegram'dan onay bildirimi bekleyin.`);
+      loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Hata oluştu");
     }
+  };
+
+  // Kural için son slot'u bul
+  const getLastSlotForRule = (ruleId: string): ScheduledSlot | undefined => {
+    return slots
+      .filter(s => s.timeSlotRuleId === ruleId)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
   };
 
   return (
@@ -72,12 +144,27 @@ export default function TimeSlots() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Zaman Kuralları</h1>
-          <p className="text-gray-500 mt-1">Otomatik içerik üretim zamanlaması</p>
+          <h1 className="text-2xl font-bold text-gray-900">Otomatik Paylaşım Zamanları</h1>
+          <p className="text-gray-500 mt-1">
+            Her zaman dilimi için en uygun saatte otomatik içerik üretilir
+          </p>
         </div>
         <button onClick={() => setShowAddModal(true)} className="btn-primary">
-          + Yeni Kural
+          + Yeni Zaman Dilimi
         </button>
+      </div>
+
+      {/* Bilgi Kartı */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">💡</span>
+          <div>
+            <p className="font-medium text-gray-800">Nasıl Çalışır?</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Belirlediğiniz saat aralığında, Instagram etkileşim verilerine göre <strong>en optimal saatte</strong> otomatik içerik üretilir ve Telegram'dan onayınıza sunulur.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Loading */}
@@ -91,34 +178,120 @@ export default function TimeSlots() {
       {error && (
         <div className="card bg-red-50 border-red-200">
           <p className="text-red-600">{error}</p>
-          <button onClick={loadRules} className="btn-secondary mt-4">
+          <button onClick={loadData} className="btn-secondary mt-4">
             Tekrar Dene
           </button>
         </div>
       )}
+
+      {/* View Toggle */}
+      <div className="flex justify-end mb-4">
+        <div className="flex bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setViewMode("grid")}
+            className={`p-2 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
+            title="Grid Görünüm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={`p-2 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
+            title="Liste Görünüm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       {/* Kurallar Listesi */}
       {!loading && !error && (
         <>
           {rules.length === 0 ? (
             <div className="card text-center py-12">
-              <p className="text-gray-500 mb-4">Henüz kural yok</p>
+              <div className="text-4xl mb-4">📅</div>
+              <p className="text-gray-600 mb-2">Henüz otomatik paylaşım zamanı eklenmemiş</p>
+              <p className="text-gray-500 text-sm mb-6">
+                İlk zaman dilimini ekleyerek otomatik içerik üretimine başlayın
+              </p>
               <button onClick={() => setShowAddModal(true)} className="btn-primary">
-                İlk Kuralı Ekle
+                İlk Zaman Dilimini Ekle
               </button>
             </div>
-          ) : (
+          ) : viewMode === "grid" ? (
             <div className="space-y-4">
               {rules.map((rule) => (
                 <RuleCard
                   key={rule.id}
                   rule={rule}
+                  today={today}
+                  lastSlot={getLastSlotForRule(rule.id)}
                   onEdit={() => setEditingRule(rule)}
                   onDelete={() => handleDelete(rule.id)}
                   onToggle={() => handleToggleActive(rule)}
                   onTrigger={() => handleTrigger(rule.id)}
                 />
               ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zaman Dilimi</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saat Aralığı</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Günler</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün Tipleri</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {rules.map((rule) => (
+                      <tr key={rule.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
+                          {getTimeSlotName(rule.startHour)} Paylaşımı
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                          {String(rule.startHour).padStart(2, '0')}:00 - {String(rule.endHour).padStart(2, '0')}:00
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-1">
+                            {rule.daysOfWeek.map((day) => (
+                              <span key={day} className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-xs font-medium text-gray-600" title={DAY_NAMES[day]}>
+                                {DAY_NAMES_SHORT[day][0]}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-1">
+                            {rule.productTypes.map(pt => (
+                              <span key={pt} className="text-xl" title={PRODUCT_CONFIG[pt]?.label}>{PRODUCT_CONFIG[pt]?.emoji}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${rule.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                            {rule.isActive ? 'Aktif' : 'Pasif'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button onClick={() => handleTrigger(rule.id)} className="text-blue-600 hover:text-blue-900 mr-3" title="Şimdi Çalıştır">▶</button>
+                          <button onClick={() => setEditingRule(rule)} className="text-indigo-600 hover:text-indigo-900 mr-3">Düzenle</button>
+                          <button onClick={() => handleDelete(rule.id)} className="text-red-600 hover:text-red-900">Sil</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>
@@ -135,7 +308,7 @@ export default function TimeSlots() {
           onSuccess={() => {
             setShowAddModal(false);
             setEditingRule(null);
-            loadRules();
+            loadData();
           }}
         />
       )}
@@ -143,119 +316,191 @@ export default function TimeSlots() {
   );
 }
 
-// Kural kartı
+// Kural kartı - İyileştirilmiş versiyon
 function RuleCard({
   rule,
+  today,
+  lastSlot,
   onEdit,
   onDelete,
   onToggle,
   onTrigger,
 }: {
   rule: TimeSlotRule;
+  today: number;
+  lastSlot?: ScheduledSlot;
   onEdit: () => void;
   onDelete: () => void;
   onToggle: () => void;
   onTrigger: () => void;
 }) {
   const formatTime = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
+  const timeSlotName = getTimeSlotName(rule.startHour);
+  const mainProduct = rule.productTypes[0];
+  const productConfig = PRODUCT_CONFIG[mainProduct];
+
+  // Bugün için en iyi saati hesapla
+  const bestTime = findBestHourInRange(rule.startHour, rule.endHour, today);
+  const scoreColorClass = getScoreColor(bestTime.score);
+
+  // Sonraki çalışma günü
+  const getNextActiveDay = (): { dayIndex: number; dayName: string } => {
+    for (let i = 0; i <= 7; i++) {
+      const checkDay = (today + i) % 7;
+      if (rule.daysOfWeek.includes(checkDay)) {
+        return {
+          dayIndex: checkDay,
+          dayName: i === 0 ? "Bugün" : i === 1 ? "Yarın" : DAY_NAMES[checkDay],
+        };
+      }
+    }
+    return { dayIndex: today, dayName: "Bugün" };
+  };
+
+  const nextActive = getNextActiveDay();
+  const nextBestTime = findBestHourInRange(rule.startHour, rule.endHour, nextActive.dayIndex);
+
+  // Son paylaşım zamanı
+  const formatLastSlot = (): string => {
+    if (!lastSlot) return "Henüz çalışmadı";
+    const date = new Date(lastSlot.scheduledTime);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return `Bugün ${formatTime(date.getHours())}`;
+    if (diffDays === 1) return `Dün ${formatTime(date.getHours())}`;
+    return `${diffDays} gün önce`;
+  };
 
   return (
-    <div className={`card ${!rule.isActive ? "opacity-60" : ""}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          {/* Zaman Aralığı */}
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-2xl font-bold text-gray-900">
-              {formatTime(rule.startHour)} - {formatTime(rule.endHour)}
-            </span>
-            <span className={`px-2 py-0.5 rounded-full text-xs ${
-              rule.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-            }`}>
-              {rule.isActive ? "Aktif" : "Pasif"}
-            </span>
-            <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue text-xs rounded-full">
-              Öncelik: {rule.priority}
-            </span>
+    <div className={`card overflow-hidden ${!rule.isActive ? "opacity-60 bg-gray-50" : ""}`}>
+      {/* Üst Bölüm - Başlık ve Durum */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-3xl">{productConfig?.emoji || "📦"}</span>
+          <div>
+            <h3 className="font-bold text-lg text-gray-900">
+              {timeSlotName} Paylaşımı
+            </h3>
+            <p className="text-sm text-gray-500">
+              {formatTime(rule.startHour)} - {formatTime(rule.endHour)} arası
+            </p>
           </div>
+        </div>
+        <div className={`px-3 py-1.5 rounded-full text-sm font-medium ${rule.isActive
+          ? "bg-green-100 text-green-700"
+          : "bg-gray-200 text-gray-600"
+          }`}>
+          {rule.isActive ? "✓ Otomatik Aktif" : "Duraklatıldı"}
+        </div>
+      </div>
 
-          {/* Günler */}
-          <div className="flex gap-1 mb-3">
+      {/* Orta Bölüm - Detaylar Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        {/* En İyi Saat */}
+        <div className={`rounded-xl p-3 ${scoreColorClass}`}>
+          <div className="text-xs font-medium opacity-70 mb-1">🎯 En İyi Saat (Bugün)</div>
+          <div className="text-xl font-bold">{formatTime(bestTime.hour)}</div>
+          <div className="text-xs mt-1">Skor: {bestTime.score}/100</div>
+        </div>
+
+        {/* Sonraki Paylaşım */}
+        <div className="rounded-xl p-3 bg-purple-50 text-purple-700">
+          <div className="text-xs font-medium opacity-70 mb-1">📅 Sonraki Paylaşım</div>
+          <div className="text-xl font-bold">{nextActive.dayName}</div>
+          <div className="text-xs mt-1">~{formatTime(nextBestTime.hour)} civarı</div>
+        </div>
+
+        {/* Son Çalışma */}
+        <div className="rounded-xl p-3 bg-gray-100 text-gray-700">
+          <div className="text-xs font-medium opacity-70 mb-1">⏱️ Son Çalışma</div>
+          <div className="text-lg font-bold">{formatLastSlot()}</div>
+          {lastSlot && (
+            <div className="text-xs mt-1">
+              {lastSlot.status === "completed" ? "✓ Başarılı" :
+                lastSlot.status === "failed" ? "✗ Başarısız" :
+                  lastSlot.status === "awaiting_approval" ? "⏳ Onay bekliyor" :
+                    lastSlot.status}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Alt Bölüm - Günler ve Ürünler */}
+      <div className="flex flex-wrap items-center gap-4 mb-4 pb-4 border-b border-gray-100">
+        {/* Günler */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 mr-1">Günler:</span>
+          <div className="flex gap-1">
             {[0, 1, 2, 3, 4, 5, 6].map((day) => (
               <span
                 key={day}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs ${
-                  rule.daysOfWeek.includes(day)
-                    ? "bg-brand-blue text-white"
-                    : "bg-gray-100 text-gray-400"
-                }`}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${rule.daysOfWeek.includes(day)
+                  ? day === today
+                    ? "bg-brand-blue text-white ring-2 ring-brand-blue/30"
+                    : "bg-brand-blue/80 text-white"
+                  : "bg-gray-100 text-gray-400"
+                  }`}
                 title={DAY_NAMES[day]}
               >
-                {DAY_NAMES[day].charAt(0)}
+                {DAY_NAMES_SHORT[day].charAt(0)}
               </span>
             ))}
           </div>
+        </div>
 
-          {/* Ürün Tipleri */}
-          <div className="flex flex-wrap gap-2 mb-2">
+        {/* Ürün Tipleri */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 mr-1">Ürünler:</span>
+          <div className="flex flex-wrap gap-1">
             {rule.productTypes.map((pt) => (
               <span
                 key={pt}
-                className="px-3 py-1 bg-brand-mustard/20 text-amber-800 text-sm rounded-full"
+                className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium"
               >
-                {PRODUCT_LABELS[pt]}
+                {PRODUCT_CONFIG[pt]?.emoji} {PRODUCT_CONFIG[pt]?.label}
               </span>
             ))}
           </div>
-
-          {/* Eşleştirme */}
-          {rule.allowPairing && rule.pairingWith && (
-            <p className="text-sm text-gray-500">
-              + Eşleştirme: {rule.pairingWith.map((p) => PRODUCT_LABELS[p]).join(", ")}
-            </p>
-          )}
         </div>
+      </div>
 
-        {/* Aksiyonlar */}
-        <div className="flex flex-col gap-2 min-w-[100px]">
-          <div className="relative group">
-            <button
-              onClick={onTrigger}
-              className="btn-primary text-sm py-1.5 w-full"
-            >
-              Şimdi Üret
-            </button>
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-              Bu kuralla hemen içerik üretir
-            </div>
-          </div>
-          <button
-            onClick={onToggle}
-            className="btn-secondary text-sm py-1.5"
-            title={rule.isActive ? "Kuralı devre dışı bırak" : "Kuralı etkinleştir"}
-          >
-            {rule.isActive ? "Durdur" : "Başlat"}
-          </button>
-          <button
-            onClick={onEdit}
-            className="text-gray-500 hover:text-gray-700 text-sm"
-            title="Kuralı düzenle"
-          >
-            Düzenle
-          </button>
-          <button
-            onClick={onDelete}
-            className="text-red-500 hover:text-red-700 text-sm"
-            title="Kuralı kalıcı olarak sil"
-          >
-            Sil
-          </button>
-        </div>
+      {/* Aksiyonlar */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={onTrigger}
+          disabled={!rule.isActive}
+          className="px-4 py-2 bg-brand-blue text-white rounded-xl text-sm font-medium hover:bg-brand-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <span>▶</span> Şimdi Üret
+        </button>
+        <button
+          onClick={onToggle}
+          className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${rule.isActive
+            ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+            : "bg-green-100 text-green-700 hover:bg-green-200"
+            }`}
+        >
+          {rule.isActive ? "⏸ Duraklat" : "▶ Başlat"}
+        </button>
+        <button
+          onClick={onEdit}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+        >
+          ✏️ Düzenle
+        </button>
+        <button
+          onClick={onDelete}
+          className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors"
+        >
+          🗑️ Sil
+        </button>
       </div>
     </div>
   );
 }
 
-// Kural Modal
+// Kural Modal - İyileştirilmiş versiyon
 function RuleModal({
   rule,
   onClose,
@@ -271,7 +516,6 @@ function RuleModal({
   const [productTypes, setProductTypes] = useState<OrchestratorProductType[]>(
     rule?.productTypes || ["croissants"]
   );
-  const [priority, setPriority] = useState(rule?.priority || 10);
   const [saving, setSaving] = useState(false);
 
   const toggleDay = (day: number) => {
@@ -296,6 +540,10 @@ function RuleModal({
       alert("En az bir gün seçmelisiniz");
       return;
     }
+    if (endHour <= startHour) {
+      alert("Bitiş saati başlangıç saatinden büyük olmalıdır");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -304,7 +552,7 @@ function RuleModal({
         endHour,
         daysOfWeek,
         productTypes,
-        priority,
+        priority: 10,
       };
 
       if (rule) {
@@ -320,109 +568,132 @@ function RuleModal({
     }
   };
 
+  // Seçili saat aralığı için önizleme
+  const today = new Date().getDay();
+  const previewBestTime = findBestHourInRange(startHour, endHour, today);
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">
-          {rule ? "Kuralı Düzenle" : "Yeni Kural Ekle"}
+        <h2 className="text-xl font-bold mb-2">
+          {rule ? "Zaman Dilimini Düzenle" : "Yeni Zaman Dilimi Ekle"}
         </h2>
+        <p className="text-gray-500 text-sm mb-6">
+          Belirlediğiniz aralıkta en optimal saatte otomatik içerik üretilir
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Zaman Aralığı */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Başlangıç Saati
-              </label>
-              <select
-                value={startHour}
-                onChange={(e) => setStartHour(Number(e.target.value))}
-                className="input w-full"
-              >
-                {Array.from({ length: 24 }, (_, i) => (
-                  <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
-                ))}
-              </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              ⏰ Saat Aralığı
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Başlangıç</label>
+                <select
+                  value={startHour}
+                  onChange={(e) => setStartHour(Number(e.target.value))}
+                  className="input w-full"
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Bitiş</label>
+                <select
+                  value={endHour}
+                  onChange={(e) => setEndHour(Number(e.target.value))}
+                  className="input w-full"
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Bitiş Saati
-              </label>
-              <select
-                value={endHour}
-                onChange={(e) => setEndHour(Number(e.target.value))}
-                className="input w-full"
-              >
-                {Array.from({ length: 24 }, (_, i) => (
-                  <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
-                ))}
-              </select>
-            </div>
+            {/* Önizleme */}
+            {endHour > startHour && (
+              <div className="mt-3 p-3 bg-blue-50 rounded-xl text-sm">
+                <span className="text-blue-700">
+                  💡 Bu aralıkta bugün için en iyi saat: <strong>{String(previewBestTime.hour).padStart(2, "0")}:00</strong> (skor: {previewBestTime.score})
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Günler */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Günler
+              📅 Hangi Günler Çalışsın?
             </label>
             <div className="flex gap-2">
-              {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+              {[1, 2, 3, 4, 5, 6, 0].map((day) => (
                 <button
                   key={day}
                   type="button"
                   onClick={() => toggleDay(day)}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm transition-colors ${
-                    daysOfWeek.includes(day)
-                      ? "bg-brand-blue text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                  className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${daysOfWeek.includes(day)
+                    ? "bg-brand-blue text-white shadow-md"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
                 >
-                  {DAY_NAMES[day].charAt(0)}
+                  <div className="text-xs opacity-70">{DAY_NAMES_SHORT[day]}</div>
                 </button>
               ))}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDaysOfWeek([1, 2, 3, 4, 5])}
+                className="text-xs text-brand-blue hover:underline"
+              >
+                Hafta içi
+              </button>
+              <button
+                type="button"
+                onClick={() => setDaysOfWeek([0, 6])}
+                className="text-xs text-brand-blue hover:underline"
+              >
+                Hafta sonu
+              </button>
+              <button
+                type="button"
+                onClick={() => setDaysOfWeek([0, 1, 2, 3, 4, 5, 6])}
+                className="text-xs text-brand-blue hover:underline"
+              >
+                Her gün
+              </button>
             </div>
           </div>
 
           {/* Ürün Tipleri */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Ürün Tipleri
+              📦 Hangi Ürünler İçin?
             </label>
-            <div className="flex flex-wrap gap-2">
-              {(Object.keys(PRODUCT_LABELS) as OrchestratorProductType[]).map((pt) => (
+            <div className="grid grid-cols-2 gap-2">
+              {(Object.keys(PRODUCT_CONFIG) as OrchestratorProductType[]).map((pt) => (
                 <button
                   key={pt}
                   type="button"
                   onClick={() => toggleProductType(pt)}
-                  className={`px-4 py-2 rounded-xl text-sm transition-colors ${
-                    productTypes.includes(pt)
-                      ? "bg-brand-mustard text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                  className={`p-3 rounded-xl text-sm transition-all flex items-center gap-2 ${productTypes.includes(pt)
+                    ? "bg-amber-100 text-amber-800 ring-2 ring-amber-300"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
                 >
-                  {PRODUCT_LABELS[pt]}
+                  <span className="text-xl">{PRODUCT_CONFIG[pt].emoji}</span>
+                  <span className="font-medium">{PRODUCT_CONFIG[pt].label}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Öncelik */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Öncelik (düşük = yüksek öncelik)
-            </label>
-            <input
-              type="number"
-              value={priority}
-              onChange={(e) => setPriority(Number(e.target.value))}
-              min={1}
-              max={100}
-              className="input w-full"
-            />
-          </div>
-
           {/* Butonlar */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-4 border-t">
             <button
               type="button"
               onClick={onClose}

@@ -17,5 +17,11 @@ service firebase.storage {
       allow read: if true;
       allow write: if true; // Development için açık
     }
+
+    // Generated images - AI tarafından üretilen görseller
+    match /generated/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // Cloud Functions yazabilir
+    }
   }
 }

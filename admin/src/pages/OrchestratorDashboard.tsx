@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api } from "../services/api";
 import type {
   OrchestratorDashboardStats,
   ScheduledSlot,
   OrchestratorProductType,
+  ScheduledSlotStatus,
 } from "../types";
 
 // Ürün tipi etiketleri
@@ -15,14 +16,14 @@ const PRODUCT_LABELS: Record<OrchestratorProductType, string> = {
   coffees: "Kahve",
 };
 
-// Slot durumu renkleri
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  pending: { bg: "bg-gray-100", text: "text-gray-700" },
-  generating: { bg: "bg-blue-100", text: "text-blue-700" },
-  awaiting_approval: { bg: "bg-yellow-100", text: "text-yellow-700" },
-  approved: { bg: "bg-green-100", text: "text-green-700" },
-  published: { bg: "bg-brand-green/20", text: "text-green-800" },
-  failed: { bg: "bg-red-100", text: "text-red-700" },
+// Slot durumu renkleri ve etiketleri
+const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string; icon: string }> = {
+  pending: { bg: "bg-gray-100", text: "text-gray-700", label: "Bekliyor", icon: "⏳" },
+  generating: { bg: "bg-blue-100", text: "text-blue-700", label: "Üretiliyor", icon: "⚙️" },
+  awaiting_approval: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Onay Bekliyor", icon: "👀" },
+  approved: { bg: "bg-green-100", text: "text-green-700", label: "Onaylandı", icon: "✅" },
+  published: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Yayınlandı", icon: "📤" },
+  failed: { bg: "bg-red-100", text: "text-red-700", label: "Başarısız", icon: "❌" },
 };
 
 // Pipeline aşama isimleri
@@ -37,35 +38,51 @@ const STAGE_LABELS: Record<string, string> = {
   completed: "Tamamlandı",
 };
 
-// Tahmini süre (saniye)
-const STAGE_DURATIONS: Record<string, number> = {
-  asset_selection: 5,
-  metadata_analysis: 15,
-  prompt_optimization: 20,
-  image_generation: 60,
-  quality_control: 15,
-  content_packaging: 5,
-  telegram_notification: 5,
-};
+// gs:// URL'yi public URL'ye çevir
+function convertStorageUrl(url: string | undefined): string | null {
+  if (!url) return null;
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Bekliyor",
-  generating: "Üretiliyor",
-  awaiting_approval: "Onay Bekliyor",
-  approved: "Onaylandı",
-  published: "Yayınlandı",
-  failed: "Başarısız",
+  // Zaten public URL ise olduğu gibi döndür
+  if (url.startsWith("https://")) return url;
+
+  // gs:// formatını public URL'ye çevir
+  if (url.startsWith("gs://")) {
+    const match = url.match(/gs:\/\/([^/]+)\/(.+)/);
+    if (match) {
+      const [, bucket, path] = match;
+      return `https://storage.googleapis.com/${bucket}/${path}`;
+    }
+  }
+
+  return null;
+}
+
+// Grid boyut seçenekleri
+type GridSize = "compact" | "normal" | "large";
+const GRID_CONFIG: Record<GridSize, { cols: string; aspectRatio: string; label: string }> = {
+  compact: { cols: "grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5", aspectRatio: "aspect-square", label: "Kompakt" },
+  normal: { cols: "grid-cols-1 md:grid-cols-2 lg:grid-cols-3", aspectRatio: "aspect-[4/5]", label: "Normal" },
+  large: { cols: "grid-cols-1 md:grid-cols-2", aspectRatio: "aspect-[4/5]", label: "Büyük" },
 };
 
 export default function OrchestratorDashboard() {
   const [stats, setStats] = useState<OrchestratorDashboardStats | null>(null);
-  const [recentSlots, setRecentSlots] = useState<ScheduledSlot[]>([]);
+  const [slots, setSlots] = useState<ScheduledSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filtreler
+  const [statusFilter, setStatusFilter] = useState<ScheduledSlotStatus | "all">("all");
+
+  // Grid boyutu
+  const [gridSize, setGridSize] = useState<GridSize>("normal");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+
+  // Üretim
   const [generating, setGenerating] = useState(false);
   const [selectedProductType, setSelectedProductType] = useState<OrchestratorProductType>("croissants");
 
-  // Progress tracking
+  // Progress Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [currentSlotId, setCurrentSlotId] = useState<string | null>(null);
   const [progressInfo, setProgressInfo] = useState<{
@@ -77,9 +94,36 @@ export default function OrchestratorDashboard() {
   } | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
 
+  // Detay Modal
+  const [selectedSlot, setSelectedSlot] = useState<ScheduledSlot | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [editingCaption, setEditingCaption] = useState(false);
+  const [captionText, setCaptionText] = useState("");
+  const [hashtagsText, setHashtagsText] = useState("");
+
+  // İşlem durumları
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [statsData, slotsData] = await Promise.all([
+        api.getOrchestratorDashboardStats(),
+        api.listScheduledSlots({ limit: 50 }),
+      ]);
+      setStats(statsData);
+      setSlots(slotsData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Veri yüklenemedi");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Progress polling
   useEffect(() => {
@@ -97,7 +141,6 @@ export default function OrchestratorDashboard() {
             error: slot.error,
           });
 
-          // Tamamlandı veya hata varsa polling'i durdur
           if (slot.status === "awaiting_approval" || slot.status === "failed") {
             clearInterval(pollInterval);
             setGenerating(false);
@@ -110,36 +153,22 @@ export default function OrchestratorDashboard() {
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [currentSlotId, showProgressModal]);
+  }, [currentSlotId, showProgressModal, loadData]);
 
   // Elapsed time counter
   useEffect(() => {
     if (!generating) return;
-
-    const timer = setInterval(() => {
-      setElapsedTime((prev) => prev + 1);
-    }, 1000);
-
+    const timer = setInterval(() => setElapsedTime((prev) => prev + 1), 1000);
     return () => clearInterval(timer);
   }, [generating]);
 
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [statsData, slotsData] = await Promise.all([
-        api.getOrchestratorDashboardStats(),
-        api.listScheduledSlots({ limit: 10 }),
-      ]);
-      setStats(statsData);
-      setRecentSlots(slotsData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Veri yüklenemedi");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Filtrelenmiş slotlar
+  const filteredSlots = slots.filter((slot) => {
+    if (statusFilter !== "all" && slot.status !== statusFilter) return false;
+    return true;
+  });
 
+  // Hemen üret
   const handleGenerateNow = async () => {
     setGenerating(true);
     setElapsedTime(0);
@@ -180,29 +209,106 @@ export default function OrchestratorDashboard() {
     }
   };
 
-  const closeProgressModal = () => {
-    setShowProgressModal(false);
-    setCurrentSlotId(null);
-    setProgressInfo(null);
-    loadData();
+  // Slot işlemleri
+  const handleDeleteSlot = async (slotId: string) => {
+    if (!confirm("Bu slot silinecek. Emin misiniz?")) return;
+    setActionLoading(slotId);
+    try {
+      await api.deleteScheduledSlot(slotId);
+      loadData();
+    } catch (err) {
+      alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  // Tahmini kalan süreyi hesapla
-  const getEstimatedTimeRemaining = (): string => {
-    if (!progressInfo) return "Hesaplanıyor...";
-
-    const stages = Object.keys(STAGE_DURATIONS);
-    let remainingSeconds = 0;
-
-    for (let i = progressInfo.stageIndex; i < stages.length; i++) {
-      remainingSeconds += STAGE_DURATIONS[stages[i]] || 10;
+  const handleRetrySlot = async (slotId: string) => {
+    if (!confirm("Slot yeniden denenecek. Emin misiniz?")) return;
+    setActionLoading(slotId);
+    try {
+      await api.retrySlot(slotId);
+      alert("Yeniden deneme başlatıldı!");
+      loadData();
+    } catch (err) {
+      alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    } finally {
+      setActionLoading(null);
     }
+  };
 
-    if (remainingSeconds < 60) {
-      return `~${remainingSeconds} saniye`;
+  const handleApproveSlot = async (slotId: string) => {
+    if (!confirm("Slot onaylanıp Instagram'a yayınlanacak. Emin misiniz?")) return;
+    setActionLoading(slotId);
+    try {
+      await api.approveSlot(slotId);
+      alert("Yayınlandı!");
+      loadData();
+      setShowDetailModal(false);
+    } catch (err) {
+      alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    } finally {
+      setActionLoading(null);
     }
-    const minutes = Math.ceil(remainingSeconds / 60);
-    return `~${minutes} dakika`;
+  };
+
+  const handleRejectSlot = async (slotId: string) => {
+    if (!confirm("Slot reddedilecek. Emin misiniz?")) return;
+    setActionLoading(slotId);
+    try {
+      await api.rejectSlot(slotId);
+      loadData();
+      setShowDetailModal(false);
+    } catch (err) {
+      alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleResendTelegram = async (slotId: string) => {
+    setActionLoading(slotId);
+    try {
+      await api.orchestratorResendTelegram(slotId);
+      alert("Telegram bildirimi gönderildi!");
+    } catch (err) {
+      alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSaveCaption = async () => {
+    if (!selectedSlot) return;
+    setActionLoading("caption");
+    try {
+      const hashtags = hashtagsText.split(/[\s,]+/).filter(h => h.startsWith("#") || h.length > 0).map(h => h.startsWith("#") ? h : `#${h}`);
+      await api.updateSlotCaption(selectedSlot.id, captionText, hashtags);
+      alert("Caption güncellendi!");
+      setEditingCaption(false);
+      loadData();
+      // Modal'daki veriyi güncelle
+      const updatedSlot = await api.getSlotDetail(selectedSlot.id);
+      setSelectedSlot(updatedSlot);
+    } catch (err) {
+      alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Detay modal'ını aç
+  const openDetailModal = async (slot: ScheduledSlot) => {
+    try {
+      const fullSlot = await api.getSlotDetail(slot.id);
+      setSelectedSlot(fullSlot);
+      setCaptionText(fullSlot.pipelineResult?.contentPackage?.caption || "");
+      setHashtagsText(fullSlot.pipelineResult?.contentPackage?.hashtags?.join(" ") || "");
+      setEditingCaption(false);
+      setShowDetailModal(true);
+    } catch (err) {
+      alert("Detay yüklenemedi: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    }
   };
 
   const formatElapsedTime = (seconds: number): string => {
@@ -211,34 +317,16 @@ export default function OrchestratorDashboard() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleTriggerScheduler = async () => {
-    try {
-      const result = await api.triggerOrchestratorScheduler();
-
-      // Hiçbir kural tetiklenmediyse açıklayıcı mesaj göster
-      if (result.triggered === 0 && result.skipped === 0 && result.errors.length === 0) {
-        const now = new Date();
-        const currentHour = now.getHours();
-        const currentDay = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"][now.getDay()];
-
-        alert(
-          `⚠️ Hiçbir kural tetiklenmedi!\n\n` +
-          `Şu an: ${currentDay}, saat ${currentHour}:00\n\n` +
-          `Olası sebepler:\n` +
-          `• Aktif kuralların zaman aralığı şu ana uymuyor\n` +
-          `• Kurallar bugünü (${currentDay}) kapsamıyor\n\n` +
-          `💡 İpucu: Test için "Üret" butonunu veya Zaman Kuralları sayfasındaki "Tetikle" butonunu kullanın.`
-        );
-      } else {
-        alert(`Scheduler çalıştırıldı!\n\nTetiklenen: ${result.triggered}\nAtlanan: ${result.skipped}\nHatalar: ${result.errors.length}`);
-      }
-      loadData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Hata oluştu");
-    }
+  const formatDate = (timestamp: number): string => {
+    return new Date(timestamp).toLocaleString("tr-TR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
-  if (loading) {
+  if (loading && !stats) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
@@ -250,89 +338,46 @@ export default function OrchestratorDashboard() {
     return (
       <div className="card bg-red-50 border-red-200">
         <p className="text-red-600">{error}</p>
-        <button onClick={loadData} className="btn-secondary mt-4">
-          Tekrar Dene
-        </button>
+        <button onClick={loadData} className="btn-secondary mt-4">Tekrar Dene</button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Progress Modal */}
       {showProgressModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
             <h3 className="text-lg font-semibold mb-4">
-              {progressInfo?.status === "failed" ? "Üretim Başarısız" :
-                progressInfo?.status === "awaiting_approval" ? "Üretim Tamamlandı!" :
-                  "İçerik Üretiliyor..."}
+              {progressInfo?.status === "failed" ? "❌ Üretim Başarısız" :
+                progressInfo?.status === "awaiting_approval" ? "✅ Üretim Tamamlandı!" :
+                  "⚙️ İçerik Üretiliyor..."}
             </h3>
 
             {/* Progress Bar */}
             <div className="mb-4">
               <div className="flex justify-between text-sm text-gray-600 mb-1">
-                <span>
-                  {progressInfo ? STAGE_LABELS[progressInfo.stage] || progressInfo.stage : "Başlatılıyor..."}
-                </span>
+                <span>{progressInfo ? STAGE_LABELS[progressInfo.stage] || progressInfo.stage : "Başlatılıyor..."}</span>
                 <span>{progressInfo ? `${progressInfo.stageIndex}/${progressInfo.totalStages}` : "0/7"}</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className={`h-3 rounded-full transition-all duration-500 ${progressInfo?.status === "failed" ? "bg-red-500" :
-                      progressInfo?.status === "awaiting_approval" ? "bg-green-500" :
-                        "bg-brand-blue"
+                    progressInfo?.status === "awaiting_approval" ? "bg-green-500" :
+                      "bg-brand-blue"
                     }`}
-                  style={{
-                    width: `${progressInfo ? (progressInfo.stageIndex / progressInfo.totalStages) * 100 : 0}%`,
-                  }}
+                  style={{ width: `${progressInfo ? (progressInfo.stageIndex / progressInfo.totalStages) * 100 : 0}%` }}
                 />
               </div>
             </div>
 
-            {/* Stages List */}
-            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-              {Object.entries(STAGE_LABELS).filter(([key]) => key !== "completed").map(([key, label], index) => {
-                const currentIndex = progressInfo?.stageIndex || 0;
-                const isDone = index < currentIndex;
-                const isCurrent = index === currentIndex - 1;
-                const isFailed = progressInfo?.status === "failed" && isCurrent;
-
-                return (
-                  <div
-                    key={key}
-                    className={`flex items-center gap-2 text-sm ${isDone ? "text-green-600" :
-                        isFailed ? "text-red-600" :
-                          isCurrent ? "text-brand-blue font-medium" :
-                            "text-gray-400"
-                      }`}
-                  >
-                    {isDone ? (
-                      <span className="w-5 h-5 flex items-center justify-center bg-green-100 rounded-full text-xs">✓</span>
-                    ) : isFailed ? (
-                      <span className="w-5 h-5 flex items-center justify-center bg-red-100 rounded-full text-xs">✕</span>
-                    ) : isCurrent ? (
-                      <span className="w-5 h-5 flex items-center justify-center bg-brand-blue/20 rounded-full">
-                        <span className="w-2 h-2 bg-brand-blue rounded-full animate-pulse" />
-                      </span>
-                    ) : (
-                      <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded-full text-xs text-gray-400">
-                        {index + 1}
-                      </span>
-                    )}
-                    <span>{label}</span>
-                  </div>
-                );
-              })}
-            </div>
-
             {/* Time Info */}
-            <div className="flex justify-between text-sm text-gray-500 border-t pt-3">
-              <span>Geçen süre: {formatElapsedTime(elapsedTime)}</span>
-              {generating && <span>Kalan: {getEstimatedTimeRemaining()}</span>}
+            <div className="text-sm text-gray-500 border-t pt-3">
+              Geçen süre: {formatElapsedTime(elapsedTime)}
             </div>
 
-            {/* Error Message */}
+            {/* Error */}
             {progressInfo?.error && (
               <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-700">{progressInfo.error}</p>
@@ -342,12 +387,227 @@ export default function OrchestratorDashboard() {
             {/* Close Button */}
             {(!generating || progressInfo?.status === "failed" || progressInfo?.status === "awaiting_approval") && (
               <button
-                onClick={closeProgressModal}
+                onClick={() => { setShowProgressModal(false); setCurrentSlotId(null); }}
                 className="mt-4 w-full btn-primary"
               >
-                {progressInfo?.status === "awaiting_approval" ? "Harika! Kapat" : "Kapat"}
+                Kapat
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {showDetailModal && selectedSlot && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+              <h3 className="text-lg font-semibold">Slot Detayları</h3>
+              <button onClick={() => setShowDetailModal(false)} className="text-gray-500 hover:text-gray-700">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Sol: Görsel */}
+              <div>
+                {(() => {
+                  const modalStorageUrl = convertStorageUrl(selectedSlot.pipelineResult?.generatedImage?.storageUrl);
+                  const modalBase64Url = selectedSlot.pipelineResult?.generatedImage?.imageBase64
+                    ? `data:${selectedSlot.pipelineResult.generatedImage.mimeType};base64,${selectedSlot.pipelineResult.generatedImage.imageBase64}`
+                    : null;
+                  const modalImageUrl = modalStorageUrl || modalBase64Url;
+
+                  if (modalImageUrl) {
+                    return (
+                      <img
+                        src={modalImageUrl}
+                        alt="Üretilen görsel"
+                        className="w-full rounded-xl shadow-lg"
+                      />
+                    );
+                  }
+                  return (
+                    <div className="w-full aspect-[4/5] bg-gray-100 rounded-xl flex items-center justify-center">
+                      <span className="text-gray-400">Görsel yok</span>
+                    </div>
+                  );
+                })()}
+
+                {/* Kalite Skoru */}
+                {selectedSlot.pipelineResult?.qualityControl && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-xl">
+                    <h4 className="font-medium mb-2">Kalite Skoru</h4>
+                    <div className="text-3xl font-bold text-brand-blue">
+                      {selectedSlot.pipelineResult.qualityControl.score}/10
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm">
+                      {Object.entries(selectedSlot.pipelineResult.qualityControl.evaluation || {}).map(([key, val]) => (
+                        <div key={key} className="flex justify-between">
+                          <span className="text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+                          <span className="font-medium">{val}/10</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Sağ: Detaylar */}
+              <div className="space-y-4">
+                {/* Durum */}
+                <div className="flex items-center gap-3">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_CONFIG[selectedSlot.status]?.bg} ${STATUS_CONFIG[selectedSlot.status]?.text}`}>
+                    {STATUS_CONFIG[selectedSlot.status]?.icon} {STATUS_CONFIG[selectedSlot.status]?.label}
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    {formatDate(selectedSlot.createdAt)}
+                  </span>
+                </div>
+
+                {/* Caption */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium">Caption</h4>
+                    {selectedSlot.status === "awaiting_approval" && !editingCaption && (
+                      <button
+                        onClick={() => setEditingCaption(true)}
+                        className="text-sm text-brand-blue hover:underline"
+                      >
+                        Düzenle
+                      </button>
+                    )}
+                  </div>
+
+                  {editingCaption ? (
+                    <div className="space-y-3">
+                      <textarea
+                        value={captionText}
+                        onChange={(e) => setCaptionText(e.target.value)}
+                        className="w-full p-3 border rounded-lg text-sm"
+                        rows={4}
+                      />
+                      <input
+                        type="text"
+                        value={hashtagsText}
+                        onChange={(e) => setHashtagsText(e.target.value)}
+                        placeholder="Hashtag'ler (boşlukla ayırın)"
+                        className="w-full p-3 border rounded-lg text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveCaption}
+                          disabled={actionLoading === "caption"}
+                          className="btn-primary text-sm"
+                        >
+                          {actionLoading === "caption" ? "Kaydediliyor..." : "Kaydet"}
+                        </button>
+                        <button
+                          onClick={() => setEditingCaption(false)}
+                          className="btn-secondary text-sm"
+                        >
+                          İptal
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-gray-700 whitespace-pre-wrap text-sm">
+                        {selectedSlot.pipelineResult?.contentPackage?.caption || "Caption yok"}
+                      </p>
+                      {selectedSlot.pipelineResult?.contentPackage?.hashtags && (
+                        <p className="text-blue-600 text-sm mt-2">
+                          {selectedSlot.pipelineResult.contentPackage.hashtags.join(" ")}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Kullanılan Asset */}
+                {selectedSlot.pipelineResult?.assetSelection?.product && (
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <h4 className="font-medium mb-2">Kullanılan Ürün Görseli</h4>
+                    <div className="flex items-center gap-3">
+                      {selectedSlot.pipelineResult.assetSelection.product.storageUrl && (
+                        <img
+                          src={selectedSlot.pipelineResult.assetSelection.product.storageUrl}
+                          alt="Referans"
+                          className="w-16 h-16 object-cover rounded-lg"
+                        />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{selectedSlot.pipelineResult.assetSelection.product.filename}</p>
+                        <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.product.subType}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hata */}
+                {selectedSlot.status === "failed" && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <h4 className="font-medium text-red-700 mb-1">Hata</h4>
+                    <p className="text-sm text-red-600">
+                      {selectedSlot.pipelineResult?.status?.error || "Bilinmeyen hata"}
+                    </p>
+                  </div>
+                )}
+
+                {/* Aksiyonlar */}
+                <div className="pt-4 border-t space-y-3">
+                  {selectedSlot.status === "awaiting_approval" && (
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleApproveSlot(selectedSlot.id)}
+                        disabled={actionLoading === selectedSlot.id}
+                        className="flex-1 btn-primary bg-green-600 hover:bg-green-700"
+                      >
+                        {actionLoading === selectedSlot.id ? "..." : "✅ Onayla ve Yayınla"}
+                      </button>
+                      <button
+                        onClick={() => handleRejectSlot(selectedSlot.id)}
+                        disabled={actionLoading === selectedSlot.id}
+                        className="flex-1 btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        ❌ Reddet
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedSlot.status === "awaiting_approval" && (
+                    <button
+                      onClick={() => handleResendTelegram(selectedSlot.id)}
+                      disabled={actionLoading === selectedSlot.id}
+                      className="w-full btn-secondary"
+                    >
+                      📤 Telegram'a Tekrar Gönder
+                    </button>
+                  )}
+
+                  {selectedSlot.status === "failed" && (
+                    <button
+                      onClick={() => handleRetrySlot(selectedSlot.id)}
+                      disabled={actionLoading === selectedSlot.id}
+                      className="w-full btn-primary"
+                    >
+                      🔄 Yeniden Dene
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => handleDeleteSlot(selectedSlot.id)}
+                    disabled={actionLoading === selectedSlot.id}
+                    className="w-full btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    🗑️ Sil
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -355,7 +615,7 @@ export default function OrchestratorDashboard() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Orchestrator</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Orchestrator Dashboard</h1>
           <p className="text-gray-500 mt-1">AI destekli otomatik içerik üretimi</p>
         </div>
         <button onClick={loadData} className="btn-secondary">
@@ -372,12 +632,8 @@ export default function OrchestratorDashboard() {
               <p className="font-semibold text-yellow-800">Henüz Görsel Yok!</p>
               <p className="text-yellow-700 text-sm mt-1">
                 İçerik üretmek için önce ürün görselleri yüklemeniz gerekiyor.
-                Görsel olmadan üretim başarısız olur.
               </p>
-              <a
-                href="/assets"
-                className="inline-block mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-medium hover:bg-yellow-700 transition-colors"
-              >
+              <a href="/assets" className="inline-block mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-medium hover:bg-yellow-700">
                 Görseller Sayfasına Git →
               </a>
             </div>
@@ -388,7 +644,7 @@ export default function OrchestratorDashboard() {
       {/* Hızlı Üretim */}
       <div className="card bg-gradient-to-br from-brand-blue/10 to-brand-blue/5">
         <h2 className="text-lg font-semibold mb-4">Hemen İçerik Üret</h2>
-        <div className="flex flex-wrap gap-6 items-start">
+        <div className="flex flex-wrap gap-4 items-end">
           <div>
             <label className="block text-sm text-gray-600 mb-1">Ürün Tipi</label>
             <select
@@ -401,169 +657,156 @@ export default function OrchestratorDashboard() {
               ))}
             </select>
           </div>
-
-          {/* Şimdi Üret Butonu */}
-          <div className="text-center">
-            <button
-              onClick={handleGenerateNow}
-              disabled={generating}
-              className="btn-primary disabled:opacity-50 min-w-[120px]"
-            >
-              {generating ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Üretiliyor...
-                </span>
-              ) : (
-                "Şimdi Üret"
-              )}
-            </button>
-            <p className="text-xs text-gray-500 mt-1.5 max-w-[150px]">
-              Seçili ürün tipiyle hemen içerik üretir
-            </p>
-          </div>
-
-          {/* Zamanlanmış Üretim Butonu */}
-          <div className="text-center">
-            <button
-              onClick={handleTriggerScheduler}
-              className="btn-secondary min-w-[120px]"
-            >
-              Zamanlı Kontrol
-            </button>
-            <p className="text-xs text-gray-500 mt-1.5 max-w-[150px]">
-              Zaman kurallarına göre uygun olanları üretir
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 p-3 bg-white/50 rounded-lg">
-          <p className="text-xs text-gray-600">
-            <strong>Süreç:</strong> Claude AI görsel seçer → Gemini görsel üretir → Claude kalite kontrol yapar → Telegram'a onay gönderir → Instagram'a paylaşır
-          </p>
+          <button
+            onClick={handleGenerateNow}
+            disabled={generating}
+            className="btn-primary disabled:opacity-50"
+          >
+            {generating ? "Üretiliyor..." : "🚀 Şimdi Üret"}
+          </button>
         </div>
       </div>
 
       {/* İstatistikler */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Toplam Görsel"
-          value={stats?.assets.total || 0}
-          color="bg-brand-blue/20"
-          textColor="text-blue-800"
-        />
-        <StatCard
-          label="Aktif Kurallar"
-          value={stats?.rules.total || 0}
-          color="bg-brand-green/20"
-          textColor="text-green-800"
-        />
-        <StatCard
-          label="Pipeline Çalışmaları"
-          value={stats?.pipeline.totalRuns || 0}
-          color="bg-brand-mustard/20"
-          textColor="text-amber-800"
-        />
-        <StatCard
-          label="Toplam Maliyet"
-          value={`$${stats?.pipeline.totalCost || "0.00"}`}
-          color="bg-brand-peach/20"
-          textColor="text-orange-800"
-          isText
-        />
+        <StatCard label="Toplam Görsel" value={stats?.assets.total || 0} icon="🖼️" color="bg-blue-50" />
+        <StatCard label="Aktif Kurallar" value={stats?.rules.total || 0} icon="⏰" color="bg-green-50" />
+        <StatCard label="Pipeline Çalışmaları" value={stats?.pipeline.totalRuns || 0} icon="⚙️" color="bg-amber-50" />
+        <StatCard label="Toplam Maliyet" value={`$${stats?.pipeline.totalCost || "0.00"}`} icon="💰" color="bg-orange-50" isText />
       </div>
 
-      {/* Asset Dağılımı */}
-      {stats?.assets.byCategory && Object.keys(stats.assets.byCategory).length > 0 && (
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Asset Dağılımı</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(stats.assets.byCategory).map(([category, count]) => (
-              <div key={category} className="p-3 bg-gray-50 rounded-xl text-center">
-                <p className="text-2xl font-bold text-gray-900">{count}</p>
-                <p className="text-sm text-gray-500 capitalize">{category}</p>
-              </div>
+      {/* Slot Durumları (Quick Stats) */}
+      {stats?.slots.byStatus && Object.keys(stats.slots.byStatus).length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(stats.slots.byStatus).map(([status, count]) => {
+            const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+            return (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status as ScheduledSlotStatus)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${statusFilter === status ? "ring-2 ring-offset-2 ring-brand-blue" : ""
+                  } ${config.bg} ${config.text}`}
+              >
+                {config.icon} {config.label}: {count}
+              </button>
+            );
+          })}
+          {statusFilter !== "all" && (
+            <button
+              onClick={() => setStatusFilter("all")}
+              className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-200 text-gray-700"
+            >
+              ✕ Filtreyi Temizle
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Slot Listesi */}
+      <div className="card">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">
+            İşlemler {filteredSlots.length > 0 && `(${filteredSlots.length})`}
+          </h2>
+
+          {/* View Toggle */}
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`p-2 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
+              title="Grid Görünüm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-2 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
+              title="Liste Görünüm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {filteredSlots.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">Henüz işlem yok</p>
+        ) : viewMode === "grid" ? (
+          <div className={`grid ${GRID_CONFIG[gridSize].cols} gap-4`}>
+            {filteredSlots.map((slot) => (
+              <SlotCard
+                key={slot.id}
+                slot={slot}
+                aspectRatio={GRID_CONFIG[gridSize].aspectRatio}
+                compact={gridSize === "compact"}
+                onView={() => openDetailModal(slot)}
+                onDelete={() => handleDeleteSlot(slot.id)}
+                onRetry={() => handleRetrySlot(slot.id)}
+                onApprove={() => handleApproveSlot(slot.id)}
+                onReject={() => handleRejectSlot(slot.id)}
+                loading={actionLoading === slot.id}
+              />
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Slot Durumu */}
-      {stats?.slots.byStatus && Object.keys(stats.slots.byStatus).length > 0 && (
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Slot Durumları</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {Object.entries(stats.slots.byStatus).map(([status, count]) => {
-              const colors = STATUS_COLORS[status] || STATUS_COLORS.pending;
-              return (
-                <div key={status} className={`p-3 rounded-xl ${colors.bg}`}>
-                  <p className={`text-xl font-bold ${colors.text}`}>{count}</p>
-                  <p className="text-xs text-gray-600">{STATUS_LABELS[status] || status}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Son Slotlar */}
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Son İşlemler</h2>
-        {recentSlots.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">Henüz işlem yok</p>
         ) : (
-          <div className="space-y-3">
-            {recentSlots.map((slot) => {
-              const colors = STATUS_COLORS[slot.status] || STATUS_COLORS.pending;
-              return (
-                <div
-                  key={slot.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">
-                      Slot {slot.id.slice(0, 8)}...
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {new Date(slot.scheduledTime).toLocaleString("tr-TR")}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {/* Resend Notification Button */}
-                    {slot.status === "awaiting_approval" && (
-                      <button
-                        onClick={async () => {
-                          if (!confirm("Telegram bildirimi tekrar gönderilsin mi?")) return;
-                          try {
-                            setLoading(true);
-                            await api.orchestratorResendTelegram(slot.id);
-                            alert("Bildirim gönderildi!");
-                          } catch (err) {
-                            alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen hata"));
-                          } finally {
-                            setLoading(false);
-                            loadData();
-                          }
-                        }}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Telegram Bildirimini Tekrar Gönder"
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                      </button>
-                    )}
-
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${colors.bg} ${colors.text}`}>
-                      {STATUS_LABELS[slot.status] || slot.status}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="bg-white rounded-xl shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Görsel</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum/Aşama</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredSlots.map((slot) => {
+                    const statusConfig = STATUS_CONFIG[slot.status] || STATUS_CONFIG.pending;
+                    return (
+                      <tr key={slot.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {(() => {
+                            const storageUrl = convertStorageUrl(slot.pipelineResult?.generatedImage?.storageUrl);
+                            const imageUrl = storageUrl || (slot.pipelineResult?.generatedImage?.imageBase64 ? `data:image/jpeg;base64,${slot.pipelineResult?.generatedImage?.imageBase64}` : null);
+                            return imageUrl ? (
+                              <img src={imageUrl} alt="Slot" className="h-12 w-12 rounded bg-gray-100 object-cover cursor-pointer" onClick={() => openDetailModal(slot)} />
+                            ) : (
+                              <div className="h-12 w-12 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-400">Yok</div>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(slot.createdAt)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
+                            {statusConfig.icon} {statusConfig.label}
+                          </span>
+                          {slot.currentStage && slot.status !== "completed" && slot.status !== "failed" && slot.status !== "awaiting_approval" && (
+                            <div className="text-xs text-gray-400 mt-1">{STAGE_LABELS[slot.currentStage] || slot.currentStage}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {slot.pipelineResult?.assetSelection?.product?.subType || "-"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button onClick={() => openDetailModal(slot)} className="text-brand-blue hover:text-blue-900 mr-3">Detay</button>
+                          {slot.status === "awaiting_approval" && (
+                            <button onClick={() => handleApproveSlot(slot.id)} className="text-green-600 hover:text-green-900 mr-3">Onayla</button>
+                          )}
+                          <button onClick={() => handleDeleteSlot(slot.id)} className="text-red-600 hover:text-red-900">Sil</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
@@ -571,24 +814,137 @@ export default function OrchestratorDashboard() {
   );
 }
 
-// Stat kartı komponenti
-function StatCard({
-  label,
-  value,
-  color,
-  textColor,
-  isText = false,
-}: {
+// Stat Card
+function StatCard({ label, value, icon, color, isText = false }: {
   label: string;
   value: number | string;
+  icon: string;
   color: string;
-  textColor: string;
   isText?: boolean;
 }) {
   return (
     <div className={`card ${color}`}>
-      <p className="text-sm text-gray-600">{label}</p>
-      <p className={`${isText ? "text-2xl" : "text-3xl"} font-bold ${textColor}`}>{value}</p>
+      <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+        <span>{icon}</span>
+        <span>{label}</span>
+      </div>
+      <p className={`${isText ? "text-xl" : "text-2xl"} font-bold text-gray-900`}>{value}</p>
+    </div>
+  );
+}
+
+// Slot Card
+function SlotCard({ slot, aspectRatio, compact, onView, onDelete, onRetry, onApprove, onReject, loading }: {
+  slot: ScheduledSlot;
+  aspectRatio: string;
+  compact: boolean;
+  onView: () => void;
+  onDelete: () => void;
+  onRetry: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  loading: boolean;
+}) {
+  const config = STATUS_CONFIG[slot.status] || STATUS_CONFIG.pending;
+
+  // URL'yi çevir - önce storageUrl, yoksa base64
+  const storageUrl = convertStorageUrl(slot.pipelineResult?.generatedImage?.storageUrl);
+  const base64Url = slot.pipelineResult?.generatedImage?.imageBase64
+    ? `data:${slot.pipelineResult.generatedImage.mimeType};base64,${slot.pipelineResult.generatedImage.imageBase64}`
+    : null;
+  const imageUrl = storageUrl || base64Url;
+
+  return (
+    <div className="border rounded-xl overflow-hidden hover:shadow-lg transition-shadow bg-white">
+      {/* Görsel */}
+      <div
+        onClick={onView}
+        className={`${aspectRatio} bg-gray-100 relative cursor-pointer group`}
+      >
+        {imageUrl ? (
+          <img src={imageUrl} alt="Üretilen" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-400">
+            {slot.status === "generating" ? (
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue mx-auto mb-1"></div>
+                {!compact && <span className="text-xs">{STAGE_LABELS[slot.currentStage || ""] || "Üretiliyor..."}</span>}
+              </div>
+            ) : (
+              <span className="text-xs">Görsel yok</span>
+            )}
+          </div>
+        )}
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <span className="text-white font-medium text-sm">Detayları Gör</span>
+        </div>
+
+        {/* Status badge */}
+        <div className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${config.bg} ${config.text}`}>
+          {config.icon} {!compact && config.label}
+        </div>
+      </div>
+
+      {/* Info - Compact modda gizle */}
+      {!compact && (
+        <div className="p-3">
+          {/* Caption preview */}
+          <p className="text-sm text-gray-700 line-clamp-2 mb-2">
+            {slot.pipelineResult?.contentPackage?.caption || "Caption oluşturulmadı"}
+          </p>
+
+          {/* Meta */}
+          <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+            <span>{new Date(slot.createdAt).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+            {slot.pipelineResult?.qualityControl?.score && (
+              <span className="font-medium text-brand-blue">Skor: {slot.pipelineResult.qualityControl.score}/10</span>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2">
+            {slot.status === "awaiting_approval" && (
+              <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onApprove(); }}
+                  disabled={loading}
+                  className="flex-1 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-50"
+                >
+                  ✅ Onayla
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onReject(); }}
+                  disabled={loading}
+                  className="flex-1 py-1.5 text-xs font-medium bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50"
+                >
+                  ❌ Reddet
+                </button>
+              </>
+            )}
+
+            {slot.status === "failed" && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onRetry(); }}
+                disabled={loading}
+                className="flex-1 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50"
+              >
+                🔄 Tekrar Dene
+              </button>
+            )}
+
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              disabled={loading}
+              className="py-1.5 px-2 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+              title="Sil"
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

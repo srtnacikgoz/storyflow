@@ -42,6 +42,7 @@ export default function Assets() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<AssetCategory | "all">("all");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
   useEffect(() => {
     loadAssets();
@@ -95,29 +96,54 @@ export default function Assets() {
         </button>
       </div>
 
-      {/* Filtreler */}
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setSelectedCategory("all")}
-          className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === "all"
+      {/* View Toggle & Filters */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        {/* Filtreler */}
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setSelectedCategory("all")}
+            className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === "all"
               ? "bg-brand-blue text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-        >
-          Tümü ({assets.length})
-        </button>
-        {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === cat
-                ? "bg-brand-blue text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
           >
-            {CATEGORY_LABELS[cat]} ({groupedAssets[cat]?.length || 0})
+            Tümü ({assets.length})
           </button>
-        ))}
+          {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === cat
+                ? "bg-brand-blue text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+            >
+              {CATEGORY_LABELS[cat]} ({groupedAssets[cat]?.length || 0})
+            </button>
+          ))}
+        </div>
+
+        {/* View Mode Toggle */}
+        <div className="flex bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setViewMode("grid")}
+            className={`p-2 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
+            title="Grid Görünüm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={`p-2 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
+            title="Liste Görünüm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Loading */}
@@ -147,7 +173,7 @@ export default function Assets() {
                 İlk Görseli Ekle
               </button>
             </div>
-          ) : (
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {assets.map((asset) => (
                 <AssetCard
@@ -156,6 +182,93 @@ export default function Assets() {
                   onDelete={() => handleDelete(asset.id)}
                 />
               ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Görsel
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Dosya Adı / Tip
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Özellikler
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Durum
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        İşlemler
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {assets.map((asset) => (
+                      <tr key={asset.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {asset.storageUrl ? (
+                            <img
+                              src={asset.thumbnailUrl || asset.storageUrl}
+                              alt={asset.filename}
+                              className="h-12 w-12 rounded-lg object-cover bg-gray-100"
+                            />
+                          ) : (
+                            <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
+                              📷
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]" title={asset.filename}>
+                            {asset.filename}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {CATEGORY_LABELS[asset.category as AssetCategory]} • {SUBTYPE_LABELS[asset.subType] || asset.subType}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-1">
+                            {asset.visualProperties?.dominantColors && (
+                              <div className="flex gap-1">
+                                {asset.visualProperties.dominantColors.slice(0, 3).map((color, i) => (
+                                  <div
+                                    key={i}
+                                    className="w-3 h-3 rounded-full border border-gray-200"
+                                    style={{ backgroundColor: color }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <div className="text-xs text-gray-500">
+                              {asset.usageCount} kez kullanıldı
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${asset.isActive
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                            }`}>
+                            {asset.isActive ? "Aktif" : "Pasif"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleDelete(asset.id)}
+                            className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors"
+                          >
+                            Sil
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>

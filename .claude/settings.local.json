@@ -33,7 +33,12 @@
       "Bash(grep:*)",
       "Bash(node -e:*)",
       "Bash(ls:*)",
-      "Bash(gcloud firestore documents update:*)"
+      "Bash(gcloud firestore documents update:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(orchestrator\\): Full AI orchestrator with progress tracking\n\n- Add Claude + Gemini orchestrator pipeline for automated content generation\n- Add real-time progress modal with stage tracking and elapsed time\n- Add asset management pages \\(Assets, TimeSlots, OrchestratorDashboard\\)\n- Fix Firestore undefined values with removeUndefined helper\n- Fix pipeline await pattern to prevent Cloud Functions early termination\n- Add getScheduledSlot endpoint for progress polling\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(firebase functions:list:*)",
+      "Bash(npm run deploy:*)",
+      "Bash(NODE_OPTIONS='--max-old-space-size=8192' FUNCTIONS_DISCOVERY_TIMEOUT=120000 firebase deploy:*)"
     ]
   }
 }

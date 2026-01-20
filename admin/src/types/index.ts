@@ -413,6 +413,11 @@ export interface ScheduledSlot {
   timeSlotRuleId: string;
   status: ScheduledSlotStatus;
   pipelineResult?: PipelineResult;
+  // Progress tracking alanları
+  currentStage?: string;
+  stageIndex?: number;
+  totalStages?: number;
+  error?: string;
   createdAt: number;
   updatedAt: number;
 }

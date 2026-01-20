@@ -595,8 +595,10 @@ COMPOSITION:
     const buffer = Buffer.from(imageBase64, "base64");
     await file.save(buffer, {
       metadata: { contentType: mimeType },
+      public: true, // Dosyayı public yap (frontend erişimi için)
     });
 
+    // gs:// formatında döndür (Telegram akışı bunu bekliyor)
     return `gs://${bucket.name}/${filename}`;
   }
 

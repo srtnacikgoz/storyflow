@@ -146,6 +146,12 @@ export interface ScheduledSlot {
   // Pipeline sonuçları (doldurulacak)
   pipelineResult?: PipelineResult;
 
+  // İlerleme durumu
+  currentStage?: string;
+  stageIndex?: number;
+  totalStages?: number;
+  error?: string;
+
   // Meta
   createdAt: number;
   updatedAt: number;

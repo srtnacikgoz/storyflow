@@ -777,6 +777,70 @@ class ApiService {
     }>("getOrchestratorDashboardStats");
     return response.data;
   }
+
+  // ==========================================
+  // Orchestrator - Slot CRUD Operations
+  // ==========================================
+
+  /**
+   * Slot'un tam detaylarını getir (pipelineResult dahil)
+   */
+  async getSlotDetail(slotId: string): Promise<ScheduledSlot> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: ScheduledSlot;
+    }>(`getSlotDetail?slotId=${slotId}`);
+    return response.data;
+  }
+
+  /**
+   * Slot sil
+   */
+  async deleteScheduledSlot(slotId: string): Promise<void> {
+    await this.fetch<{ success: boolean }>(`deleteScheduledSlot?slotId=${slotId}`, {
+      method: "POST",
+    });
+  }
+
+  /**
+   * Başarısız slot'u yeniden dene
+   */
+  async retrySlot(slotId: string): Promise<void> {
+    await this.fetch<{ success: boolean }>("retrySlot", {
+      method: "POST",
+      body: JSON.stringify({ slotId }),
+    });
+  }
+
+  /**
+   * Slot'u onayla ve Instagram'a yayınla
+   */
+  async approveSlot(slotId: string): Promise<void> {
+    await this.fetch<{ success: boolean }>("approveSlot", {
+      method: "POST",
+      body: JSON.stringify({ slotId }),
+    });
+  }
+
+  /**
+   * Slot'u reddet
+   */
+  async rejectSlot(slotId: string): Promise<void> {
+    await this.fetch<{ success: boolean }>("rejectSlot", {
+      method: "POST",
+      body: JSON.stringify({ slotId }),
+    });
+  }
+
+  /**
+   * Slot caption'ını güncelle
+   */
+  async updateSlotCaption(slotId: string, caption: string, hashtags?: string[]): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateSlotCaption", {
+      method: "POST",
+      body: JSON.stringify({ slotId, caption, hashtags }),
+    });
+  }
 }
 
 // Singleton instance
