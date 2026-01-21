@@ -345,7 +345,7 @@ export interface CalendarData {
 // ==========================================
 
 // Asset kategorileri
-export type AssetCategory = "products" | "props" | "furniture";
+export type AssetCategory = "products" | "props" | "furniture" | "environments" | "pets";
 
 // Ürün tipleri (orchestrator için)
 export type OrchestratorProductType =
@@ -360,6 +360,12 @@ export type PropType = "plates" | "cups" | "cutlery" | "napkins";
 
 // Mobilya tipleri
 export type FurnitureType = "tables" | "chairs" | "decor";
+
+// Ortam tipleri (iç mekan, dış mekan, pencere)
+export type EnvironmentType = "indoor" | "outdoor" | "window" | "cafe" | "home";
+
+// Evcil hayvan tipleri
+export type PetType = "dogs" | "cats";
 
 // Asset
 export interface OrchestratorAsset {

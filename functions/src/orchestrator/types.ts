@@ -14,7 +14,9 @@ export type AssetCategory =
   | "products"    // Ürün fotoğrafları
   | "props"       // Tabak, çatal, peçete
   | "furniture"   // Masa, sandalye, dekor
-  | "music";      // Müzik dosyaları
+  | "music"       // Müzik dosyaları
+  | "environments" // Mekan, pencere, dış alan
+  | "pets";       // Köpek, kedi
 
 /**
  * Ürün alt kategorileri
@@ -44,7 +46,24 @@ export type FurnitureType =
   | "decor";      // Vazolar, bitkiler
 
 /**
- * Özel asset tipleri
+ * Ortam alt kategorileri
+ */
+export type EnvironmentType =
+  | "indoor"      // İç mekan
+  | "outdoor"     // Dış mekan
+  | "window"      // Pencere önü
+  | "cafe"        // Kafe ortamı
+  | "home";       // Ev ortamı
+
+/**
+ * Evcil hayvan alt kategorileri
+ */
+export type PetType =
+  | "dogs"        // Köpekler
+  | "cats";       // Kediler
+
+/**
+ * Özel asset tipleri (legacy - geriye uyumluluk için)
  */
 export type SpecialAssetType =
   | "pets"        // Köpek, kedi

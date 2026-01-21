@@ -92,6 +92,11 @@ Seçim kriterleri:
 5. ÇEŞİTLİLİK: ${blockedTables.length > 0 ? `Bu masaları SEÇME (son kullanılmış): ${blockedTables.join(", ")}` : "Masaları rotasyonla kullan"}
 6. KÖPEK: ${shouldIncludePet ? "Bu sefer KÖPEK DAHİL ET (uygun senaryo için)" : "Köpek dahil etme"}
 7. DEKORASYON: Cozy senaryolarda bitki veya kitap eklenebilir
+8. FİNCAN SEÇİMİ KRİTİK:
+   - SERAMİK veya CAM fincan/bardak TERCIH ET
+   - KARTON/PAPER bardak SEÇME (takeaway senaryosu hariç)
+   - Material özelliğine dikkat et: "ceramic", "glass", "porcelain" tercih edilir
+   - Seçilen fincanın rengi ve stili masa ve ürün ile uyumlu olmalı
 
 JSON formatında yanıt ver.`;
 
@@ -128,8 +133,10 @@ ${JSON.stringify(availableAssets.cups.map((a: Asset) => ({
       id: a.id,
       filename: a.filename,
       colors: a.visualProperties?.dominantColors,
+      material: a.visualProperties?.material,
       style: a.visualProperties?.style,
-      usageCount: a.usageCount
+      usageCount: a.usageCount,
+      tags: a.tags
     })), null, 2)}
 
 MASALAR:

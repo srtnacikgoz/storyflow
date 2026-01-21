@@ -71,7 +71,7 @@ export interface ImageTransformOptions {
   faithfulness?: number; // 0.0 - 1.0 (varsayılan: 0.7)
   aspectRatio?: "1:1" | "9:16" | "16:9" | "4:3" | "3:4";
   textOverlay?: string; // Görsel üzerine yazılacak metin (opsiyonel)
-  referenceImages?: Array<{ base64: string; mimeType: string; label: string }>; // Ek referans görseller (tabak, masa vb.)
+  referenceImages?: Array<{ base64: string; mimeType: string; label: string; description?: string }>; // Ek referans görseller (tabak, masa vb.)
 }
 
 /**
@@ -217,8 +217,15 @@ The FIRST image is the MAIN PRODUCT (pastry/croissant/cake) - this MUST appear i
       editPrefix += `The following additional reference images are also attached and should be used in the scene:
 `;
       for (const ref of options.referenceImages) {
-        editPrefix += `- A ${ref.label.toUpperCase()} image - use this exact ${ref.label} in the scene
+        if (ref.description) {
+          // Detaylı açıklama varsa kullan
+          editPrefix += `- ${ref.label.toUpperCase()}: ${ref.description}
 `;
+        } else {
+          // Fallback: basit açıklama
+          editPrefix += `- A ${ref.label.toUpperCase()} image - use this exact ${ref.label} in the scene
+`;
+        }
       }
     }
 

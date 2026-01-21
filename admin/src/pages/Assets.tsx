@@ -9,6 +9,8 @@ const CATEGORY_LABELS: Record<AssetCategory, string> = {
   products: "Ürünler",
   props: "Aksesuarlar",
   furniture: "Mobilya",
+  environments: "Ortamlar",
+  pets: "Evcil Hayvanlar",
 };
 
 // Alt tip etiketleri
@@ -28,6 +30,15 @@ const SUBTYPE_LABELS: Record<string, string> = {
   tables: "Masa",
   chairs: "Sandalye",
   decor: "Dekor",
+  // Environments (ortamlar)
+  indoor: "İç Mekan",
+  outdoor: "Dış Mekan",
+  window: "Pencere Önü",
+  cafe: "Kafe",
+  home: "Ev",
+  // Pets (evcil hayvanlar)
+  dogs: "Köpek",
+  cats: "Kedi",
 };
 
 // Alt tipler kategori bazlı
@@ -35,6 +46,8 @@ const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   products: ["croissants", "pastas", "chocolates", "macarons", "coffees"],
   props: ["plates", "cups", "cutlery", "napkins"],
   furniture: ["tables", "chairs", "decor"],
+  environments: ["indoor", "outdoor", "window", "cafe", "home"],
+  pets: ["dogs", "cats"],
 };
 
 export default function Assets() {
@@ -99,7 +112,7 @@ export default function Assets() {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Görsel Yönetimi</h1>
-          <p className="text-gray-500 mt-1">Ürün, aksesuar ve mobilya görselleri</p>
+          <p className="text-gray-500 mt-1">Ürün, aksesuar, mobilya, ortam ve evcil hayvan görselleri</p>
         </div>
         <button onClick={() => setShowAddModal(true)} className="btn-primary">
           + Yeni Görsel

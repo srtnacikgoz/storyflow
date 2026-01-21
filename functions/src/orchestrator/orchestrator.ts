@@ -18,7 +18,6 @@ import {
   GeneratedImage,
   QualityControlResult,
   OrchestratorConfig,
-  Theme,
 } from "./types";
 
 /**
@@ -83,11 +82,7 @@ export class Orchestrator {
 
   /**
    * Tam pipeline'ı çalıştır
-   * @param productType - Urun tipi
-   * @param timeSlotRule - Zaman kurali
    * @param onProgress - Her aşamada çağrılan callback (opsiyonel)
-   * @param slotId - scheduled-slots koleksiyonundaki ID (Telegram callback icin)
-   * @param scheduledHour - İçeriğin hedeflediği saat (opsiyonel, yoksa rule.startHour kullanılır)
    */
   async runPipeline(
     productType: ProductType,
@@ -112,7 +107,7 @@ export class Orchestrator {
       status,
       totalCost: 0,
       startedAt,
-      slotId, // scheduled-slots referansi - Telegram callback icin
+      slotId, // Scheduler'dan gelen slot referansı
     };
 
     try {
@@ -131,13 +126,8 @@ export class Orchestrator {
       if (onProgress) await onProgress("asset_selection", 1, TOTAL_STAGES);
 
       const assets = await this.loadAvailableAssets(productType);
-
-      // Hedef saati belirle: scheduledHour > timeSlotRule.startHour > şu anki saat
-      const targetHour = scheduledHour ?? timeSlotRule.startHour;
-      const timeOfDay = this.getTimeOfDay(targetHour);
-      const mood = this.getMoodFromTime(targetHour);
-
-      console.log(`[Orchestrator] Target hour: ${targetHour}, timeOfDay: ${timeOfDay}, mood: ${mood}`);
+      const timeOfDay = this.getTimeOfDay();
+      const mood = this.getMoodFromTime();
 
       const assetResponse = await this.claude.selectAssets(
         productType,
@@ -167,33 +157,9 @@ export class Orchestrator {
       // Senaryolar kurallardan alınıyor (zaten yüklendi)
       const allScenarios = effectiveRules.staticRules.scenarios;
 
-      // Tema veya senaryo tercihini belirle
-      let preferredScenarioIds: string[] | null = null;
-      let themePetAllowed: boolean | null = null;
-
-      // Önce themeId kontrol et (yeni sistem)
-      if (timeSlotRule.themeId) {
-        console.log(`[Orchestrator] Using themeId: ${timeSlotRule.themeId}`);
-        const themeDoc = await this.db.collection("themes").doc(timeSlotRule.themeId).get();
-        if (themeDoc.exists) {
-          const theme = themeDoc.data() as Theme;
-          preferredScenarioIds = theme.scenarios;
-          themePetAllowed = theme.petAllowed;
-          console.log(`[Orchestrator] Theme loaded: ${theme.name}, scenarios: [${preferredScenarioIds.join(", ")}], petAllowed: ${themePetAllowed}`);
-        } else {
-          console.log(`[Orchestrator] Theme not found: ${timeSlotRule.themeId}, falling back`);
-        }
-      }
-
-      // Tema yoksa veya bulunamadıysa, scenarioPreference'a düş (geriye dönük uyumluluk)
-      if (!preferredScenarioIds && timeSlotRule.scenarioPreference) {
-        console.log(`[Orchestrator] Using legacy scenarioPreference: [${timeSlotRule.scenarioPreference.join(", ")}]`);
-        preferredScenarioIds = timeSlotRule.scenarioPreference;
-      }
-
-      // Senaryo filtreleme
-      let filteredScenarios = preferredScenarioIds
-        ? allScenarios.filter(s => preferredScenarioIds!.includes(s.id))
+      // Senaryo filtreleme: TimeSlotRule tercihi + bloklanmış senaryolar
+      let filteredScenarios = timeSlotRule.scenarioPreference
+        ? allScenarios.filter(s => timeSlotRule.scenarioPreference!.includes(s.id))
         : allScenarios;
 
       // Bloklanmış senaryoları çıkar (son N üretimde kullanılanlar)
@@ -203,17 +169,8 @@ export class Orchestrator {
 
       // Eğer tüm senaryolar bloklanmışsa, en az kullanılmış olanı seç
       if (filteredScenarios.length === 0) {
-        console.log("[Orchestrator] All scenarios blocked, using full list from preference");
-        // Önce tema/preference listesini dene, yoksa tüm senaryolar
-        filteredScenarios = preferredScenarioIds
-          ? allScenarios.filter(s => preferredScenarioIds!.includes(s.id))
-          : allScenarios;
-      }
-
-      // Tema'dan gelen petAllowed ayarını effectiveRules'a ekle (varsa)
-      if (themePetAllowed !== null) {
-        effectiveRules.shouldIncludePet = themePetAllowed && effectiveRules.shouldIncludePet;
-        console.log(`[Orchestrator] Pet inclusion after theme check: ${effectiveRules.shouldIncludePet}`);
+        console.log("[Orchestrator] All scenarios blocked, using full list");
+        filteredScenarios = allScenarios;
       }
 
       // Claude için basitleştirilmiş senaryo listesi
@@ -247,7 +204,12 @@ export class Orchestrator {
       status.currentStage = "prompt_optimization";
       if (onProgress) await onProgress("prompt_optimization", 3, TOTAL_STAGES);
 
-      const basePrompt = await this.getScenarioPrompt(result.scenarioSelection.scenarioId);
+      const basePrompt = await this.getScenarioPrompt(
+        result.scenarioSelection.scenarioId,
+        result.scenarioSelection.compositionId,
+        result.scenarioSelection.handStyle,
+        result.assetSelection.cup
+      );
 
       const promptResponse = await this.claude.optimizePrompt(
         basePrompt,
@@ -295,7 +257,7 @@ export class Orchestrator {
           console.log(`[Orchestrator] ASSET DEBUG: Loaded image size: ${productImageBase64.length} chars (base64)`);
 
           // Load reference images (plate, table, cup) if selected
-          const referenceImages: Array<{ base64: string; mimeType: string; label: string }> = [];
+          const referenceImages: Array<{ base64: string; mimeType: string; label: string; description?: string }> = [];
 
           if (result.assetSelection.plate?.storageUrl) {
             console.log(`[Orchestrator] Loading plate: ${result.assetSelection.plate.filename}`);
@@ -312,7 +274,19 @@ export class Orchestrator {
           if (result.assetSelection.cup?.storageUrl) {
             console.log(`[Orchestrator] Loading cup: ${result.assetSelection.cup.filename}`);
             const cupBase64 = await this.loadImageAsBase64(result.assetSelection.cup.storageUrl);
-            referenceImages.push({ base64: cupBase64, mimeType: "image/png", label: "cup" });
+
+            // Cup için detaylı açıklama oluştur
+            const cupColors = result.assetSelection.cup.visualProperties?.dominantColors?.join(", ") || "neutral tones";
+            const cupMaterial = result.assetSelection.cup.visualProperties?.material || "ceramic";
+            const cupStyle = result.assetSelection.cup.visualProperties?.style || "modern";
+            const cupDescription = `This is the EXACT cup to use - a ${cupMaterial} ${cupStyle} cup/mug with ${cupColors} colors. DO NOT substitute with paper cup, disposable cup, or any different style. The cup in your output MUST match this reference EXACTLY in color, material, and shape.`;
+
+            referenceImages.push({
+              base64: cupBase64,
+              mimeType: "image/png",
+              label: "cup",
+              description: cupDescription
+            });
           }
 
           console.log(`[Orchestrator] Sending ${referenceImages.length} reference images to Gemini`);
@@ -530,26 +504,17 @@ export class Orchestrator {
   }
 
   /**
-   * Günün zamanını belirle
-   * @param targetHour - Hedef saat (opsiyonel, yoksa şu anki TRT saati kullanılır)
+   * Günün zamanını belirle (TRT - Europe/Istanbul)
    */
-  private getTimeOfDay(targetHour?: number): string {
-    let hour: number;
+  private getTimeOfDay(): string {
+    // TRT saatine göre saati al
+    const hourStr = new Date().toLocaleString("en-US", {
+      timeZone: "Europe/Istanbul",
+      hour: "numeric",
+      hour12: false
+    });
+    const hour = parseInt(hourStr);
 
-    if (targetHour !== undefined) {
-      // Hedef saat verilmişse onu kullan (slot'un zamanlanmış saati)
-      hour = targetHour;
-    } else {
-      // Yoksa şu anki TRT saatini kullan
-      const hourStr = new Date().toLocaleString("en-US", {
-        timeZone: "Europe/Istanbul",
-        hour: "numeric",
-        hour12: false
-      });
-      hour = parseInt(hourStr);
-    }
-
-    // Zaman dilimi belirleme
     if (hour >= 6 && hour < 11) return "morning";
     if (hour >= 11 && hour < 14) return "noon";
     if (hour >= 14 && hour < 17) return "afternoon";
@@ -559,10 +524,9 @@ export class Orchestrator {
 
   /**
    * Zamana göre mood belirle
-   * @param targetHour - Hedef saat (opsiyonel)
    */
-  private getMoodFromTime(targetHour?: number): string {
-    const timeOfDay = this.getTimeOfDay(targetHour);
+  private getMoodFromTime(): string {
+    const timeOfDay = this.getTimeOfDay();
     const moodMap: Record<string, string> = {
       morning: "morning-vibes",
       noon: "cozy-cafe",
@@ -575,223 +539,272 @@ export class Orchestrator {
 
   /**
    * Senaryo prompt'unu al (Firestore veya sabit)
+   * compositionId ve handStyle parametreleri ile detaylı prompt üretir
    */
-  private async getScenarioPrompt(scenarioId: string): Promise<string> {
+  private async getScenarioPrompt(
+    scenarioId: string,
+    compositionId?: string,
+    handStyle?: string,
+    selectedCup?: Asset
+  ): Promise<string> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
 
     if (promptDoc.exists) {
-      return promptDoc.data()?.prompt || "";
+      // Firestore'dan gelen prompt'a kompozisyon ve el stili ekle
+      let prompt = promptDoc.data()?.prompt || "";
+      prompt += this.getCompositionDetails(scenarioId, compositionId);
+      prompt += this.getHandStyleDetails(handStyle);
+      prompt += this.getCupReferenceDetails(selectedCup);
+      return prompt;
     }
 
-    // Fallback: Sabit prompt
-    // MUTLAK KURAL - Tüm prompt'ların başında olacak
-    const ABSOLUTE_RESTRICTION = `ABSOLUTE RESTRICTION:
-Use ONLY objects visible in the uploaded reference images.
-Do NOT add ANY prop, furniture, decoration, lighting fixture, or object that is not in the reference.
-The scene must contain ONLY: the product + selected assets (plate, cup, table if provided).
-Nothing else. No lampshade, no vase, no candles, no flowers, no extra items. Minimalist composition.
+    // Fallback: Dinamik prompt oluştur
+    return this.buildDynamicPrompt(scenarioId, compositionId, handStyle, selectedCup);
+  }
 
-`;
+  /**
+   * Kompozisyon detaylarını döndür
+   */
+  private getCompositionDetails(scenarioId: string, compositionId?: string): string {
+    if (!compositionId || compositionId === "default") return "";
 
-    const fallbackPrompts: Record<string, string> = {
-      "zarif-tutma": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+    const compositions: Record<string, Record<string, string>> = {
+      "kahve-ani": {
+        "product-front": `
+
+COMPOSITION - PRODUCT FRONT:
+- Product in FOREGROUND, occupying 55% of frame, SHARP FOCUS (f/2.8)
+- Hands holding cup in BACKGROUND, SOFT BOKEH BLUR (f/1.8)
+- Product positioned in lower-center of frame
+- Cup and hands in upper-third, creating depth
+- Distance between product and hands: 30-40cm visual depth
+- Product is the HERO, hands are atmospheric backdrop`,
+
+        "product-side": `
+
+COMPOSITION - PRODUCT SIDE:
+- Product on LEFT third of frame, SHARP FOCUS
+- Hands holding cup on RIGHT third, MEDIUM FOCUS
+- Both elements at SAME focal plane (f/4.0)
+- Diagonal composition from bottom-left to top-right
+- Product and cup at 45-degree angle to each other
+- Arms entering frame from RIGHT side at hip height
+- Creates conversational, intimate feeling`,
+
+        "overhead": `
+
+COMPOSITION - OVERHEAD (BIRD'S EYE):
+- Camera angle: STRAIGHT DOWN, 90-degree top view
+- Product in LOWER half of frame
+- Cup with hands in UPPER half of frame
+- Both elements EQUALLY SHARP (f/5.6)
+- Table surface fills entire background
+- Hands visible from ABOVE - palms partially showing
+- Fingertips at 10 and 2 o'clock positions on cup
+- Clean negative space between product and cup`,
+      },
+
+      "zarif-tutma": {
+        "bottom-right": `
+
+COMPOSITION - BOTTOM RIGHT ENTRY:
+- Hand entering frame from BOTTOM-RIGHT corner
+- Wrist at 45-degree angle, fingers pointing upper-left
+- Product held in palm center, tilted 15-degrees toward camera
+- Hand occupies lower-right 40% of frame
+- Product centered in overall composition
+- Background visible in upper-left quadrant`,
+
+        "bottom-left": `
+
+COMPOSITION - BOTTOM LEFT ENTRY:
+- Hand entering frame from BOTTOM-LEFT corner
+- Wrist at 45-degree angle, fingers pointing upper-right
+- Product held delicately between thumb and fingers
+- Hand occupies lower-left 40% of frame
+- Product centered in overall composition
+- Background visible in upper-right quadrant`,
+
+        "top-corner": `
+
+COMPOSITION - TOP CORNER ENTRY:
+- Hand entering frame from TOP-RIGHT corner
+- Arm visible from elbow down, descending into frame
+- Product held between fingertips, presented downward
+- Creates dramatic, editorial feel
+- Product in center-lower portion of frame
+- Unusual angle creates visual interest`,
+
+        "center-hold": `
+
+COMPOSITION - CENTER HOLD:
+- Product perfectly centered in frame
+- Both hands cupping product from below
+- Hands form protective, presenting gesture
+- Fingers spread naturally around product
+- Thumbs visible on sides
+- Product elevated slightly toward camera
+- Symmetrical, balanced composition`,
+      },
+    };
+
+    return compositions[scenarioId]?.[compositionId] || "";
+  }
+
+  /**
+   * El stili detaylarını döndür
+   */
+  private getHandStyleDetails(handStyle?: string): string {
+    if (!handStyle) return "";
+
+    const styles: Record<string, string> = {
+      elegant: `
+
+HAND STYLING - ELEGANT:
+- Nails: Nude/soft pink gel polish, almond shape, medium length (8-10mm)
+- Cuticles: Clean, well-groomed, pushed back
+- Ring: Thin silver midi ring on RIGHT middle finger, delicate design
+- Bracelet: Single delicate chain bracelet on LEFT wrist (2mm width)
+- Tattoo: Tiny crescent moon on inner LEFT wrist (2cm size), fine line art
+- Skin: Smooth, moisturized appearance, even tone
+- Nail surface: Subtle glossy shine, no chips or imperfections`,
+
+      bohemian: `
+
+HAND STYLING - BOHEMIAN:
+- Nails: Terracotta/earth-tone matte polish, natural rounded shape
+- Cuticles: Natural, healthy appearance
+- Rings: 3-4 stacked thin rings on RIGHT hand (mix of gold and silver, varied widths)
+- Bracelet: Beaded bracelet with natural stones (turquoise, wood) on LEFT wrist
+- Tattoo: Small wildflower bouquet on RIGHT inner forearm (4cm), botanical illustration style
+- Skin: Natural, sun-kissed warm tone
+- Additional: Thin braided leather wrap on RIGHT wrist`,
+
+      minimal: `
+
+HAND STYLING - MINIMAL:
+- Nails: No polish OR clear coat only, natural pink nail beds visible
+- Shape: Short, practical length (3-5mm), squared oval
+- Cuticles: Clean and neat
+- Ring: Single thin gold band on LEFT ring finger (1.5mm width)
+- Bracelet: None
+- Tattoo: None
+- Skin: Clean, natural, healthy appearance
+- Overall: Understated, professional, timeless`,
+
+      trendy: `
+
+HAND STYLING - TRENDY:
+- Nails: French tip with thin white line, coffin/ballerina shape, longer length (12-15mm)
+- Cuticles: Perfectly groomed
+- Ring: Chunky gold signet ring on RIGHT pinky, statement piece
+- Bracelet: Gold chain link bracelet on LEFT wrist (4mm links)
+- Tattoo: Geometric fine-line triangle on RIGHT hand between thumb and index (3cm)
+- Skin: Flawless, possibly with subtle highlighter on knuckles
+- Additional: Matching gold ring on LEFT index finger`,
+
+      sporty: `
+
+HAND STYLING - SPORTY:
+- Nails: No polish, very short and practical (2-3mm)
+- Shape: Natural, trimmed for activity
+- Cuticles: Healthy, natural
+- Watch: Fitness tracker or simple sport watch on LEFT wrist
+- Bracelet: Simple silicone band or fabric friendship bracelet
+- Ring: None or simple rubber band ring
+- Tattoo: None
+- Skin: Healthy, active appearance, natural tone`,
+    };
+
+    return styles[handStyle] || "";
+  }
+
+  /**
+   * Seçilen fincan için referans detayları
+   */
+  private getCupReferenceDetails(cup?: Asset): string {
+    if (!cup) return "";
+
+    const colors = cup.visualProperties?.dominantColors?.join(", ") || "neutral";
+    const material = cup.visualProperties?.material || "ceramic";
+    const style = cup.visualProperties?.style || "modern";
+
+    return `
+
+CUP REFERENCE - USE EXACTLY THIS CUP:
+- The cup from REFERENCE IMAGE must be used EXACTLY as shown
+- Cup colors: ${colors}
+- Cup material: ${material}
+- Cup style: ${style}
+- Filename reference: ${cup.filename}
+- DO NOT substitute with a different cup style
+- DO NOT use paper/disposable cup unless reference shows one
+- DO NOT change the cup color or material
+- The cup in output MUST match the reference cup precisely`;
+  }
+
+  /**
+   * Dinamik prompt oluştur (fallback)
+   */
+  private buildDynamicPrompt(
+    scenarioId: string,
+    compositionId?: string,
+    handStyle?: string,
+    selectedCup?: Asset
+  ): string {
+    const basePrompts: Record<string, string> = {
+      "zarif-tutma": `Using uploaded image as reference for the product.
 
 Lifestyle Instagram story photo of elegant feminine hand holding the product from reference.
 
-HAND STYLING:
-- Well-manicured nails with nude/soft pink polish
-- Small minimalist finger tattoos (tiny moon, star, fine lines)
-- Simple silver midi ring or stacked thin rings
-- Thin chain bracelet on wrist
-- Natural relaxed grip
-
-COMPOSITION:
-- Product held at slight angle toward camera
-- Hand entering frame from bottom-right
-- Product fills 40% of frame
-- Soft blurred background (f/2.0)
+CRITICAL RULES:
+- Use ONLY the product from the reference image
+- Product must be clearly recognizable from reference
+- Single product, single hand composition
 
 LIGHTING:
 - Soft natural side light from left
 - Warm golden tones
 - Gentle highlights on nail surface
+- Soft blurred background (f/2.0)
 
 9:16 vertical for Instagram Stories. 8K photorealistic.`,
 
-      "kahve-ani": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the pastry.
+      "kahve-ani": `Using uploaded image as reference for the pastry.
 
-CRITICAL ABSOLUTE RULES (NEVER VIOLATE):
-- ONLY ONE PASTRY in the image (the one from reference)
-- ONLY ONE COFFEE CUP (Sade branded ceramic cup, in background)
-- NO duplicate products - if you see 2 pastries, REJECT
-- NO duplicate cups - if you see 2 cups, REJECT
-- The pastry from reference MUST be the ONLY food item
+ABSOLUTE RULES - PRODUCT COUNT:
+- EXACTLY ONE pastry (from reference image)
+- EXACTLY ONE cup (from cup reference image if provided)
+- NO additional food items
+- NO duplicate items of any kind
 
-Lifestyle Instagram story with SINGLE pastry from reference as hero.
-
-SCENE COMPOSITION:
-- FOREGROUND (55%): Single pastry on small plate, SHARP FOCUS
-- BACKGROUND (35%): Feminine hands cupping ONE Sade coffee cup, SOFT FOCUS
-- DEPTH: Shallow DOF separates product from hands
+Lifestyle Instagram story with the pastry from reference as the hero subject.
 
 TABLE SURFACE:
-- White/grey marble visible
-- Clean, minimal props
-
-HAND STYLING (background, soft focus):
-- Both hands gently cupping the ceramic cup
-- Hands should be BEHIND the product, out of focus
-- Simple elegant styling (nude polish, minimal rings)
+- Use the table surface from reference if provided
+- Clean, minimal - no extra props or decorations
 
 LIGHTING:
 - Soft natural side light from left
 - Warm golden tones on product
-- Product is the STAR, hands are supporting element
-
-NEGATIVE REQUIREMENTS:
-- NO second pastry or food item
-- NO second cup or mug
-- NO cluttered composition
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
-
-      "kahve-kosesi": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
-
-Cozy corner Instagram story photo. Product on a small plate, placed on table surface from reference.
-
-COMPOSITION:
-- Product as hero, sharp focus, 50% of frame
-- Warm, intimate atmosphere
-- Shallow depth of field (f/2.0)
-- NO hands in frame
-
-SETTING:
-- Use ONLY the table surface from reference
-- Soft natural lighting, warm tones
-- Clean, uncluttered composition
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
-
-      "yarim-kaldi": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
-
-"Left behind" aesthetic - product with a bite taken, casual authentic moment.
-
-COMPOSITION:
-- Product partially eaten (one bite missing)
-- On plate from reference, on table from reference
-- Scattered crumbs for authenticity
-- NO hands in frame
-
-MOOD:
-- Relaxed, intimate, real moment
-- Warm natural lighting
-- Shallow depth of field
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
-
-      "cam-kenari": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
-
-Window-side composition with beautiful natural light.
-
-COMPOSITION:
-- Product on plate, near window
-- Soft natural daylight from side
-- Clean background, minimal props
-- NO hands in frame
-
-LIGHTING:
-- Natural window light, soft and warm
-- Gentle shadows
-- Bright, airy feel
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
-
-      "mermer-zarafet": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
-
-Elegant marble surface presentation, premium aesthetic.
-
-COMPOSITION:
-- Product centered on marble surface from reference
-- Clean, luxurious presentation
-- Minimal styling, maximum elegance
-- NO hands in frame
-
-STYLING:
-- White/grey marble texture visible
-- Soft diffused lighting
-- High-end patisserie feel
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
-
-      "hediye-acilisi": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
-
-Gift unboxing moment with elegant hand interaction.
-
-COMPOSITION:
-- Hands opening/revealing product
-- Product emerging from gift box
-- Excitement and discovery moment
-
-HAND STYLING:
-- Well-manicured nails, nude polish
-- Minimal jewelry (thin ring, simple bracelet)
-- Natural, graceful movement
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
-
-      "ilk-dilim": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
-
-First slice moment - fork entering the product.
-
-COMPOSITION:
-- Product on plate from reference
-- Elegant hand with fork taking first bite
-- Anticipation moment captured
-
-HAND STYLING:
-- Feminine hand, well-manicured
-- Simple elegant styling
-- Fork held gracefully
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
-
-      "paylasim": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
-
-Sharing moment - social, friendly atmosphere.
-
-COMPOSITION:
-- Product centered, two small plates suggested
-- Social, conversational setting
-- Warm, inviting atmosphere
-- NO hands required
-
-MOOD:
-- Friendly, social gathering feel
-- Warm natural lighting
-- Clean table surface from reference
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
-
-      "paket-servis": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
-
-Takeaway/delivery presentation with kraft packaging.
-
-COMPOSITION:
-- Product with takeaway packaging
-- Clean, modern presentation
-- Ready-to-go aesthetic
-- NO hands in frame
-
-STYLING:
-- Kraft paper, simple packaging
-- Clean background
-- Professional takeaway look
+- Product is the PRIMARY subject
 
 9:16 vertical for Instagram Stories. 8K photorealistic.`,
     };
 
-    return fallbackPrompts[scenarioId] || fallbackPrompts["zarif-tutma"];
+    let prompt = basePrompts[scenarioId] || basePrompts["zarif-tutma"];
+
+    // Kompozisyon detayları ekle
+    prompt += this.getCompositionDetails(scenarioId, compositionId);
+
+    // El stili detayları ekle
+    prompt += this.getHandStyleDetails(handStyle);
+
+    // Fincan referans detayları ekle
+    prompt += this.getCupReferenceDetails(selectedCup);
+
+    return prompt;
   }
 
   /**
@@ -985,8 +998,28 @@ STYLING:
       // Store reference to pipeline result
       pipelineResultId: shortId, // Reference to this item
       generatedStorageUrl: result.generatedImage.storageUrl,
-      // Orchestrator slot referansi - Telegram callback'te scheduled-slots güncellemesi için
-      slotId: result.slotId,
+      // Orchestrator slot referansı - Telegram callback'te scheduled-slots güncellemesi için
+      slotId: result.slotId || null,
+
+      // ORCHESTRATOR DATA - Yeniden oluşturmada kullanılacak
+      // Firestore undefined kabul etmiyor, null kullan
+      orchestratorData: {
+        scenarioId: result.scenarioSelection?.scenarioId || null,
+        scenarioName: result.scenarioSelection?.scenarioName || null,
+        compositionId: result.scenarioSelection?.compositionId || null,
+        handStyle: result.scenarioSelection?.handStyle || null,
+        mainPrompt: result.optimizedPrompt?.mainPrompt || null,
+        negativePrompt: result.optimizedPrompt?.negativePrompt || null,
+        aspectRatio: result.optimizedPrompt?.aspectRatio || null,
+        assetIds: {
+          productId: result.assetSelection?.product?.id || null,
+          cupId: result.assetSelection?.cup?.id || null,
+          tableId: result.assetSelection?.table?.id || null,
+          plateId: result.assetSelection?.plate?.id || null,
+          decorId: result.assetSelection?.decor?.id || null,
+          petId: result.assetSelection?.pet?.id || null,
+        },
+      },
     };
 
     // Save to photos collection with the short ID as document ID

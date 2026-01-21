@@ -144,17 +144,32 @@ export async function processNextItem(
         // Determine mime type
         const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
 
-        // Build prompt - Photo Prompt Studio'dan geliyorsa customPrompt kullan
+        // Build prompt - Öncelik sırası:
+        // 1. Orchestrator'dan gelen prompt (yeniden oluşturma için)
+        // 2. Photo Prompt Studio'dan gelen custom prompt
+        // 3. Varsayılan prompt builder
         let prompt: string;
         let negativePrompt: string;
 
-        if (item.customPrompt) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const orchestratorData = (item as any).orchestratorData;
+
+        if (orchestratorData?.mainPrompt) {
+          // Orchestrator'dan gelen prompt - YENİDEN OLUŞTURMA
+          console.log("[Orchestrator] Using saved orchestrator prompt for regeneration");
+          console.log("[Orchestrator] Scenario:", orchestratorData.scenarioName);
+          console.log("[Orchestrator] Composition:", orchestratorData.compositionId);
+          console.log("[Orchestrator] Hand Style:", orchestratorData.handStyle);
+          prompt = orchestratorData.mainPrompt;
+          negativePrompt = orchestratorData.negativePrompt || "";
+        } else if (item.customPrompt) {
           // Photo Prompt Studio'dan gelen custom prompt
           console.log("[Orchestrator] Using custom prompt from Photo Prompt Studio");
           prompt = item.customPrompt;
           negativePrompt = item.customNegativePrompt || "";
         } else {
-          // Varsayılan prompt builder
+          // Varsayılan prompt builder (fallback)
+          console.log("[Orchestrator] Using default prompt builder (fallback)");
           const builtPrompt = buildPrompt(
             item.productCategory,
             item.styleVariant,
@@ -431,17 +446,32 @@ export async function processWithApproval(
         const base64Image = imageBuffer.toString("base64");
         const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
 
-        // Build prompt - Photo Prompt Studio'dan geliyorsa customPrompt kullan
+        // Build prompt - Öncelik sırası:
+        // 1. Orchestrator'dan gelen prompt (yeniden oluşturma için)
+        // 2. Photo Prompt Studio'dan gelen custom prompt
+        // 3. Varsayılan prompt builder
         let prompt: string;
         let negativePrompt: string;
 
-        if (item.customPrompt) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const orchestratorData = (item as any).orchestratorData;
+
+        if (orchestratorData?.mainPrompt) {
+          // Orchestrator'dan gelen prompt - YENİDEN OLUŞTURMA
+          console.log("[Orchestrator] Using saved orchestrator prompt for regeneration");
+          console.log("[Orchestrator] Scenario:", orchestratorData.scenarioName);
+          console.log("[Orchestrator] Composition:", orchestratorData.compositionId);
+          console.log("[Orchestrator] Hand Style:", orchestratorData.handStyle);
+          prompt = orchestratorData.mainPrompt;
+          negativePrompt = orchestratorData.negativePrompt || "";
+        } else if (item.customPrompt) {
           // Photo Prompt Studio'dan gelen custom prompt
           console.log("[Orchestrator] Using custom prompt from Photo Prompt Studio");
           prompt = item.customPrompt;
           negativePrompt = item.customNegativePrompt || "";
         } else {
-          // Varsayılan prompt builder
+          // Varsayılan prompt builder (fallback)
+          console.log("[Orchestrator] Using default prompt builder (fallback)");
           const builtPrompt = buildPrompt(
             item.productCategory,
             item.styleVariant,
