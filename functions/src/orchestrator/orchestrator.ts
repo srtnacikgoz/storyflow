@@ -83,13 +83,15 @@ export class Orchestrator {
   /**
    * Tam pipeline'ı çalıştır
    * @param onProgress - Her aşamada çağrılan callback (opsiyonel)
+   * @param overrideThemeId - Manuel tema seçimi (Dashboard'dan "Şimdi Üret" ile)
    */
   async runPipeline(
     productType: ProductType,
     timeSlotRule: TimeSlotRule,
     onProgress?: (stage: string, stageIndex: number, totalStages: number) => Promise<void>,
     slotId?: string,
-    scheduledHour?: number
+    scheduledHour?: number,
+    overrideThemeId?: string
   ): Promise<PipelineResult> {
     const TOTAL_STAGES = 7; // asset, scenario, prompt, image, quality, content, telegram
     const startedAt = Date.now();
@@ -157,20 +159,47 @@ export class Orchestrator {
       // Senaryolar kurallardan alınıyor (zaten yüklendi)
       const allScenarios = effectiveRules.staticRules.scenarios;
 
-      // Senaryo filtreleme: TimeSlotRule tercihi + bloklanmış senaryolar
-      let filteredScenarios = timeSlotRule.scenarioPreference
-        ? allScenarios.filter(s => timeSlotRule.scenarioPreference!.includes(s.id))
-        : allScenarios;
+      // Tema bazlı senaryo filtreleme
+      // Öncelik: 1) overrideThemeId (Dashboard'dan manuel) 2) timeSlotRule.themeId
+      const effectiveThemeId = overrideThemeId || timeSlotRule.themeId;
+      let themeFilteredScenarios = allScenarios;
+
+      if (effectiveThemeId) {
+        console.log(`[Orchestrator] Loading theme: ${effectiveThemeId}`);
+        try {
+          const themeDoc = await this.db.collection("themes").doc(effectiveThemeId).get();
+          if (themeDoc.exists) {
+            const themeData = themeDoc.data();
+            if (themeData?.scenarios && Array.isArray(themeData.scenarios)) {
+              // Temanın senaryoları ile filtrele
+              themeFilteredScenarios = allScenarios.filter(s => themeData.scenarios.includes(s.id));
+              console.log(`[Orchestrator] Theme "${themeData.name}" applied - ${themeFilteredScenarios.length} scenarios available`);
+            }
+          } else {
+            console.warn(`[Orchestrator] Theme "${effectiveThemeId}" not found, using all scenarios`);
+          }
+        } catch (themeError) {
+          console.error(`[Orchestrator] Failed to load theme: ${themeError}`);
+        }
+      }
+
+      // Senaryo filtreleme: Tema filtrelemesi + deprecated scenarioPreference fallback
+      let filteredScenarios = themeFilteredScenarios;
+
+      // Deprecated: scenarioPreference (tema yoksa ve eski kural varsa)
+      if (!effectiveThemeId && timeSlotRule.scenarioPreference) {
+        filteredScenarios = filteredScenarios.filter(s => timeSlotRule.scenarioPreference!.includes(s.id));
+      }
 
       // Bloklanmış senaryoları çıkar (son N üretimde kullanılanlar)
       filteredScenarios = filteredScenarios.filter(
         s => !effectiveRules.blockedScenarios.includes(s.id)
       );
 
-      // Eğer tüm senaryolar bloklanmışsa, en az kullanılmış olanı seç
+      // Eğer tüm senaryolar bloklanmışsa, tema filtrelemesinden sonraki listeyi kullan
       if (filteredScenarios.length === 0) {
-        console.log("[Orchestrator] All scenarios blocked, using full list");
-        filteredScenarios = allScenarios;
+        console.log("[Orchestrator] All scenarios blocked, using theme-filtered list");
+        filteredScenarios = themeFilteredScenarios.length > 0 ? themeFilteredScenarios : allScenarios;
       }
 
       // Claude için basitleştirilmiş senaryo listesi

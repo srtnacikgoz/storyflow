@@ -19,7 +19,6 @@ const Settings = lazy(() => import("./pages/Settings"));
 const OrchestratorDashboard = lazy(() => import("./pages/OrchestratorDashboard"));
 const Assets = lazy(() => import("./pages/Assets"));
 const TimeSlots = lazy(() => import("./pages/TimeSlots"));
-const OrchestratorRules = lazy(() => import("./pages/OrchestratorRules"));
 const Themes = lazy(() => import("./pages/Themes"));
 
 // Loading fallback component
@@ -53,7 +52,6 @@ function App() {
             <Route path="orchestrator" element={<Suspense fallback={<PageLoader />}><OrchestratorDashboard /></Suspense>} />
             <Route path="assets" element={<Suspense fallback={<PageLoader />}><Assets /></Suspense>} />
             <Route path="time-slots" element={<Suspense fallback={<PageLoader />}><TimeSlots /></Suspense>} />
-            <Route path="orchestrator-rules" element={<Suspense fallback={<PageLoader />}><OrchestratorRules /></Suspense>} />
             <Route path="themes" element={<Suspense fallback={<PageLoader />}><Themes /></Suspense>} />
           </Route>
         </Routes>

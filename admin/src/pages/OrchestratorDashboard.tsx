@@ -5,6 +5,7 @@ import type {
   ScheduledSlot,
   OrchestratorProductType,
   ScheduledSlotStatus,
+  Theme,
 } from "../types";
 
 // Ürün tipi etiketleri
@@ -82,6 +83,10 @@ export default function OrchestratorDashboard() {
   const [generating, setGenerating] = useState(false);
   const [selectedProductType, setSelectedProductType] = useState<OrchestratorProductType>("croissants");
 
+  // Tema seçimi
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [selectedThemeId, setSelectedThemeId] = useState<string>("");
+
   // Progress Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [currentSlotId, setCurrentSlotId] = useState<string | null>(null);
@@ -108,12 +113,14 @@ export default function OrchestratorDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [statsData, slotsData] = await Promise.all([
+      const [statsData, slotsData, themesData] = await Promise.all([
         api.getOrchestratorDashboardStats(),
         api.listScheduledSlots({ limit: 50 }),
+        api.listThemes().catch(() => []),
       ]);
       setStats(statsData);
       setSlots(slotsData);
+      setThemes(themesData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
@@ -176,7 +183,11 @@ export default function OrchestratorDashboard() {
     setShowProgressModal(true);
 
     try {
-      const result = await api.orchestratorGenerateNow(selectedProductType);
+      // themeId varsa gönder, yoksa undefined
+      const result = await api.orchestratorGenerateNow(
+        selectedProductType,
+        selectedThemeId || undefined
+      );
       setCurrentSlotId(result.slotId);
 
       if (result.success) {
@@ -657,6 +668,23 @@ export default function OrchestratorDashboard() {
               ))}
             </select>
           </div>
+          {themes.length > 0 && (
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Tema (Opsiyonel)</label>
+              <select
+                value={selectedThemeId}
+                onChange={(e) => setSelectedThemeId(e.target.value)}
+                className="input w-48"
+              >
+                <option value="">Tema seçilmedi</option>
+                {themes.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button
             onClick={handleGenerateNow}
             disabled={generating}
@@ -665,6 +693,15 @@ export default function OrchestratorDashboard() {
             {generating ? "Üretiliyor..." : "🚀 Şimdi Üret"}
           </button>
         </div>
+        {selectedThemeId && themes.length > 0 && (
+          <div className="mt-3 p-3 bg-purple-50 rounded-xl text-sm">
+            <p className="text-purple-700">
+              <span className="font-medium">Seçili tema:</span>{" "}
+              {themes.find(t => t.id === selectedThemeId)?.name} - Senaryolar:{" "}
+              {themes.find(t => t.id === selectedThemeId)?.scenarios.join(", ")}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* İstatistikler */}

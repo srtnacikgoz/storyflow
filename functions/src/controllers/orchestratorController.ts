@@ -451,7 +451,7 @@ export const orchestratorGenerateNow = functions
           return;
         }
 
-        const { productType } = request.body as { productType: ProductType };
+        const { productType, themeId } = request.body as { productType: ProductType; themeId?: string };
 
         if (!productType) {
           response.status(400).json({
@@ -465,7 +465,8 @@ export const orchestratorGenerateNow = functions
         const scheduler = new OrchestratorScheduler(config);
 
         // Pipeline tamamlanana kadar bekle
-        const result = await scheduler.generateNow(productType);
+        // themeId varsa override olarak gönder
+        const result = await scheduler.generateNow(productType, themeId);
 
         if (result.success) {
           response.json({

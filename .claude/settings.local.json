@@ -45,7 +45,8 @@
       "Bash(node .claude/hooks/*)",
       "Bash(mv:*)",
       "Bash(rm:*)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(git push:*)"
     ]
   },
   "hooks": {

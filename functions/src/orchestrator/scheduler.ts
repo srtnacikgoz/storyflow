@@ -252,8 +252,14 @@ export class OrchestratorScheduler {
    * @param rule - Zaman kuralı
    * @param slotId - Slot ID
    * @param scheduledHour - İçeriğin hedeflediği saat (zaman dilimine göre içerik üretimi için)
+   * @param overrideThemeId - Manuel tema override (Dashboard'dan "Şimdi Üret" için)
    */
-  private async runPipelineAsync(rule: TimeSlotRule, slotId: string, scheduledHour?: number): Promise<void> {
+  private async runPipelineAsync(
+    rule: TimeSlotRule,
+    slotId: string,
+    scheduledHour?: number,
+    overrideThemeId?: string
+  ): Promise<void> {
     const orchestrator = new Orchestrator(this.config);
 
     try {
@@ -273,8 +279,15 @@ export class OrchestratorScheduler {
         });
       };
 
-      // Pipeline çalıştır (progress callback ile, slotId ile, scheduledHour ile)
-      const result = await orchestrator.runPipeline(productType, rule, onProgress, slotId, scheduledHour);
+      // Pipeline çalıştır (progress callback ile, slotId ile, scheduledHour ile, themeId ile)
+      const result = await orchestrator.runPipeline(
+        productType,
+        rule,
+        onProgress,
+        slotId,
+        scheduledHour,
+        overrideThemeId
+      );
 
       // Slot'u güncelle (undefined değerleri temizle)
       await this.db.collection("scheduled-slots").doc(slotId).update({
@@ -340,8 +353,10 @@ export class OrchestratorScheduler {
   /**
    * Belirli bir ürün tipi için hemen içerik üret
    * Pipeline tamamlanana kadar bekler
+   * @param productType - Ürün tipi
+   * @param overrideThemeId - Opsiyonel tema ID'si (senaryo filtreleme için)
    */
-  async generateNow(productType: ProductType): Promise<{
+  async generateNow(productType: ProductType, overrideThemeId?: string): Promise<{
     slotId: string;
     success: boolean;
     error?: string;
@@ -350,6 +365,7 @@ export class OrchestratorScheduler {
     const startTime = Date.now();
 
     // Varsayılan kural oluştur
+    // themeId varsa rule'a ekle (orchestrator bu themeId'yi kullanacak)
     const tempRule: TimeSlotRule = {
       id: `manual-${Date.now()}`,
       startHour: new Date().getHours(),
@@ -358,13 +374,14 @@ export class OrchestratorScheduler {
       productTypes: [productType],
       isActive: true,
       priority: 0,
+      themeId: overrideThemeId, // Tema override
     };
 
     const slot = await this.createSlot(tempRule, new Date());
 
     try {
-      // Pipeline'ı bekleyerek çalıştır
-      await this.runPipelineAsync(tempRule, slot.id);
+      // Pipeline'ı bekleyerek çalıştır (themeId override ile)
+      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId);
 
       return {
         slotId: slot.id,

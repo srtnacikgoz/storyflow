@@ -664,14 +664,21 @@ class ApiService {
 
   /**
    * Hemen içerik üret (pipeline tamamlanana kadar bekler)
+   * @param productType Ürün tipi
+   * @param themeId Opsiyonel tema ID'si - senaryoları filtreler
    */
-  async orchestratorGenerateNow(productType: string): Promise<{
+  async orchestratorGenerateNow(productType: string, themeId?: string): Promise<{
     success: boolean;
     message: string;
     slotId: string;
     duration?: number;
     error?: string;
   }> {
+    const body: { productType: string; themeId?: string } = { productType };
+    if (themeId) {
+      body.themeId = themeId;
+    }
+
     const response = await this.fetch<{
       success: boolean;
       message: string;
@@ -680,7 +687,7 @@ class ApiService {
       error?: string;
     }>("orchestratorGenerateNow", {
       method: "POST",
-      body: JSON.stringify({ productType }),
+      body: JSON.stringify(body),
     });
     return response;
   }

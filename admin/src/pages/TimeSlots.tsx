@@ -522,6 +522,8 @@ function RuleModal({
   const [productTypes, setProductTypes] = useState<OrchestratorProductType[]>(
     rule?.productTypes || ["croissants"]
   );
+  // Tema kullanım state'leri
+  const [useTheme, setUseTheme] = useState<boolean>(!!rule?.themeId);
   const [themeId, setThemeId] = useState<string>(rule?.themeId || "");
   const [saving, setSaving] = useState(false);
 
@@ -562,9 +564,12 @@ function RuleModal({
         priority: 10,
       };
 
-      // Tema seçildiyse ekle
-      if (themeId) {
+      // Tema kullan seçildiyse ve tema seçildiyse ekle
+      if (useTheme && themeId) {
         data.themeId = themeId;
+      } else {
+        // Tema kullanılmıyorsa themeId'yi temizle
+        data.themeId = undefined;
       }
 
       if (rule) {
@@ -704,33 +709,65 @@ function RuleModal({
             </div>
           </div>
 
-          {/* Tema Seçimi */}
+          {/* Tema Kullanımı */}
           {themes.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                🎨 Tema (Opsiyonel)
+            <div className="space-y-3">
+              {/* Tema Kullan Checkbox */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useTheme}
+                  onChange={(e) => {
+                    setUseTheme(e.target.checked);
+                    if (!e.target.checked) {
+                      setThemeId("");
+                    }
+                  }}
+                  className="w-5 h-5 text-brand-blue border-gray-300 rounded focus:ring-brand-blue"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  🎨 Tema Kullan
+                </span>
               </label>
-              <select
-                value={themeId}
-                onChange={(e) => setThemeId(e.target.value)}
-                className="input w-full"
-              >
-                <option value="">Tema seçilmedi (tüm senaryolar)</option>
-                {themes.map((theme) => (
-                  <option key={theme.id} value={theme.id}>
-                    {theme.name} ({theme.scenarios.length} senaryo)
-                  </option>
-                ))}
-              </select>
-              {themeId && (
-                <div className="mt-2 p-3 bg-purple-50 rounded-xl text-sm">
-                  <p className="text-purple-700 font-medium mb-1">
-                    Seçili Tema: {themes.find(t => t.id === themeId)?.name}
-                  </p>
-                  <p className="text-purple-600 text-xs">
-                    Senaryolar: {themes.find(t => t.id === themeId)?.scenarios.join(", ")}
-                  </p>
+
+              {/* Tema Dropdown - Sadece checkbox işaretliyse göster */}
+              {useTheme && (
+                <div className="ml-8">
+                  <select
+                    value={themeId}
+                    onChange={(e) => setThemeId(e.target.value)}
+                    className="input w-full"
+                  >
+                    <option value="">Tema seçin...</option>
+                    {themes.map((theme) => (
+                      <option key={theme.id} value={theme.id}>
+                        {theme.name} ({theme.scenarios.length} senaryo)
+                      </option>
+                    ))}
+                  </select>
+                  {themeId && (
+                    <div className="mt-2 p-3 bg-purple-50 rounded-xl text-sm">
+                      <p className="text-purple-700 font-medium mb-1">
+                        Seçili Tema: {themes.find(t => t.id === themeId)?.name}
+                      </p>
+                      <p className="text-purple-600 text-xs">
+                        Senaryolar: {themes.find(t => t.id === themeId)?.scenarios.join(", ")}
+                      </p>
+                    </div>
+                  )}
+                  {!themeId && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠️ Tema seçilmedi - lütfen bir tema seçin veya "Tema Kullan"ı kapatın
+                    </p>
+                  )}
                 </div>
+              )}
+
+              {/* Tema kullanılmadığında açıklama */}
+              {!useTheme && (
+                <p className="text-xs text-gray-500 ml-8">
+                  Tema kullanılmadığında tüm senaryolar arasından seçim yapılır
+                </p>
               )}
             </div>
           )}

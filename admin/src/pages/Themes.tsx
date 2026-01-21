@@ -2,6 +2,26 @@ import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import type { Theme } from "../types";
 
+// Çeşitlilik kuralları tipi
+interface VariationRules {
+  scenarioGap: number;
+  tableGap: number;
+  handStyleGap: number;
+  compositionGap: number;
+  petFrequency: number;
+  similarityThreshold: number;
+}
+
+// Varsayılan değerler
+const DEFAULT_VARIATION_RULES: VariationRules = {
+  scenarioGap: 3,
+  tableGap: 2,
+  handStyleGap: 4,
+  compositionGap: 2,
+  petFrequency: 15,
+  similarityThreshold: 50,
+};
+
 // Tüm senaryolar
 const ALL_SCENARIOS = [
   { id: "zarif-tutma", name: "Zarif Tutma", includesHands: true },
@@ -51,8 +71,13 @@ export default function Themes() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Çeşitlilik kuralları state
+  const [variationRules, setVariationRules] = useState<VariationRules>(DEFAULT_VARIATION_RULES);
+  const [savingRules, setSavingRules] = useState(false);
+
   useEffect(() => {
     loadThemes();
+    loadVariationRules();
   }, []);
 
   const loadThemes = async () => {
@@ -65,6 +90,34 @@ export default function Themes() {
       setError(err instanceof Error ? err.message : "Temalar yüklenemedi");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Çeşitlilik kurallarını yükle
+  const loadVariationRules = async () => {
+    try {
+      const data = await api.getOrchestratorConfig();
+      if (data?.variationRules) {
+        setVariationRules({
+          ...DEFAULT_VARIATION_RULES,
+          ...data.variationRules,
+        });
+      }
+    } catch (err) {
+      console.error("Çeşitlilik kuralları yüklenemedi:", err);
+    }
+  };
+
+  // Çeşitlilik kurallarını kaydet
+  const handleSaveRules = async () => {
+    setSavingRules(true);
+    try {
+      await api.updateOrchestratorConfig({ variationRules });
+      alert("Kurallar kaydedildi");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Kayıt başarısız");
+    } finally {
+      setSavingRules(false);
     }
   };
 
@@ -291,6 +344,147 @@ export default function Themes() {
           Henüz tema eklenmemiş.
         </div>
       )}
+
+      {/* Çeşitlilik Kuralları Bölümü */}
+      <div className="bg-white rounded-xl border border-stone-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-900">Çeşitlilik Kuralları</h2>
+            <p className="text-sm text-stone-500 mt-1">
+              İçerik üretiminde tekrarı önlemek için kuralları ayarlayın
+            </p>
+          </div>
+          <button
+            onClick={handleSaveRules}
+            disabled={savingRules}
+            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+          >
+            {savingRules ? "Kaydediliyor..." : "Kuralları Kaydet"}
+          </button>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Senaryo Aralığı */}
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-2">
+              Senaryo Aralığı: {variationRules.scenarioGap}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              value={variationRules.scenarioGap}
+              onChange={(e) =>
+                setVariationRules({ ...variationRules, scenarioGap: parseInt(e.target.value) })
+              }
+              className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+            />
+            <p className="text-xs text-stone-500 mt-1">
+              Aynı senaryo kaç üretim sonra tekrarlanabilir
+            </p>
+          </div>
+
+          {/* Masa Aralığı */}
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-2">
+              Masa Aralığı: {variationRules.tableGap}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              value={variationRules.tableGap}
+              onChange={(e) =>
+                setVariationRules({ ...variationRules, tableGap: parseInt(e.target.value) })
+              }
+              className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+            />
+            <p className="text-xs text-stone-500 mt-1">
+              Aynı masa/yüzey kaç üretim sonra tekrarlanabilir
+            </p>
+          </div>
+
+          {/* El Stili Aralığı */}
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-2">
+              El Stili Aralığı: {variationRules.handStyleGap}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              value={variationRules.handStyleGap}
+              onChange={(e) =>
+                setVariationRules({ ...variationRules, handStyleGap: parseInt(e.target.value) })
+              }
+              className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+            />
+            <p className="text-xs text-stone-500 mt-1">
+              Aynı el stili kaç üretim sonra tekrarlanabilir
+            </p>
+          </div>
+
+          {/* Kompozisyon Aralığı */}
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-2">
+              Kompozisyon Aralığı: {variationRules.compositionGap}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              value={variationRules.compositionGap}
+              onChange={(e) =>
+                setVariationRules({ ...variationRules, compositionGap: parseInt(e.target.value) })
+              }
+              className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+            />
+            <p className="text-xs text-stone-500 mt-1">
+              Aynı kompozisyon kaç üretim sonra tekrarlanabilir
+            </p>
+          </div>
+
+          {/* Köpek Frekansı */}
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-2">
+              Köpek Frekansı: Her {variationRules.petFrequency} üretimde 1
+            </label>
+            <input
+              type="range"
+              min="5"
+              max="30"
+              value={variationRules.petFrequency}
+              onChange={(e) =>
+                setVariationRules({ ...variationRules, petFrequency: parseInt(e.target.value) })
+              }
+              className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+            />
+            <p className="text-xs text-stone-500 mt-1">
+              Köpek ne sıklıkla dahil edilsin (teması izin veriyorsa)
+            </p>
+          </div>
+
+          {/* Benzerlik Eşiği */}
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-2">
+              Benzerlik Eşiği: %{variationRules.similarityThreshold}
+            </label>
+            <input
+              type="range"
+              min="30"
+              max="80"
+              value={variationRules.similarityThreshold}
+              onChange={(e) =>
+                setVariationRules({ ...variationRules, similarityThreshold: parseInt(e.target.value) })
+              }
+              className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+            />
+            <p className="text-xs text-stone-500 mt-1">
+              Bu oranın üzerindeki benzerlikler engellenir
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Modal */}
       {showModal && (
