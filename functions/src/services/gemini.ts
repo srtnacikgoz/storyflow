@@ -250,6 +250,9 @@ SCENE DIRECTION:
       fullPrompt += `\n\nAVOID: ${options.negativePrompt}`;
     }
 
+    // MUTLAK KISITLAMA - Her zaman eklenir (3. koruma katmanı)
+    fullPrompt += `\n\nABSOLUTE RESTRICTION: Use ONLY objects from the uploaded reference images. Do NOT add ANY prop, furniture, decoration, or lighting fixture (lamp, lampshade, vase, candle, flowers, picture frame, clock, etc.) that is not in the reference. The scene must be MINIMALIST - only the product and explicitly provided assets. Nothing else.`;
+
     // Metin yanıtını engellemek için kesin talimat
     fullPrompt += "\n\nCRITICAL: Edit the image and return ONLY the edited image. Do not provide any text. The product in your output MUST be the same product from the input image.";
 

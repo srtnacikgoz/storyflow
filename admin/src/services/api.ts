@@ -24,6 +24,7 @@ import type {
   ScheduledSlot,
   PipelineResult,
   OrchestratorDashboardStats,
+  Theme,
 } from "../types";
 
 // Firebase Functions base URL
@@ -967,6 +968,72 @@ class ApiService {
       };
     }>("getPetUsageStats");
     return response.data;
+  }
+
+  // ==========================================
+  // Orchestrator - Theme Management
+  // ==========================================
+
+  /**
+   * Tüm temaları listele
+   */
+  async listThemes(): Promise<Theme[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: Theme[];
+    }>("listThemes");
+    return response.data;
+  }
+
+  /**
+   * Yeni tema oluştur
+   */
+  async createTheme(theme: {
+    id: string;
+    name: string;
+    description?: string;
+    scenarios: string[];
+    mood: string;
+    petAllowed: boolean;
+  }): Promise<Theme> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: Theme;
+    }>("createTheme", {
+      method: "POST",
+      body: JSON.stringify(theme),
+    });
+    return response.data;
+  }
+
+  /**
+   * Tema güncelle
+   */
+  async updateTheme(id: string, updates: Partial<{
+    name: string;
+    description: string;
+    scenarios: string[];
+    mood: string;
+    petAllowed: boolean;
+  }>): Promise<Theme> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: Theme;
+    }>("updateTheme", {
+      method: "POST",
+      body: JSON.stringify({ id, ...updates }),
+    });
+    return response.data;
+  }
+
+  /**
+   * Tema sil
+   */
+  async deleteTheme(id: string): Promise<void> {
+    await this.fetch<{ success: boolean }>("deleteTheme", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
   }
 }
 

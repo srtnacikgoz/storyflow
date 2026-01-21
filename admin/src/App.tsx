@@ -14,6 +14,7 @@ import OrchestratorDashboard from "./pages/OrchestratorDashboard";
 import Assets from "./pages/Assets";
 import TimeSlots from "./pages/TimeSlots";
 import OrchestratorRules from "./pages/OrchestratorRules";
+import Themes from "./pages/Themes";
 // Global loading
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { LoadingOverlay } from "./components/LoadingOverlay";
@@ -38,6 +39,7 @@ function App() {
             <Route path="assets" element={<Assets />} />
             <Route path="time-slots" element={<TimeSlots />} />
             <Route path="orchestrator-rules" element={<OrchestratorRules />} />
+            <Route path="themes" element={<Themes />} />
           </Route>
         </Routes>
         {/* Global loading indicator */}

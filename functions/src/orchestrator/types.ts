@@ -123,7 +123,11 @@ export interface TimeSlotRule {
   allowPairing?: boolean;         // Kahve + pasta gibi kombinasyon
   pairingWith?: ProductType[];    // ["coffees"]
 
-  // Senaryo tercihi
+  // Tema tercihi (yeni sistem)
+  themeId?: string;               // "morning-energy" - Temalar sayfasından seçilir
+
+  // Senaryo tercihi (eski sistem, geriye dönük uyumluluk)
+  // @deprecated - themeId kullanın
   scenarioPreference?: string[];  // ["zarif-tutma", "kahve-ani"]
 
   // Aktiflik
@@ -552,3 +556,77 @@ export interface EffectiveRules {
   blockedHandStyles: string[];
   blockedCompositions: string[];
 }
+
+// ==========================================
+// THEME SYSTEM
+// ==========================================
+
+/**
+ * Tema tanımı
+ * Senaryoları, mood'u ve diğer ayarları gruplar
+ * TimeSlotRule'dan referans edilir
+ */
+export interface Theme {
+  id: string;              // "morning-energy"
+  name: string;            // "Sabah Enerjisi"
+  description?: string;    // "Enerjik sabah paylaşımları için"
+  scenarios: string[];     // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
+  mood: string;            // "energetic"
+  petAllowed: boolean;     // Köpek dahil edilebilir mi?
+
+  // Metadata
+  createdAt: number;
+  updatedAt: number;
+  isDefault?: boolean;     // Varsayılan tema mı (silinemeyen)
+}
+
+/**
+ * Varsayılan temalar (sistem tarafından oluşturulan)
+ */
+export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
+  {
+    id: "morning-energy",
+    name: "Sabah Enerjisi",
+    description: "Güne enerjik başlangıç için aydınlık, taze senaryolar",
+    scenarios: ["cam-kenari", "zarif-tutma", "ilk-dilim"],
+    mood: "energetic",
+    petAllowed: false,
+    isDefault: true,
+  },
+  {
+    id: "brunch-social",
+    name: "Brunch Keyfi",
+    description: "Sosyal, paylaşım odaklı brunch atmosferi",
+    scenarios: ["kahve-ani", "paylasim"],
+    mood: "social",
+    petAllowed: false,
+    isDefault: true,
+  },
+  {
+    id: "afternoon-chill",
+    name: "Öğleden Sonra Rahatlığı",
+    description: "Rahat, dinlendirici öğleden sonra anları",
+    scenarios: ["kahve-kosesi", "yarim-kaldi"],
+    mood: "relaxed",
+    petAllowed: true,
+    isDefault: true,
+  },
+  {
+    id: "golden-hour",
+    name: "Altın Saat",
+    description: "Sıcak, romantik akşam ışığı",
+    scenarios: ["cam-kenari", "hediye-acilisi"],
+    mood: "warm",
+    petAllowed: false,
+    isDefault: true,
+  },
+  {
+    id: "cozy-night",
+    name: "Gece Samimiyeti",
+    description: "Samimi, rahat gece atmosferi",
+    scenarios: ["kahve-kosesi", "yarim-kaldi"],
+    mood: "cozy",
+    petAllowed: true,
+    isDefault: true,
+  },
+];

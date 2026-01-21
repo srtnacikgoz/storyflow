@@ -122,8 +122,8 @@ export class OrchestratorScheduler {
           // Slot oluştur (en iyi saat ile)
           const slot = await this.createSlot(rule, now, bestHour);
 
-          // Pipeline'ı async başlat (beklemeden)
-          this.runPipelineAsync(rule, slot.id).catch(error => {
+          // Pipeline'ı async başlat (beklemeden) - bestHour'ı da gönder
+          this.runPipelineAsync(rule, slot.id, bestHour).catch(error => {
             console.error(`[Scheduler] Pipeline error for ${rule.id}:`, error);
           });
 
@@ -249,8 +249,11 @@ export class OrchestratorScheduler {
 
   /**
    * Pipeline'ı async çalıştır
+   * @param rule - Zaman kuralı
+   * @param slotId - Slot ID
+   * @param scheduledHour - İçeriğin hedeflediği saat (zaman dilimine göre içerik üretimi için)
    */
-  private async runPipelineAsync(rule: TimeSlotRule, slotId: string): Promise<void> {
+  private async runPipelineAsync(rule: TimeSlotRule, slotId: string, scheduledHour?: number): Promise<void> {
     const orchestrator = new Orchestrator(this.config);
 
     try {
@@ -270,8 +273,8 @@ export class OrchestratorScheduler {
         });
       };
 
-      // Pipeline çalıştır (progress callback ile, slotId ile)
-      const result = await orchestrator.runPipeline(productType, rule, onProgress, slotId);
+      // Pipeline çalıştır (progress callback ile, slotId ile, scheduledHour ile)
+      const result = await orchestrator.runPipeline(productType, rule, onProgress, slotId, scheduledHour);
 
       // Slot'u güncelle (undefined değerleri temizle)
       await this.db.collection("scheduled-slots").doc(slotId).update({

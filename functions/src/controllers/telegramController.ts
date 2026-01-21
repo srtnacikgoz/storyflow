@@ -165,16 +165,26 @@ export const telegramWebhook = functions
                             try {
                                 const db = getFirestore();
                                 await db.collection("scheduled-slots").doc(item.slotId).update({
-                                    status: "completed",
+                                    status: "published",
                                     igPostId: story.id,
                                     completedAt: Date.now(),
                                     updatedAt: Date.now(),
+                                    "pipelineResult.approvalStatus": "approved",
+                                    "pipelineResult.publishedAt": Date.now(),
+                                    "pipelineResult.instagramPostId": story.id,
                                 });
                                 console.log("[Telegram Webhook] scheduled-slots updated:", item.slotId);
                             } catch (slotError) {
                                 // Slot güncelleme hatası ana akışı etkilemesin
                                 console.error("[Telegram Webhook] scheduled-slots update failed:", slotError);
                             }
+                        } else {
+                            // slotId yoksa uyarı logla - bu durum sorun teşkil edebilir
+                            console.warn("[Telegram Webhook] ⚠️ Item has no slotId, scheduled-slots will NOT be updated!", {
+                                itemId: parsed.itemId,
+                                productName: item.productName,
+                                source: item.source,
+                            });
                         }
 
                         // Best Time to Post - Analitik kaydı
@@ -234,14 +244,21 @@ export const telegramWebhook = functions
                         try {
                             const db = getFirestore();
                             await db.collection("scheduled-slots").doc(item.slotId).update({
-                                status: "rejected",
+                                status: "failed",
+                                error: "Kullanıcı tarafından reddedildi",
                                 rejectedAt: Date.now(),
                                 updatedAt: Date.now(),
+                                "pipelineResult.approvalStatus": "rejected",
+                                "pipelineResult.approvalRespondedAt": Date.now(),
                             });
                             console.log("[Telegram Webhook] scheduled-slots rejected:", item.slotId);
                         } catch (slotError) {
                             console.error("[Telegram Webhook] scheduled-slots reject update failed:", slotError);
                         }
+                    } else {
+                        console.warn("[Telegram Webhook] ⚠️ Item has no slotId for rejection!", {
+                            itemId: parsed.itemId,
+                        });
                     }
                     break;
                 }

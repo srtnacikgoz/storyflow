@@ -392,9 +392,25 @@ export interface TimeSlotRule {
   productTypes: OrchestratorProductType[];
   allowPairing?: boolean;
   pairingWith?: OrchestratorProductType[];
+  // Tema tercihi (yeni sistem)
+  themeId?: string;
+  // Senaryo tercihi (eski sistem, geriye dönük uyumluluk)
   scenarioPreference?: string[];
   isActive: boolean;
   priority: number;
+}
+
+// Tema tanımı
+export interface Theme {
+  id: string;
+  name: string;
+  description?: string;
+  scenarios: string[];
+  mood: string;
+  petAllowed: boolean;
+  createdAt: number;
+  updatedAt: number;
+  isDefault?: boolean;
 }
 
 // Planlanmış slot durumu

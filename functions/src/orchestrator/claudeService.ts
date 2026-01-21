@@ -662,12 +662,17 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
 
     const systemPrompt = `Sen bir AI görsel üretimi uzmanısın. Gemini Pro için prompt optimize ediyorsun.
 
+MUTLAK KURAL (ASLA İHLAL ETME):
+Prompt'a SADECE referans görsellerde görünen objeleri dahil et.
+Referansta olmayan HİÇBİR obje ekleme: abajur, lamba, vazo, çiçek, mum, tablo, saat, perde, sandalye, kitaplık, dekorasyon... HİÇBİR ŞEY.
+"Cozy atmosphere" veya "warm lighting" gibi mood tanımları için ASLA fiziksel obje önerme.
+Atmosfer ışık ve renk tonlarıyla sağlanır, ek objelerle DEĞİL.
+
 Optimizasyon kuralları:
 1. Asset özelliklerini prompt'a dahil et (renk, malzeme, stil)
 2. Senaryo gereksinimlerini güçlendir
-3. ZORUNLU KURAL: Referans assetler ve senaryo dışında HİÇBİR EŞYA (abajur, vazo, çiçek, sandalye vb.) EKLEME. Minimalist kal.
-4. Sadece "Asset" listesinde verilen eşyaları kullan.
-5. Negative prompt'u güçlendir (özellikle "lampshade", "vase", "flowers", "clutter" ekle).
+3. Prompt'un başına şu kuralı MUTLAKA ekle: "Use ONLY objects from reference images. Add NOTHING extra."
+4. Minimalist kompozisyon - sadece ürün + seçilen asset'ler
 
 Kısa ve etkili ol.`;
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
-import type { TimeSlotRule, OrchestratorProductType } from "../types";
+import type { TimeSlotRule, OrchestratorProductType, Theme } from "../types";
 
 // Gün isimleri
 const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
@@ -73,6 +73,7 @@ interface ScheduledSlot {
 export default function TimeSlots() {
   const [rules, setRules] = useState<TimeSlotRule[]>([]);
   const [slots, setSlots] = useState<ScheduledSlot[]>([]);
+  const [themes, setThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -89,12 +90,14 @@ export default function TimeSlots() {
     setLoading(true);
     setError(null);
     try {
-      const [rulesData, slotsData] = await Promise.all([
+      const [rulesData, slotsData, themesData] = await Promise.all([
         api.listTimeSlotRules(),
         api.listScheduledSlots({ limit: 50 }).catch(() => []),
+        api.listThemes().catch(() => []),
       ]);
       setRules(rulesData);
       setSlots(slotsData);
+      setThemes(themesData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
@@ -301,6 +304,7 @@ export default function TimeSlots() {
       {(showAddModal || editingRule) && (
         <RuleModal
           rule={editingRule}
+          themes={themes}
           onClose={() => {
             setShowAddModal(false);
             setEditingRule(null);
@@ -503,10 +507,12 @@ function RuleCard({
 // Kural Modal - İyileştirilmiş versiyon
 function RuleModal({
   rule,
+  themes,
   onClose,
   onSuccess,
 }: {
   rule: TimeSlotRule | null;
+  themes: Theme[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -516,6 +522,7 @@ function RuleModal({
   const [productTypes, setProductTypes] = useState<OrchestratorProductType[]>(
     rule?.productTypes || ["croissants"]
   );
+  const [themeId, setThemeId] = useState<string>(rule?.themeId || "");
   const [saving, setSaving] = useState(false);
 
   const toggleDay = (day: number) => {
@@ -547,7 +554,7 @@ function RuleModal({
 
     setSaving(true);
     try {
-      const data = {
+      const data: Partial<TimeSlotRule> = {
         startHour,
         endHour,
         daysOfWeek,
@@ -555,10 +562,15 @@ function RuleModal({
         priority: 10,
       };
 
+      // Tema seçildiyse ekle
+      if (themeId) {
+        data.themeId = themeId;
+      }
+
       if (rule) {
         await api.updateTimeSlotRule(rule.id, data);
       } else {
-        await api.createTimeSlotRule(data);
+        await api.createTimeSlotRule(data as Omit<TimeSlotRule, "id" | "isActive">);
       }
       onSuccess();
     } catch (err) {
@@ -691,6 +703,37 @@ function RuleModal({
               ))}
             </div>
           </div>
+
+          {/* Tema Seçimi */}
+          {themes.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                🎨 Tema (Opsiyonel)
+              </label>
+              <select
+                value={themeId}
+                onChange={(e) => setThemeId(e.target.value)}
+                className="input w-full"
+              >
+                <option value="">Tema seçilmedi (tüm senaryolar)</option>
+                {themes.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.name} ({theme.scenarios.length} senaryo)
+                  </option>
+                ))}
+              </select>
+              {themeId && (
+                <div className="mt-2 p-3 bg-purple-50 rounded-xl text-sm">
+                  <p className="text-purple-700 font-medium mb-1">
+                    Seçili Tema: {themes.find(t => t.id === themeId)?.name}
+                  </p>
+                  <p className="text-purple-600 text-xs">
+                    Senaryolar: {themes.find(t => t.id === themeId)?.scenarios.join(", ")}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Butonlar */}
           <div className="flex gap-3 pt-4 border-t">

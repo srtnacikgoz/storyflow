@@ -8,7 +8,7 @@ import { defineSecret } from "firebase-functions/params";
 import { getFirestore } from "firebase-admin/firestore";
 import { getCors, getConfig } from "../lib/serviceFactory";
 import { OrchestratorScheduler } from "../orchestrator/scheduler";
-import { Asset, TimeSlotRule, ProductType, OrchestratorConfig } from "../orchestrator/types";
+import { Asset, TimeSlotRule, ProductType, OrchestratorConfig, Theme, DEFAULT_THEMES } from "../orchestrator/types";
 
 const REGION = "europe-west1";
 const db = getFirestore();
@@ -1069,6 +1069,157 @@ export const rejectSlot = functions
   });
 
 /**
+ * Slot status'ünü güncelle (admin manual override)
+ * Eski işlemleri "published" veya diğer status'lere manuel olarak güncellemek için
+ */
+export const updateSlotStatus = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const { slotId, status, note } = request.body;
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        // İzin verilen status değerleri
+        const allowedStatuses = ["pending", "generating", "awaiting_approval", "approved", "published", "failed"];
+        if (!allowedStatuses.includes(status)) {
+          response.status(400).json({
+            success: false,
+            error: `Invalid status. Allowed: ${allowedStatuses.join(", ")}`,
+          });
+          return;
+        }
+
+        // Slot'un var olduğunu kontrol et
+        const slotDoc = await db.collection("scheduled-slots").doc(slotId).get();
+        if (!slotDoc.exists) {
+          response.status(404).json({ success: false, error: "Slot not found" });
+          return;
+        }
+
+        // Slot'u güncelle
+        const updateData: Record<string, unknown> = {
+          status,
+          updatedAt: Date.now(),
+          manualOverride: true,
+          manualOverrideNote: note || "Manuel olarak güncellendi",
+          manualOverrideAt: Date.now(),
+        };
+
+        // Status'e göre ek alanlar
+        if (status === "published") {
+          updateData.completedAt = Date.now();
+          updateData["pipelineResult.approvalStatus"] = "approved";
+        } else if (status === "failed") {
+          updateData.failedAt = Date.now();
+        }
+
+        await db.collection("scheduled-slots").doc(slotId).update(updateData);
+
+        console.log(`[updateSlotStatus] Slot ${slotId} status updated to ${status}`);
+
+        response.json({
+          success: true,
+          message: `Slot status updated to ${status}`,
+        });
+      } catch (error) {
+        console.error("[updateSlotStatus] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Birden fazla slot'un status'ünü toplu güncelle
+ * Eski işlemleri topluca "published" yapmak için
+ */
+export const batchUpdateSlotStatus = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const { slotIds, status, note } = request.body;
+
+        if (!slotIds || !Array.isArray(slotIds) || slotIds.length === 0) {
+          response.status(400).json({
+            success: false,
+            error: "slotIds array is required",
+          });
+          return;
+        }
+
+        // İzin verilen status değerleri
+        const allowedStatuses = ["pending", "generating", "awaiting_approval", "approved", "published", "failed"];
+        if (!allowedStatuses.includes(status)) {
+          response.status(400).json({
+            success: false,
+            error: `Invalid status. Allowed: ${allowedStatuses.join(", ")}`,
+          });
+          return;
+        }
+
+        // Batch işlem
+        const batch = db.batch();
+        const updateData: Record<string, unknown> = {
+          status,
+          updatedAt: Date.now(),
+          manualOverride: true,
+          manualOverrideNote: note || "Toplu güncelleme ile güncellendi",
+          manualOverrideAt: Date.now(),
+        };
+
+        if (status === "published") {
+          updateData.completedAt = Date.now();
+          updateData["pipelineResult.approvalStatus"] = "approved";
+        }
+
+        for (const slotId of slotIds) {
+          const ref = db.collection("scheduled-slots").doc(slotId);
+          batch.update(ref, updateData);
+        }
+
+        await batch.commit();
+
+        console.log(`[batchUpdateSlotStatus] ${slotIds.length} slots updated to ${status}`);
+
+        response.json({
+          success: true,
+          message: `${slotIds.length} slots updated to ${status}`,
+          updatedCount: slotIds.length,
+        });
+      } catch (error) {
+        console.error("[batchUpdateSlotStatus] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
  * Slot caption'ını güncelle
  */
 export const updateSlotCaption = functions
@@ -1163,6 +1314,232 @@ export const orchestratorScheduledTrigger = functions
       console.error("[OrchestratorScheduler] Fatal error:", error);
       throw error;
     }
+  });
+
+// ==========================================
+// THEME MANAGEMENT
+// ==========================================
+
+/**
+ * Tüm temaları listele
+ * Firestore'daki temalar + varsayılan temalar birleştirilir
+ */
+export const listThemes = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        // Firestore'daki temaları al
+        const snapshot = await db.collection("themes").orderBy("name").get();
+        const firestoreThemes: Theme[] = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Theme[];
+
+        // Varsayılan temaları kontrol et ve eksik olanları ekle
+        const existingIds = firestoreThemes.map((t) => t.id);
+        const missingDefaults = DEFAULT_THEMES.filter((dt) => !existingIds.includes(dt.id));
+
+        // Eksik varsayılan temaları Firestore'a ekle
+        const batch = db.batch();
+        const now = Date.now();
+        for (const theme of missingDefaults) {
+          const ref = db.collection("themes").doc(theme.id);
+          batch.set(ref, {
+            ...theme,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+        if (missingDefaults.length > 0) {
+          await batch.commit();
+          console.log(`[listThemes] Added ${missingDefaults.length} default themes`);
+        }
+
+        // Tüm temaları birleştir ve döndür
+        const allThemes = [
+          ...firestoreThemes,
+          ...missingDefaults.map((t) => ({ ...t, createdAt: now, updatedAt: now })),
+        ].sort((a, b) => a.name.localeCompare(b.name, "tr"));
+
+        response.json({ success: true, data: allThemes });
+      } catch (error) {
+        console.error("[listThemes] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Yeni tema oluştur
+ */
+export const createTheme = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const { id, name, description, scenarios, mood, petAllowed } = request.body;
+
+        if (!id || !name || !scenarios || scenarios.length === 0) {
+          response.status(400).json({
+            success: false,
+            error: "id, name, and scenarios are required",
+          });
+          return;
+        }
+
+        // ID benzersiz mi kontrol et
+        const existingDoc = await db.collection("themes").doc(id).get();
+        if (existingDoc.exists) {
+          response.status(400).json({
+            success: false,
+            error: "Bu ID zaten kullanılıyor",
+          });
+          return;
+        }
+
+        const now = Date.now();
+        const theme: Theme = {
+          id,
+          name,
+          description: description || "",
+          scenarios,
+          mood: mood || "balanced",
+          petAllowed: petAllowed || false,
+          createdAt: now,
+          updatedAt: now,
+          isDefault: false,
+        };
+
+        await db.collection("themes").doc(id).set(theme);
+
+        console.log(`[createTheme] Created theme: ${id}`);
+        response.json({ success: true, data: theme });
+      } catch (error) {
+        console.error("[createTheme] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Tema güncelle
+ */
+export const updateTheme = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "PUT" && request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use PUT or POST" });
+          return;
+        }
+
+        const { id, name, description, scenarios, mood, petAllowed } = request.body;
+
+        if (!id) {
+          response.status(400).json({ success: false, error: "id is required" });
+          return;
+        }
+
+        const docRef = db.collection("themes").doc(id);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+          response.status(404).json({ success: false, error: "Theme not found" });
+          return;
+        }
+
+        const updateData: Partial<Theme> = {
+          updatedAt: Date.now(),
+        };
+
+        if (name !== undefined) updateData.name = name;
+        if (description !== undefined) updateData.description = description;
+        if (scenarios !== undefined) updateData.scenarios = scenarios;
+        if (mood !== undefined) updateData.mood = mood;
+        if (petAllowed !== undefined) updateData.petAllowed = petAllowed;
+
+        await docRef.update(updateData);
+
+        const updated = await docRef.get();
+        console.log(`[updateTheme] Updated theme: ${id}`);
+        response.json({ success: true, data: { id, ...updated.data() } });
+      } catch (error) {
+        console.error("[updateTheme] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Tema sil
+ * Not: Varsayılan temalar silinemez
+ */
+export const deleteTheme = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "DELETE" && request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use DELETE or POST" });
+          return;
+        }
+
+        const id = request.body.id || request.query.id;
+
+        if (!id) {
+          response.status(400).json({ success: false, error: "id is required" });
+          return;
+        }
+
+        const docRef = db.collection("themes").doc(id as string);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+          response.status(404).json({ success: false, error: "Theme not found" });
+          return;
+        }
+
+        const theme = doc.data() as Theme;
+        if (theme.isDefault) {
+          response.status(400).json({
+            success: false,
+            error: "Varsayılan temalar silinemez",
+          });
+          return;
+        }
+
+        await docRef.delete();
+
+        console.log(`[deleteTheme] Deleted theme: ${id}`);
+        response.json({ success: true, message: "Theme deleted" });
+      } catch (error) {
+        console.error("[deleteTheme] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
   });
 
 // ==========================================

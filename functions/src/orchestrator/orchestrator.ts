@@ -18,6 +18,7 @@ import {
   GeneratedImage,
   QualityControlResult,
   OrchestratorConfig,
+  Theme,
 } from "./types";
 
 /**
@@ -86,12 +87,14 @@ export class Orchestrator {
    * @param timeSlotRule - Zaman kurali
    * @param onProgress - Her aşamada çağrılan callback (opsiyonel)
    * @param slotId - scheduled-slots koleksiyonundaki ID (Telegram callback icin)
+   * @param scheduledHour - İçeriğin hedeflediği saat (opsiyonel, yoksa rule.startHour kullanılır)
    */
   async runPipeline(
     productType: ProductType,
     timeSlotRule: TimeSlotRule,
     onProgress?: (stage: string, stageIndex: number, totalStages: number) => Promise<void>,
-    slotId?: string
+    slotId?: string,
+    scheduledHour?: number
   ): Promise<PipelineResult> {
     const TOTAL_STAGES = 7; // asset, scenario, prompt, image, quality, content, telegram
     const startedAt = Date.now();
@@ -128,8 +131,13 @@ export class Orchestrator {
       if (onProgress) await onProgress("asset_selection", 1, TOTAL_STAGES);
 
       const assets = await this.loadAvailableAssets(productType);
-      const timeOfDay = this.getTimeOfDay();
-      const mood = this.getMoodFromTime();
+
+      // Hedef saati belirle: scheduledHour > timeSlotRule.startHour > şu anki saat
+      const targetHour = scheduledHour ?? timeSlotRule.startHour;
+      const timeOfDay = this.getTimeOfDay(targetHour);
+      const mood = this.getMoodFromTime(targetHour);
+
+      console.log(`[Orchestrator] Target hour: ${targetHour}, timeOfDay: ${timeOfDay}, mood: ${mood}`);
 
       const assetResponse = await this.claude.selectAssets(
         productType,
@@ -159,9 +167,33 @@ export class Orchestrator {
       // Senaryolar kurallardan alınıyor (zaten yüklendi)
       const allScenarios = effectiveRules.staticRules.scenarios;
 
-      // Senaryo filtreleme: TimeSlotRule tercihi + bloklanmış senaryolar
-      let filteredScenarios = timeSlotRule.scenarioPreference
-        ? allScenarios.filter(s => timeSlotRule.scenarioPreference!.includes(s.id))
+      // Tema veya senaryo tercihini belirle
+      let preferredScenarioIds: string[] | null = null;
+      let themePetAllowed: boolean | null = null;
+
+      // Önce themeId kontrol et (yeni sistem)
+      if (timeSlotRule.themeId) {
+        console.log(`[Orchestrator] Using themeId: ${timeSlotRule.themeId}`);
+        const themeDoc = await this.db.collection("themes").doc(timeSlotRule.themeId).get();
+        if (themeDoc.exists) {
+          const theme = themeDoc.data() as Theme;
+          preferredScenarioIds = theme.scenarios;
+          themePetAllowed = theme.petAllowed;
+          console.log(`[Orchestrator] Theme loaded: ${theme.name}, scenarios: [${preferredScenarioIds.join(", ")}], petAllowed: ${themePetAllowed}`);
+        } else {
+          console.log(`[Orchestrator] Theme not found: ${timeSlotRule.themeId}, falling back`);
+        }
+      }
+
+      // Tema yoksa veya bulunamadıysa, scenarioPreference'a düş (geriye dönük uyumluluk)
+      if (!preferredScenarioIds && timeSlotRule.scenarioPreference) {
+        console.log(`[Orchestrator] Using legacy scenarioPreference: [${timeSlotRule.scenarioPreference.join(", ")}]`);
+        preferredScenarioIds = timeSlotRule.scenarioPreference;
+      }
+
+      // Senaryo filtreleme
+      let filteredScenarios = preferredScenarioIds
+        ? allScenarios.filter(s => preferredScenarioIds!.includes(s.id))
         : allScenarios;
 
       // Bloklanmış senaryoları çıkar (son N üretimde kullanılanlar)
@@ -171,8 +203,17 @@ export class Orchestrator {
 
       // Eğer tüm senaryolar bloklanmışsa, en az kullanılmış olanı seç
       if (filteredScenarios.length === 0) {
-        console.log("[Orchestrator] All scenarios blocked, using full list");
-        filteredScenarios = allScenarios;
+        console.log("[Orchestrator] All scenarios blocked, using full list from preference");
+        // Önce tema/preference listesini dene, yoksa tüm senaryolar
+        filteredScenarios = preferredScenarioIds
+          ? allScenarios.filter(s => preferredScenarioIds!.includes(s.id))
+          : allScenarios;
+      }
+
+      // Tema'dan gelen petAllowed ayarını effectiveRules'a ekle (varsa)
+      if (themePetAllowed !== null) {
+        effectiveRules.shouldIncludePet = themePetAllowed && effectiveRules.shouldIncludePet;
+        console.log(`[Orchestrator] Pet inclusion after theme check: ${effectiveRules.shouldIncludePet}`);
       }
 
       // Claude için basitleştirilmiş senaryo listesi
@@ -489,17 +530,26 @@ export class Orchestrator {
   }
 
   /**
-   * Günün zamanını belirle (TRT - Europe/Istanbul)
+   * Günün zamanını belirle
+   * @param targetHour - Hedef saat (opsiyonel, yoksa şu anki TRT saati kullanılır)
    */
-  private getTimeOfDay(): string {
-    // TRT saatine göre saati al
-    const hourStr = new Date().toLocaleString("en-US", {
-      timeZone: "Europe/Istanbul",
-      hour: "numeric",
-      hour12: false
-    });
-    const hour = parseInt(hourStr);
+  private getTimeOfDay(targetHour?: number): string {
+    let hour: number;
 
+    if (targetHour !== undefined) {
+      // Hedef saat verilmişse onu kullan (slot'un zamanlanmış saati)
+      hour = targetHour;
+    } else {
+      // Yoksa şu anki TRT saatini kullan
+      const hourStr = new Date().toLocaleString("en-US", {
+        timeZone: "Europe/Istanbul",
+        hour: "numeric",
+        hour12: false
+      });
+      hour = parseInt(hourStr);
+    }
+
+    // Zaman dilimi belirleme
     if (hour >= 6 && hour < 11) return "morning";
     if (hour >= 11 && hour < 14) return "noon";
     if (hour >= 14 && hour < 17) return "afternoon";
@@ -509,9 +559,10 @@ export class Orchestrator {
 
   /**
    * Zamana göre mood belirle
+   * @param targetHour - Hedef saat (opsiyonel)
    */
-  private getMoodFromTime(): string {
-    const timeOfDay = this.getTimeOfDay();
+  private getMoodFromTime(targetHour?: number): string {
+    const timeOfDay = this.getTimeOfDay(targetHour);
     const moodMap: Record<string, string> = {
       morning: "morning-vibes",
       noon: "cozy-cafe",
@@ -534,8 +585,17 @@ export class Orchestrator {
     }
 
     // Fallback: Sabit prompt
+    // MUTLAK KURAL - Tüm prompt'ların başında olacak
+    const ABSOLUTE_RESTRICTION = `ABSOLUTE RESTRICTION:
+Use ONLY objects visible in the uploaded reference images.
+Do NOT add ANY prop, furniture, decoration, lighting fixture, or object that is not in the reference.
+The scene must contain ONLY: the product + selected assets (plate, cup, table if provided).
+Nothing else. No lampshade, no vase, no candles, no flowers, no extra items. Minimalist composition.
+
+`;
+
     const fallbackPrompts: Record<string, string> = {
-      "zarif-tutma": `Using uploaded image as reference for the product.
+      "zarif-tutma": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
 
 Lifestyle Instagram story photo of elegant feminine hand holding the product from reference.
 
@@ -559,7 +619,7 @@ LIGHTING:
 
 9:16 vertical for Instagram Stories. 8K photorealistic.`,
 
-      "kahve-ani": `Using uploaded image as reference for the pastry.
+      "kahve-ani": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the pastry.
 
 CRITICAL ABSOLUTE RULES (NEVER VIOLATE):
 - ONLY ONE PASTRY in the image (the one from reference)
@@ -593,6 +653,140 @@ NEGATIVE REQUIREMENTS:
 - NO second pastry or food item
 - NO second cup or mug
 - NO cluttered composition
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`,
+
+      "kahve-kosesi": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+
+Cozy corner Instagram story photo. Product on a small plate, placed on table surface from reference.
+
+COMPOSITION:
+- Product as hero, sharp focus, 50% of frame
+- Warm, intimate atmosphere
+- Shallow depth of field (f/2.0)
+- NO hands in frame
+
+SETTING:
+- Use ONLY the table surface from reference
+- Soft natural lighting, warm tones
+- Clean, uncluttered composition
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`,
+
+      "yarim-kaldi": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+
+"Left behind" aesthetic - product with a bite taken, casual authentic moment.
+
+COMPOSITION:
+- Product partially eaten (one bite missing)
+- On plate from reference, on table from reference
+- Scattered crumbs for authenticity
+- NO hands in frame
+
+MOOD:
+- Relaxed, intimate, real moment
+- Warm natural lighting
+- Shallow depth of field
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`,
+
+      "cam-kenari": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+
+Window-side composition with beautiful natural light.
+
+COMPOSITION:
+- Product on plate, near window
+- Soft natural daylight from side
+- Clean background, minimal props
+- NO hands in frame
+
+LIGHTING:
+- Natural window light, soft and warm
+- Gentle shadows
+- Bright, airy feel
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`,
+
+      "mermer-zarafet": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+
+Elegant marble surface presentation, premium aesthetic.
+
+COMPOSITION:
+- Product centered on marble surface from reference
+- Clean, luxurious presentation
+- Minimal styling, maximum elegance
+- NO hands in frame
+
+STYLING:
+- White/grey marble texture visible
+- Soft diffused lighting
+- High-end patisserie feel
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`,
+
+      "hediye-acilisi": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+
+Gift unboxing moment with elegant hand interaction.
+
+COMPOSITION:
+- Hands opening/revealing product
+- Product emerging from gift box
+- Excitement and discovery moment
+
+HAND STYLING:
+- Well-manicured nails, nude polish
+- Minimal jewelry (thin ring, simple bracelet)
+- Natural, graceful movement
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`,
+
+      "ilk-dilim": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+
+First slice moment - fork entering the product.
+
+COMPOSITION:
+- Product on plate from reference
+- Elegant hand with fork taking first bite
+- Anticipation moment captured
+
+HAND STYLING:
+- Feminine hand, well-manicured
+- Simple elegant styling
+- Fork held gracefully
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`,
+
+      "paylasim": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+
+Sharing moment - social, friendly atmosphere.
+
+COMPOSITION:
+- Product centered, two small plates suggested
+- Social, conversational setting
+- Warm, inviting atmosphere
+- NO hands required
+
+MOOD:
+- Friendly, social gathering feel
+- Warm natural lighting
+- Clean table surface from reference
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`,
+
+      "paket-servis": ABSOLUTE_RESTRICTION + `Using uploaded image as reference for the product.
+
+Takeaway/delivery presentation with kraft packaging.
+
+COMPOSITION:
+- Product with takeaway packaging
+- Clean, modern presentation
+- Ready-to-go aesthetic
+- NO hands in frame
+
+STYLING:
+- Kraft paper, simple packaging
+- Clean background
+- Professional takeaway look
 
 9:16 vertical for Instagram Stories. 8K photorealistic.`,
     };

@@ -309,66 +309,90 @@ export default function OrchestratorRules() {
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Haftalık Temalar</h2>
         <p className="text-gray-600 text-sm mb-6">
-          Haftanın her günü için mood ve önerilen senaryoları belirleyin.
+          Haftanın her günü için mood ve önerilen senaryoları belirleyin. İşaretli senaryolar o gün için kullanılabilir.
         </p>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gün</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mood</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Önerilen Senaryolar</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Köpek İzni</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {DAY_KEYS.map((dayKey, idx) => {
-                const theme = weeklyThemes[dayKey] || { mood: "", scenarios: [], petAllowed: false };
-                return (
-                  <tr key={dayKey} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">
-                      {DAYS[idx]}
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="text"
-                        value={theme.mood}
-                        onChange={(e) => handleThemeChange(dayKey, "mood", e.target.value)}
-                        placeholder="örn: energetic, relaxed..."
-                        className="w-full px-2 py-1 border rounded text-sm"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        multiple
-                        value={theme.scenarios}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.selectedOptions, (option) => option.value);
-                          handleThemeChange(dayKey, "scenarios", selected);
-                        }}
-                        className="w-full px-2 py-1 border rounded text-sm h-20"
-                      >
-                        {SCENARIOS.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} {s.hasHands ? "✋" : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={theme.petAllowed}
-                        onChange={(e) => handleThemeChange(dayKey, "petAllowed", e.target.checked)}
-                        className="w-5 h-5 accent-brand-blue"
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-6">
+          {DAY_KEYS.map((dayKey, idx) => {
+            const theme = weeklyThemes[dayKey] || { mood: "", scenarios: [], petAllowed: false };
+            const selectedScenarios = theme.scenarios || [];
+
+            // Senaryo toggle fonksiyonu
+            const toggleScenario = (scenarioId: string) => {
+              const newScenarios = selectedScenarios.includes(scenarioId)
+                ? selectedScenarios.filter(s => s !== scenarioId)
+                : [...selectedScenarios, scenarioId];
+              handleThemeChange(dayKey, "scenarios", newScenarios);
+            };
+
+            return (
+              <div key={dayKey} className="border rounded-lg p-4 bg-gray-50 hover:bg-white transition-colors">
+                {/* Gün Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">{DAYS[idx]}</h3>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={theme.petAllowed}
+                      onChange={(e) => handleThemeChange(dayKey, "petAllowed", e.target.checked)}
+                      className="w-5 h-5 accent-brand-blue rounded"
+                    />
+                    <span className="text-sm text-gray-600">🐕 Köpek İzni</span>
+                  </label>
+                </div>
+
+                {/* Mood Input */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Günün Mood'u</label>
+                  <input
+                    type="text"
+                    value={theme.mood}
+                    onChange={(e) => handleThemeChange(dayKey, "mood", e.target.value)}
+                    placeholder="örn: energetic, relaxed, cozy..."
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-brand-blue focus:border-transparent"
+                  />
+                </div>
+
+                {/* Senaryo Seçimi - Checkbox Grid */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Önerilen Senaryolar
+                    <span className="text-gray-400 font-normal ml-2">
+                      ({selectedScenarios.length} seçili)
+                    </span>
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                    {SCENARIOS.map((scenario) => {
+                      const isSelected = selectedScenarios.includes(scenario.id);
+                      return (
+                        <label
+                          key={scenario.id}
+                          className={`
+                            flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all
+                            ${isSelected
+                              ? "bg-brand-blue/10 border-2 border-brand-blue"
+                              : "bg-white border-2 border-gray-200 hover:border-gray-300"
+                            }
+                          `}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleScenario(scenario.id)}
+                            className="w-4 h-4 accent-brand-blue rounded"
+                          />
+                          <span className={`text-sm ${isSelected ? "font-medium text-brand-blue" : "text-gray-700"}`}>
+                            {scenario.name}
+                          </span>
+                          {scenario.hasHands && <span className="text-xs">✋</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
