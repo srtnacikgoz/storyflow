@@ -1,5 +1,26 @@
 # Claude Code Proje Konfigürasyonu
 
+---
+
+## 🚨🚨🚨 EN ÖNEMLİ KURAL 🚨🚨🚨
+
+# ARAŞTIRMADAN, İNCELEMEDEN, EMİN OLMADAN VARSAYIMDA BULUNMA!
+
+**Bu kural TÜM diğer kuralların üstündedir.**
+
+| YASAK | ZORUNLU |
+|-------|---------|
+| "Muhtemelen şöyledir" | Önce kontrol et, sonra söyle |
+| "Büyük ihtimalle..." | Veriyi oku, logları incele |
+| "Sanırım..." | Emin ol, sonra konuş |
+| "Olabilir ki..." | Araştır, bul, göster |
+
+**Bilmiyorsan "bilmiyorum, araştırayım" de.**
+**Varsayım yapma, veri topla.**
+**Tahmin etme, doğrula.**
+
+---
+
 > **🔒 KURAL SİSTEMİ AKTİF:** Bu projede `.claude/rules/` klasöründeki kurallar **otomatik yüklenir** ve `rules-enforcer.js` hook'u ile **oturum boyunca zorunlu kılınır**. Kuralları görmezden gelme - hook sistemi hatırlatacak.
 
 ---
@@ -58,6 +79,17 @@ Otomatik yüklenen kuralların yanı sıra, aşağıdaki dosyaları **sırasıyl
 - İyileştirme önerileri
 - Refactor ihtiyaçları
 - TODO listesi
+
+### 3.5. Problem Kayıt Defteri (Zorunlu - KRİTİK)
+```
+.claude/PROBLEM-REGISTRY.md
+```
+- **Çözülmüş sorunlar ve nasıl çözüldüğü**
+- **İşe yaramayan yaklaşımlar**
+- **Tekrar eden pattern'ler**
+- Aktif/araştırılan sorunlar
+
+> ⚠️ **ÖNEMLİ:** Aynı sorunu tekrar çözmemek için bu dosyayı mutlaka oku. Token ve zaman israfını önler.
 
 ### 4. Proje Yol Haritası (Zorunlu)
 ```
@@ -175,7 +207,7 @@ Bir görev veya phase tamamlandığında:
 
 ## Hatırlatmalar
 
-1. **Her oturumda** yukarıdaki 6 dosyayı oku ve uygula
+1. **Her oturumda** yukarıdaki 7 dosyayı oku ve uygula
 2. **`.claude/rules/` kuralları** otomatik yüklenir - her zaman uygula
 3. **Her iş bitiminde** ROADMAP'i güncelle
 4. **Bug bulduğunda** FEEDBACK.md'ye ekle
@@ -185,6 +217,8 @@ Bir görev veya phase tamamlandığında:
 8. **Yeni bağımlılık eklerken** `RISK-CHECK` protokolünü uygula
 9. **Görsel üretirken** `.claude/references/KURALLAR.md` oku ve uygula
 10. **Orchestrator çalışırken** `.claude/references/ORCHESTRATOR.md` oku ve uygula
+11. **Sorun çözmeye başlamadan önce** `PROBLEM-REGISTRY.md` kontrol et (aynı sorun daha önce çözüldü mü?)
+12. **Ciddi sorun çözdükten sonra** `PROBLEM-REGISTRY.md`'ye kaydet (çözüm + işe yaramayanlar)
 
 ---
 

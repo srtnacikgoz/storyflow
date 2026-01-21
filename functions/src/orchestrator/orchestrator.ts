@@ -208,6 +208,8 @@ export class Orchestrator {
         name: s.name,
         description: s.description,
         includesHands: s.includesHands,
+        isInterior: s.isInterior,
+        interiorType: s.interiorType,
       }));
 
       const scenarioResponse = await this.claude.selectScenario(
@@ -222,58 +224,139 @@ export class Orchestrator {
         throw new Error(`Scenario selection failed: ${scenarioResponse.error}`);
       }
 
-      result.scenarioSelection = scenarioResponse.data;
+      // Interior senaryosu mu kontrol et
+      const selectedScenario = filteredScenarios.find(s => s.id === scenarioResponse.data?.scenarioId);
+      const isInteriorScenario = selectedScenario?.isInterior || false;
+      const interiorType = selectedScenario?.interiorType;
+
+      result.scenarioSelection = {
+        ...scenarioResponse.data,
+        isInterior: isInteriorScenario,
+        interiorType: interiorType,
+      };
       totalCost += scenarioResponse.cost;
       status.completedStages.push("scenario_selection");
 
-      // ==========================================
-      // STAGE 3: PROMPT OPTIMIZATION
-      // ==========================================
-      console.log("[Orchestrator] Stage 3: Prompt Optimization");
-      status.currentStage = "prompt_optimization";
-      if (onProgress) await onProgress("prompt_optimization", 3, TOTAL_STAGES);
+      console.log(`[Orchestrator] Scenario selected: ${result.scenarioSelection.scenarioName}, isInterior: ${isInteriorScenario}`);
 
-      const basePrompt = await this.getScenarioPrompt(
-        result.scenarioSelection.scenarioId,
-        result.scenarioSelection.compositionId,
-        result.scenarioSelection.handStyle,
-        result.assetSelection.cup
-      );
+      // ══════════════════════════════════════════════════════════════════════
+      // INTERIOR SENARYO AKIŞI - AI görsel üretimi ATLANIR
+      // ══════════════════════════════════════════════════════════════════════
+      if (isInteriorScenario) {
+        console.log(`[Orchestrator] Interior scenario detected - skipping AI image generation`);
+        console.log(`[Orchestrator] Interior type: ${interiorType}`);
 
-      const promptResponse = await this.claude.optimizePrompt(
-        basePrompt,
-        result.scenarioSelection,
-        result.assetSelection
-      );
+        // Interior asset seç
+        const selectedInterior = this.selectInteriorAsset(assets.interior, interiorType);
 
-      if (!promptResponse.success || !promptResponse.data) {
-        throw new Error(`Prompt optimization failed: ${promptResponse.error}`);
-      }
+        if (!selectedInterior) {
+          throw new Error(`No interior asset found for type: ${interiorType || 'any'}`);
+        }
 
-      result.optimizedPrompt = {
-        mainPrompt: promptResponse.data.optimizedPrompt,
-        negativePrompt: promptResponse.data.negativePrompt,
-        customizations: promptResponse.data.customizations,
-        aspectRatio: "9:16",
-        faithfulness: 0.8,
-      };
-      totalCost += promptResponse.cost;
-      status.completedStages.push("prompt_optimization");
+        console.log(`[Orchestrator] Selected interior asset: ${selectedInterior.filename}`);
 
-      // ==========================================
-      // STAGE 4: IMAGE GENERATION (with retry)
-      // ==========================================
-      console.log("[Orchestrator] Stage 4: Image Generation");
-      status.currentStage = "image_generation";
-      if (onProgress) await onProgress("image_generation", 4, TOTAL_STAGES);
+        // Asset selection'a interior bilgisini ekle
+        result.assetSelection = {
+          ...result.assetSelection,
+          interior: selectedInterior,
+          isInteriorScenario: true,
+        };
 
-      let generationAttempt = 0;
-      let generatedImage: GeneratedImage | null = null;
-      let qualityResult: QualityControlResult | null = null;
+        // Stage 3, 4, 5 atlanıyor - prompt ve görsel üretimi yok
+        status.completedStages.push("prompt_optimization");
+        status.completedStages.push("image_generation");
+        status.completedStages.push("quality_control");
 
-      while (generationAttempt < this.config.maxRetries) {
-        generationAttempt++;
-        console.log(`[Orchestrator] Generation attempt ${generationAttempt}/${this.config.maxRetries}`);
+        // Interior görseli doğrudan kullan
+        result.generatedImage = {
+          imageBase64: "", // Interior için base64 gerekmiyor, storageUrl yeterli
+          mimeType: "image/jpeg",
+          model: "interior-asset", // AI modeli kullanılmadı
+          cost: 0,
+          generatedAt: Date.now(),
+          attemptNumber: 0,
+          storageUrl: selectedInterior.storageUrl,
+        };
+
+        result.qualityControl = {
+          passed: true,
+          score: 10,
+          evaluation: {
+            productAccuracy: 10,
+            composition: 10,
+            lighting: 10,
+            realism: 10,
+            instagramReadiness: 10,
+          },
+          feedback: "Interior asset - Real photo, no AI generation needed",
+          shouldRegenerate: false,
+        };
+
+        result.optimizedPrompt = {
+          mainPrompt: `Interior photo: ${selectedInterior.filename}`,
+          negativePrompt: "",
+          customizations: [],
+          aspectRatio: "9:16",
+          faithfulness: 1.0, // Gerçek fotoğraf olduğu için 1.0
+        };
+
+        if (onProgress) await onProgress("interior_asset_selected", 4, TOTAL_STAGES);
+        console.log(`[Orchestrator] Interior asset selected, proceeding to content creation`);
+
+        // Stage 6'ya atla (Content Creation)
+      } else {
+        // ══════════════════════════════════════════════════════════════════════
+        // NORMAL AKIŞ - AI görsel üretimi
+        // ══════════════════════════════════════════════════════════════════════
+
+        // ==========================================
+        // STAGE 3: PROMPT OPTIMIZATION
+        // ==========================================
+        console.log("[Orchestrator] Stage 3: Prompt Optimization");
+        status.currentStage = "prompt_optimization";
+        if (onProgress) await onProgress("prompt_optimization", 3, TOTAL_STAGES);
+
+        const basePrompt = await this.getScenarioPrompt(
+          result.scenarioSelection.scenarioId,
+          result.scenarioSelection.compositionId,
+          result.scenarioSelection.handStyle,
+          result.assetSelection.cup
+        );
+
+        const promptResponse = await this.claude.optimizePrompt(
+          basePrompt,
+          result.scenarioSelection,
+          result.assetSelection
+        );
+
+        if (!promptResponse.success || !promptResponse.data) {
+          throw new Error(`Prompt optimization failed: ${promptResponse.error}`);
+        }
+
+        result.optimizedPrompt = {
+          mainPrompt: promptResponse.data.optimizedPrompt,
+          negativePrompt: promptResponse.data.negativePrompt,
+          customizations: promptResponse.data.customizations,
+          aspectRatio: "9:16",
+          faithfulness: 0.8,
+        };
+        totalCost += promptResponse.cost;
+        status.completedStages.push("prompt_optimization");
+
+        // ==========================================
+        // STAGE 4: IMAGE GENERATION (with retry)
+        // ==========================================
+        console.log("[Orchestrator] Stage 4: Image Generation");
+        status.currentStage = "image_generation";
+        if (onProgress) await onProgress("image_generation", 4, TOTAL_STAGES);
+
+        let generationAttempt = 0;
+        let generatedImage: GeneratedImage | null = null;
+        let qualityResult: QualityControlResult | null = null;
+
+        while (generationAttempt < this.config.maxRetries) {
+          generationAttempt++;
+          console.log(`[Orchestrator] Generation attempt ${generationAttempt}/${this.config.maxRetries}`);
 
         try {
           // Ürün görselini yükle
@@ -384,20 +467,21 @@ export class Orchestrator {
           // Prompt'u güncelle
           result.optimizedPrompt.mainPrompt += `\n\nIMPROVEMENT: ${qualityResult.regenerationHints}`;
         }
-      }
+        }
 
-      if (!generatedImage || !qualityResult) {
-        throw new Error("Image generation failed after all retries");
-      }
+        if (!generatedImage || !qualityResult) {
+          throw new Error("Image generation failed after all retries");
+        }
 
-      result.generatedImage = generatedImage;
-      result.qualityControl = qualityResult;
-      status.completedStages.push("image_generation");
-      status.completedStages.push("quality_control");
+        result.generatedImage = generatedImage;
+        result.qualityControl = qualityResult;
+        status.completedStages.push("image_generation");
+        status.completedStages.push("quality_control");
 
-      // Görseli Storage'a kaydet
-      const storageUrl = await this.saveImageToStorage(generatedImage.imageBase64, generatedImage.mimeType);
-      result.generatedImage.storageUrl = storageUrl;
+        // Görseli Storage'a kaydet
+        const storageUrl = await this.saveImageToStorage(generatedImage.imageBase64, generatedImage.mimeType);
+        result.generatedImage.storageUrl = storageUrl;
+      } // else bloğu sonu (normal akış - AI görsel üretimi)
 
       // ==========================================
       // STAGE 6: CONTENT CREATION
@@ -474,6 +558,7 @@ export class Orchestrator {
     decor: Asset[];
     pets: Asset[];
     environments: Asset[];
+    interior: Asset[];
   }> {
     const assetsRef = this.db.collection("assets");
 
@@ -488,6 +573,7 @@ export class Orchestrator {
       decorAlt,
       pets,
       environments,
+      interior,
     ] = await Promise.all([
       // Ürünler
       assetsRef.where("category", "==", "products").where("subType", "==", productType).where("isActive", "==", true).get(),
@@ -507,6 +593,8 @@ export class Orchestrator {
       assetsRef.where("category", "==", "pets").where("isActive", "==", true).get(),
       // Mekan/ortam görselleri
       assetsRef.where("category", "==", "environments").where("isActive", "==", true).get(),
+      // Interior görselleri (pastane atmosferi - AI üretimi yapılmaz)
+      assetsRef.where("category", "==", "interior").where("isActive", "==", true).get(),
     ]);
 
     const allTables = [
@@ -519,7 +607,7 @@ export class Orchestrator {
       ...decorAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     ];
 
-    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}`);
+    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}`);
 
     return {
       products: products.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
@@ -529,7 +617,39 @@ export class Orchestrator {
       decor: allDecor,
       pets: pets.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       environments: environments.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      interior: interior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     };
+  }
+
+  /**
+   * Interior asset seç (interiorType'a göre filtreleyerek)
+   * Interior senaryolarında AI görsel üretimi yerine bu asset kullanılır
+   */
+  private selectInteriorAsset(interiorAssets: Asset[], interiorType?: string): Asset | null {
+    if (!interiorAssets || interiorAssets.length === 0) {
+      console.warn("[Orchestrator] No interior assets available");
+      return null;
+    }
+
+    let filtered = interiorAssets;
+
+    // interiorType belirtilmişse filtrele
+    if (interiorType) {
+      filtered = interiorAssets.filter(a => a.subType === interiorType);
+      console.log(`[Orchestrator] Filtered interior assets by type '${interiorType}': ${filtered.length} found`);
+    }
+
+    // Filtreden sonra hiç kalmadıysa tüm interior asset'leri kullan
+    if (filtered.length === 0) {
+      console.warn(`[Orchestrator] No interior assets for type '${interiorType}', using all available`);
+      filtered = interiorAssets;
+    }
+
+    // Rastgele bir interior asset seç
+    const selected = filtered[Math.floor(Math.random() * filtered.length)];
+    console.log(`[Orchestrator] Selected interior asset: ${selected.filename} (type: ${selected.subType})`);
+
+    return selected;
   }
 
   /**
@@ -1052,8 +1172,13 @@ LIGHTING:
     };
 
     // Save to photos collection with the short ID as document ID
+    console.log(`[Orchestrator] 🔍 Saving to queue - slotId check:`, {
+      resultSlotId: result.slotId,
+      photoItemSlotId: photoItem.slotId,
+      slotIdType: typeof photoItem.slotId,
+    });
     await this.db.collection("media-queue").doc(shortId).set(photoItem);
-    console.log(`[Orchestrator] Saved photo to queue with ID: ${shortId}`);
+    console.log(`[Orchestrator] Saved photo to queue with ID: ${shortId}, slotId: ${photoItem.slotId}`);
 
     const messageId = await this.telegram.sendApprovalRequest(
       {

@@ -14,6 +14,7 @@ import {
   HandStyle,
   CompositionVariant,
   ProductionHistoryEntry,
+  InteriorType,
 } from "./types";
 
 // Varsayılan çeşitlilik kuralları
@@ -22,6 +23,9 @@ const DEFAULT_VARIATION_RULES: VariationRules = {
   tableGap: 2,
   handStyleGap: 4,
   compositionGap: 5,
+  productGap: 3,      // Aynı ürün 3 üretim sonra tekrar
+  plateGap: 2,        // Aynı tabak 2 üretim sonra tekrar
+  cupGap: 2,          // Aynı fincan 2 üretim sonra tekrar
   petFrequency: 15,
   outdoorFrequency: 10,
   wabiSabiFrequency: 5,
@@ -139,6 +143,139 @@ const DEFAULT_SCENARIOS: Scenario[] = [
       { id: "package-hero", description: "Paket ön planda" },
       { id: "unboxing", description: "Kutu açılıyor" },
       { id: "takeaway-ready", description: "Götürmeye hazır" },
+    ],
+  },
+  // ═══════════════════════════════════════════════════════════════════
+  // INTERIOR SENARYOLARI (AI görsel üretimi YAPILMAZ, gerçek fotoğraf kullanılır)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    id: "vitrin-sergisi",
+    name: "Vitrin Sergisi",
+    description: "Vitrin içindeki ürün dizilimi",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "vitrin" as InteriorType,
+    compositions: [
+      { id: "full-display", description: "Tam vitrin görünümü" },
+      { id: "detail-focus", description: "Tek ürün odaklı" },
+      { id: "angled-view", description: "Açılı vitrin görünümü" },
+    ],
+  },
+  {
+    id: "kruvasan-tezgahi",
+    name: "Kruvasan Tezgahı",
+    description: "Taze kruvasanlar tezgahta dizili",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "tezgah" as InteriorType,
+    compositions: [
+      { id: "golden-row", description: "Altın renkli sıra" },
+      { id: "steam-fresh", description: "Taze çıkmış, sıcak" },
+      { id: "variety-display", description: "Çeşitlilik gösterisi" },
+    ],
+  },
+  {
+    id: "pastane-ici",
+    name: "Pastane İçi",
+    description: "Genel pastane mekan atmosferi",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "genel-mekan" as InteriorType,
+    compositions: [
+      { id: "wide-angle", description: "Geniş açı mekan" },
+      { id: "cozy-corner", description: "Rahat köşe" },
+      { id: "entrance-view", description: "Giriş görünümü" },
+    ],
+  },
+  {
+    id: "oturma-kosesi",
+    name: "Oturma Köşesi",
+    description: "Samimi oturma alanı görünümü",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "oturma-alani" as InteriorType,
+    compositions: [
+      { id: "intimate-corner", description: "Samimi köşe" },
+      { id: "window-seat", description: "Pencere kenarı koltuk" },
+      { id: "cozy-nook", description: "Rahat köşe" },
+    ],
+  },
+  {
+    id: "cicek-detay",
+    name: "Çiçek Detay",
+    description: "Dekoratif çiçekler ve bitkiler",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "dekorasyon" as InteriorType,
+    compositions: [
+      { id: "vase-focus", description: "Vazo odaklı" },
+      { id: "table-arrangement", description: "Masa üstü düzenleme" },
+      { id: "window-light", description: "Pencere ışığında" },
+    ],
+  },
+  {
+    id: "kahve-hazirligi",
+    name: "Kahve Hazırlığı",
+    description: "Barista veya kahve hazırlama anı",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "tezgah" as InteriorType,
+    compositions: [
+      { id: "pour-moment", description: "Dökme anı" },
+      { id: "machine-action", description: "Makine çalışıyor" },
+      { id: "preparation", description: "Hazırlık aşaması" },
+    ],
+  },
+  {
+    id: "sabah-acilis",
+    name: "Sabah Açılış",
+    description: "Günaydın, kapı girişi görünümü",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "genel-mekan" as InteriorType,
+    compositions: [
+      { id: "door-entrance", description: "Kapıdan giriş" },
+      { id: "morning-light", description: "Sabah ışığı" },
+      { id: "welcome-view", description: "Hoş geldin görünümü" },
+    ],
+  },
+  {
+    id: "pencere-isigi",
+    name: "Pencere Işığı",
+    description: "Pencere kenarı, doğal ışık görünümü",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "genel-mekan" as InteriorType,
+    compositions: [
+      { id: "silhouette", description: "Siluet görünümü" },
+      { id: "golden-rays", description: "Altın ışık huzmesi" },
+      { id: "soft-glow", description: "Yumuşak parıltı" },
+    ],
+  },
+  {
+    id: "raf-zenginligi",
+    name: "Raf Zenginliği",
+    description: "Dolu raflar, bolluk hissi",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "vitrin" as InteriorType,
+    compositions: [
+      { id: "full-shelves", description: "Dolu raflar" },
+      { id: "abundance", description: "Bolluk görünümü" },
+      { id: "organized-display", description: "Düzenli sergi" },
+    ],
+  },
+  {
+    id: "detay-cekimi",
+    name: "Detay Çekimi",
+    description: "Fincan, peçete, aksesuar detayları",
+    includesHands: false,
+    isInterior: true,
+    interiorType: "dekorasyon" as InteriorType,
+    compositions: [
+      { id: "cup-detail", description: "Fincan detayı" },
+      { id: "napkin-fold", description: "Peçete katlama" },
+      { id: "accessory-focus", description: "Aksesuar odağı" },
     ],
   },
 ];
@@ -431,6 +568,18 @@ export class RulesService {
     const recentCompositions = entries.slice(0, variationRules.compositionGap);
     const blockedCompositions = [...new Set(recentCompositions.map(e => e.compositionId))];
 
+    // Bloklanmış ürünler
+    const recentProducts = entries.slice(0, variationRules.productGap);
+    const blockedProducts = [...new Set(recentProducts.map(e => e.productId).filter(Boolean))] as string[];
+
+    // Bloklanmış tabaklar
+    const recentPlates = entries.slice(0, variationRules.plateGap);
+    const blockedPlates = [...new Set(recentPlates.map(e => e.plateId).filter(Boolean))] as string[];
+
+    // Bloklanmış fincanlar
+    const recentCups = entries.slice(0, variationRules.cupGap);
+    const blockedCups = [...new Set(recentCups.map(e => e.cupId).filter(Boolean))] as string[];
+
     return {
       staticRules,
       dynamicConfig,
@@ -440,6 +589,9 @@ export class RulesService {
       blockedTables,
       blockedHandStyles,
       blockedCompositions,
+      blockedProducts,
+      blockedPlates,
+      blockedCups,
     };
   }
 

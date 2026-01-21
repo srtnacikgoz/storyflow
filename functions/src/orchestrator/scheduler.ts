@@ -411,14 +411,19 @@ export class OrchestratorScheduler {
     productType: ProductType
   ): Promise<void> {
     try {
+      // Firestore undefined değerleri kabul etmiyor, bu yüzden null kullanıyoruz
       const entry: ProductionHistoryEntry = {
         timestamp: Date.now(),
         scenarioId: result.scenarioSelection?.scenarioId || "unknown",
         compositionId: result.scenarioSelection?.compositionId || "default",
-        tableId: result.assetSelection?.table?.id,
-        handStyleId: result.scenarioSelection?.handStyle,
+        tableId: result.assetSelection?.table?.id || null,
+        handStyleId: result.scenarioSelection?.handStyle || null,
         includesPet: result.assetSelection?.includesPet || false,
         productType,
+        // Ek rotasyon alanları
+        productId: result.assetSelection?.product?.id || null,
+        plateId: result.assetSelection?.plate?.id || null,
+        cupId: result.assetSelection?.cup?.id || null,
       };
 
       // Firestore'a kaydet

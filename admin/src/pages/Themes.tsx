@@ -24,16 +24,28 @@ const DEFAULT_VARIATION_RULES: VariationRules = {
 
 // Tüm senaryolar
 const ALL_SCENARIOS = [
-  { id: "zarif-tutma", name: "Zarif Tutma", includesHands: true },
-  { id: "kahve-ani", name: "Kahve Anı", includesHands: true },
-  { id: "kahve-kosesi", name: "Kahve Köşesi", includesHands: false },
-  { id: "yarim-kaldi", name: "Yarım Kaldı", includesHands: false },
-  { id: "cam-kenari", name: "Cam Kenarı", includesHands: false },
-  { id: "mermer-zarafet", name: "Mermer Zarafet", includesHands: false },
-  { id: "hediye-acilisi", name: "Hediye Açılışı", includesHands: true },
-  { id: "ilk-dilim", name: "İlk Dilim", includesHands: true },
-  { id: "paylasim", name: "Paylaşım", includesHands: false },
-  { id: "paket-servis", name: "Paket Servis", includesHands: false },
+  // Normal senaryolar (AI görsel üretimi yapılır)
+  { id: "zarif-tutma", name: "Zarif Tutma", includesHands: true, isInterior: false },
+  { id: "kahve-ani", name: "Kahve Anı", includesHands: true, isInterior: false },
+  { id: "kahve-kosesi", name: "Kahve Köşesi", includesHands: false, isInterior: false },
+  { id: "yarim-kaldi", name: "Yarım Kaldı", includesHands: false, isInterior: false },
+  { id: "cam-kenari", name: "Cam Kenarı", includesHands: false, isInterior: false },
+  { id: "mermer-zarafet", name: "Mermer Zarafet", includesHands: false, isInterior: false },
+  { id: "hediye-acilisi", name: "Hediye Açılışı", includesHands: true, isInterior: false },
+  { id: "ilk-dilim", name: "İlk Dilim", includesHands: true, isInterior: false },
+  { id: "paylasim", name: "Paylaşım", includesHands: false, isInterior: false },
+  { id: "paket-servis", name: "Paket Servis", includesHands: false, isInterior: false },
+  // Interior senaryolar (AI görsel üretimi ATLANIR, gerçek fotoğraf kullanılır)
+  { id: "vitrin-sergisi", name: "Vitrin Sergisi", includesHands: false, isInterior: true },
+  { id: "kruvasan-tezgahi", name: "Kruvasan Tezgahı", includesHands: false, isInterior: true },
+  { id: "pastane-ici", name: "Pastane İçi", includesHands: false, isInterior: true },
+  { id: "oturma-kosesi", name: "Oturma Köşesi", includesHands: false, isInterior: true },
+  { id: "cicek-detay", name: "Çiçek Detay", includesHands: false, isInterior: true },
+  { id: "kahve-hazirligi", name: "Kahve Hazırlığı", includesHands: false, isInterior: true },
+  { id: "sabah-acilis", name: "Sabah Açılış", includesHands: false, isInterior: true },
+  { id: "pencere-isigi", name: "Pencere Işığı", includesHands: false, isInterior: true },
+  { id: "raf-zenginligi", name: "Raf Zenginliği", includesHands: false, isInterior: true },
+  { id: "detay-cekimi", name: "Detay Çekimi", includesHands: false, isInterior: true },
 ];
 
 // Mood seçenekleri
@@ -306,12 +318,15 @@ export default function Themes() {
                     <span
                       key={scenarioId}
                       className={`text-xs px-2 py-1 rounded ${
-                        scenario?.includesHands
+                        scenario?.isInterior
+                          ? "bg-green-100 text-green-700"
+                          : scenario?.includesHands
                           ? "bg-purple-100 text-purple-700"
                           : "bg-blue-100 text-blue-700"
                       }`}
                     >
                       {scenario?.name || scenarioId}
+                      {scenario?.isInterior && " 📍"}
                     </span>
                   );
                 })}
@@ -613,6 +628,9 @@ export default function Themes() {
                           <span className="text-sm font-medium text-stone-800">
                             {scenario.name}
                           </span>
+                          {scenario.isInterior && (
+                            <span className="ml-2 text-xs text-green-600">📍 Interior</span>
+                          )}
                           {scenario.includesHands && (
                             <span className="ml-2 text-xs text-purple-600">El var</span>
                           )}

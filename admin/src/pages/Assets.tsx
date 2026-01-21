@@ -11,6 +11,7 @@ const CATEGORY_LABELS: Record<AssetCategory, string> = {
   furniture: "Mobilya",
   environments: "Ortamlar",
   pets: "Evcil Hayvanlar",
+  interior: "Mekan Atmosferi",
 };
 
 // Alt tip etiketleri
@@ -39,6 +40,12 @@ const SUBTYPE_LABELS: Record<string, string> = {
   // Pets (evcil hayvanlar)
   dogs: "Köpek",
   cats: "Kedi",
+  // Interior (mekan atmosferi - AI üretimi yapılmaz)
+  vitrin: "Vitrin",
+  tezgah: "Tezgah",
+  "oturma-alani": "Oturma Alanı",
+  dekorasyon: "Dekorasyon",
+  "genel-mekan": "Genel Mekan",
 };
 
 // Alt tipler kategori bazlı
@@ -48,6 +55,29 @@ const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   furniture: ["tables", "chairs", "decor"],
   environments: ["indoor", "outdoor", "window", "cafe", "home"],
   pets: ["dogs", "cats"],
+  interior: ["vitrin", "tezgah", "oturma-alani", "dekorasyon", "genel-mekan"],
+};
+
+// Kategori bazlı hangi alanların gösterileceği
+// required: Göster ve kritik olduğunu vurgula
+// optional: Göster, opsiyonel etiketi ile
+// hidden: Gösterme
+type FieldVisibility = "required" | "optional" | "hidden";
+
+interface CategoryFieldConfig {
+  tags: FieldVisibility;
+  dominantColors: FieldVisibility;
+  style: FieldVisibility;
+  material: FieldVisibility;
+}
+
+const FIELDS_BY_CATEGORY: Record<AssetCategory, CategoryFieldConfig> = {
+  products: { tags: "optional", dominantColors: "required", style: "required", material: "hidden" },
+  props: { tags: "optional", dominantColors: "required", style: "required", material: "required" },
+  furniture: { tags: "optional", dominantColors: "hidden", style: "required", material: "required" },
+  environments: { tags: "optional", dominantColors: "hidden", style: "required", material: "hidden" },
+  pets: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
+  interior: { tags: "optional", dominantColors: "hidden", style: "hidden", material: "hidden" },
 };
 
 export default function Assets() {
@@ -55,9 +85,12 @@ export default function Assets() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<AssetCategory | "all">("all");
-  const [showAddModal, setShowAddModal] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Modal state - hem create hem edit için
+  const [showModal, setShowModal] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<OrchestratorAsset | null>(null);
 
   // Global loading hook
   const { execute: executeDelete } = useLoadingOperation("asset-delete");
@@ -81,6 +114,27 @@ export default function Assets() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Modal açma fonksiyonları
+  const openCreateModal = () => {
+    setEditingAsset(null);
+    setShowModal(true);
+  };
+
+  const openEditModal = (asset: OrchestratorAsset) => {
+    setEditingAsset(asset);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setEditingAsset(null);
+    setShowModal(false);
+  };
+
+  const handleModalSuccess = () => {
+    closeModal();
+    loadAssets();
   };
 
   const handleDelete = async (id: string) => {
@@ -114,7 +168,7 @@ export default function Assets() {
           <h1 className="text-2xl font-bold text-gray-900">Görsel Yönetimi</h1>
           <p className="text-gray-500 mt-1">Ürün, aksesuar, mobilya, ortam ve evcil hayvan görselleri</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="btn-primary">
+        <button onClick={openCreateModal} className="btn-primary">
           + Yeni Görsel
         </button>
       </div>
@@ -192,7 +246,7 @@ export default function Assets() {
           {assets.length === 0 ? (
             <div className="card text-center py-12">
               <p className="text-gray-500 mb-4">Henüz görsel yok</p>
-              <button onClick={() => setShowAddModal(true)} className="btn-primary">
+              <button onClick={openCreateModal} className="btn-primary">
                 İlk Görseli Ekle
               </button>
             </div>
@@ -202,6 +256,7 @@ export default function Assets() {
                 <AssetCard
                   key={asset.id}
                   asset={asset}
+                  onEdit={() => openEditModal(asset)}
                   onDelete={() => handleDelete(asset.id)}
                   isDeleting={deletingId === asset.id}
                 />
@@ -256,7 +311,7 @@ export default function Assets() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1">
-                            {asset.visualProperties?.dominantColors && (
+                            {asset.visualProperties?.dominantColors && asset.visualProperties.dominantColors.length > 0 && (
                               <div className="flex gap-1">
                                 {asset.visualProperties.dominantColors.slice(0, 3).map((color, i) => (
                                   <div
@@ -281,13 +336,21 @@ export default function Assets() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => handleDelete(asset.id)}
-                            disabled={deletingId === asset.id}
-                            className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {deletingId === asset.id ? "Siliniyor..." : "Sil"}
-                          </button>
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => openEditModal(asset)}
+                              className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-lg transition-colors"
+                            >
+                              Düzenle
+                            </button>
+                            <button
+                              onClick={() => handleDelete(asset.id)}
+                              disabled={deletingId === asset.id}
+                              className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingId === asset.id ? "Siliniyor..." : "Sil"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -299,27 +362,27 @@ export default function Assets() {
         </>
       )}
 
-      {/* Add Modal */}
-      {showAddModal && (
-        <AddAssetModal
-          onClose={() => setShowAddModal(false)}
-          onSuccess={() => {
-            setShowAddModal(false);
-            loadAssets();
-          }}
+      {/* Asset Modal (Create/Edit) */}
+      {showModal && (
+        <AssetModal
+          asset={editingAsset}
+          onClose={closeModal}
+          onSuccess={handleModalSuccess}
         />
       )}
     </div>
   );
 }
 
-// Asset karti
+// Asset kartı
 function AssetCard({
   asset,
+  onEdit,
   onDelete,
   isDeleting,
 }: {
   asset: OrchestratorAsset;
+  onEdit: () => void;
   onDelete: () => void;
   isDeleting?: boolean;
 }) {
@@ -366,7 +429,7 @@ function AssetCard({
         )}
 
         {/* Renkler */}
-        {asset.visualProperties?.dominantColors && (
+        {asset.visualProperties?.dominantColors && asset.visualProperties.dominantColors.length > 0 && (
           <div className="flex gap-1">
             {asset.visualProperties.dominantColors.slice(0, 4).map((color, i) => (
               <div
@@ -387,6 +450,12 @@ function AssetCard({
         {/* Aksiyonlar */}
         <div className="flex gap-2 pt-2 border-t border-gray-100">
           <button
+            onClick={onEdit}
+            className="text-blue-500 hover:text-blue-700 text-sm"
+          >
+            Düzenle
+          </button>
+          <button
             onClick={onDelete}
             disabled={isDeleting}
             className="text-red-500 hover:text-red-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -399,35 +468,60 @@ function AssetCard({
   );
 }
 
-// Yeni Asset Modal
-function AddAssetModal({
+// Asset Modal (Create/Edit birleşik)
+function AssetModal({
+  asset,
   onClose,
   onSuccess,
 }: {
+  asset: OrchestratorAsset | null; // null = create mode
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [category, setCategory] = useState<AssetCategory>("products");
-  const [subType, setSubType] = useState("");
-  const [filename, setFilename] = useState("");
-  const [storageUrl, setStorageUrl] = useState("");
-  const [tags, setTags] = useState("");
-  const [dominantColors, setDominantColors] = useState("");
-  const [style, setStyle] = useState("");
+  const isEditMode = asset !== null;
+
+  // Form state
+  const [category, setCategory] = useState<AssetCategory>(asset?.category as AssetCategory || "products");
+  const [subType, setSubType] = useState(asset?.subType || "");
+  const [filename, setFilename] = useState(asset?.filename || "");
+  const [storageUrl, setStorageUrl] = useState(asset?.storageUrl || "");
+  const [tags, setTags] = useState(asset?.tags?.join(", ") || "");
+  const [dominantColors, setDominantColors] = useState(asset?.visualProperties?.dominantColors?.join(", ") || "");
+  const [style, setStyle] = useState(asset?.visualProperties?.style || "modern");
+  const [material, setMaterial] = useState(asset?.visualProperties?.material || "");
   const [saving, setSaving] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Kategori değişince alt tipi sıfırla ve upload'ı temizle
+  // Edit modunda görsel değiştirme kontrolü
+  const [wantsToChangeImage, setWantsToChangeImage] = useState(false);
+
+  // Kategori değişince alt tipi güncelle (sadece create modda veya kategori değişince)
   useEffect(() => {
-    const subtypes = SUBTYPES_BY_CATEGORY[category];
-    if (subtypes.length > 0) {
-      setSubType(subtypes[0]);
+    if (!isEditMode) {
+      // Create modda kategori değişince ilk alt tipi seç ve upload'ı temizle
+      const subtypes = SUBTYPES_BY_CATEGORY[category];
+      if (subtypes.length > 0) {
+        setSubType(subtypes[0]);
+      }
+      setFilename("");
+      setStorageUrl("");
+      setUploadError(null);
     }
-    // Kategori değişince önceki yüklemeyi temizle
-    setFilename("");
-    setStorageUrl("");
-    setUploadError(null);
-  }, [category]);
+  }, [category, isEditMode]);
+
+  // Edit modda başlangıç değerlerini ayarla
+  useEffect(() => {
+    if (asset) {
+      setCategory(asset.category as AssetCategory);
+      setSubType(asset.subType);
+      setFilename(asset.filename);
+      setStorageUrl(asset.storageUrl);
+      setTags(asset.tags?.join(", ") || "");
+      setDominantColors(asset.visualProperties?.dominantColors?.join(", ") || "");
+      setStyle(asset.visualProperties?.style || "modern");
+      setMaterial(asset.visualProperties?.material || "");
+    }
+  }, [asset]);
 
   const handleUploadComplete = (url: string, uploadedFilename: string) => {
     setStorageUrl(url);
@@ -439,26 +533,59 @@ function AddAssetModal({
     setUploadError(error);
   };
 
+  // Mevcut kategorinin alan konfigürasyonu
+  const fieldConfig = FIELDS_BY_CATEGORY[category];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!filename || !storageUrl) {
+
+    // Create modda görsel zorunlu
+    if (!isEditMode && (!filename || !storageUrl)) {
       alert("Lütfen önce dosya yükleyin");
       return;
     }
 
     setSaving(true);
     try {
-      await api.createAsset({
+      // Alan değerlerini kategori bazlı hazırla
+      const parsedTags = fieldConfig.tags !== "hidden"
+        ? tags.split(",").map(t => t.trim()).filter(Boolean)
+        : [];
+
+      const parsedColors = fieldConfig.dominantColors !== "hidden"
+        ? dominantColors.split(",").map(c => c.trim()).filter(Boolean)
+        : [];
+
+      const parsedStyle = fieldConfig.style !== "hidden"
+        ? (style || "modern")
+        : "modern";
+
+      const parsedMaterial = fieldConfig.material !== "hidden" && material
+        ? material
+        : undefined;
+
+      // Asset data objesi
+      const assetData = {
         category,
         subType,
         filename,
         storageUrl,
-        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        tags: parsedTags,
         visualProperties: {
-          dominantColors: dominantColors.split(",").map((c) => c.trim()).filter(Boolean),
-          style: style || "modern",
+          dominantColors: parsedColors,
+          style: parsedStyle,
+          ...(parsedMaterial && { material: parsedMaterial }),
         },
-      });
+      };
+
+      if (isEditMode && asset) {
+        // Update modu
+        await api.updateAsset(asset.id, assetData);
+      } else {
+        // Create modu
+        await api.createAsset(assetData);
+      }
+
       onSuccess();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Kaydetme hatası");
@@ -467,10 +594,20 @@ function AddAssetModal({
     }
   };
 
+  // Label helper - opsiyonel/zorunlu etiketi
+  const getFieldLabel = (baseLabel: string, visibility: FieldVisibility) => {
+    if (visibility === "optional") {
+      return `${baseLabel} (opsiyonel)`;
+    }
+    return baseLabel;
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Yeni Görsel Ekle</h2>
+        <h2 className="text-xl font-bold mb-4">
+          {isEditMode ? "Görsel Düzenle" : "Yeni Görsel Ekle"}
+        </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Kategori */}
@@ -482,11 +619,15 @@ function AddAssetModal({
               value={category}
               onChange={(e) => setCategory(e.target.value as AssetCategory)}
               className="input w-full"
+              disabled={isEditMode} // Edit modda kategori değiştirilemez
             >
               {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map((cat) => (
                 <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
               ))}
             </select>
+            {isEditMode && (
+              <p className="text-xs text-gray-400 mt-1">Kategori düzenlenemez</p>
+            )}
           </div>
 
           {/* Alt Tip */}
@@ -508,67 +649,155 @@ function AddAssetModal({
           {/* Dosya Yükleme */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Görsel Yükle
+              Görsel
             </label>
-            <AssetUpload
-              type="image"
-              folder={`orchestrator-assets/${category}`}
-              onUploadComplete={handleUploadComplete}
-              onError={handleUploadError}
-            />
-            {uploadError && (
-              <p className="text-sm text-red-500 mt-1">{uploadError}</p>
+
+            {/* Edit modda mevcut görsel önizleme */}
+            {isEditMode && storageUrl && !wantsToChangeImage && (
+              <div className="mb-2">
+                <div className="relative inline-block">
+                  <img
+                    src={storageUrl}
+                    alt={filename}
+                    className="h-24 w-24 rounded-lg object-cover border border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setWantsToChangeImage(true)}
+                    className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full p-1 text-xs hover:bg-blue-600"
+                    title="Görseli değiştir"
+                  >
+                    ✎
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{filename}</p>
+              </div>
             )}
-            {filename && (
-              <p className="text-xs text-gray-500 mt-1">
-                Dosya: {filename}
+
+            {/* Yükleme alanı - create modda veya değiştirmek istiyorsa göster */}
+            {(!isEditMode || wantsToChangeImage) && (
+              <>
+                <AssetUpload
+                  type="image"
+                  folder={`orchestrator-assets/${category}`}
+                  onUploadComplete={handleUploadComplete}
+                  onError={handleUploadError}
+                />
+                {uploadError && (
+                  <p className="text-sm text-red-500 mt-1">{uploadError}</p>
+                )}
+                {filename && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Dosya: {filename}
+                  </p>
+                )}
+                {isEditMode && wantsToChangeImage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWantsToChangeImage(false);
+                      // Orijinal değerleri geri yükle
+                      if (asset) {
+                        setFilename(asset.filename);
+                        setStorageUrl(asset.storageUrl);
+                      }
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700 mt-1"
+                  >
+                    ← Değiştirmekten vazgeç
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Tags - kategori bazlı göster/gizle */}
+          {fieldConfig.tags !== "hidden" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {getFieldLabel("Etiketler (virgülle ayır)", fieldConfig.tags)}
+              </label>
+              <input
+                type="text"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="gold-rim, white, elegant"
+                className="input w-full"
+              />
+            </div>
+          )}
+
+          {/* Dominant Renkler - kategori bazlı göster/gizle */}
+          {fieldConfig.dominantColors !== "hidden" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {getFieldLabel("Dominant Renkler (virgülle ayır)", fieldConfig.dominantColors)}
+                {fieldConfig.dominantColors === "required" && (
+                  <span className="text-red-500 ml-1">*</span>
+                )}
+              </label>
+              <input
+                type="text"
+                value={dominantColors}
+                onChange={(e) => setDominantColors(e.target.value)}
+                placeholder="#D4A574, #FFFFFF"
+                className="input w-full"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                AI görsel üretiminde renk tutarlılığı için kritik
               </p>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Tags */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Etiketler (virgülle ayır)
-            </label>
-            <input
-              type="text"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="gold-rim, white, elegant"
-              className="input w-full"
-            />
-          </div>
+          {/* Stil - kategori bazlı göster/gizle */}
+          {fieldConfig.style !== "hidden" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {getFieldLabel("Stil", fieldConfig.style)}
+              </label>
+              <select
+                value={style}
+                onChange={(e) => setStyle(e.target.value)}
+                className="input w-full"
+              >
+                <option value="modern">Modern</option>
+                <option value="rustic">Rustic</option>
+                <option value="minimal">Minimal</option>
+                <option value="elegant">Elegant</option>
+              </select>
+            </div>
+          )}
 
-          {/* Görsel Özellikleri */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Dominant Renkler (virgülle ayır)
-            </label>
-            <input
-              type="text"
-              value={dominantColors}
-              onChange={(e) => setDominantColors(e.target.value)}
-              placeholder="#D4A574, #FFFFFF"
-              className="input w-full"
-            />
-          </div>
+          {/* Material - kategori bazlı göster/gizle */}
+          {fieldConfig.material !== "hidden" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {getFieldLabel("Malzeme", fieldConfig.material)}
+              </label>
+              <select
+                value={material}
+                onChange={(e) => setMaterial(e.target.value)}
+                className="input w-full"
+              >
+                <option value="">Seçiniz...</option>
+                <option value="ceramic">Seramik</option>
+                <option value="porcelain">Porselen</option>
+                <option value="glass">Cam</option>
+                <option value="wood">Ahşap</option>
+                <option value="metal">Metal</option>
+                <option value="marble">Mermer</option>
+              </select>
+            </div>
+          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Stil
-            </label>
-            <select
-              value={style}
-              onChange={(e) => setStyle(e.target.value)}
-              className="input w-full"
-            >
-              <option value="modern">Modern</option>
-              <option value="rustic">Rustic</option>
-              <option value="minimal">Minimal</option>
-              <option value="elegant">Elegant</option>
-            </select>
-          </div>
+          {/* Interior için bilgi mesajı */}
+          {category === "interior" && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-sm text-green-800">
+                📍 <strong>Mekan Atmosferi</strong> kategorisindeki görseller AI tarafından işlenmez, doğrudan paylaşılır.
+              </p>
+            </div>
+          )}
 
           {/* Butonlar */}
           <div className="flex gap-3 pt-4">
@@ -581,10 +810,10 @@ function AddAssetModal({
             </button>
             <button
               type="submit"
-              disabled={saving || !storageUrl}
+              disabled={saving || (!isEditMode && !storageUrl)}
               className="btn-primary flex-1 disabled:opacity-50"
             >
-              {saving ? "Kaydediliyor..." : "Kaydet"}
+              {saving ? "Kaydediliyor..." : (isEditMode ? "Güncelle" : "Kaydet")}
             </button>
           </div>
         </form>

@@ -16,6 +16,7 @@ import {
   EffectiveRules,
   HandStyleId,
 } from "./types";
+import { getCompactTrainingContext } from "./promptTrainingService";
 
 // Lazy load Anthropic SDK
 let anthropicClient: Anthropic | null = null;
@@ -76,9 +77,12 @@ export class ClaudeService {
   ): Promise<ClaudeResponse<AssetSelection>> {
     const client = this.getClient();
 
-    // Köpek dahil edilmeli mi?
+    // Çeşitlilik kurallarını çıkar
     const shouldIncludePet = effectiveRules?.shouldIncludePet || false;
     const blockedTables = effectiveRules?.blockedTables || [];
+    const blockedProducts = effectiveRules?.blockedProducts || [];
+    const blockedPlates = effectiveRules?.blockedPlates || [];
+    const blockedCups = effectiveRules?.blockedCups || [];
 
     const systemPrompt = `Sen bir görsel içerik direktörüsün. Sade Patisserie için Instagram içerikleri hazırlıyorsun.
 
@@ -89,10 +93,16 @@ Seçim kriterleri:
 2. STİL TUTARLILIĞI: Modern/rustic/minimal tarzlar karışmamalı
 3. ZAMAN UYUMU: Sabah için aydınlık, akşam için sıcak tonlar
 4. KULLANIM ROTASYONU: Az kullanılmış asset'lere öncelik ver
-5. ÇEŞİTLİLİK: ${blockedTables.length > 0 ? `Bu masaları SEÇME (son kullanılmış): ${blockedTables.join(", ")}` : "Masaları rotasyonla kullan"}
-6. KÖPEK: ${shouldIncludePet ? "Bu sefer KÖPEK DAHİL ET (uygun senaryo için)" : "Köpek dahil etme"}
-7. DEKORASYON: Cozy senaryolarda bitki veya kitap eklenebilir
-8. FİNCAN SEÇİMİ KRİTİK:
+
+⚠️ ÇEŞİTLİLİK KURALLARI (KRİTİK - Bu ID'leri SEÇME):
+${blockedProducts.length > 0 ? `- BLOKLANMIŞ ÜRÜNLER: ${blockedProducts.join(", ")}` : ""}
+${blockedPlates.length > 0 ? `- BLOKLANMIŞ TABAKLAR: ${blockedPlates.join(", ")}` : ""}
+${blockedCups.length > 0 ? `- BLOKLANMIŞ FİNCANLAR: ${blockedCups.join(", ")}` : ""}
+${blockedTables.length > 0 ? `- BLOKLANMIŞ MASALAR: ${blockedTables.join(", ")}` : ""}
+
+5. KÖPEK: ${shouldIncludePet ? "Bu sefer KÖPEK DAHİL ET (uygun senaryo için)" : "Köpek dahil etme"}
+6. DEKORASYON: Cozy senaryolarda bitki veya kitap eklenebilir
+7. FİNCAN SEÇİMİ KRİTİK:
    - SERAMİK veya CAM fincan/bardak TERCIH ET
    - KARTON/PAPER bardak SEÇME (takeaway senaryosu hariç)
    - Material özelliğine dikkat et: "ceramic", "glass", "porcelain" tercih edilir
@@ -667,7 +677,16 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
   ): Promise<ClaudeResponse<{ optimizedPrompt: string; negativePrompt: string; customizations: string[] }>> {
     const client = this.getClient();
 
+    // Eğitim kurallarını yükle
+    const trainingContext = getCompactTrainingContext();
+
     const systemPrompt = `Sen bir AI görsel üretimi uzmanısın. Gemini Pro için prompt optimize ediyorsun.
+
+${trainingContext}
+
+═══════════════════════════════════════════════════════════════
+                    EK OPTİMİZASYON KURALLARI
+═══════════════════════════════════════════════════════════════
 
 MUTLAK KURAL (ASLA İHLAL ETME):
 Prompt'a SADECE referans görsellerde görünen objeleri dahil et.
@@ -675,13 +694,41 @@ Referansta olmayan HİÇBİR obje ekleme: abajur, lamba, vazo, çiçek, mum, tab
 "Cozy atmosphere" veya "warm lighting" gibi mood tanımları için ASLA fiziksel obje önerme.
 Atmosfer ışık ve renk tonlarıyla sağlanır, ek objelerle DEĞİL.
 
+REFERANS SADAKATİ (KRİTİK):
+- Orijinal fotoğraftaki ARKA PLAN korunmalı
+- Cam önü masa ise → arka planda CAM ve DIŞ MANZARA görünmeli
+- Zemin/masa malzemesi referansla aynı olmalı
+- Işık yönü referansla tutarlı olmalı
+
+FİNAN/BARDAK KURALLARI:
+- Fincan rengi ve malzemesi AÇIKÇA belirtilmeli (örn: "beige ceramic cup")
+- "a nice cup" veya "coffee cup" gibi belirsiz ifadeler YASAK
+- Seçilen fincanın özellikleri prompt'a dahil edilmeli
+
+FİZİKSEL MANTIK:
+- Pasta/tatlı tabağının üzerine fincan KONMAZ
+- Fincan masada, ürünün YANINDA olmalı
+- Üst üste tabaklar müşteri masasında OLMAZ
+- Tüm objeler yerçekimine uygun pozisyonlarda
+
+OBJE LİSTESİ KAPATMA:
+Prompt'un sonuna MUTLAKA ekle:
+"COMPLETE OBJECT LIST: [listelenen objeler]. SCENE COMPLETE - no other objects exist."
+
 Optimizasyon kuralları:
 1. Asset özelliklerini prompt'a dahil et (renk, malzeme, stil)
 2. Senaryo gereksinimlerini güçlendir
 3. Prompt'un başına şu kuralı MUTLAKA ekle: "Use ONLY objects from reference images. Add NOTHING extra."
 4. Minimalist kompozisyon - sadece ürün + seçilen asset'ler
+5. Fincan varsa renk ve malzemesini AÇIKÇA belirt
+6. Arka plan tanımını referansa sadık yap
 
 Kısa ve etkili ol.`;
+
+    // Fincan detaylarını hazırla
+    const cupDetails = assets.cup ? `
+- Fincan: ${assets.cup.visualProperties?.dominantColors?.join(", ") || "belirtilmemiş"} renkli, ${assets.cup.visualProperties?.material || "ceramic"} malzeme, ${assets.cup.visualProperties?.style || "modern"} stil
+  ⚠️ BU FİNCAN KULLANILACAK - başka fincan ekleme!` : "- Fincan: YOK (bu sahnede fincan bulunmuyor)";
 
     const userPrompt = `
 BASE PROMPT:
@@ -692,10 +739,15 @@ ${scenario.scenarioName}
 Kompozisyon: ${scenario.composition}
 El stili: ${scenario.handStyle || "yok"}
 
-ASSET'LER:
-- Ürün renkleri: ${assets.product.visualProperties?.dominantColors?.join(", ")}
-- Tabak: ${assets.plate?.visualProperties?.material || "belirtilmemiş"}
-- Masa: ${assets.table?.visualProperties?.material || "belirtilmemiş"}, ${assets.table?.visualProperties?.style || ""}
+ASSET'LER (SADECE BUNLAR KULLANILABİLİR):
+- Ürün renkleri: ${assets.product.visualProperties?.dominantColors?.join(", ") || "belirtilmemiş"}
+- Tabak: ${assets.plate?.visualProperties?.material || "belirtilmemiş"} malzeme, ${assets.plate?.visualProperties?.dominantColors?.join(", ") || "belirtilmemiş"} renk
+- Masa: ${assets.table?.visualProperties?.material || "belirtilmemiş"} malzeme, ${assets.table?.visualProperties?.style || "belirtilmemiş"} stil
+${cupDetails}
+- Dekorasyon: ${assets.decor ? assets.decor.filename : "YOK"}
+- Ortam/Mekan: ${assets.environment ? "VAR - arka plan bu ortamdan alınacak" : "YOK - standart arka plan"}
+
+⚠️ UYARI: Yukarıdaki listede OLMAYAN hiçbir obje prompt'a eklenmemeli!
 
 Prompt'u optimize et:
 {

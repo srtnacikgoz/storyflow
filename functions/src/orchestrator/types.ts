@@ -16,7 +16,8 @@ export type AssetCategory =
   | "furniture"   // Masa, sandalye, dekor
   | "music"       // Müzik dosyaları
   | "environments" // Mekan, pencere, dış alan
-  | "pets";       // Köpek, kedi
+  | "pets"        // Köpek, kedi
+  | "interior";   // İç mekan fotoğrafları (vitrin, tezgah, oturma alanı)
 
 /**
  * Ürün alt kategorileri
@@ -61,6 +62,17 @@ export type EnvironmentType =
 export type PetType =
   | "dogs"        // Köpekler
   | "cats";       // Kediler
+
+/**
+ * İç mekan alt kategorileri
+ * Bu fotoğraflar AI görsel üretimi ATLANARAK doğrudan kullanılır
+ */
+export type InteriorType =
+  | "vitrin"          // Vitrin görünümü
+  | "tezgah"          // Ürün tezgahları
+  | "oturma-alani"    // Oturma köşeleri
+  | "dekorasyon"      // Çiçekler, bitkiler, detaylar
+  | "genel-mekan";    // Pastane genel görünümü
 
 /**
  * Özel asset tipleri (legacy - geriye uyumluluk için)
@@ -232,6 +244,7 @@ export interface AssetSelection {
   decor?: Asset;          // Dekorasyon (bitki, kitap, vb.)
   pet?: Asset;            // Köpek, kedi
   environment?: Asset;    // Mekan referansı
+  interior?: Asset;       // İç mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
 
   // Claude'un seçim gerekçesi
   selectionReasoning: string;
@@ -239,6 +252,9 @@ export interface AssetSelection {
   // Çeşitlilik bilgisi
   includesPet: boolean;
   petReason?: string;     // Neden köpek dahil/hariç
+
+  // Interior senaryo bilgisi
+  isInteriorScenario?: boolean;  // true ise AI görsel üretimi atlanır
 }
 
 /**
@@ -275,6 +291,10 @@ export interface Scenario {
   description: string;
   includesHands: boolean;
   compositions: CompositionVariant[];
+
+  // Interior senaryolar için (AI görsel üretimi atlanır)
+  isInterior?: boolean;           // true ise AI görsel üretimi ATLANIR
+  interiorType?: InteriorType;    // Hangi interior kategorisinden asset seçilecek
 }
 
 /**
@@ -293,6 +313,10 @@ export interface ScenarioSelection {
   handStyleDetails?: HandStyle;
   compositionId: string;
   composition: string;
+
+  // Interior senaryolar için
+  isInterior?: boolean;           // true ise AI görsel üretimi ATLANIR
+  interiorType?: InteriorType;    // Kullanılacak interior asset tipi
 }
 
 /**
@@ -474,6 +498,9 @@ export interface VariationRules {
   tableGap: number;             // Aynı masa min kaç üretim sonra (default: 2)
   handStyleGap: number;         // Aynı el stili min kaç üretim sonra (default: 4)
   compositionGap: number;       // Aynı kompozisyon min kaç üretim sonra (default: 5)
+  productGap: number;           // Aynı ürün min kaç üretim sonra (default: 3)
+  plateGap: number;             // Aynı tabak min kaç üretim sonra (default: 2)
+  cupGap: number;               // Aynı fincan min kaç üretim sonra (default: 2)
   petFrequency: number;         // Köpek her kaç üretimde bir (default: 15)
   outdoorFrequency: number;     // Dış mekan her kaç üretimde bir (default: 10)
   wabiSabiFrequency: number;    // Wabi-sabi her kaç üretimde bir (default: 5)
@@ -514,15 +541,20 @@ export interface AssetPersonality {
 
 /**
  * Üretim geçmişi kaydı
+ * Çeşitlilik algoritması için son üretimleri takip eder
  */
 export interface ProductionHistoryEntry {
   timestamp: number;
   scenarioId: string;
   compositionId: string;
-  tableId?: string;
-  handStyleId?: string;
+  tableId?: string | null;
+  handStyleId?: string | null;
   includesPet: boolean;
   productType: ProductType;
+  // Ek rotasyon alanları (ürün/tabak/fincan çeşitliliği için)
+  productId?: string | null;
+  plateId?: string | null;
+  cupId?: string | null;
 }
 
 /**
@@ -574,6 +606,9 @@ export interface EffectiveRules {
   blockedTables: string[];
   blockedHandStyles: string[];
   blockedCompositions: string[];
+  blockedProducts: string[];    // Son N üretimde kullanılan ürünler
+  blockedPlates: string[];      // Son N üretimde kullanılan tabaklar
+  blockedCups: string[];        // Son N üretimde kullanılan fincanlar
 }
 
 // ==========================================
@@ -646,6 +681,26 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     scenarios: ["kahve-kosesi", "yarim-kaldi"],
     mood: "cozy",
     petAllowed: true,
+    isDefault: true,
+  },
+  {
+    id: "mekan-tanitimi",
+    name: "Mekan Tanıtımı",
+    description: "Pastane atmosferini yansıtan gerçek fotoğraflar (AI görsel üretimi atlanır)",
+    scenarios: [
+      "vitrin-sergisi",
+      "kruvasan-tezgahi",
+      "pastane-ici",
+      "oturma-kosesi",
+      "cicek-detay",
+      "kahve-hazirligi",
+      "sabah-acilis",
+      "pencere-isigi",
+      "raf-zenginligi",
+      "detay-cekimi",
+    ],
+    mood: "warm",
+    petAllowed: false,
     isDefault: true,
   },
 ];

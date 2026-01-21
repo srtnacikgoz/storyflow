@@ -161,6 +161,12 @@ export const telegramWebhook = functions
 
                         // Orchestrator scheduled-slots güncellemesi
                         // slotId varsa, scheduled-slots koleksiyonundaki durumu da güncelle
+                        console.log("[Telegram Webhook] 🔍 Checking slotId for scheduled-slots update:", {
+                            slotId: item.slotId,
+                            slotIdType: typeof item.slotId,
+                            slotIdTruthy: !!item.slotId,
+                            itemKeys: Object.keys(item),
+                        });
                         if (item.slotId) {
                             try {
                                 const db = getFirestore();
@@ -240,6 +246,11 @@ export const telegramWebhook = functions
                     }
 
                     // Orchestrator scheduled-slots güncellemesi
+                    console.log("[Telegram Webhook] 🔍 Checking slotId for rejection:", {
+                        slotId: item.slotId,
+                        slotIdType: typeof item.slotId,
+                        slotIdTruthy: !!item.slotId,
+                    });
                     if (item.slotId) {
                         try {
                             const db = getFirestore();

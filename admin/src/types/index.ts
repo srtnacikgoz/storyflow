@@ -345,7 +345,10 @@ export interface CalendarData {
 // ==========================================
 
 // Asset kategorileri
-export type AssetCategory = "products" | "props" | "furniture" | "environments" | "pets";
+export type AssetCategory = "products" | "props" | "furniture" | "environments" | "pets" | "interior";
+
+// Interior tipleri (mekan atmosferi - AI üretimi yapılmaz)
+export type InteriorType = "vitrin" | "tezgah" | "oturma-alani" | "dekorasyon" | "genel-mekan";
 
 // Ürün tipleri (orchestrator için)
 export type OrchestratorProductType =

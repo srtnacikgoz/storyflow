@@ -104,9 +104,11 @@ Bu dosya proje ile ilgili hataları, geri bildirimleri, iyileştirme önerilerin
 ## [TODO-005] Mekan/Atmosfer Paylaşım Sistemi
 - **Kategori:** todo
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** closed
 - **Tarih:** 2026-01-21
+- **Çözüm Tarihi:** 2026-01-21
 - **Açıklama:** Sürekli ürün görseli yerine pastane atmosferini yansıtan paylaşımlar eklenecek. Vitrin, tezgah, oturma alanı, çiçekler vb. gerçek fotoğraflar kullanılacak. AI görsel üretimi yapılmayacak, sadece caption/hashtag üretilecek.
+- **Çözüm:** Interior senaryo sistemi eklendi. 10 yeni interior senaryo (vitrin-sergisi, kruvasan-tezgahi, pastane-ici, oturma-kosesi, cicek-detay, kahve-hazirligi, sabah-acilis, pencere-isigi, raf-zenginligi, detay-cekimi) ve "interior" asset kategorisi eklendi. Orchestrator, interior senaryolarda AI görsel üretimini atlıyor ve doğrudan interior asset kullanıyor.
 
 ### Konsept
 - Gerçek pastane fotoğrafları doğrudan paylaşım için kullanılacak
@@ -255,6 +257,49 @@ Telegram onayına gönder
 - En iyi paylaşım saatlerini gerçek verilerle belirleme
 - Takipçi büyüme analizi
 - İçerik stratejisi optimizasyonu
+
+---
+
+## [TODO-007] Prompt Training UI (Admin Panel)
+- **Kategori:** todo
+- **Öncelik:** low
+- **Durum:** open
+- **Tarih:** 2026-01-21
+- **Açıklama:** Prompt eğitim kurallarını Admin Panel üzerinden yönetme özelliği. Şu an markdown dosyası ile çalışıyor (`.claude/references/PROMPT-EGITIMI.md`), ileride UI'a taşınacak.
+
+### Önerilen UI Yapısı
+**Sayfa:** `/prompt-training`
+
+**Tabs:**
+1. 📚 Temel Kurallar (readonly - sistem kuralları görüntüleme)
+2. ✅ İyi Örnekler (CRUD - başarılı prompt'lar)
+3. ❌ Kötü Örnekler (CRUD - başarısız prompt'lar)
+4. 👁️ Gözlemlerim (CRUD - kullanıcı notları)
+5. 📝 Kişisel Kurallarım (CRUD - özel kurallar)
+
+**Her giriş için form alanları:**
+- Başlık
+- Tarih (otomatik)
+- Kategori (dropdown)
+- Açıklama (textarea)
+- Prompt (code block)
+- Etiketler (çoklu seçim: fincan, tabak, arka plan, vb.)
+
+**Özellikler:**
+- Liste görünümü
+- Arama ve filtreleme
+- Firestore'da saklama (`prompt-training` collection)
+- Claude runtime'da okuma
+
+### Avantajları
+- Kullanıcı dostu form ile giriş
+- Validasyonlu, format hatası olmaz
+- Kategorilendirme ve etiketleme
+- Mobil erişim imkanı
+
+### Notlar
+- Şu an markdown ile çalışıyor, acil değil
+- Orchestrator Rules sayfası pattern olarak kullanılabilir
 
 ---
 
