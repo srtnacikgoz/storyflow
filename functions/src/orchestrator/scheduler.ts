@@ -4,7 +4,7 @@
  * TimeScoreService entegrasyonu ile en optimal saatte tetikleme
  */
 
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { Orchestrator } from "./orchestrator";
 import {
   TimeSlotRule,
@@ -431,6 +431,9 @@ export class OrchestratorScheduler {
 
       console.log(`[Scheduler] Production history saved - scenario: ${entry.scenarioId}, pet: ${entry.includesPet}`);
 
+      // Seçilen asset'lerin usageCount'larını artır
+      await this.incrementAssetUsage(result.assetSelection);
+
       // Eski kayıtları temizle (son 50'yi tut)
       await this.cleanupOldHistory();
     } catch (error) {
@@ -460,6 +463,57 @@ export class OrchestratorScheduler {
       console.log(`[Scheduler] Cleaned up ${snapshot.docs.length} old history entries`);
     } catch (error) {
       console.error("[Scheduler] Failed to cleanup history:", error);
+    }
+  }
+
+  /**
+   * Seçilen asset'lerin usageCount'larını artır
+   */
+  private async incrementAssetUsage(assetSelection?: {
+    product?: { id: string };
+    plate?: { id: string };
+    cup?: { id: string };
+    table?: { id: string };
+    decor?: { id: string };
+    pet?: { id: string };
+    environment?: { id: string };
+  }): Promise<void> {
+    if (!assetSelection) return;
+
+    const now = Date.now();
+    const assetsCollection = this.db.collection("assets");
+
+    // Güncellenecek asset ID'lerini topla
+    const assetIds: string[] = [];
+
+    if (assetSelection.product?.id) assetIds.push(assetSelection.product.id);
+    if (assetSelection.plate?.id) assetIds.push(assetSelection.plate.id);
+    if (assetSelection.cup?.id) assetIds.push(assetSelection.cup.id);
+    if (assetSelection.table?.id) assetIds.push(assetSelection.table.id);
+    if (assetSelection.decor?.id) assetIds.push(assetSelection.decor.id);
+    if (assetSelection.pet?.id) assetIds.push(assetSelection.pet.id);
+    if (assetSelection.environment?.id) assetIds.push(assetSelection.environment.id);
+
+    if (assetIds.length === 0) return;
+
+    try {
+      // Batch update ile tüm asset'leri güncelle
+      const batch = this.db.batch();
+
+      for (const assetId of assetIds) {
+        const assetRef = assetsCollection.doc(assetId);
+        batch.update(assetRef, {
+          usageCount: FieldValue.increment(1),
+          lastUsedAt: now,
+          updatedAt: now,
+        });
+      }
+
+      await batch.commit();
+      console.log(`[Scheduler] Updated usageCount for ${assetIds.length} assets`);
+    } catch (error) {
+      console.error("[Scheduler] Failed to increment asset usage:", error);
+      // Hata durumunda pipeline'ı durdurma
     }
   }
 
