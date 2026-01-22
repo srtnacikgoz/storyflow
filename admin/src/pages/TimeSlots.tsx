@@ -11,7 +11,6 @@ const PRODUCT_CONFIG: Record<OrchestratorProductType, { label: string; emoji: st
   croissants: { label: "Kruvasan", emoji: "🥐" },
   pastas: { label: "Pasta", emoji: "🍰" },
   chocolates: { label: "Çikolata", emoji: "🍫" },
-  macarons: { label: "Makaron", emoji: "🧁" },
   coffees: { label: "Kahve", emoji: "☕" },
 };
 

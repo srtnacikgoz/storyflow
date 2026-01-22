@@ -26,7 +26,6 @@ export type ProductType =
   | "croissants"
   | "pastas"
   | "chocolates"
-  | "macarons"
   | "coffees";
 
 /**
@@ -94,6 +93,16 @@ export type MusicMood =
   | "golden-hour";    // Altın saat
 
 /**
+ * Ürün tutma şekli
+ * Claude'un senaryo seçiminde kullanılır
+ */
+export type HoldingType =
+  | "hand"   // Elle tutulabilir (kurabiye, kruvasan, sandviç)
+  | "fork"   // Çatalla yenir (tiramisu, cheesecake, pasta dilimi)
+  | "spoon"  // Kaşıkla yenir (puding, sufle)
+  | "none";  // Dokunulmaz/tabakta sunulur (bütün kek, tart)
+
+/**
  * Asset metadata
  */
 export interface Asset {
@@ -113,6 +122,10 @@ export interface Asset {
     material?: string;            // "ceramic", "wood", "marble"
     shape?: string;               // "round", "square", "rectangular"
   };
+
+  // Ürün tutma şekli (sadece products kategorisi için)
+  // Claude senaryo seçerken bunu kullanır
+  holdingType?: HoldingType;
 
   // Müzik özellikleri
   musicProperties?: {
@@ -378,21 +391,22 @@ export interface QualityControlResult {
 
 /**
  * İçerik paketi
+ * NOT: Caption ve hashtag desteği kaldırıldı (Instagram API limitleri)
  */
 export interface ContentPackage {
-  // Caption
-  caption: string;
+  // Caption (artık kullanılmıyor)
+  caption?: string;
   captionAlternatives?: string[];
 
-  // Hashtags
-  hashtags: string[];
+  // Hashtags (artık kullanılmıyor)
+  hashtags?: string[];
 
   // Müzik
   musicAsset?: Asset;
   musicSuggestion?: string;
 
   // Meta
-  generatedAt: number;
+  generatedAt?: number;
 }
 
 /**
@@ -704,3 +718,100 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     isDefault: true,
   },
 ];
+
+// ==========================================
+// AI FEEDBACK SYSTEM
+// ==========================================
+
+/**
+ * Sorun kategorileri
+ * Kullanıcı üretilen görselde sorun bildirirken seçer
+ */
+export type IssueCategoryId =
+  | "holding-mismatch"    // Tutma şekli uyumsuz (elle tiramisu tutma gibi)
+  | "product-unrecognized" // Ürün tanınmıyor/bozuk
+  | "composition-bad"      // Kompozisyon kötü
+  | "lighting-bad"         // Işık sorunu
+  | "realism-low"          // Gerçekçilik düşük
+  | "background-issue"     // Arka plan sorunu
+  | "hand-anatomy"         // El anatomisi bozuk
+  | "color-mismatch"       // Renk uyumsuzluğu
+  | "other";               // Diğer
+
+/**
+ * Sorun kategorisi açıklamaları
+ */
+export const ISSUE_CATEGORIES: Record<IssueCategoryId, { label: string; description: string; aiHint: string }> = {
+  "holding-mismatch": {
+    label: "Tutma Şekli Uyumsuz",
+    description: "Ürün elle tutulmaması gereken bir şekilde tutulmuş (ör: tiramisu elle)",
+    aiHint: "Bu ürün elle tutulmamalı, çatal/kaşık ile servis edilmeli veya tabakta gösterilmeli",
+  },
+  "product-unrecognized": {
+    label: "Ürün Tanınmıyor",
+    description: "Ürün bozuk görünüyor veya tanınmıyor",
+    aiHint: "Ürünün görünümü korunmalı, referans görsele daha sadık kalınmalı",
+  },
+  "composition-bad": {
+    label: "Kompozisyon Kötü",
+    description: "Görsel düzeni ve yerleşim sorunlu",
+    aiHint: "Daha dengeli bir kompozisyon kullan, öğeleri daha iyi yerleştir",
+  },
+  "lighting-bad": {
+    label: "Işık Sorunu",
+    description: "Aydınlatma yapay veya uygunsuz",
+    aiHint: "Daha doğal ışık kullan, gölgeleri kontrol et",
+  },
+  "realism-low": {
+    label: "Gerçekçilik Düşük",
+    description: "Görsel yapay veya AI yapımı belli oluyor",
+    aiHint: "Daha gerçekçi dokular ve detaylar kullan",
+  },
+  "background-issue": {
+    label: "Arka Plan Sorunu",
+    description: "Arka plan uygunsuz veya dikkat dağıtıcı",
+    aiHint: "Daha sade ve ürünü ön plana çıkaran arka plan kullan",
+  },
+  "hand-anatomy": {
+    label: "El Anatomisi Bozuk",
+    description: "Parmak sayısı, pozisyon veya orantı hatası",
+    aiHint: "El anatomisine dikkat et, doğal pozisyon ve orantı kullan",
+  },
+  "color-mismatch": {
+    label: "Renk Uyumsuzluğu",
+    description: "Renkler referans görselle uyuşmuyor",
+    aiHint: "Ürünün orijinal renklerini koru, referansa sadık kal",
+  },
+  "other": {
+    label: "Diğer",
+    description: "Yukarıdakilerden farklı bir sorun",
+    aiHint: "Belirtilen özel sorunu dikkate al",
+  },
+};
+
+/**
+ * Kullanıcı geri bildirimi
+ */
+export interface IssueFeedback {
+  id: string;
+
+  // Hangi içerikle ilgili
+  slotId: string;           // scheduled-slots ID
+  pipelineId?: string;      // Pipeline run ID
+
+  // Sorun detayları
+  category: IssueCategoryId;
+  customNote?: string;      // Kullanıcının ek açıklaması
+
+  // Bağlam (otomatik doldurulur)
+  scenarioId?: string;
+  productType?: string;
+  productId?: string;
+  handStyleId?: string;
+  compositionId?: string;
+
+  // Meta
+  createdAt: number;
+  resolved: boolean;        // Sorun çözüldü mü?
+  resolvedAt?: number;
+}

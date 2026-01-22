@@ -3,12 +3,13 @@
  * Claude + Gemini entegrasyonu ile tam otomatik içerik üretimi
  */
 
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { ClaudeService } from "./claudeService";
 import { GeminiService } from "../services/gemini";
 import { TelegramService } from "../services/telegram";
 import { RulesService } from "./rulesService";
+import { FeedbackService } from "../services/feedbackService";
 import {
   Asset,
   ProductType,
@@ -93,7 +94,7 @@ export class Orchestrator {
     scheduledHour?: number,
     overrideThemeId?: string
   ): Promise<PipelineResult> {
-    const TOTAL_STAGES = 7; // asset, scenario, prompt, image, quality, content, telegram
+    const TOTAL_STAGES = 6; // asset, scenario, prompt, image, quality, telegram (caption kaldırıldı)
     const startedAt = Date.now();
     let totalCost = 0;
 
@@ -226,12 +227,19 @@ export class Orchestrator {
         interiorType: s.interiorType,
       }));
 
+      // Kullanıcı geri bildirimlerinden ipuçları al
+      const feedbackHints = await FeedbackService.generatePromptHints();
+      if (feedbackHints) {
+        console.log("[Orchestrator] Feedback hints loaded for Claude");
+      }
+
       const scenarioResponse = await this.claude.selectScenario(
         productType,
         timeOfDay,
         result.assetSelection,
         scenariosForClaude,
-        effectiveRules  // Çeşitlilik kurallarını da gönder
+        effectiveRules,  // Çeşitlilik kurallarını da gönder
+        feedbackHints    // Kullanıcı geri bildirimleri
       );
 
       if (!scenarioResponse.success || !scenarioResponse.data) {
@@ -499,35 +507,12 @@ export class Orchestrator {
       } // else bloğu sonu (normal akış - AI görsel üretimi)
 
       // ==========================================
-      // STAGE 6: CONTENT CREATION
+      // STAGE 6: TELEGRAM APPROVAL (eski Stage 7)
+      // NOT: Content Creation (caption/hashtag) kaldırıldı - Instagram API caption desteklemiyor
       // ==========================================
-      console.log("[Orchestrator] Stage 6: Content Creation");
-      status.currentStage = "content_creation";
-      if (onProgress) await onProgress("content_creation", 6, TOTAL_STAGES);
-
-      const contentResponse = await this.claude.generateContent(
-        productType,
-        result.scenarioSelection,
-        timeOfDay
-      );
-
-      if (!contentResponse.success || !contentResponse.data) {
-        throw new Error(`İçerik oluşturma başarısız: ${contentResponse.error || "Bilinmeyen hata"}`);
-      }
-
-      result.contentPackage = {
-        ...contentResponse.data,
-        // musicAsset kaldırıldı - music desteği şimdilik yok
-      };
-      totalCost += contentResponse.cost;
-      status.completedStages.push("content_creation");
-
-      // ==========================================
-      // STAGE 7: TELEGRAM APPROVAL
-      // ==========================================
-      console.log("[Orchestrator] Stage 7: Telegram Approval");
+      console.log("[Orchestrator] Stage 6: Telegram Approval");
       status.currentStage = "telegram_approval";
-      if (onProgress) await onProgress("telegram_approval", 7, TOTAL_STAGES);
+      if (onProgress) await onProgress("telegram_approval", 6, TOTAL_STAGES);
 
       const telegramMessageId = await this.sendTelegramApproval(result);
       result.telegramMessageId = telegramMessageId;
@@ -541,6 +526,9 @@ export class Orchestrator {
       result.totalDuration = result.completedAt - startedAt;
 
       console.log(`[Orchestrator] Pipeline completed in ${result.totalDuration}ms, cost: $${totalCost.toFixed(4)}`);
+
+      // Kullanılan asset'lerin usageCount'unu artır
+      await this.incrementAssetUsageCounts(result.assetSelection);
 
       return result;
 
@@ -1216,6 +1204,54 @@ LIGHTING:
       ...cleanedResult,
       savedAt: Date.now(),
     });
+  }
+
+  /**
+   * Kullanılan asset'lerin usageCount değerini artır
+   * Pipeline başarıyla tamamlandığında çağrılır
+   * Hata olsa bile pipeline'ı durdurmaz
+   */
+  private async incrementAssetUsageCounts(
+    assetSelection: PipelineResult["assetSelection"]
+  ): Promise<void> {
+    if (!assetSelection) return;
+
+    const assetsToUpdate: string[] = [];
+
+    // Kullanılan tüm asset ID'lerini topla
+    if (assetSelection.product?.id) assetsToUpdate.push(assetSelection.product.id);
+    if (assetSelection.plate?.id) assetsToUpdate.push(assetSelection.plate.id);
+    if (assetSelection.cup?.id) assetsToUpdate.push(assetSelection.cup.id);
+    if (assetSelection.table?.id) assetsToUpdate.push(assetSelection.table.id);
+    if (assetSelection.decor?.id) assetsToUpdate.push(assetSelection.decor.id);
+    if (assetSelection.pet?.id) assetsToUpdate.push(assetSelection.pet.id);
+    if (assetSelection.interior?.id) assetsToUpdate.push(assetSelection.interior.id);
+
+    if (assetsToUpdate.length === 0) {
+      console.log("[Orchestrator] No assets to update usage count");
+      return;
+    }
+
+    console.log(`[Orchestrator] Incrementing usage count for ${assetsToUpdate.length} assets: ${assetsToUpdate.join(", ")}`);
+
+    // Batch güncelleme - atomik ve hızlı
+    const batch = this.db.batch();
+
+    for (const assetId of assetsToUpdate) {
+      const assetRef = this.db.collection("assets").doc(assetId);
+      batch.update(assetRef, {
+        usageCount: FieldValue.increment(1),
+        lastUsedAt: Date.now(),
+      });
+    }
+
+    try {
+      await batch.commit();
+      console.log(`[Orchestrator] Usage counts updated successfully for ${assetsToUpdate.length} assets`);
+    } catch (error) {
+      // Hata olsa bile pipeline'ı durdurmuyoruz - sadece logluyoruz
+      console.error(`[Orchestrator] Failed to update usage counts:`, error);
+    }
   }
 }
 

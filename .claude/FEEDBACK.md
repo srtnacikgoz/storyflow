@@ -326,3 +326,115 @@ Telegram onayına gönder
   - Sıralı şekilde otomatik seçilecek
   - Belirlenen saatlerde otomatik paylaşılacak
   - Kullanıcı sadece depoyu doldurur, sistem gerisini halleder
+
+---
+
+## [BUG-003] Instagram Onaylama Hatası - publishToInstagram
+- **Kategori:** bug
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-22
+- **Açıklama:** Orchestrator Dashboard'da bir işlemi "Onayla" denildiğinde şu hata alınıyor: `Hata: orchestrator.publishToInstagram is not a function`
+- **Etki:** Kullanıcı görselleri Instagram'a yayınlayamıyor
+- **Muhtemel Neden:** approveSlot endpoint'i `publishToInstagram` fonksiyonunu çağırıyor ama bu fonksiyon tanımlı değil veya export edilmemiş
+
+---
+
+## [BUG-004] holdingType Çalışmıyor - El Senaryoları Filtrelenmemesi
+- **Kategori:** bug
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-22
+- **Açıklama:** Asset'e "Kaşıkla Yenir" veya "Çatalla Yenir" seçilse bile AI hala el ile tutma senaryoları üretiyor.
+- **Kök Neden:** Sistem Claude'a "EL İÇEREN SENARYO SEÇME!" diyor ama:
+  1. El senaryoları listeden ÇIKARILMIYOR - Claude'a tüm senaryolar gönderiliyor
+  2. Claude'a sadece "seçme" deniyor, ama AI bazen dinlemiyor
+- **Çözüm Önerisi:** Kod seviyesinde el senaryolarını filtreleyip Claude'a hiç göndermemeli. `claudeService.ts` içinde `availableScenarios` listesi oluşturulurken `includesHands: true` olanlar `canUseHandScenarios === false` durumunda çıkarılmalı.
+
+---
+
+## [IMP-002] AI Monitor - Log Gruplandırması
+- **Kategori:** improvement
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-22
+- **Açıklama:** AI Monitor sayfasında her pipeline çalışmasının log'ları karışık gösteriliyor. Hangi log hangi pipeline'a ait belli değil.
+- **Mevcut Durum:** Tüm loglar düz liste halinde, pipeline ID'si bile gösterilmiyor
+- **İstenen:**
+  1. Her pipeline çalışması için görsel gruplama (collapsible card veya accordion)
+  2. Pipeline başlığında: tarih/saat, ürün tipi, sonuç (başarılı/başarısız)
+  3. Grubun içinde: Asset Seçimi → Senaryo Seçimi → Prompt → Görsel Üretimi → Kalite Kontrol → Telegram sırası
+  4. Renk kodlaması: başarılı=yeşil, başarısız=kırmızı
+- **Dosya:** `admin/src/pages/AIMonitor.tsx`
+
+---
+
+## [IMP-003] AI Monitor - Log'dan Feedback/Eğitim Özelliği
+- **Kategori:** improvement
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-22
+- **Açıklama:** AI Monitor'daki loglardan yola çıkarak düzeltme yapıp AI'yı eğitme imkanı isteniyor.
+- **İstenen Özellikler:**
+  1. Her log detayında "Sorun Bildir" veya "Düzeltme Ekle" butonu
+  2. Buton tıklandığında modal açılsın:
+     - Sorun kategorisi seçimi
+     - Açıklama alanı
+     - "Bu durumda ne yapmalıydı?" açıklaması
+  3. Bu feedback'ler `ai-feedback` collection'a kaydedilsin
+  4. Claude prompt'larına bu feedback'ler hint olarak eklensin (mevcut sistem var)
+- **İlişkili:** Mevcut `FeedbackService` ve `ai-feedback` collection kullanılabilir
+- **Dosya:** `admin/src/pages/AIMonitor.tsx`
+
+---
+
+## [IMP-004] Asset - "Elle Tutulabilir mi?" Ayrı Alan
+- **Kategori:** improvement
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-22
+- **Açıklama:** Mevcut `holdingType` dropdown'u yetersiz. "Kaşıkla yenir" ≠ "Elle tutulamaz" - bir ürün kaşıkla yenebilir ama aynı zamanda kabı elle tutulabilir.
+- **Çözüm Önerisi:** İki ayrı alan:
+  1. `eatingMethod`: "Elle yenir" | "Çatalla yenir" | "Kaşıkla yenir" | "Yenmez/Servis"
+  2. `canBeHeldByHand`: boolean (Elle tutulabilir mi?)
+- **Örnek:**
+  - Tiramisu: eatingMethod="Kaşıkla", canBeHeldByHand=false (kap tutulmaz)
+  - Puding bardağı: eatingMethod="Kaşıkla", canBeHeldByHand=true (bardak tutulabilir)
+  - Kurabiye: eatingMethod="Elle", canBeHeldByHand=true
+  - Bütün pasta: eatingMethod="Yenmez/Servis", canBeHeldByHand=false
+- **Dosyalar:**
+  - `functions/src/orchestrator/types.ts` - Type güncelleme
+  - `admin/src/types/index.ts` - Frontend type
+  - `admin/src/pages/Assets.tsx` - Form güncelleme
+  - `functions/src/orchestrator/claudeService.ts` - Senaryo filtreleme
+
+---
+
+## [IMP-005] "Şimdi Üret" - İç/Dış Mekan Seçimi
+- **Kategori:** improvement
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-22
+- **Açıklama:** Orchestrator Dashboard'daki "Hemen İçerik Üret" bölümüne iç mekan / dış mekan toggle'ı eklenmeli.
+- **Kullanım:** Seçime göre senaryolar filtrelenir:
+  - "İç Mekan" → Sadece interior senaryolar
+  - "Dış Mekan" → Sadece outdoor/terrace senaryolar
+  - "Fark Etmez" → Tümü (varsayılan)
+- **Dosyalar:**
+  - `admin/src/pages/OrchestratorDashboard.tsx` - Toggle ekleme
+  - `admin/src/services/api.ts` - locationPreference parametresi
+  - `functions/src/orchestrator/orchestrator.ts` - Senaryo filtreleme
+
+---
+
+## [IMP-006] "Şimdi Üret" - Hava Durumu Seçimi (Faz 2)
+- **Kategori:** improvement
+- **Öncelik:** low
+- **Durum:** open
+- **Tarih:** 2026-01-22
+- **Açıklama:** Hava durumuna göre senaryo filtreleme. Yağmurlu havada dış mekan güneşli görsel üretmek inandırıcılığı düşürür.
+- **Seçenekler:**
+  1. **Manuel seçim (basit):** 3 buton - ☀️ Güneşli | 🌥️ Bulutlu | 🌧️ Yağmurlu
+  2. **Otomatik API (karmaşık):** OpenWeather API ile konum bazlı hava durumu
+- **Öneri:** Manuel seçimle başla, otomatik sonra eklenebilir
+- **Etki:** "Yağmurlu" seçilirse → dış mekan senaryoları devre dışı

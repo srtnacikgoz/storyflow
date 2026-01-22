@@ -10,7 +10,6 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Queue = lazy(() => import("./pages/Queue"));
 const AddPhoto = lazy(() => import("./pages/AddPhoto"));
 const Archive = lazy(() => import("./pages/Archive"));
-const Templates = lazy(() => import("./pages/Templates"));
 const BestTimes = lazy(() => import("./pages/BestTimes"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Calendar = lazy(() => import("./pages/Calendar"));
@@ -20,6 +19,7 @@ const OrchestratorDashboard = lazy(() => import("./pages/OrchestratorDashboard")
 const Assets = lazy(() => import("./pages/Assets"));
 const TimeSlots = lazy(() => import("./pages/TimeSlots"));
 const Themes = lazy(() => import("./pages/Themes"));
+const AIMonitor = lazy(() => import("./pages/AIMonitor"));
 
 // Loading fallback component
 function PageLoader() {
@@ -43,7 +43,6 @@ function App() {
             <Route path="queue" element={<Suspense fallback={<PageLoader />}><Queue /></Suspense>} />
             <Route path="add" element={<Suspense fallback={<PageLoader />}><AddPhoto /></Suspense>} />
             <Route path="archive" element={<Suspense fallback={<PageLoader />}><Archive /></Suspense>} />
-            <Route path="templates" element={<Suspense fallback={<PageLoader />}><Templates /></Suspense>} />
             <Route path="best-times" element={<Suspense fallback={<PageLoader />}><BestTimes /></Suspense>} />
             <Route path="analytics" element={<Suspense fallback={<PageLoader />}><Analytics /></Suspense>} />
             <Route path="calendar" element={<Suspense fallback={<PageLoader />}><Calendar /></Suspense>} />
@@ -53,6 +52,7 @@ function App() {
             <Route path="assets" element={<Suspense fallback={<PageLoader />}><Assets /></Suspense>} />
             <Route path="time-slots" element={<Suspense fallback={<PageLoader />}><TimeSlots /></Suspense>} />
             <Route path="themes" element={<Suspense fallback={<PageLoader />}><Themes /></Suspense>} />
+            <Route path="ai-monitor" element={<Suspense fallback={<PageLoader />}><AIMonitor /></Suspense>} />
           </Route>
         </Routes>
         {/* Global loading indicator */}

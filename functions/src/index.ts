@@ -14,6 +14,7 @@ export * from "./controllers/healthController";
 export * from "./controllers/captionTemplateController";
 export * from "./controllers/timeScoreController";
 export * from "./controllers/orchestratorController";
+export * from "./controllers/aiLogController";
 
 // Export Schedulers
 

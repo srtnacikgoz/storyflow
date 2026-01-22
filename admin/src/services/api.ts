@@ -25,6 +25,12 @@ import type {
   PipelineResult,
   OrchestratorDashboardStats,
   Theme,
+  // AI Monitor types
+  AILog,
+  AIStats,
+  AIProvider,
+  AILogStage,
+  AILogStatus,
 } from "../types";
 
 // Firebase Functions base URL
@@ -1041,6 +1047,139 @@ class ApiService {
       method: "POST",
       body: JSON.stringify({ id }),
     });
+  }
+
+  // ==========================================
+  // AI Monitor Methods
+  // ==========================================
+
+  /**
+   * AI loglarını listele
+   */
+  async getAILogs(options?: {
+    provider?: AIProvider;
+    stage?: AILogStage;
+    status?: AILogStatus;
+    pipelineId?: string;
+    limit?: number;
+  }): Promise<AILog[]> {
+    const params = new URLSearchParams();
+    if (options?.provider) params.append("provider", options.provider);
+    if (options?.stage) params.append("stage", options.stage);
+    if (options?.status) params.append("status", options.status);
+    if (options?.pipelineId) params.append("pipelineId", options.pipelineId);
+    if (options?.limit) params.append("limit", String(options.limit));
+
+    const queryString = params.toString();
+    const endpoint = queryString ? `getAILogs?${queryString}` : "getAILogs";
+
+    const response = await this.fetch<{
+      success: boolean;
+      data: AILog[];
+      count: number;
+    }>(endpoint);
+    return response.data;
+  }
+
+  /**
+   * AI istatistiklerini getir
+   */
+  async getAIStats(hours: number = 24): Promise<AIStats> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: AIStats;
+      period: string;
+    }>(`getAIStats?hours=${hours}`);
+    return response.data;
+  }
+
+  /**
+   * Tek bir AI log kaydını getir
+   */
+  async getAILogById(id: string): Promise<AILog> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: AILog;
+    }>(`getAILogById/${id}`);
+    return response.data;
+  }
+
+  /**
+   * Pipeline'a ait AI loglarını getir
+   */
+  async getAILogsByPipeline(pipelineId: string): Promise<AILog[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: AILog[];
+      count: number;
+      pipelineId: string;
+    }>(`getAILogsByPipeline/${pipelineId}`);
+    return response.data;
+  }
+
+  /**
+   * Eski AI loglarını temizle
+   */
+  async cleanupAILogs(daysOld: number = 30): Promise<number> {
+    const response = await this.fetch<{
+      success: boolean;
+      message: string;
+      deletedCount: number;
+    }>(`cleanupAILogs?daysOld=${daysOld}`, {
+      method: "POST",
+    });
+    return response.deletedCount;
+  }
+
+  // ==========================================
+  // FEEDBACK API
+  // ==========================================
+
+  /**
+   * Yeni feedback oluştur
+   */
+  async createFeedback(data: {
+    slotId: string;
+    category: string;
+    customNote?: string;
+    pipelineId?: string;
+    scenarioId?: string;
+    productType?: string;
+    productId?: string;
+    handStyleId?: string;
+    compositionId?: string;
+  }): Promise<string> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: { id: string };
+    }>("createFeedback", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return response.data.id;
+  }
+
+  /**
+   * Slot'a ait feedback'leri getir
+   */
+  async getFeedbackBySlot(slotId: string): Promise<Array<{
+    id: string;
+    category: string;
+    customNote?: string;
+    createdAt: number;
+    resolved: boolean;
+  }>> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: Array<{
+        id: string;
+        category: string;
+        customNote?: string;
+        createdAt: number;
+        resolved: boolean;
+      }>;
+    }>(`getFeedbackBySlot?slotId=${slotId}`);
+    return response.data;
   }
 }
 

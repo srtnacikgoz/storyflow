@@ -3,6 +3,8 @@
  * img2img transformation - orijinal görsel korunarak stil uygulanır
  */
 
+import { AILogService } from "./aiLogService";
+
 // Lazy load imports - Cloud Functions startup timeout'unu önler
 // @google/generative-ai ve sharp modülleri ilk kullanımda yüklenir
 
@@ -117,6 +119,13 @@ export class GeminiService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any = null; // Lazy initialized
 
+  // Pipeline context for logging
+  private pipelineContext: {
+    pipelineId?: string;
+    slotId?: string;
+    productType?: string;
+  } = {};
+
   /**
    * Maliyet sabitleri (USD per image)
    */
@@ -130,6 +139,17 @@ export class GeminiService {
   constructor(config: GeminiConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model || "gemini-2.5-flash-image";
+  }
+
+  /**
+   * Pipeline context'i ayarla (loglama için)
+   */
+  setPipelineContext(context: {
+    pipelineId?: string;
+    slotId?: string;
+    productType?: string;
+  }): void {
+    this.pipelineContext = context;
   }
 
   /**
@@ -263,6 +283,9 @@ SCENE DIRECTION:
     // Metin yanıtını engellemek için kesin talimat
     fullPrompt += "\n\nCRITICAL: Edit the image and return ONLY the edited image. Do not provide any text. The product in your output MUST be the same product from the input image.";
 
+    const startTime = Date.now();
+    const inputImageCount = 1 + (options.referenceImages?.length || 0);
+
     try {
       console.log(`[GeminiService] Generating with model: ${this.model}`);
 
@@ -341,8 +364,24 @@ SCENE DIRECTION:
 
       // Maliyet hesapla
       const cost = GeminiService.COSTS[this.model] || 0.0;
+      const durationMs = Date.now() - startTime;
 
       console.log("[GeminiService] Image generated successfully");
+
+      // AI Log kaydet
+      await AILogService.logGemini({
+        model: this.model,
+        userPrompt: fullPrompt,
+        negativePrompt: options.negativePrompt,
+        status: "success",
+        cost,
+        durationMs,
+        inputImageCount,
+        outputImageGenerated: true,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: this.pipelineContext.productType,
+      });
 
       return {
         imageBase64: inlineData.data,
@@ -351,7 +390,27 @@ SCENE DIRECTION:
         cost,
       };
     } catch (error) {
+      const durationMs = Date.now() - startTime;
       console.error(`[GeminiService] Error with ${this.model}:`, error);
+
+      // Hata logla
+      const errorMessage = error instanceof Error ? error.message : "Unknown Gemini API error";
+      const errorType = error instanceof GeminiBlockedError ? "blocked" : "error";
+
+      await AILogService.logGemini({
+        model: this.model,
+        userPrompt: fullPrompt,
+        negativePrompt: options.negativePrompt,
+        status: errorType as "error" | "blocked",
+        error: errorMessage,
+        cost: 0,
+        durationMs,
+        inputImageCount,
+        outputImageGenerated: false,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: this.pipelineContext.productType,
+      });
 
       // Bilinen hata tiplerini kontrol et
       if (error instanceof GeminiBlockedError) {
@@ -364,7 +423,7 @@ SCENE DIRECTION:
 
       // Genel hata
       throw new GeminiApiError(
-        error instanceof Error ? error.message : "Unknown Gemini API error",
+        errorMessage,
         "API_ERROR"
       );
     }

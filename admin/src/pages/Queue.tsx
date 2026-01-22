@@ -285,20 +285,7 @@ export default function Queue() {
                       </span>
                     )}
 
-                    {/* Şablon */}
-                    {item.captionTemplateName && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-mustard/20 text-brand-mustard rounded text-xs">
-                        📋 {item.captionTemplateName}
-                      </span>
-                    )}
                   </div>
-
-                  {/* Caption Preview */}
-                  {item.caption && (
-                    <p className="text-sm text-gray-600 mt-2 line-clamp-1 italic">
-                      "{item.caption}"
-                    </p>
-                  )}
                 </div>
               </div>
 

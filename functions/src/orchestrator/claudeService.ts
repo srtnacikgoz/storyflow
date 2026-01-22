@@ -17,6 +17,8 @@ import {
   HandStyleId,
 } from "./types";
 import { getCompactTrainingContext } from "./promptTrainingService";
+import { AILogService } from "../services/aiLogService";
+import { AILogStage } from "../types";
 
 // Lazy load Anthropic SDK
 let anthropicClient: Anthropic | null = null;
@@ -28,9 +30,27 @@ export class ClaudeService {
   private apiKey: string;
   private model: string;
 
+  // Pipeline context for logging
+  private pipelineContext: {
+    pipelineId?: string;
+    slotId?: string;
+    productType?: string;
+  } = {};
+
   constructor(apiKey: string, model: string = "claude-sonnet-4-20250514") {
     this.apiKey = apiKey;
     this.model = model;
+  }
+
+  /**
+   * Pipeline context'i ayarla (loglama için)
+   */
+  setPipelineContext(context: {
+    pipelineId?: string;
+    slotId?: string;
+    productType?: string;
+  }): void {
+    this.pipelineContext = context;
   }
 
   /**
@@ -79,10 +99,41 @@ export class ClaudeService {
 
     // Çeşitlilik kurallarını çıkar
     const shouldIncludePet = effectiveRules?.shouldIncludePet || false;
-    const blockedTables = effectiveRules?.blockedTables || [];
-    const blockedProducts = effectiveRules?.blockedProducts || [];
-    const blockedPlates = effectiveRules?.blockedPlates || [];
-    const blockedCups = effectiveRules?.blockedCups || [];
+    let blockedTables = effectiveRules?.blockedTables || [];
+    let blockedProducts = effectiveRules?.blockedProducts || [];
+    let blockedPlates = effectiveRules?.blockedPlates || [];
+    let blockedCups = effectiveRules?.blockedCups || [];
+
+    // Bloklamadan sonra seçenek kalıp kalmadığını kontrol et
+    // Kalmazsa bloklama yapma (edge case: tek ürün var ve o da bloklu)
+    const availableProductIds = availableAssets.products.map((a: Asset) => a.id);
+    const remainingProducts = availableProductIds.filter(id => !blockedProducts.includes(id));
+    if (remainingProducts.length === 0 && availableProductIds.length > 0) {
+      console.log(`[ClaudeService] Tüm ürünler bloklu, bloklama kaldırılıyor. Bloklu: [${blockedProducts.join(", ")}], Mevcut: [${availableProductIds.join(", ")}]`);
+      blockedProducts = [];
+    }
+
+    // Aynı kontrolü tabak, fincan ve masa için de yap
+    const availablePlateIds = availableAssets.plates.map((a: Asset) => a.id);
+    const remainingPlates = availablePlateIds.filter(id => !blockedPlates.includes(id));
+    if (remainingPlates.length === 0 && availablePlateIds.length > 0) {
+      console.log(`[ClaudeService] Tüm tabaklar bloklu, bloklama kaldırılıyor.`);
+      blockedPlates = [];
+    }
+
+    const availableCupIds = availableAssets.cups.map((a: Asset) => a.id);
+    const remainingCups = availableCupIds.filter(id => !blockedCups.includes(id));
+    if (remainingCups.length === 0 && availableCupIds.length > 0) {
+      console.log(`[ClaudeService] Tüm fincanlar bloklu, bloklama kaldırılıyor.`);
+      blockedCups = [];
+    }
+
+    const availableTableIds = availableAssets.tables.map((a: Asset) => a.id);
+    const remainingTables = availableTableIds.filter(id => !blockedTables.includes(id));
+    if (remainingTables.length === 0 && availableTableIds.length > 0) {
+      console.log(`[ClaudeService] Tüm masalar bloklu, bloklama kaldırılıyor.`);
+      blockedTables = [];
+    }
 
     const systemPrompt = `Sen bir görsel içerik direktörüsün. Sade Patisserie için Instagram içerikleri hazırlıyorsun.
 
@@ -199,6 +250,8 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
   "petReason": "${shouldIncludePet ? "Köpek seçim nedeni" : "Köpek neden dahil edilmedi"}"
 }`;
 
+    const startTime = Date.now();
+
     try {
       const response = await client.messages.create({
         model: this.model,
@@ -237,12 +290,32 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
       const environment = selection.environmentId ? availableAssets.environments.find((a: Asset) => a.id === selection.environmentId) : undefined;
 
       if (!product) {
-        const availableIds = availableAssets.products.map((a: Asset) => a.id).join(", ");
-        console.error(`[ClaudeService] Product not found. Selected: ${selection.productId}, Available: ${availableIds}`);
-        throw new Error(`Seçilen ürün bulunamadı (ID: ${selection.productId}). Mevcut ürün sayısı: ${availableAssets.products.length}. Assets sayfasından "${productType}" kategorisinde ürün olduğundan emin olun.`);
+        // Detaylı hata logu - Claude'un ne döndürdüğünü vs mevcut ID'leri göster
+        const availableIds = availableAssets.products.map((a: Asset) => a.id);
+        console.error(`[ClaudeService] Product mismatch - Claude returned: "${selection.productId}", Available IDs: [${availableIds.join(", ")}]`);
+        console.error(`[ClaudeService] Full Claude response: ${JSON.stringify(selection)}`);
+        throw new Error(`Seçilen ürün bulunamadı. Claude ID: ${selection.productId}, Mevcut: ${availableIds.join(", ")}`);
       }
 
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const durationMs = Date.now() - startTime;
+
+      // AI Log kaydet
+      await AILogService.logClaude("asset-selection" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response: textContent.text,
+        responseData: selection,
+        status: "success",
+        tokensUsed,
+        cost,
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: productType,
+      });
 
       return {
         success: true,
@@ -259,10 +332,25 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
           petReason: selection.petReason,
         },
         tokensUsed,
-        cost: this.calculateCost(response.usage.input_tokens, response.usage.output_tokens),
+        cost,
       };
     } catch (error) {
+      const durationMs = Date.now() - startTime;
       console.error("[ClaudeService] Asset selection error:", error);
+
+      // Hata logla
+      await AILogService.logClaude("asset-selection" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: productType,
+      });
+
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -284,7 +372,8 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
     timeOfDay: string,
     selectedAssets: AssetSelection,
     availableScenarios: Array<{ id: string; name: string; description: string; includesHands: boolean }>,
-    effectiveRules?: EffectiveRules
+    effectiveRules?: EffectiveRules,
+    feedbackHints?: string // Kullanıcı geri bildirimlerinden elde edilen ipuçları
   ): Promise<ClaudeResponse<ScenarioSelection>> {
     const client = this.getClient();
 
@@ -297,6 +386,10 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
     // Kullanılabilir el stilleri (bloklanmamış olanlar)
     const availableHandStyles = handStyles.filter(hs => !blockedHandStyles.includes(hs.id));
 
+    // Ürünün tutma şekli - el senaryoları için kritik
+    const productHoldingType = selectedAssets.product.holdingType || "hand";
+    const canUseHandScenarios = productHoldingType === "hand";
+
     const systemPrompt = `Sen bir içerik stratejistisin. Instagram için en etkili senaryoyu seçiyorsun.
 
 Seçim kriterleri:
@@ -306,10 +399,14 @@ Seçim kriterleri:
 4. ÇEŞİTLİLİK: Son paylaşımlardan FARKLI senaryo ve kompozisyon seç
 5. ETKİLEŞİM: Yüksek etkileşim potansiyeli olan senaryolar öncelikli
 6. KÖPEK: ${shouldIncludePet ? "Köpek dahil edildi, KÖPEK UYUMLU senaryo seç (kahve-kosesi, yarim-kaldi, cam-kenari)" : "Köpek yok, herhangi senaryo uygun"}
+7. TUTMA ŞEKLİ: ${canUseHandScenarios
+      ? "Bu ürün elle tutulabilir - el içeren senaryolar uygundur"
+      : `⚠️ KRİTİK: Bu ürün "${productHoldingType}" türünde - EL İÇEREN SENARYO SEÇME! Sadece tabakta/servis halinde gösterilmeli.`}
 
 ÖNEMLİ ÇEŞİTLİLİK KURALLARI:
 - ${blockedHandStyles.length > 0 ? `Bu el stillerini KULLANMA (son kullanılmış): ${blockedHandStyles.join(", ")}` : "Tüm el stilleri kullanılabilir"}
 - ${blockedCompositions.length > 0 ? `Bu kompozisyonları KULLANMA (son kullanılmış): ${blockedCompositions.join(", ")}` : "Tüm kompozisyonlar kullanılabilir"}
+${feedbackHints || ""}
 
 JSON formatında yanıt ver.`;
 
@@ -319,12 +416,14 @@ Zaman: ${timeOfDay}
 ${shouldIncludePet ? "⭐ KÖPEK SEÇİLDİ - Köpek uyumlu senaryo seç!" : ""}
 
 Seçilen Asset'ler:
-- Ürün: ${selectedAssets.product.filename} (stil: ${selectedAssets.product.visualProperties?.style})
+- Ürün: ${selectedAssets.product.filename} (stil: ${selectedAssets.product.visualProperties?.style}, tutma: ${productHoldingType})
 - Tabak: ${selectedAssets.plate?.filename || "yok"}
 - Fincan: ${selectedAssets.cup?.filename || "yok"}
 - Masa: ${selectedAssets.table?.filename} (malzeme: ${selectedAssets.table?.visualProperties?.material})
 - Dekorasyon: ${selectedAssets.decor?.filename || "yok"}
 - Köpek: ${selectedAssets.pet?.filename || "yok"}
+
+${!canUseHandScenarios ? `⚠️ UYARI: Ürün tutma tipi "${productHoldingType}" - Bu ürün ${productHoldingType === "fork" ? "çatalla" : productHoldingType === "spoon" ? "kaşıkla" : "dokunmadan"} servis edilmeli. EL İLE TUTMA SAHNESI YAPMA!` : ""}
 
 MEVCUT SENARYOLAR:
 ${JSON.stringify(availableScenarios, null, 2)}
@@ -346,6 +445,8 @@ Yanıt formatı:
   "compositionId": "bottom-right | bottom-left | top-corner | center-hold | product-front | overhead | ..." (senaryo varyantı),
   "compositionNotes": "Kompozisyon için özel notlar..."
 }`;
+
+    const startTime = Date.now();
 
     try {
       const response = await client.messages.create({
@@ -378,6 +479,24 @@ Yanıt formatı:
         : undefined;
 
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const durationMs = Date.now() - startTime;
+
+      // AI Log kaydet
+      await AILogService.logClaude("scenario-selection" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response: textContent.text,
+        responseData: selection,
+        status: "success",
+        tokensUsed,
+        cost,
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: productType,
+      });
 
       return {
         success: true,
@@ -392,10 +511,25 @@ Yanıt formatı:
           composition: selection.compositionNotes,
         },
         tokensUsed,
-        cost: this.calculateCost(response.usage.input_tokens, response.usage.output_tokens),
+        cost,
       };
     } catch (error) {
+      const durationMs = Date.now() - startTime;
       console.error("[ClaudeService] Scenario selection error:", error);
+
+      // Hata logla
+      await AILogService.logClaude("scenario-selection" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: productType,
+      });
+
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -475,6 +609,8 @@ Görseli değerlendir ve JSON formatında yanıt ver:
   "regenerationHints": "Eğer yeniden üretilecekse, ne değişmeli... (duplikasyon varsa: ONLY ONE product, ONLY ONE cup)"
 }`;
 
+    const startTime = Date.now();
+
     try {
       const response = await client.messages.create({
         model: this.model,
@@ -512,6 +648,8 @@ Görseli değerlendir ve JSON formatında yanıt ver:
 
       const evaluation = JSON.parse(jsonMatch[0]);
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const durationMs = Date.now() - startTime;
 
       // Duplikasyon kontrolü
       const hasDuplication = evaluation.duplicateCheck?.hasDuplication ||
@@ -545,6 +683,22 @@ Görseli değerlendir ve JSON formatında yanıt ver:
 
       console.log(`[ClaudeService] QC Result - Score: ${finalScore}, Duplication: ${hasDuplication}, Regenerate: ${shouldRegenerate}`);
 
+      // AI Log kaydet
+      await AILogService.logClaude("quality-control" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response: textContent.text,
+        responseData: evaluation,
+        status: "success",
+        tokensUsed,
+        cost,
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: this.pipelineContext.productType,
+      });
+
       return {
         success: true,
         data: {
@@ -565,10 +719,25 @@ Görseli değerlendir ve JSON formatında yanıt ver:
           regenerationHints,
         },
         tokensUsed,
-        cost: this.calculateCost(response.usage.input_tokens, response.usage.output_tokens),
+        cost,
       };
     } catch (error) {
+      const durationMs = Date.now() - startTime;
       console.error("[ClaudeService] Quality control error:", error);
+
+      // Hata logla
+      await AILogService.logClaude("quality-control" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: this.pipelineContext.productType,
+      });
+
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -631,6 +800,8 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
   "hashtags": ["#sadepatisserie", "#antalya", ...]
 }`;
 
+    const startTime = Date.now();
+
     try {
       const response = await client.messages.create({
         model: this.model,
@@ -651,6 +822,24 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
 
       const content = JSON.parse(jsonMatch[0]);
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const durationMs = Date.now() - startTime;
+
+      // AI Log kaydet
+      await AILogService.logClaude("content-generation" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response: textContent.text,
+        responseData: content,
+        status: "success",
+        tokensUsed,
+        cost,
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: productType,
+      });
 
       return {
         success: true,
@@ -662,10 +851,25 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
           generatedAt: Date.now(),
         },
         tokensUsed,
-        cost: this.calculateCost(response.usage.input_tokens, response.usage.output_tokens),
+        cost,
       };
     } catch (error) {
+      const durationMs = Date.now() - startTime;
       console.error("[ClaudeService] Content generation error:", error);
+
+      // Hata logla
+      await AILogService.logClaude("content-generation" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: productType,
+      });
+
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -768,6 +972,8 @@ Prompt'u optimize et:
   "customizations": ["eklenen detay 1", "eklenen detay 2"]
 }`;
 
+    const startTime = Date.now();
+
     try {
       const response = await client.messages.create({
         model: this.model,
@@ -788,6 +994,24 @@ Prompt'u optimize et:
 
       const result = JSON.parse(jsonMatch[0]);
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const durationMs = Date.now() - startTime;
+
+      // AI Log kaydet
+      await AILogService.logClaude("prompt-optimization" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response: textContent.text,
+        responseData: result,
+        status: "success",
+        tokensUsed,
+        cost,
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: this.pipelineContext.productType,
+      });
 
       return {
         success: true,
@@ -797,10 +1021,25 @@ Prompt'u optimize et:
           customizations: result.customizations,
         },
         tokensUsed,
-        cost: this.calculateCost(response.usage.input_tokens, response.usage.output_tokens),
+        cost,
       };
     } catch (error) {
+      const durationMs = Date.now() - startTime;
       console.error("[ClaudeService] Prompt optimization error:", error);
+
+      // Hata logla
+      await AILogService.logClaude("prompt-optimization" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: this.pipelineContext.productType,
+      });
+
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",

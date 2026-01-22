@@ -35,7 +35,7 @@ export interface QueueItem {
   enhancedUrl?: string;
   productCategory: ProductCategory;
   productName?: string;
-  caption: string;
+  caption?: string; // Artık kullanılmıyor - Instagram API caption desteklemiyor
   status: QueueStatus;
   uploadedAt: number;
   processedAt?: number;
@@ -320,7 +320,7 @@ export interface CalendarItem {
   originalUrl: string;
   productName?: string;
   productCategory: ProductCategory;
-  caption: string;
+  caption?: string; // Artık kullanılmıyor
   scheduledFor?: number;
   schedulingMode: SchedulingMode;
   status: QueueStatus;
@@ -355,7 +355,6 @@ export type OrchestratorProductType =
   | "croissants"
   | "pastas"
   | "chocolates"
-  | "macarons"
   | "coffees";
 
 // Prop tipleri
@@ -369,6 +368,9 @@ export type EnvironmentType = "indoor" | "outdoor" | "window" | "cafe" | "home";
 
 // Evcil hayvan tipleri
 export type PetType = "dogs" | "cats";
+
+// Ürün tutma şekli (el, çatal, kaşık, hiçbiri)
+export type HoldingType = "hand" | "fork" | "spoon" | "none";
 
 // Asset
 export interface OrchestratorAsset {
@@ -384,6 +386,8 @@ export interface OrchestratorAsset {
     material?: string;
     shape?: string;
   };
+  // Ürün tutma şekli (sadece products için)
+  holdingType?: HoldingType;
   usageCount: number;
   lastUsedAt?: number;
   tags: string[];
@@ -519,10 +523,10 @@ export interface PipelineResult {
     regenerationHints?: string;
   };
   contentPackage?: {
-    caption: string;
+    caption?: string; // Artık kullanılmıyor
     captionAlternatives?: string[];
-    hashtags: string[];
-    generatedAt: number;
+    hashtags?: string[]; // Artık kullanılmıyor
+    generatedAt?: number;
   };
   telegramMessageId?: number;
   approvalStatus?: "pending" | "approved" | "rejected" | "regenerate";
@@ -552,4 +556,148 @@ export interface OrchestratorDashboardStats {
     totalRuns: number;
     totalCost: string;
   };
+}
+
+// ==========================================
+// AI Monitor Types
+// ==========================================
+
+// AI Provider tipi
+export type AIProvider = "claude" | "gemini";
+
+// AI Log aşaması (orchestrator pipeline aşamaları)
+export type AILogStage =
+  | "asset-selection"      // Claude: Asset seçimi
+  | "scenario-selection"   // Claude: Senaryo seçimi
+  | "prompt-optimization"  // Claude: Prompt optimizasyonu
+  | "image-generation"     // Gemini: Görsel üretimi
+  | "quality-control"      // Claude: Kalite kontrolü
+  | "content-generation";  // Claude: Caption üretimi
+
+// AI Log durumu
+export type AILogStatus = "success" | "error" | "blocked";
+
+// AI Log kaydı
+export interface AILog {
+  id: string;
+
+  // Provider ve aşama bilgileri
+  provider: AIProvider;
+  stage: AILogStage;
+  model: string;
+
+  // Pipeline bilgileri
+  pipelineId?: string;      // Orchestrator run ID
+  slotId?: string;          // Time slot ID
+  productType?: string;     // Ürün tipi
+
+  // Prompt bilgileri
+  systemPrompt?: string;    // Claude için system prompt
+  userPrompt: string;       // Ana prompt
+  negativePrompt?: string;  // Gemini negative prompt
+
+  // Yanıt bilgileri
+  response?: string;        // AI yanıtı (JSON veya text)
+  responseData?: Record<string, unknown>; // Parse edilmiş yanıt
+
+  // Durum
+  status: AILogStatus;
+  error?: string;           // Hata mesajı
+
+  // Metrikler
+  tokensUsed?: number;      // Token kullanımı (Claude)
+  cost?: number;            // Maliyet (USD)
+  durationMs: number;       // İşlem süresi (ms)
+
+  // Görsel bilgileri (Gemini için)
+  inputImageCount?: number;   // Input görsel sayısı
+  outputImageGenerated?: boolean;
+
+  // Meta
+  createdAt: number;        // Timestamp
+}
+
+// AI Stats (istatistikler)
+export interface AIStats {
+  totalCalls: number;
+  claudeCalls: number;
+  geminiCalls: number;
+  successRate: number;
+  totalCost: number;
+  avgDurationMs: number;
+  byStage: Record<string, number>;
+  errorCount: number;
+}
+
+// ==========================================
+// AI Feedback System Types
+// ==========================================
+
+// Sorun kategorileri
+export type IssueCategoryId =
+  | "holding-mismatch"    // Tutma şekli uyumsuz
+  | "product-unrecognized" // Ürün tanınmıyor
+  | "composition-bad"      // Kompozisyon kötü
+  | "lighting-bad"         // Işık sorunu
+  | "realism-low"          // Gerçekçilik düşük
+  | "background-issue"     // Arka plan sorunu
+  | "hand-anatomy"         // El anatomisi bozuk
+  | "color-mismatch"       // Renk uyumsuzluğu
+  | "other";               // Diğer
+
+// Sorun kategori açıklamaları
+export const ISSUE_CATEGORIES: Record<IssueCategoryId, { label: string; description: string }> = {
+  "holding-mismatch": {
+    label: "Tutma Şekli Uyumsuz",
+    description: "Ürün elle tutulmaması gereken şekilde tutulmuş",
+  },
+  "product-unrecognized": {
+    label: "Ürün Tanınmıyor",
+    description: "Ürün bozuk görünüyor veya tanınmıyor",
+  },
+  "composition-bad": {
+    label: "Kompozisyon Kötü",
+    description: "Görsel düzeni ve yerleşim sorunlu",
+  },
+  "lighting-bad": {
+    label: "Işık Sorunu",
+    description: "Aydınlatma yapay veya uygunsuz",
+  },
+  "realism-low": {
+    label: "Gerçekçilik Düşük",
+    description: "Görsel yapay belli oluyor",
+  },
+  "background-issue": {
+    label: "Arka Plan Sorunu",
+    description: "Arka plan uygunsuz veya dikkat dağıtıcı",
+  },
+  "hand-anatomy": {
+    label: "El Anatomisi Bozuk",
+    description: "Parmak sayısı veya pozisyon hatası",
+  },
+  "color-mismatch": {
+    label: "Renk Uyumsuzluğu",
+    description: "Renkler referans görselle uyuşmuyor",
+  },
+  "other": {
+    label: "Diğer",
+    description: "Yukarıdakilerden farklı bir sorun",
+  },
+};
+
+// Kullanıcı geri bildirimi
+export interface IssueFeedback {
+  id: string;
+  slotId: string;
+  pipelineId?: string;
+  category: IssueCategoryId;
+  customNote?: string;
+  scenarioId?: string;
+  productType?: string;
+  productId?: string;
+  handStyleId?: string;
+  compositionId?: string;
+  createdAt: number;
+  resolved: boolean;
+  resolvedAt?: number;
 }

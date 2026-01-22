@@ -3,6 +3,73 @@
  * Instagram Automation - Sade Patisserie
  */
 
+// ==========================================
+// AI MONITOR TYPES
+// ==========================================
+
+/**
+ * AI Service Provider
+ */
+export type AIProvider = "claude" | "gemini";
+
+/**
+ * AI Log Stage - Orchestrator pipeline aşamaları
+ */
+export type AILogStage =
+  | "asset-selection"    // Claude: Asset seçimi
+  | "scenario-selection" // Claude: Senaryo seçimi
+  | "prompt-optimization"// Claude: Prompt optimizasyonu
+  | "image-generation"   // Gemini: Görsel üretimi
+  | "quality-control"    // Claude: Kalite kontrolü
+  | "content-generation";// Claude: Caption üretimi
+
+/**
+ * AI Log Status
+ */
+export type AILogStatus = "success" | "error" | "blocked";
+
+/**
+ * AI Log Entry - Her AI çağrısının kaydı
+ */
+export interface AILog {
+  id: string;
+
+  // Provider ve aşama bilgileri
+  provider: AIProvider;
+  stage: AILogStage;
+  model: string;
+
+  // Pipeline bilgileri
+  pipelineId?: string;      // Orchestrator run ID
+  slotId?: string;          // Time slot ID
+  productType?: string;     // Ürün tipi
+
+  // Prompt bilgileri
+  systemPrompt?: string;    // Claude için system prompt
+  userPrompt: string;       // Ana prompt
+  negativePrompt?: string;  // Gemini negative prompt
+
+  // Yanıt bilgileri
+  response?: string;        // AI yanıtı (JSON veya text)
+  responseData?: Record<string, unknown>; // Parse edilmiş yanıt
+
+  // Durum
+  status: AILogStatus;
+  error?: string;           // Hata mesajı
+
+  // Metrikler
+  tokensUsed?: number;      // Token kullanımı (Claude)
+  cost?: number;            // Maliyet (USD)
+  durationMs: number;       // İşlem süresi (ms)
+
+  // Görsel bilgileri (Gemini için)
+  inputImageCount?: number;   // Input görsel sayısı
+  outputImageGenerated?: boolean;
+
+  // Meta
+  createdAt: number;        // Timestamp
+}
+
 /**
  * AI Model Types for Image Enhancement
  * - gemini-flash: Gemini 2.5 Flash Image (hızlı, $0.01/görsel)
@@ -88,7 +155,7 @@ export interface Photo {
   filename: string;
   originalUrl: string;
   enhancedUrl?: string;
-  caption: string;
+  caption?: string; // Artık kullanılmıyor - Instagram API caption desteklemiyor
   uploadedAt: number;
   processed: boolean;
   status: "pending" | "processing" | "awaiting_approval" | "scheduled" | "completed" | "failed" | "rejected";
@@ -152,7 +219,7 @@ export interface Photo {
 export interface InstagramPost {
   id: string;
   imageUrl: string;
-  caption: string;
+  caption?: string; // Artık kullanılmıyor
   timestamp: number;
 }
 

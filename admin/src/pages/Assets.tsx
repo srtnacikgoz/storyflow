@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
-import type { OrchestratorAsset, AssetCategory } from "../types";
+import type { OrchestratorAsset, AssetCategory, HoldingType } from "../types";
 import { useLoadingOperation } from "../contexts/LoadingContext";
 
 // Kategori etiketleri
@@ -20,7 +20,6 @@ const SUBTYPE_LABELS: Record<string, string> = {
   croissants: "Kruvasan",
   pastas: "Pasta",
   chocolates: "Çikolata",
-  macarons: "Makaron",
   coffees: "Kahve",
   // Props
   plates: "Tabak",
@@ -50,7 +49,7 @@ const SUBTYPE_LABELS: Record<string, string> = {
 
 // Alt tipler kategori bazlı
 const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
-  products: ["croissants", "pastas", "chocolates", "macarons", "coffees"],
+  products: ["croissants", "pastas", "chocolates", "coffees"],
   props: ["plates", "cups", "cutlery", "napkins"],
   furniture: ["tables", "chairs", "decor"],
   environments: ["indoor", "outdoor", "window", "cafe", "home"],
@@ -489,6 +488,7 @@ function AssetModal({
   const [dominantColors, setDominantColors] = useState(asset?.visualProperties?.dominantColors?.join(", ") || "");
   const [style, setStyle] = useState(asset?.visualProperties?.style || "modern");
   const [material, setMaterial] = useState(asset?.visualProperties?.material || "");
+  const [holdingType, setHoldingType] = useState<HoldingType>(asset?.holdingType || "hand");
   const [saving, setSaving] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -520,6 +520,7 @@ function AssetModal({
       setDominantColors(asset.visualProperties?.dominantColors?.join(", ") || "");
       setStyle(asset.visualProperties?.style || "modern");
       setMaterial(asset.visualProperties?.material || "");
+      setHoldingType(asset.holdingType || "hand");
     }
   }, [asset]);
 
@@ -576,6 +577,8 @@ function AssetModal({
           style: parsedStyle,
           ...(parsedMaterial && { material: parsedMaterial }),
         },
+        // Sadece products kategorisinde holdingType kaydedilir
+        ...(category === "products" && { holdingType }),
       };
 
       if (isEditMode && asset) {
@@ -787,6 +790,28 @@ function AssetModal({
                 <option value="metal">Metal</option>
                 <option value="marble">Mermer</option>
               </select>
+            </div>
+          )}
+
+          {/* Tutma Şekli - sadece products kategorisinde */}
+          {category === "products" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tutma Şekli
+              </label>
+              <select
+                value={holdingType}
+                onChange={(e) => setHoldingType(e.target.value as HoldingType)}
+                className="input w-full"
+              >
+                <option value="hand">Elle Tutulabilir (kurabiye, kruvasan)</option>
+                <option value="fork">Çatalla Yenir (tiramisu, pasta dilimi)</option>
+                <option value="spoon">Kaşıkla Yenir (puding, sufle)</option>
+                <option value="none">Dokunulmaz (bütün kek, tart)</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                AI senaryo seçiminde "el tutma" sahneleri için kullanılır
+              </p>
             </div>
           )}
 

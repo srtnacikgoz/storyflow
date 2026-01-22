@@ -8,7 +8,8 @@ import { defineSecret } from "firebase-functions/params";
 import { getFirestore } from "firebase-admin/firestore";
 import { getCors, getConfig } from "../lib/serviceFactory";
 import { OrchestratorScheduler } from "../orchestrator/scheduler";
-import { Asset, TimeSlotRule, ProductType, OrchestratorConfig, Theme, DEFAULT_THEMES } from "../orchestrator/types";
+import { Asset, TimeSlotRule, ProductType, OrchestratorConfig, Theme, DEFAULT_THEMES, IssueCategoryId } from "../orchestrator/types";
+import { FeedbackService } from "../services/feedbackService";
 
 const REGION = "europe-west1";
 const db = getFirestore();
@@ -1764,6 +1765,135 @@ export const getPetUsageStats = functions
         });
       } catch (error) {
         console.error("[getPetUsageStats] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+// ==========================================
+// FEEDBACK ENDPOINTS
+// ==========================================
+
+/**
+ * Yeni feedback oluştur
+ * POST /createFeedback
+ * Body: { slotId, category, customNote?, pipelineId?, scenarioId?, productType?, productId?, handStyleId?, compositionId? }
+ */
+export const createFeedback = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      if (request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        const {
+          slotId,
+          category,
+          customNote,
+          pipelineId,
+          scenarioId,
+          productType,
+          productId,
+          handStyleId,
+          compositionId,
+        } = request.body;
+
+        // Validasyon
+        if (!slotId || !category) {
+          response.status(400).json({
+            success: false,
+            error: "slotId ve category zorunludur",
+          });
+          return;
+        }
+
+        const feedbackId = await FeedbackService.createFeedback({
+          slotId,
+          category: category as IssueCategoryId,
+          customNote,
+          pipelineId,
+          scenarioId,
+          productType,
+          productId,
+          handStyleId,
+          compositionId,
+        });
+
+        response.json({
+          success: true,
+          data: { id: feedbackId },
+        });
+      } catch (error) {
+        console.error("[createFeedback] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Slot'a ait feedback'leri getir
+ * GET /getFeedbackBySlot?slotId=xxx
+ */
+export const getFeedbackBySlot = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const slotId = request.query.slotId as string;
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId parametresi zorunludur",
+          });
+          return;
+        }
+
+        const feedbacks = await FeedbackService.getFeedbackBySlot(slotId);
+
+        response.json({
+          success: true,
+          data: feedbacks,
+        });
+      } catch (error) {
+        console.error("[getFeedbackBySlot] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
+/**
+ * Feedback istatistiklerini getir
+ * GET /getFeedbackStats
+ */
+export const getFeedbackStats = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const stats = await FeedbackService.getStats();
+
+        response.json({
+          success: true,
+          data: stats,
+        });
+      } catch (error) {
+        console.error("[getFeedbackStats] Error:", error);
         response.status(500).json({
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

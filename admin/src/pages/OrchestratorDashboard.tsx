@@ -1,19 +1,21 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../services/api";
+import { useLoading } from "../contexts/LoadingContext";
 import type {
   OrchestratorDashboardStats,
   ScheduledSlot,
   OrchestratorProductType,
   ScheduledSlotStatus,
   Theme,
+  IssueCategoryId,
 } from "../types";
+import { ISSUE_CATEGORIES } from "../types";
 
 // Ürün tipi etiketleri
 const PRODUCT_LABELS: Record<OrchestratorProductType, string> = {
   croissants: "Kruvasan",
   pastas: "Pasta",
   chocolates: "Çikolata",
-  macarons: "Makaron",
   coffees: "Kahve",
 };
 
@@ -67,6 +69,9 @@ const GRID_CONFIG: Record<GridSize, { cols: string; aspectRatio: string; label: 
 };
 
 export default function OrchestratorDashboard() {
+  // Global loading context
+  const { startLoading, stopLoading } = useLoading();
+
   const [stats, setStats] = useState<OrchestratorDashboardStats | null>(null);
   const [slots, setSlots] = useState<ScheduledSlot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,16 +107,22 @@ export default function OrchestratorDashboard() {
   // Detay Modal
   const [selectedSlot, setSelectedSlot] = useState<ScheduledSlot | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [editingCaption, setEditingCaption] = useState(false);
-  const [captionText, setCaptionText] = useState("");
-  const [hashtagsText, setHashtagsText] = useState("");
+
+  // Sorun Bildir Modal
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportCategory, setReportCategory] = useState<IssueCategoryId>("holding-mismatch");
+  const [reportNote, setReportNote] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
 
   // İşlem durumları
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showGlobalLoading = false) => {
     setLoading(true);
     setError(null);
+    if (showGlobalLoading) {
+      startLoading("load-data", "Veriler yükleniyor...");
+    }
     try {
       const [statsData, slotsData, themesData] = await Promise.all([
         api.getOrchestratorDashboardStats(),
@@ -125,8 +136,11 @@ export default function OrchestratorDashboard() {
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
       setLoading(false);
+      if (showGlobalLoading) {
+        stopLoading("load-data");
+      }
     }
-  }, []);
+  }, [startLoading, stopLoading]);
 
   useEffect(() => {
     loadData();
@@ -224,6 +238,7 @@ export default function OrchestratorDashboard() {
   const handleDeleteSlot = async (slotId: string) => {
     if (!confirm("Bu slot silinecek. Emin misiniz?")) return;
     setActionLoading(slotId);
+    startLoading(`delete-${slotId}`, "Slot siliniyor...");
     try {
       await api.deleteScheduledSlot(slotId);
       loadData();
@@ -231,12 +246,14 @@ export default function OrchestratorDashboard() {
       alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
     } finally {
       setActionLoading(null);
+      stopLoading(`delete-${slotId}`);
     }
   };
 
   const handleRetrySlot = async (slotId: string) => {
     if (!confirm("Slot yeniden denenecek. Emin misiniz?")) return;
     setActionLoading(slotId);
+    startLoading(`retry-${slotId}`, "Yeniden deneniyor...");
     try {
       await api.retrySlot(slotId);
       alert("Yeniden deneme başlatıldı!");
@@ -245,12 +262,14 @@ export default function OrchestratorDashboard() {
       alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
     } finally {
       setActionLoading(null);
+      stopLoading(`retry-${slotId}`);
     }
   };
 
   const handleApproveSlot = async (slotId: string) => {
     if (!confirm("Slot onaylanıp Instagram'a yayınlanacak. Emin misiniz?")) return;
     setActionLoading(slotId);
+    startLoading(`approve-${slotId}`, "Instagram'a yayınlanıyor...");
     try {
       await api.approveSlot(slotId);
       alert("Yayınlandı!");
@@ -260,12 +279,14 @@ export default function OrchestratorDashboard() {
       alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
     } finally {
       setActionLoading(null);
+      stopLoading(`approve-${slotId}`);
     }
   };
 
   const handleRejectSlot = async (slotId: string) => {
     if (!confirm("Slot reddedilecek. Emin misiniz?")) return;
     setActionLoading(slotId);
+    startLoading(`reject-${slotId}`, "Slot reddediliyor...");
     try {
       await api.rejectSlot(slotId);
       loadData();
@@ -274,11 +295,13 @@ export default function OrchestratorDashboard() {
       alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
     } finally {
       setActionLoading(null);
+      stopLoading(`reject-${slotId}`);
     }
   };
 
   const handleResendTelegram = async (slotId: string) => {
     setActionLoading(slotId);
+    startLoading(`telegram-${slotId}`, "Telegram bildirimi gönderiliyor...");
     try {
       await api.orchestratorResendTelegram(slotId);
       alert("Telegram bildirimi gönderildi!");
@@ -286,25 +309,7 @@ export default function OrchestratorDashboard() {
       alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
     } finally {
       setActionLoading(null);
-    }
-  };
-
-  const handleSaveCaption = async () => {
-    if (!selectedSlot) return;
-    setActionLoading("caption");
-    try {
-      const hashtags = hashtagsText.split(/[\s,]+/).filter(h => h.startsWith("#") || h.length > 0).map(h => h.startsWith("#") ? h : `#${h}`);
-      await api.updateSlotCaption(selectedSlot.id, captionText, hashtags);
-      alert("Caption güncellendi!");
-      setEditingCaption(false);
-      loadData();
-      // Modal'daki veriyi güncelle
-      const updatedSlot = await api.getSlotDetail(selectedSlot.id);
-      setSelectedSlot(updatedSlot);
-    } catch (err) {
-      alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
-    } finally {
-      setActionLoading(null);
+      stopLoading(`telegram-${slotId}`);
     }
   };
 
@@ -313,12 +318,43 @@ export default function OrchestratorDashboard() {
     try {
       const fullSlot = await api.getSlotDetail(slot.id);
       setSelectedSlot(fullSlot);
-      setCaptionText(fullSlot.pipelineResult?.contentPackage?.caption || "");
-      setHashtagsText(fullSlot.pipelineResult?.contentPackage?.hashtags?.join(" ") || "");
-      setEditingCaption(false);
       setShowDetailModal(true);
     } catch (err) {
       alert("Detay yüklenemedi: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    }
+  };
+
+  // Sorun bildir
+  const handleReportIssue = async () => {
+    if (!selectedSlot) return;
+
+    setReportLoading(true);
+    startLoading("report-issue", "Geri bildirim gönderiliyor...");
+    try {
+      // Bağlam bilgilerini topla
+      const pipelineResult = selectedSlot.pipelineResult;
+
+      await api.createFeedback({
+        slotId: selectedSlot.id,
+        category: reportCategory,
+        customNote: reportNote || undefined,
+        pipelineId: pipelineResult?.id,
+        scenarioId: pipelineResult?.scenarioSelection?.scenarioId,
+        productType: pipelineResult?.assetSelection?.product?.subType,
+        productId: pipelineResult?.assetSelection?.product?.id,
+        handStyleId: pipelineResult?.scenarioSelection?.handStyle || undefined,
+        compositionId: pipelineResult?.scenarioSelection?.composition,
+      });
+
+      alert("Geri bildirim kaydedildi! AI bir sonraki üretimde bu hatayı dikkate alacak.");
+      setShowReportModal(false);
+      setReportNote("");
+      setReportCategory("holding-mismatch");
+    } catch (err) {
+      alert("Hata: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    } finally {
+      setReportLoading(false);
+      stopLoading("report-issue");
     }
   };
 
@@ -349,7 +385,7 @@ export default function OrchestratorDashboard() {
     return (
       <div className="card bg-red-50 border-red-200">
         <p className="text-red-600">{error}</p>
-        <button onClick={loadData} className="btn-secondary mt-4">Tekrar Dene</button>
+        <button onClick={() => loadData(true)} className="btn-secondary mt-4">Tekrar Dene</button>
       </div>
     );
   }
@@ -479,65 +515,6 @@ export default function OrchestratorDashboard() {
                   </span>
                 </div>
 
-                {/* Caption */}
-                <div className="p-4 bg-gray-50 rounded-xl">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium">Caption</h4>
-                    {selectedSlot.status === "awaiting_approval" && !editingCaption && (
-                      <button
-                        onClick={() => setEditingCaption(true)}
-                        className="text-sm text-brand-blue hover:underline"
-                      >
-                        Düzenle
-                      </button>
-                    )}
-                  </div>
-
-                  {editingCaption ? (
-                    <div className="space-y-3">
-                      <textarea
-                        value={captionText}
-                        onChange={(e) => setCaptionText(e.target.value)}
-                        className="w-full p-3 border rounded-lg text-sm"
-                        rows={4}
-                      />
-                      <input
-                        type="text"
-                        value={hashtagsText}
-                        onChange={(e) => setHashtagsText(e.target.value)}
-                        placeholder="Hashtag'ler (boşlukla ayırın)"
-                        className="w-full p-3 border rounded-lg text-sm"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleSaveCaption}
-                          disabled={actionLoading === "caption"}
-                          className="btn-primary text-sm"
-                        >
-                          {actionLoading === "caption" ? "Kaydediliyor..." : "Kaydet"}
-                        </button>
-                        <button
-                          onClick={() => setEditingCaption(false)}
-                          className="btn-secondary text-sm"
-                        >
-                          İptal
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-gray-700 whitespace-pre-wrap text-sm">
-                        {selectedSlot.pipelineResult?.contentPackage?.caption || "Caption yok"}
-                      </p>
-                      {selectedSlot.pipelineResult?.contentPackage?.hashtags && (
-                        <p className="text-blue-600 text-sm mt-2">
-                          {selectedSlot.pipelineResult.contentPackage.hashtags.join(" ")}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-
                 {/* Kullanılan Asset */}
                 {selectedSlot.pipelineResult?.assetSelection?.product && (
                   <div className="p-4 bg-gray-50 rounded-xl">
@@ -609,6 +586,16 @@ export default function OrchestratorDashboard() {
                     </button>
                   )}
 
+                  {/* Sorun Bildir butonu - sadece görsel üretilmişse göster */}
+                  {selectedSlot.pipelineResult?.generatedImage && (
+                    <button
+                      onClick={() => setShowReportModal(true)}
+                      className="w-full btn-secondary text-amber-600 border-amber-200 hover:bg-amber-50"
+                    >
+                      ⚠️ Sorun Bildir
+                    </button>
+                  )}
+
                   <button
                     onClick={() => handleDeleteSlot(selectedSlot.id)}
                     disabled={actionLoading === selectedSlot.id}
@@ -623,13 +610,77 @@ export default function OrchestratorDashboard() {
         </div>
       )}
 
+      {/* Sorun Bildir Modal */}
+      {showReportModal && selectedSlot && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Sorun Bildir</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Bu geri bildirim, AI'ın bir sonraki üretimde daha iyi sonuçlar vermesine yardımcı olacak.
+            </p>
+
+            {/* Kategori Seçimi */}
+            <div className="space-y-2 mb-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Sorun Türü
+              </label>
+              <select
+                value={reportCategory}
+                onChange={(e) => setReportCategory(e.target.value as IssueCategoryId)}
+                className="w-full p-3 border border-gray-200 rounded-lg text-sm"
+              >
+                {Object.entries(ISSUE_CATEGORIES).map(([id, cat]) => (
+                  <option key={id} value={id}>
+                    {cat.label} - {cat.description}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Özel Not */}
+            <div className="space-y-2 mb-6">
+              <label className="block text-sm font-medium text-gray-700">
+                Ek Açıklama (opsiyonel)
+              </label>
+              <textarea
+                value={reportNote}
+                onChange={(e) => setReportNote(e.target.value)}
+                placeholder="Sorunu daha detaylı açıklamak isterseniz..."
+                className="w-full p-3 border border-gray-200 rounded-lg text-sm resize-y"
+                rows={3}
+              />
+            </div>
+
+            {/* Butonlar */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleReportIssue}
+                disabled={reportLoading}
+                className="flex-1 btn-primary bg-amber-600 hover:bg-amber-700"
+              >
+                {reportLoading ? "Gönderiliyor..." : "Gönder"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReportNote("");
+                }}
+                className="flex-1 btn-secondary"
+              >
+                İptal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Orchestrator Dashboard</h1>
           <p className="text-gray-500 mt-1">AI destekli otomatik içerik üretimi</p>
         </div>
-        <button onClick={loadData} className="btn-secondary">
+        <button onClick={() => loadData(true)} className="btn-secondary">
           Yenile
         </button>
       </div>
@@ -927,11 +978,6 @@ function SlotCard({ slot, aspectRatio, compact, onView, onDelete, onRetry, onApp
       {/* Info - Compact modda gizle */}
       {!compact && (
         <div className="p-3">
-          {/* Caption preview */}
-          <p className="text-sm text-gray-700 line-clamp-2 mb-2">
-            {slot.pipelineResult?.contentPackage?.caption || "Caption oluşturulmadı"}
-          </p>
-
           {/* Meta */}
           <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
             <span>{new Date(slot.createdAt).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
