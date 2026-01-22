@@ -94,11 +94,12 @@ Seçim kriterleri:
 3. ZAMAN UYUMU: Sabah için aydınlık, akşam için sıcak tonlar
 4. KULLANIM ROTASYONU: Az kullanılmış asset'lere öncelik ver
 
-⚠️ ÇEŞİTLİLİK KURALLARI (KRİTİK - Bu ID'leri SEÇME):
-${blockedProducts.length > 0 ? `- BLOKLANMIŞ ÜRÜNLER: ${blockedProducts.join(", ")}` : ""}
-${blockedPlates.length > 0 ? `- BLOKLANMIŞ TABAKLAR: ${blockedPlates.join(", ")}` : ""}
-${blockedCups.length > 0 ? `- BLOKLANMIŞ FİNCANLAR: ${blockedCups.join(", ")}` : ""}
-${blockedTables.length > 0 ? `- BLOKLANMIŞ MASALAR: ${blockedTables.join(", ")}` : ""}
+${[
+      blockedProducts.length > 0 ? `⚠️ BLOKLANMIŞ ÜRÜNLER (SEÇME): ${blockedProducts.join(", ")}` : "",
+      blockedPlates.length > 0 ? `⚠️ BLOKLANMIŞ TABAKLAR (SEÇME): ${blockedPlates.join(", ")}` : "",
+      blockedCups.length > 0 ? `⚠️ BLOKLANMIŞ FİNCANLAR (SEÇME): ${blockedCups.join(", ")}` : "",
+      blockedTables.length > 0 ? `⚠️ BLOKLANMIŞ MASALAR (SEÇME): ${blockedTables.join(", ")}` : "",
+    ].filter(Boolean).join("\n")}
 
 5. KÖPEK: ${shouldIncludePet ? "Bu sefer KÖPEK DAHİL ET (uygun senaryo için)" : "Köpek dahil etme"}
 6. DEKORASYON: Cozy senaryolarda bitki veya kitap eklenebilir
@@ -183,17 +184,19 @@ ${JSON.stringify(availableAssets.environments.map((a: Asset) => ({
       usageCount: a.usageCount
     })), null, 2)}
 
-Yanıt formatı:
+⚠️ ÖNEMLİ: productId ZORUNLUDUR - yukarıdaki ÜRÜNLER listesinden bir ID seçmelisin!
+
+Yanıt formatı (SADECE JSON, başka açıklama yazma):
 {
-  "productId": "...",
-  "plateId": "..." veya null,
-  "cupId": "..." veya null,
-  "tableId": "..." veya null,
-  "decorId": "..." veya null,
-  "petId": "..." veya null (${shouldIncludePet ? "KÖPEK SEÇ!" : "null bırak"}),
-  "environmentId": "..." veya null,
-  "reasoning": "Seçim gerekçesi...",
-  "petReason": "${shouldIncludePet ? "Neden bu köpek seçildi..." : "Neden köpek dahil edilmedi..."}"
+  "productId": "ZORUNLU - ÜRÜNLER listesindeki id'lerden birini yaz",
+  "plateId": "id veya null",
+  "cupId": "id veya null",
+  "tableId": "id veya null",
+  "decorId": "id veya null",
+  "petId": "${shouldIncludePet ? "KÖPEK SEÇ - PETS listesinden id" : "null"}",
+  "environmentId": "id veya null",
+  "reasoning": "Seçim gerekçesi",
+  "petReason": "${shouldIncludePet ? "Köpek seçim nedeni" : "Köpek neden dahil edilmedi"}"
 }`;
 
     try {
@@ -218,7 +221,14 @@ Yanıt formatı:
       const selection = JSON.parse(jsonMatch[0]);
 
       // Asset'leri bul (genişletilmiş)
-      const product = availableAssets.products.find((a: Asset) => a.id === selection.productId);
+      let product = availableAssets.products.find((a: Asset) => a.id === selection.productId);
+
+      // Fallback: Claude geçersiz ID döndürdüyse ve ürün varsa, ilkini kullan
+      if (!product && availableAssets.products.length > 0) {
+        console.warn(`[ClaudeService] Claude geçersiz productId döndürdü: ${selection.productId}. İlk ürün kullanılıyor.`);
+        product = availableAssets.products[0];
+      }
+
       const plate = selection.plateId ? availableAssets.plates.find((a: Asset) => a.id === selection.plateId) : undefined;
       const cup = selection.cupId ? availableAssets.cups.find((a: Asset) => a.id === selection.cupId) : undefined;
       const table = selection.tableId ? availableAssets.tables.find((a: Asset) => a.id === selection.tableId) : undefined;
