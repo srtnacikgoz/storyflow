@@ -227,7 +227,9 @@ Yanıt formatı:
       const environment = selection.environmentId ? availableAssets.environments.find((a: Asset) => a.id === selection.environmentId) : undefined;
 
       if (!product) {
-        throw new Error("Seçilen ürün bulunamadı");
+        const availableIds = availableAssets.products.map((a: Asset) => a.id).join(", ");
+        console.error(`[ClaudeService] Product not found. Selected: ${selection.productId}, Available: ${availableIds}`);
+        throw new Error(`Seçilen ürün bulunamadı (ID: ${selection.productId}). Mevcut ürün sayısı: ${availableAssets.products.length}. Assets sayfasından "${productType}" kategorisinde ürün olduğundan emin olun.`);
       }
 
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;

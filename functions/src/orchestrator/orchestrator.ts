@@ -128,6 +128,20 @@ export class Orchestrator {
       if (onProgress) await onProgress("asset_selection", 1, TOTAL_STAGES);
 
       const assets = await this.loadAvailableAssets(productType);
+
+      // Ürün kontrolü - Claude'a göndermeden önce
+      if (assets.products.length === 0) {
+        const productTypeLabels: Record<ProductType, string> = {
+          croissants: "Kruvasan",
+          pastas: "Pasta",
+          chocolates: "Çikolata",
+          macarons: "Makaron",
+          coffees: "Kahve",
+        };
+        const label = productTypeLabels[productType] || productType;
+        throw new Error(`"${label}" kategorisinde aktif ürün bulunamadı. Assets sayfasından "products" kategorisi ve "${productType}" alt tipinde ürün ekleyin ve "isActive" durumunun açık olduğundan emin olun.`);
+      }
+
       const timeOfDay = this.getTimeOfDay();
       const mood = this.getMoodFromTime();
 
@@ -140,7 +154,7 @@ export class Orchestrator {
       );
 
       if (!assetResponse.success || !assetResponse.data) {
-        throw new Error(`Asset selection failed: ${assetResponse.error}`);
+        throw new Error(`Görsel seçimi başarısız: ${assetResponse.error || "Bilinmeyen hata"}`);
       }
 
       result.assetSelection = assetResponse.data;
@@ -221,7 +235,7 @@ export class Orchestrator {
       );
 
       if (!scenarioResponse.success || !scenarioResponse.data) {
-        throw new Error(`Scenario selection failed: ${scenarioResponse.error}`);
+        throw new Error(`Senaryo seçimi başarısız: ${scenarioResponse.error || "Bilinmeyen hata"}`);
       }
 
       // Interior senaryosu mu kontrol et
@@ -250,7 +264,8 @@ export class Orchestrator {
         const selectedInterior = this.selectInteriorAsset(assets.interior, interiorType);
 
         if (!selectedInterior) {
-          throw new Error(`No interior asset found for type: ${interiorType || 'any'}`);
+          const typeLabel = interiorType || "herhangi";
+          throw new Error(`İç mekan görseli bulunamadı (tip: ${typeLabel}). Assets sayfasından "interior" kategorisinde "${typeLabel}" alt tipinde görsel ekleyin.`);
         }
 
         console.log(`[Orchestrator] Selected interior asset: ${selectedInterior.filename}`);
@@ -330,7 +345,7 @@ export class Orchestrator {
         );
 
         if (!promptResponse.success || !promptResponse.data) {
-          throw new Error(`Prompt optimization failed: ${promptResponse.error}`);
+          throw new Error(`Prompt oluşturma başarısız: ${promptResponse.error || "Bilinmeyen hata"}`);
         }
 
         result.optimizedPrompt = {
@@ -470,7 +485,7 @@ export class Orchestrator {
         }
 
         if (!generatedImage || !qualityResult) {
-          throw new Error("Image generation failed after all retries");
+          throw new Error("Görsel üretimi tüm denemelerde başarısız oldu. Lütfen tekrar deneyin.");
         }
 
         result.generatedImage = generatedImage;
@@ -497,7 +512,7 @@ export class Orchestrator {
       );
 
       if (!contentResponse.success || !contentResponse.data) {
-        throw new Error(`Content generation failed: ${contentResponse.error}`);
+        throw new Error(`İçerik oluşturma başarısız: ${contentResponse.error || "Bilinmeyen hata"}`);
       }
 
       result.contentPackage = {
@@ -1048,7 +1063,7 @@ LIGHTING:
    */
   public async sendTelegramApproval(result: PipelineResult): Promise<number> {
     if (!result.generatedImage || !result.generatedImage.storageUrl) {
-      throw new Error("Cannot send approval without generated image URL");
+      throw new Error("Onay gönderilemedi: Görsel URL'i bulunamadı. Görsel üretimi başarısız olmuş olabilir.");
     }
 
     // Storage URL'i public URL'e veya signed URL'e çevir
@@ -1119,7 +1134,7 @@ LIGHTING:
         imageUrl = signedUrl;
       } catch (signError) {
         console.error("[Orchestrator] Signed URL also failed:", signError);
-        throw new Error("Could not generate any accessible URL for image");
+        throw new Error("Görsel URL'i oluşturulamadı. Storage izinlerini kontrol edin veya tekrar deneyin.");
       }
     }
 
