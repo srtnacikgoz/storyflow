@@ -6,7 +6,7 @@
 import * as functions from "firebase-functions";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore } from "firebase-admin/firestore";
-import { getCors, getConfig } from "../lib/serviceFactory";
+import { getCors, getConfig, getInstagramService } from "../lib/serviceFactory";
 import { OrchestratorScheduler } from "../orchestrator/scheduler";
 import { Asset, TimeSlotRule, ProductType, OrchestratorConfig, Theme, DEFAULT_THEMES, IssueCategoryId } from "../orchestrator/types";
 import { FeedbackService } from "../services/feedbackService";
@@ -975,13 +975,36 @@ export const approveSlot = functions
         }
 
         // Onay işlemi - Instagram'a yayınla
-        const config = await getOrchestratorConfig();
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { Orchestrator } = require("../orchestrator/orchestrator");
-        const orchestrator = new Orchestrator(config);
+        const config = await getConfig();
+        const InstagramService = await getInstagramService();
+        const instagram = new InstagramService(
+          config.instagram.accountId,
+          config.instagram.accessToken
+        );
+
+        // pipelineResult'tan görsel URL ve caption al
+        const pipelineResult = slot.pipelineResult;
+        let imageUrl = pipelineResult?.generatedImage?.storageUrl;
+        const caption = pipelineResult?.caption?.text || pipelineResult?.generatedImage?.caption || "Sade Patisserie";
+
+        if (!imageUrl) {
+          response.status(400).json({
+            success: false,
+            error: "No image URL found in pipeline result",
+          });
+          return;
+        }
+
+        // gs:// URL'ini public HTTP URL'e çevir (Instagram sadece HTTP kabul eder)
+        if (imageUrl.startsWith("gs://")) {
+          // gs://bucket-name/path/to/file.png -> https://storage.googleapis.com/bucket-name/path/to/file.png
+          const gsPath = imageUrl.replace("gs://", "");
+          imageUrl = `https://storage.googleapis.com/${gsPath}`;
+          console.log(`[approveSlot] Converted gs:// to public URL: ${imageUrl}`);
+        }
 
         // Instagram'a yayınla
-        const publishResult = await orchestrator.publishToInstagram(slot.pipelineResult);
+        const publishResult = await instagram.createStory(imageUrl, caption);
 
         // Slot'u güncelle
         await db.collection("scheduled-slots").doc(slotId).update({

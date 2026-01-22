@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import api from "../services/api";
 import type { AILog, AIStats, AIProvider, AILogStage, AILogStatus } from "../types";
 
@@ -22,6 +22,16 @@ const STAGE_LABELS: Record<AILogStage, string> = {
   "content-generation": "İçerik Üretimi",
 };
 
+// Stage sırası (pipeline akışına göre)
+const STAGE_ORDER: AILogStage[] = [
+  "asset-selection",
+  "scenario-selection",
+  "prompt-optimization",
+  "image-generation",
+  "quality-control",
+  "content-generation",
+];
+
 // Status renkleri
 const STATUS_COLORS: Record<AILogStatus, string> = {
   success: "bg-green-100 text-green-800",
@@ -31,24 +41,38 @@ const STATUS_COLORS: Record<AILogStatus, string> = {
 
 // Pipeline renkleri - her pipeline için farklı renk
 const PIPELINE_COLORS = [
-  "bg-blue-50 border-l-4 border-l-blue-400",
-  "bg-amber-50 border-l-4 border-l-amber-400",
-  "bg-emerald-50 border-l-4 border-l-emerald-400",
-  "bg-rose-50 border-l-4 border-l-rose-400",
-  "bg-violet-50 border-l-4 border-l-violet-400",
-  "bg-cyan-50 border-l-4 border-l-cyan-400",
-  "bg-orange-50 border-l-4 border-l-orange-400",
-  "bg-teal-50 border-l-4 border-l-teal-400",
+  "border-l-blue-400",
+  "border-l-amber-400",
+  "border-l-emerald-400",
+  "border-l-rose-400",
+  "border-l-violet-400",
+  "border-l-cyan-400",
+  "border-l-orange-400",
+  "border-l-teal-400",
 ];
 
 // Pipeline ID'den renk al
 const getPipelineColor = (pipelineId: string | undefined, pipelineColorMap: Map<string, number>): string => {
-  if (!pipelineId) return "";
+  if (!pipelineId) return "border-l-gray-300";
   if (!pipelineColorMap.has(pipelineId)) {
     pipelineColorMap.set(pipelineId, pipelineColorMap.size % PIPELINE_COLORS.length);
   }
   return PIPELINE_COLORS[pipelineColorMap.get(pipelineId)!];
 };
+
+// Gruplandırılmış pipeline tipi
+interface PipelineGroup {
+  pipelineId: string;
+  logs: AILog[];
+  totalDuration: number;
+  totalCost: number;
+  totalTokens: number;
+  startTime: number;
+  endTime: number;
+  hasError: boolean;
+  productType?: string;
+  slotId?: string;
+}
 
 export default function AIMonitor() {
   // State
@@ -57,6 +81,12 @@ export default function AIMonitor() {
   const [selectedLog, setSelectedLog] = useState<AILog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Görünüm modu: "list" veya "grouped"
+  const [viewMode, setViewMode] = useState<"list" | "grouped">("grouped");
+
+  // Açık pipeline'lar (grouped view için)
+  const [expandedPipelines, setExpandedPipelines] = useState<Set<string>>(new Set());
 
   // Filtreler
   const [filterProvider, setFilterProvider] = useState<AIProvider | "">("");
@@ -67,6 +97,67 @@ export default function AIMonitor() {
 
   // Pipeline renk haritası (her pipeline için tutarlı renk)
   const [pipelineColorMap] = useState(() => new Map<string, number>());
+
+  // Logları pipelineId'ye göre grupla
+  const groupedPipelines = useMemo(() => {
+    const groups = new Map<string, PipelineGroup>();
+
+    logs.forEach(log => {
+      const pipelineId = log.pipelineId || "ungrouped";
+
+      if (!groups.has(pipelineId)) {
+        groups.set(pipelineId, {
+          pipelineId,
+          logs: [],
+          totalDuration: 0,
+          totalCost: 0,
+          totalTokens: 0,
+          startTime: log.createdAt,
+          endTime: log.createdAt,
+          hasError: false,
+          productType: log.productType,
+          slotId: log.slotId,
+        });
+      }
+
+      const group = groups.get(pipelineId)!;
+      group.logs.push(log);
+      group.totalDuration += log.durationMs || 0;
+      group.totalCost += log.cost || 0;
+      group.totalTokens += log.tokensUsed || 0;
+      group.startTime = Math.min(group.startTime, log.createdAt);
+      group.endTime = Math.max(group.endTime, log.createdAt);
+      if (log.status === "error") group.hasError = true;
+      if (!group.productType && log.productType) group.productType = log.productType;
+      if (!group.slotId && log.slotId) group.slotId = log.slotId;
+    });
+
+    // Her grup içindeki logları stage sırasına göre sırala
+    groups.forEach(group => {
+      group.logs.sort((a, b) => {
+        const orderA = STAGE_ORDER.indexOf(a.stage);
+        const orderB = STAGE_ORDER.indexOf(b.stage);
+        if (orderA !== orderB) return orderA - orderB;
+        return a.createdAt - b.createdAt;
+      });
+    });
+
+    // Grupları başlangıç zamanına göre sırala (en yeni önce)
+    return Array.from(groups.values()).sort((a, b) => b.startTime - a.startTime);
+  }, [logs]);
+
+  // Pipeline aç/kapat toggle
+  const togglePipeline = (pipelineId: string) => {
+    setExpandedPipelines(prev => {
+      const next = new Set(prev);
+      if (next.has(pipelineId)) {
+        next.delete(pipelineId);
+      } else {
+        next.add(pipelineId);
+      }
+      return next;
+    });
+  };
 
   // Verileri yükle
   const loadData = async () => {
@@ -113,6 +204,16 @@ export default function AIMonitor() {
     });
   };
 
+  // Kısa tarih formatla
+  const formatShortDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString("tr-TR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   // Süre formatla
   const formatDuration = (ms: number) => {
     if (ms < 1000) return `${ms}ms`;
@@ -127,6 +228,306 @@ export default function AIMonitor() {
 
   // Modal kapat
   const closeModal = () => setSelectedLog(null);
+
+  // Gruplandırılmış görünüm render
+  const renderGroupedView = () => (
+    <div className="space-y-4">
+      {groupedPipelines.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-500">
+          {loading ? "Yükleniyor..." : "Henüz AI log kaydı yok"}
+        </div>
+      ) : (
+        groupedPipelines.map(group => {
+          const isExpanded = expandedPipelines.has(group.pipelineId);
+          const isUngrouped = group.pipelineId === "ungrouped";
+          const pipelineColor = getPipelineColor(
+            isUngrouped ? undefined : group.pipelineId,
+            pipelineColorMap
+          );
+
+          return (
+            <div
+              key={group.pipelineId}
+              className={`bg-white rounded-xl border border-gray-100 overflow-hidden border-l-4 ${pipelineColor}`}
+            >
+              {/* Pipeline Header */}
+              <button
+                onClick={() => togglePipeline(group.pipelineId)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  {/* Expand/Collapse ikonu */}
+                  <svg
+                    className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+
+                  {/* Pipeline ID */}
+                  <div className="text-left">
+                    {isUngrouped ? (
+                      <span className="text-gray-400 text-sm">Pipeline ID yok</span>
+                    ) : (
+                      <span className="font-mono text-sm text-gray-700">
+                        {group.pipelineId.length > 30
+                          ? `${group.pipelineId.substring(0, 30)}...`
+                          : group.pipelineId}
+                      </span>
+                    )}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-gray-500">{formatShortDate(group.startTime)}</span>
+                      {group.productType && (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                          {group.productType}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pipeline özeti */}
+                <div className="flex items-center gap-6">
+                  {/* Adım sayısı */}
+                  <div className="text-right">
+                    <span className="text-sm font-medium text-gray-700">{group.logs.length}</span>
+                    <span className="text-xs text-gray-500 ml-1">adım</span>
+                  </div>
+
+                  {/* Süre */}
+                  <div className="text-right min-w-[60px]">
+                    <span className="text-sm font-medium text-gray-700">{formatDuration(group.totalDuration)}</span>
+                  </div>
+
+                  {/* Token */}
+                  <div className="text-right min-w-[60px]">
+                    <span className="text-sm text-gray-600">{group.totalTokens.toLocaleString()}</span>
+                    <span className="text-xs text-gray-400 ml-1">tok</span>
+                  </div>
+
+                  {/* Maliyet */}
+                  <div className="text-right min-w-[70px]">
+                    <span className="text-sm font-medium text-gray-700">{formatCost(group.totalCost)}</span>
+                  </div>
+
+                  {/* Durum */}
+                  {group.hasError ? (
+                    <span className="w-2 h-2 rounded-full bg-red-500" title="Hata var" />
+                  ) : (
+                    <span className="w-2 h-2 rounded-full bg-green-500" title="Başarılı" />
+                  )}
+                </div>
+              </button>
+
+              {/* Pipeline İçeriği (Expanded) */}
+              {isExpanded && (
+                <div className="border-t border-gray-100">
+                  {/* Adımlar - Timeline görünümü */}
+                  <div className="p-4">
+                    <div className="relative">
+                      {/* Timeline çizgisi */}
+                      <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-gray-200" />
+
+                      {/* Adımlar */}
+                      <div className="space-y-3">
+                        {group.logs.map((log, idx) => (
+                          <div key={log.id} className="relative flex items-start gap-4 pl-8">
+                            {/* Timeline nokta */}
+                            <div
+                              className={`absolute left-1.5 w-3 h-3 rounded-full border-2 border-white ${
+                                log.status === "success"
+                                  ? "bg-green-500"
+                                  : log.status === "error"
+                                  ? "bg-red-500"
+                                  : "bg-orange-500"
+                              }`}
+                              style={{ top: "4px" }}
+                            />
+
+                            {/* Adım içeriği */}
+                            <div className="flex-1 flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 hover:bg-gray-100 transition-colors">
+                              <div className="flex items-center gap-3">
+                                {/* Sıra numarası */}
+                                <span className="text-xs text-gray-400 w-4">{idx + 1}</span>
+
+                                {/* Stage */}
+                                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STAGE_COLORS[log.stage]}`}>
+                                  {STAGE_LABELS[log.stage]}
+                                </span>
+
+                                {/* Provider */}
+                                <span
+                                  className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                                    log.provider === "claude"
+                                      ? "bg-purple-100 text-purple-800"
+                                      : "bg-green-100 text-green-800"
+                                  }`}
+                                >
+                                  {log.provider === "claude" ? "Claude" : "Gemini"}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-4">
+                                {/* Süre */}
+                                <span className="text-xs text-gray-600">{formatDuration(log.durationMs)}</span>
+
+                                {/* Token */}
+                                <span className="text-xs text-gray-500">{log.tokensUsed || "-"} tok</span>
+
+                                {/* Maliyet */}
+                                <span className="text-xs text-gray-600">{log.cost ? formatCost(log.cost) : "-"}</span>
+
+                                {/* Detay butonu */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLog(log);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                                >
+                                  Detay
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+
+  // Liste görünümü render
+  const renderListView = () => (
+    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Pipeline
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Zaman
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Provider
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Aşama
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Durum
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Süre
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Token
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Maliyet
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                İşlem
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {logs.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                  {loading ? "Yükleniyor..." : "Henüz AI log kaydı yok"}
+                </td>
+              </tr>
+            ) : (
+              logs.map((log) => (
+                <tr
+                  key={log.id}
+                  className={`hover:bg-gray-50 transition-colors border-l-4 ${getPipelineColor(log.pipelineId, pipelineColorMap)}`}
+                >
+                  <td className="px-4 py-3">
+                    {log.pipelineId ? (
+                      <button
+                        onClick={() => setFilterPipelineId(log.pipelineId || "")}
+                        className="font-mono text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded truncate max-w-[80px] block"
+                        title={log.pipelineId}
+                      >
+                        {log.pipelineId.substring(0, 8)}...
+                      </button>
+                    ) : (
+                      <span className="text-gray-400 text-xs">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {formatDate(log.createdAt)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        log.provider === "claude"
+                          ? "bg-purple-100 text-purple-800"
+                          : "bg-green-100 text-green-800"
+                      }`}
+                    >
+                      {log.provider === "claude" ? "Claude" : "Gemini"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        STAGE_COLORS[log.stage]
+                      }`}
+                    >
+                      {STAGE_LABELS[log.stage]}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        STATUS_COLORS[log.status]
+                      }`}
+                    >
+                      {log.status === "success"
+                        ? "Başarılı"
+                        : log.status === "error"
+                        ? "Hata"
+                        : "Engellendi"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {formatDuration(log.durationMs)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {log.tokensUsed || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {log.cost ? formatCost(log.cost) : "-"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => setSelectedLog(log)}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Detay
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -192,7 +593,34 @@ export default function AIMonitor() {
 
       {/* Filtreler */}
       <div className="bg-white rounded-xl p-4 border border-gray-100">
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-4 items-end">
+          {/* Görünüm modu */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Görünüm</label>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => setViewMode("grouped")}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  viewMode === "grouped"
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Gruplu
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  viewMode === "list"
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Liste
+              </button>
+            </div>
+          </div>
+
           {/* Periyot seçimi */}
           <div>
             <label className="block text-xs text-gray-500 mb-1">Periyot</label>
@@ -266,130 +694,21 @@ export default function AIMonitor() {
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm w-40"
             />
           </div>
+
+          {/* Pipeline filtresi temizle */}
+          {filterPipelineId && (
+            <button
+              onClick={() => setFilterPipelineId("")}
+              className="px-3 py-2 text-sm text-red-600 hover:text-red-800"
+            >
+              Filtreyi Temizle
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Log Listesi */}
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Pipeline
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Zaman
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Provider
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Aşama
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Durum
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Süre
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Token
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Maliyet
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  İşlem
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
-                    {loading ? "Yükleniyor..." : "Henüz AI log kaydı yok"}
-                  </td>
-                </tr>
-              ) : (
-                logs.map((log) => (
-                  <tr
-                    key={log.id}
-                    className={`hover:bg-gray-100 transition-colors ${getPipelineColor(log.pipelineId, pipelineColorMap)}`}
-                  >
-                    <td className="px-4 py-3">
-                      {log.pipelineId ? (
-                        <button
-                          onClick={() => setFilterPipelineId(log.pipelineId || "")}
-                          className="font-mono text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded truncate max-w-[80px] block"
-                          title={log.pipelineId}
-                        >
-                          {log.pipelineId.substring(0, 8)}...
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 text-xs">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {formatDate(log.createdAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          log.provider === "claude"
-                            ? "bg-purple-100 text-purple-800"
-                            : "bg-green-100 text-green-800"
-                        }`}
-                      >
-                        {log.provider === "claude" ? "Claude" : "Gemini"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          STAGE_COLORS[log.stage]
-                        }`}
-                      >
-                        {STAGE_LABELS[log.stage]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          STATUS_COLORS[log.status]
-                        }`}
-                      >
-                        {log.status === "success"
-                          ? "Başarılı"
-                          : log.status === "error"
-                          ? "Hata"
-                          : "Engellendi"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {formatDuration(log.durationMs)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {log.tokensUsed || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {log.cost ? formatCost(log.cost) : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => setSelectedLog(log)}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                      >
-                        Detay
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Log Listesi / Gruplandırılmış Görünüm */}
+      {viewMode === "grouped" ? renderGroupedView() : renderListView()}
 
       {/* Detay Modal */}
       {selectedLog && (

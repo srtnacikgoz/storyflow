@@ -93,14 +93,20 @@ export type MusicMood =
   | "golden-hour";    // Altın saat
 
 /**
- * Ürün tutma şekli
- * Claude'un senaryo seçiminde kullanılır
+ * Yeme şekli - ürün nasıl yenir
+ * Bu alan ürünün servis şeklini belirler
  */
-export type HoldingType =
-  | "hand"   // Elle tutulabilir (kurabiye, kruvasan, sandviç)
+export type EatingMethod =
+  | "hand"   // Elle yenir (kurabiye, kruvasan, sandviç)
   | "fork"   // Çatalla yenir (tiramisu, cheesecake, pasta dilimi)
   | "spoon"  // Kaşıkla yenir (puding, sufle)
-  | "none";  // Dokunulmaz/tabakta sunulur (bütün kek, tart)
+  | "none";  // Yenmez/servis edilir (bütün kek, tart, dekor)
+
+/**
+ * @deprecated - geriye uyumluluk için tutulur, yeni kodda EatingMethod kullanın
+ * HoldingType artık EatingMethod ile aynı
+ */
+export type HoldingType = EatingMethod;
 
 /**
  * Asset metadata
@@ -123,8 +129,16 @@ export interface Asset {
     shape?: string;               // "round", "square", "rectangular"
   };
 
-  // Ürün tutma şekli (sadece products kategorisi için)
-  // Claude senaryo seçerken bunu kullanır
+  // Yeme şekli (sadece products kategorisi için)
+  // Ürün nasıl yenir: elle, çatalla, kaşıkla, veya servis edilir
+  eatingMethod?: EatingMethod;
+
+  // Elle tutulabilir mi? (sadece products kategorisi için)
+  // Bu alan senaryo seçiminde "el tutma" sahneleri için kullanılır
+  // Örn: Tiramisu kaşıkla yenir ama bardakta servis ediliyorsa elle tutulabilir
+  canBeHeldByHand?: boolean;
+
+  // @deprecated - geriye uyumluluk için, yeni kodda eatingMethod kullanın
   holdingType?: HoldingType;
 
   // Müzik özellikleri
@@ -258,6 +272,7 @@ export interface AssetSelection {
   pet?: Asset;            // Köpek, kedi
   environment?: Asset;    // Mekan referansı
   interior?: Asset;       // İç mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
+  exterior?: Asset;       // Dış mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
 
   // Claude'un seçim gerekçesi
   selectionReasoning: string;

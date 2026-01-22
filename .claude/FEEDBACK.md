@@ -332,40 +332,46 @@ Telegram onayına gönder
 ## [BUG-003] Instagram Onaylama Hatası - publishToInstagram
 - **Kategori:** bug
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** closed
 - **Tarih:** 2026-01-22
+- **Çözüm Tarihi:** 2026-01-22
 - **Açıklama:** Orchestrator Dashboard'da bir işlemi "Onayla" denildiğinde şu hata alınıyor: `Hata: orchestrator.publishToInstagram is not a function`
-- **Etki:** Kullanıcı görselleri Instagram'a yayınlayamıyor
-- **Muhtemel Neden:** approveSlot endpoint'i `publishToInstagram` fonksiyonunu çağırıyor ama bu fonksiyon tanımlı değil veya export edilmemiş
+- **Kök Neden:** `approveSlot` endpoint'i `orchestrator.publishToInstagram()` çağırıyordu ama bu metot Orchestrator sınıfında tanımlı değildi
+- **Çözüm:** approveSlot endpoint'i doğrudan InstagramService kullanacak şekilde düzeltildi (telegramController pattern'i ile tutarlı). pipelineResult'tan imageUrl ve caption alınıp `instagram.createStory()` ile yayınlanıyor
+- **Dosya:** `functions/src/controllers/orchestratorController.ts`
 
 ---
 
 ## [BUG-004] holdingType Çalışmıyor - El Senaryoları Filtrelenmemesi
 - **Kategori:** bug
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** closed
 - **Tarih:** 2026-01-22
+- **Çözüm Tarihi:** 2026-01-22
 - **Açıklama:** Asset'e "Kaşıkla Yenir" veya "Çatalla Yenir" seçilse bile AI hala el ile tutma senaryoları üretiyor.
-- **Kök Neden:** Sistem Claude'a "EL İÇEREN SENARYO SEÇME!" diyor ama:
-  1. El senaryoları listeden ÇIKARILMIYOR - Claude'a tüm senaryolar gönderiliyor
-  2. Claude'a sadece "seçme" deniyor, ama AI bazen dinlemiyor
-- **Çözüm Önerisi:** Kod seviyesinde el senaryolarını filtreleyip Claude'a hiç göndermemeli. `claudeService.ts` içinde `availableScenarios` listesi oluşturulurken `includesHands: true` olanlar `canUseHandScenarios === false` durumunda çıkarılmalı.
+- **Kök Neden:** Claude'a "EL İÇEREN SENARYO SEÇME!" prompt uyarısı yeterli değildi - tüm senaryolar gönderiliyordu
+- **Çözüm:** `selectScenario` fonksiyonunda `canUseHandScenarios === false` durumunda `includesHands: true` olan senaryolar listeden filtreleniyor. Claude'a sadece uygun senaryolar gönderiliyor - artık el senaryosu seçme şansı yok
+- **Dosya:** `functions/src/orchestrator/claudeService.ts`
 
 ---
 
 ## [IMP-002] AI Monitor - Log Gruplandırması
 - **Kategori:** improvement
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** closed
 - **Tarih:** 2026-01-22
+- **Çözüm Tarihi:** 2026-01-22
 - **Açıklama:** AI Monitor sayfasında her pipeline çalışmasının log'ları karışık gösteriliyor. Hangi log hangi pipeline'a ait belli değil.
-- **Mevcut Durum:** Tüm loglar düz liste halinde, pipeline ID'si bile gösterilmiyor
-- **İstenen:**
-  1. Her pipeline çalışması için görsel gruplama (collapsible card veya accordion)
-  2. Pipeline başlığında: tarih/saat, ürün tipi, sonuç (başarılı/başarısız)
-  3. Grubun içinde: Asset Seçimi → Senaryo Seçimi → Prompt → Görsel Üretimi → Kalite Kontrol → Telegram sırası
-  4. Renk kodlaması: başarılı=yeşil, başarısız=kırmızı
-- **Dosya:** `admin/src/pages/AIMonitor.tsx`
+- **Çözüm:**
+  1. Backend: `orchestrator.ts`'de pipelineId oluşturma ve `setPipelineContext()` çağrıları eklendi
+  2. Frontend: "Gruplu" / "Liste" görünüm modu toggle'ı eklendi
+  3. Gruplandırılmış görünümde her pipeline accordion card olarak gösteriliyor
+  4. Pipeline header'ında: ID, tarih, ürün tipi, adım sayısı, toplam süre, token, maliyet
+  5. Timeline görünümü ile adımlar sıralı gösteriliyor (Asset → Senaryo → Prompt → Görsel → Kalite Kontrol)
+  6. Renk kodlaması: yeşil nokta = başarılı, kırmızı = hata
+- **Dosyalar:**
+  - `functions/src/orchestrator/orchestrator.ts` (pipelineId eklendi)
+  - `admin/src/pages/AIMonitor.tsx` (gruplandırılmış görünüm)
 
 ---
 
@@ -391,22 +397,28 @@ Telegram onayına gönder
 ## [IMP-004] Asset - "Elle Tutulabilir mi?" Ayrı Alan
 - **Kategori:** improvement
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** closed
 - **Tarih:** 2026-01-22
+- **Çözüm Tarihi:** 2026-01-22
 - **Açıklama:** Mevcut `holdingType` dropdown'u yetersiz. "Kaşıkla yenir" ≠ "Elle tutulamaz" - bir ürün kaşıkla yenebilir ama aynı zamanda kabı elle tutulabilir.
-- **Çözüm Önerisi:** İki ayrı alan:
-  1. `eatingMethod`: "Elle yenir" | "Çatalla yenir" | "Kaşıkla yenir" | "Yenmez/Servis"
-  2. `canBeHeldByHand`: boolean (Elle tutulabilir mi?)
-- **Örnek:**
-  - Tiramisu: eatingMethod="Kaşıkla", canBeHeldByHand=false (kap tutulmaz)
-  - Puding bardağı: eatingMethod="Kaşıkla", canBeHeldByHand=true (bardak tutulabilir)
-  - Kurabiye: eatingMethod="Elle", canBeHeldByHand=true
-  - Bütün pasta: eatingMethod="Yenmez/Servis", canBeHeldByHand=false
+- **Çözüm:**
+  1. **Yeni tipler:** `EatingMethod` tipi eklendi, `HoldingType` deprecated (geriye uyumluluk için tutuldu)
+  2. **Yeni alanlar:** Asset interface'ine `eatingMethod` ve `canBeHeldByHand` boolean eklendi
+  3. **Form güncellendi:** Assets.tsx'de iki ayrı form alanı:
+     - `eatingMethod` dropdown (Elle yenir / Çatalla yenir / Kaşıkla yenir / Yenmez-Servis)
+     - `canBeHeldByHand` checkbox (Elle tutulabilir mi?)
+  4. **Claude mantığı güncellendi:** `canUseHandScenarios` artık `canBeHeldByHand` boolean'a bakıyor
+     - Yeni asset'ler: `canBeHeldByHand` değerine göre
+     - Eski asset'ler (geriye uyumluluk): `holdingType === "hand"` ise true
+- **Örnek Kullanım:**
+  - Tiramisu: eatingMethod="spoon", canBeHeldByHand=false → El senaryoları FİLTRELENİR
+  - Puding bardağı: eatingMethod="spoon", canBeHeldByHand=true → El senaryoları KULLANILIR
+  - Kurabiye: eatingMethod="hand", canBeHeldByHand=true → El senaryoları KULLANILIR
 - **Dosyalar:**
-  - `functions/src/orchestrator/types.ts` - Type güncelleme
-  - `admin/src/types/index.ts` - Frontend type
-  - `admin/src/pages/Assets.tsx` - Form güncelleme
-  - `functions/src/orchestrator/claudeService.ts` - Senaryo filtreleme
+  - `functions/src/orchestrator/types.ts` - EatingMethod type, canBeHeldByHand alan
+  - `admin/src/types/index.ts` - Frontend types
+  - `admin/src/pages/Assets.tsx` - İki ayrı form alanı
+  - `functions/src/orchestrator/claudeService.ts` - canBeHeldByHand bazlı senaryo filtreleme
 
 ---
 

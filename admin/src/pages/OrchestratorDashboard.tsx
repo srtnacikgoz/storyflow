@@ -719,23 +719,6 @@ export default function OrchestratorDashboard() {
               ))}
             </select>
           </div>
-          {themes.length > 0 && (
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Tema (Opsiyonel)</label>
-              <select
-                value={selectedThemeId}
-                onChange={(e) => setSelectedThemeId(e.target.value)}
-                className="input w-48"
-              >
-                <option value="">Tema seçilmedi</option>
-                {themes.map((theme) => (
-                  <option key={theme.id} value={theme.id}>
-                    {theme.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <button
             onClick={handleGenerateNow}
             disabled={generating}
@@ -744,13 +727,70 @@ export default function OrchestratorDashboard() {
             {generating ? "Üretiliyor..." : "🚀 Şimdi Üret"}
           </button>
         </div>
-        {selectedThemeId && themes.length > 0 && (
-          <div className="mt-3 p-3 bg-purple-50 rounded-xl text-sm">
-            <p className="text-purple-700">
-              <span className="font-medium">Seçili tema:</span>{" "}
-              {themes.find(t => t.id === selectedThemeId)?.name} - Senaryolar:{" "}
-              {themes.find(t => t.id === selectedThemeId)?.scenarios.join(", ")}
-            </p>
+
+        {/* Tema Seçici - Kartlı Görünüm */}
+        {themes.length > 0 && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tema Seçimi (Opsiyonel)
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Tema Yok Seçeneği */}
+              <button
+                onClick={() => setSelectedThemeId("")}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${
+                  selectedThemeId === ""
+                    ? "border-gray-400 bg-gray-50"
+                    : "border-gray-200 hover:border-gray-300 bg-white"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🎲</span>
+                  <span className="font-medium text-gray-700">Rastgele</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Tema belirtme, sistem otomatik seçsin
+                </p>
+              </button>
+
+              {/* Tema Kartları */}
+              {themes.map((theme) => (
+                <button
+                  key={theme.id}
+                  onClick={() => setSelectedThemeId(theme.id)}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    selectedThemeId === theme.id
+                      ? "border-purple-500 bg-purple-50 shadow-md"
+                      : "border-gray-200 hover:border-purple-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-800">{theme.name}</span>
+                    {theme.petAllowed && <span className="text-xs">🐕</span>}
+                  </div>
+                  {theme.description && (
+                    <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                      {theme.description}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {theme.scenarios.slice(0, 3).map((scenario) => (
+                      <span
+                        key={scenario}
+                        className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded"
+                      >
+                        {scenario}
+                      </span>
+                    ))}
+                    {theme.scenarios.length > 3 && (
+                      <span className="text-xs text-gray-500">
+                        +{theme.scenarios.length - 3}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

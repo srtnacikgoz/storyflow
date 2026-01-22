@@ -375,6 +375,17 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
     effectiveRules?: EffectiveRules,
     feedbackHints?: string // Kullanıcı geri bildirimlerinden elde edilen ipuçları
   ): Promise<ClaudeResponse<ScenarioSelection>> {
+    // Erken hata kontrolü: Hiç senaryo yoksa hemen hata döndür
+    if (!availableScenarios || availableScenarios.length === 0) {
+      console.error("[ClaudeService] HATA: selectScenario'ya boş senaryo listesi gönderildi!");
+      return {
+        success: false,
+        error: "Senaryo listesi boş. Lütfen sistemde en az bir senaryo tanımlı olduğundan emin olun.",
+        tokensUsed: 0,
+        cost: 0,
+      };
+    }
+
     const client = this.getClient();
 
     // Çeşitlilik kurallarını al
@@ -386,9 +397,34 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
     // Kullanılabilir el stilleri (bloklanmamış olanlar)
     const availableHandStyles = handStyles.filter(hs => !blockedHandStyles.includes(hs.id));
 
-    // Ürünün tutma şekli - el senaryoları için kritik
-    const productHoldingType = selectedAssets.product.holdingType || "hand";
-    const canUseHandScenarios = productHoldingType === "hand";
+    // Ürünün elle tutulup tutulamayacağını belirle - el senaryoları için kritik
+    // Yeni sistem: canBeHeldByHand boolean alanı
+    // Eski sistem (geriye uyumluluk): holdingType === "hand" ise true
+    const canUseHandScenarios = selectedAssets.product.canBeHeldByHand !== undefined
+      ? selectedAssets.product.canBeHeldByHand
+      : (selectedAssets.product.holdingType === "hand" || selectedAssets.product.eatingMethod === "hand");
+
+    // Yeme şekli (servis şekli) - prompt mesajlarında kullanılır
+    const productEatingMethod = selectedAssets.product.eatingMethod
+      || selectedAssets.product.holdingType
+      || "hand";
+
+    // KRİTİK: Eğer el senaryoları kullanılamıyorsa, el içeren senaryoları listeden çıkar
+    // Claude'a sadece uygun senaryoları gönder - "seçme" demek yerine listeden kaldır
+    let filteredScenarios = availableScenarios;
+    if (!canUseHandScenarios) {
+      const nonHandScenarios = availableScenarios.filter(s => !s.includesHands);
+
+      // Eğer filtreleme sonrası senaryo kalmazsa, TÜM senaryoları kullan (fallback)
+      if (nonHandScenarios.length === 0) {
+        console.warn(`[ClaudeService] UYARI: Elle tutulamayan ürün için el içermeyen senaryo bulunamadı. Tüm senaryolar kullanılacak.`);
+        console.warn(`[ClaudeService] Ürün: ${selectedAssets.product.filename}, canBeHeldByHand: ${selectedAssets.product.canBeHeldByHand}, eatingMethod: ${productEatingMethod}`);
+        // filteredScenarios = availableScenarios olarak kalır (değişiklik yok)
+      } else {
+        filteredScenarios = nonHandScenarios;
+        console.log(`[ClaudeService] Hand scenarios filtered - canBeHeldByHand: ${selectedAssets.product.canBeHeldByHand}, eatingMethod: ${productEatingMethod}, original: ${availableScenarios.length}, filtered: ${filteredScenarios.length}`);
+      }
+    }
 
     const systemPrompt = `Sen bir içerik stratejistisin. Instagram için en etkili senaryoyu seçiyorsun.
 
@@ -401,7 +437,7 @@ Seçim kriterleri:
 6. KÖPEK: ${shouldIncludePet ? "Köpek dahil edildi, KÖPEK UYUMLU senaryo seç (kahve-kosesi, yarim-kaldi, cam-kenari)" : "Köpek yok, herhangi senaryo uygun"}
 7. TUTMA ŞEKLİ: ${canUseHandScenarios
       ? "Bu ürün elle tutulabilir - el içeren senaryolar uygundur"
-      : `⚠️ KRİTİK: Bu ürün "${productHoldingType}" türünde - EL İÇEREN SENARYO SEÇME! Sadece tabakta/servis halinde gösterilmeli.`}
+      : `⚠️ KRİTİK: Bu ürün elle tutulamaz (yeme şekli: ${productEatingMethod}) - EL İÇEREN SENARYO SEÇME! Sadece tabakta/servis halinde gösterilmeli.`}
 
 ÖNEMLİ ÇEŞİTLİLİK KURALLARI:
 - ${blockedHandStyles.length > 0 ? `Bu el stillerini KULLANMA (son kullanılmış): ${blockedHandStyles.join(", ")}` : "Tüm el stilleri kullanılabilir"}
@@ -416,17 +452,17 @@ Zaman: ${timeOfDay}
 ${shouldIncludePet ? "⭐ KÖPEK SEÇİLDİ - Köpek uyumlu senaryo seç!" : ""}
 
 Seçilen Asset'ler:
-- Ürün: ${selectedAssets.product.filename} (stil: ${selectedAssets.product.visualProperties?.style}, tutma: ${productHoldingType})
+- Ürün: ${selectedAssets.product.filename} (stil: ${selectedAssets.product.visualProperties?.style}, yeme: ${productEatingMethod}, elle tutulabilir: ${canUseHandScenarios ? "evet" : "hayır"})
 - Tabak: ${selectedAssets.plate?.filename || "yok"}
 - Fincan: ${selectedAssets.cup?.filename || "yok"}
 - Masa: ${selectedAssets.table?.filename} (malzeme: ${selectedAssets.table?.visualProperties?.material})
 - Dekorasyon: ${selectedAssets.decor?.filename || "yok"}
 - Köpek: ${selectedAssets.pet?.filename || "yok"}
 
-${!canUseHandScenarios ? `⚠️ UYARI: Ürün tutma tipi "${productHoldingType}" - Bu ürün ${productHoldingType === "fork" ? "çatalla" : productHoldingType === "spoon" ? "kaşıkla" : "dokunmadan"} servis edilmeli. EL İLE TUTMA SAHNESI YAPMA!` : ""}
+${!canUseHandScenarios ? `⚠️ UYARI: Bu ürün elle tutulamaz (yeme şekli: ${productEatingMethod}) - ${productEatingMethod === "fork" ? "Çatalla" : productEatingMethod === "spoon" ? "Kaşıkla" : "Dokunmadan"} servis edilmeli.` : ""}
 
 MEVCUT SENARYOLAR:
-${JSON.stringify(availableScenarios, null, 2)}
+${JSON.stringify(filteredScenarios, null, 2)}
 
 KULLANILABILIR EL STİLLERİ (el içeren senaryo seçersen bunlardan birini seç):
 ${JSON.stringify(availableHandStyles.map(hs => ({
@@ -467,10 +503,33 @@ Yanıt formatı:
       }
 
       const selection = JSON.parse(jsonMatch[0]);
-      const scenario = availableScenarios.find(s => s.id === selection.scenarioId);
 
+      // Önce filteredScenarios'da ara (Claude'a gönderilen liste)
+      let scenario = filteredScenarios.find(s => s.id === selection.scenarioId);
+
+      // Bulunamazsa, benzer ID ile ara (yazım hatası toleransı)
       if (!scenario) {
-        throw new Error("Seçilen senaryo bulunamadı");
+        const similarScenario = filteredScenarios.find(s =>
+          s.id.toLowerCase() === selection.scenarioId?.toLowerCase() ||
+          s.name.toLowerCase().includes(selection.scenarioId?.toLowerCase() || "")
+        );
+        if (similarScenario) {
+          console.warn(`[ClaudeService] Senaryo ID düzeltildi: "${selection.scenarioId}" -> "${similarScenario.id}"`);
+          scenario = similarScenario;
+        }
+      }
+
+      // Hala bulunamazsa, FALLBACK: filteredScenarios'un ilkini seç
+      if (!scenario) {
+        const availableIds = filteredScenarios.map(s => s.id).join(", ");
+        console.error(`[ClaudeService] Claude geçersiz senaryo ID döndürdü: "${selection.scenarioId}". Mevcut ID'ler: ${availableIds}`);
+
+        if (filteredScenarios.length > 0) {
+          scenario = filteredScenarios[0];
+          console.warn(`[ClaudeService] FALLBACK: İlk senaryo seçildi: "${scenario.id}"`);
+        } else {
+          throw new Error(`Senaryo bulunamadı. Claude'un seçtiği: "${selection.scenarioId}", Mevcut: ${availableIds}`);
+        }
       }
 
       // El stili detaylarını bul (varsa)

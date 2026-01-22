@@ -369,8 +369,11 @@ export type EnvironmentType = "indoor" | "outdoor" | "window" | "cafe" | "home";
 // Evcil hayvan tipleri
 export type PetType = "dogs" | "cats";
 
-// Ürün tutma şekli (el, çatal, kaşık, hiçbiri)
-export type HoldingType = "hand" | "fork" | "spoon" | "none";
+// Yeme şekli - ürün nasıl yenir
+export type EatingMethod = "hand" | "fork" | "spoon" | "none";
+
+// @deprecated - geriye uyumluluk için, yeni kodda EatingMethod kullanın
+export type HoldingType = EatingMethod;
 
 // Asset
 export interface OrchestratorAsset {
@@ -386,7 +389,11 @@ export interface OrchestratorAsset {
     material?: string;
     shape?: string;
   };
-  // Ürün tutma şekli (sadece products için)
+  // Yeme şekli (sadece products için)
+  eatingMethod?: EatingMethod;
+  // Elle tutulabilir mi? (sadece products için - el senaryoları için)
+  canBeHeldByHand?: boolean;
+  // @deprecated - geriye uyumluluk için
   holdingType?: HoldingType;
   usageCount: number;
   lastUsedAt?: number;

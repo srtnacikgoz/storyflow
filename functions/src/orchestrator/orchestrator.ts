@@ -12,6 +12,7 @@ import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import {
   Asset,
+  AssetSelection,
   ProductType,
   TimeSlotRule,
   PipelineResult,
@@ -98,6 +99,26 @@ export class Orchestrator {
     const startedAt = Date.now();
     let totalCost = 0;
 
+    // Benzersiz pipeline ID oluştur (AI loglarını gruplamak için)
+    const pipelineId = slotId
+      ? `${slotId}-${startedAt}`
+      : `manual-${startedAt}-${Math.random().toString(36).substring(2, 8)}`;
+
+    console.log(`[Orchestrator] Starting pipeline: ${pipelineId}`);
+
+    // Claude ve Gemini'ye pipeline context'i set et (loglama için)
+    this.claude.setPipelineContext({
+      pipelineId,
+      slotId,
+      productType,
+    });
+
+    this.gemini.setPipelineContext({
+      pipelineId,
+      slotId,
+      productType,
+    });
+
     // Pipeline durumu başlat
     const status: PipelineStatus = {
       currentStage: "asset_selection",
@@ -121,6 +142,181 @@ export class Orchestrator {
       const effectiveRules = await this.rulesService.getEffectiveRules();
       console.log(`[Orchestrator] Rules loaded - shouldIncludePet: ${effectiveRules.shouldIncludePet}, blockedScenarios: ${effectiveRules.blockedScenarios.length}`);
 
+      // Tüm senaryoları al (tema kontrolü için de lazım)
+      const allScenarios = effectiveRules.staticRules.scenarios;
+
+      // ==========================================
+      // PRE-STAGE 2: TEMA KONTROLÜ - Interior-only tema mı?
+      // ==========================================
+      const effectiveThemeId = overrideThemeId || timeSlotRule.themeId;
+      let isInteriorOnlyTheme = false;
+      let themeData: FirebaseFirestore.DocumentData | undefined;
+      let themeFilteredScenarios = allScenarios;
+
+      if (effectiveThemeId) {
+        console.log(`[Orchestrator] PRE-CHECK: Loading theme "${effectiveThemeId}" for interior detection`);
+        try {
+          const themeDoc = await this.db.collection("themes").doc(effectiveThemeId).get();
+          if (themeDoc.exists) {
+            themeData = themeDoc.data();
+            if (themeData?.scenarios && Array.isArray(themeData.scenarios)) {
+              // Temanın senaryolarını filtrele
+              themeFilteredScenarios = allScenarios.filter(s => themeData!.scenarios.includes(s.id));
+              console.log(`[Orchestrator] Theme "${themeData.name}" has ${themeFilteredScenarios.length} scenarios`);
+
+              // Interior-only tema kontrolü: TÜM senaryolar interior mı?
+              if (themeFilteredScenarios.length > 0) {
+                isInteriorOnlyTheme = themeFilteredScenarios.every(s => s.isInterior === true);
+                console.log(`[Orchestrator] Theme "${themeData.name}" isInteriorOnly: ${isInteriorOnlyTheme}`);
+              }
+            }
+          } else {
+            console.warn(`[Orchestrator] Theme "${effectiveThemeId}" not found, using all scenarios`);
+          }
+        } catch (themeError) {
+          console.error(`[Orchestrator] Failed to load theme: ${themeError}`);
+        }
+      }
+
+      // ══════════════════════════════════════════════════════════════════════
+      // INTERIOR-ONLY TEMA AKIŞI - Asset Selection ATLANIR
+      // ══════════════════════════════════════════════════════════════════════
+      if (isInteriorOnlyTheme) {
+        console.log(`[Orchestrator] 🏠 INTERIOR-ONLY THEME DETECTED - Skipping normal asset selection`);
+
+        // Interior asset'leri yükle
+        const assets = await this.loadAvailableAssets(productType);
+
+        if (!assets.interior || assets.interior.length === 0) {
+          throw new Error(`İç mekan görseli bulunamadı. Assets sayfasından "interior" kategorisinde görsel ekleyin.`);
+        }
+
+        console.log(`[Orchestrator] Interior assets available: ${assets.interior.length}`);
+
+        // Rastgele bir interior senaryo seç (tema senaryolarından)
+        const interiorScenarios = themeFilteredScenarios.filter(s => s.isInterior === true);
+        const randomScenario = interiorScenarios[Math.floor(Math.random() * interiorScenarios.length)];
+
+        console.log(`[Orchestrator] Selected interior scenario: ${randomScenario.name} (type: ${randomScenario.interiorType})`);
+
+        // Interior asset seç (interiorType'a göre)
+        const selectedInterior = this.selectInteriorAsset(assets.interior, randomScenario.interiorType);
+
+        if (!selectedInterior) {
+          const typeLabel = randomScenario.interiorType || "herhangi";
+          throw new Error(`İç mekan görseli bulunamadı (tip: ${typeLabel}). Assets sayfasından "interior" kategorisinde "${typeLabel}" alt tipinde görsel ekleyin.`);
+        }
+
+        console.log(`[Orchestrator] Selected interior asset: ${selectedInterior.filename}`);
+
+        // Minimal asset selection oluştur (interior için)
+        result.assetSelection = {
+          product: selectedInterior, // Interior asset'i product yerine kullan (tip uyumu için)
+          interior: selectedInterior,
+          isInteriorScenario: true,
+          includesPet: false,
+          selectionReasoning: `Interior senaryo: ${randomScenario.name} - AI üretimi atlandı, mevcut fotoğraf kullanıldı`,
+        } as AssetSelection;
+
+        // Senaryo bilgisini kaydet
+        result.scenarioSelection = {
+          scenarioId: randomScenario.id,
+          scenarioName: randomScenario.name,
+          reasoning: `Interior senaryo seçildi: ${randomScenario.name} - Mevcut pastane fotoğrafı kullanılacak`,
+          includesHands: false,
+          compositionId: "interior-default",
+          composition: "Interior mekan görseli - AI üretimi yok",
+          handStyle: undefined,
+          isInterior: true,
+          interiorType: randomScenario.interiorType,
+        };
+
+        // Stage 1, 2, 3, 4, 5 tamamlandı (interior için hepsi atlanır)
+        status.completedStages.push("asset_selection");
+        status.completedStages.push("scenario_selection");
+        status.completedStages.push("prompt_optimization");
+        status.completedStages.push("image_generation");
+        status.completedStages.push("quality_control");
+
+        if (onProgress) await onProgress("interior_asset_selected", 5, TOTAL_STAGES);
+
+        // Interior görseli doğrudan kullan (AI üretimi YOK)
+        result.generatedImage = {
+          imageBase64: "",
+          mimeType: "image/jpeg",
+          model: "interior-asset",
+          cost: 0,
+          generatedAt: Date.now(),
+          attemptNumber: 0,
+          storageUrl: selectedInterior.storageUrl,
+        };
+
+        result.qualityControl = {
+          passed: true,
+          score: 10,
+          evaluation: {
+            productAccuracy: 10,
+            composition: 10,
+            lighting: 10,
+            realism: 10,
+            instagramReadiness: 10,
+          },
+          feedback: "Interior asset - Gerçek fotoğraf, AI üretimi yapılmadı",
+          shouldRegenerate: false,
+        };
+
+        result.optimizedPrompt = {
+          mainPrompt: `Interior photo: ${selectedInterior.filename}`,
+          negativePrompt: "",
+          aspectRatio: "1:1",
+          faithfulness: 1.0,
+          customizations: ["interior-asset", "no-ai-generation"],
+        };
+
+        // NOT: Content package (caption) oluşturma kaldırıldı - Instagram API caption desteklemiyor
+
+        // Production history'ye ekle (çeşitlilik takibi için)
+        const historySuccess = await this.rulesService.addToHistory({
+          timestamp: Date.now(),
+          scenarioId: "interior",
+          compositionId: "interior-default",
+          tableId: null,
+          handStyleId: null,
+          includesPet: false,
+          productType: productType,
+          productId: selectedInterior.id,
+          plateId: null,
+          cupId: null,
+        });
+
+        if (!historySuccess) {
+          console.warn("[Orchestrator] ⚠️ Interior history kaydedilemedi - çeşitlilik takibi etkilenebilir");
+        }
+
+        // Telegram'a gönder
+        console.log("[Orchestrator] Stage 6: Sending to Telegram");
+        status.currentStage = "telegram_approval";
+        if (onProgress) await onProgress("telegram_approval", 6, TOTAL_STAGES);
+
+        const telegramMessageId = await this.sendTelegramApproval(result);
+        result.telegramMessageId = telegramMessageId;
+        status.completedStages.push("telegram_approval");
+
+        // Pipeline sonucunu kaydet
+        await this.savePipelineResult(result);
+
+        result.completedAt = Date.now();
+        result.totalCost = totalCost;
+
+        console.log(`[Orchestrator] ✅ Interior pipeline completed - Cost: $${totalCost.toFixed(4)}`);
+
+        return result;
+      }
+
+      // ══════════════════════════════════════════════════════════════════════
+      // NORMAL AKIŞ - Product Shot (AI üretimi)
+      // ══════════════════════════════════════════════════════════════════════
+
       // ==========================================
       // STAGE 1: ASSET SELECTION
       // ==========================================
@@ -136,7 +332,6 @@ export class Orchestrator {
           croissants: "Kruvasan",
           pastas: "Pasta",
           chocolates: "Çikolata",
-          macarons: "Makaron",
           coffees: "Kahve",
         };
         const label = productTypeLabels[productType] || productType;
@@ -171,34 +366,7 @@ export class Orchestrator {
       status.currentStage = "scenario_selection";
       if (onProgress) await onProgress("scenario_selection", 2, TOTAL_STAGES);
 
-      // Senaryolar kurallardan alınıyor (zaten yüklendi)
-      const allScenarios = effectiveRules.staticRules.scenarios;
-
-      // Tema bazlı senaryo filtreleme
-      // Öncelik: 1) overrideThemeId (Dashboard'dan manuel) 2) timeSlotRule.themeId
-      const effectiveThemeId = overrideThemeId || timeSlotRule.themeId;
-      let themeFilteredScenarios = allScenarios;
-
-      if (effectiveThemeId) {
-        console.log(`[Orchestrator] Loading theme: ${effectiveThemeId}`);
-        try {
-          const themeDoc = await this.db.collection("themes").doc(effectiveThemeId).get();
-          if (themeDoc.exists) {
-            const themeData = themeDoc.data();
-            if (themeData?.scenarios && Array.isArray(themeData.scenarios)) {
-              // Temanın senaryoları ile filtrele
-              themeFilteredScenarios = allScenarios.filter(s => themeData.scenarios.includes(s.id));
-              console.log(`[Orchestrator] Theme "${themeData.name}" applied - ${themeFilteredScenarios.length} scenarios available`);
-            }
-          } else {
-            console.warn(`[Orchestrator] Theme "${effectiveThemeId}" not found, using all scenarios`);
-          }
-        } catch (themeError) {
-          console.error(`[Orchestrator] Failed to load theme: ${themeError}`);
-        }
-      }
-
-      // Senaryo filtreleme: Tema filtrelemesi + deprecated scenarioPreference fallback
+      // Senaryo filtreleme (tema zaten yüklendi, themeFilteredScenarios kullan)
       let filteredScenarios = themeFilteredScenarios;
 
       // Deprecated: scenarioPreference (tema yoksa ve eski kural varsa)
@@ -530,6 +698,28 @@ export class Orchestrator {
       // Kullanılan asset'lerin usageCount'unu artır
       await this.incrementAssetUsageCounts(result.assetSelection);
 
+      // ÇEŞİTLİLİK İÇİN: Üretim geçmişine kaydet
+      // Bu kayıt blockedProducts, blockedScenarios vs. için kullanılır
+      // Interior senaryolarda scenarioId "interior" olarak kaydedilir
+      const isInterior = result.scenarioSelection?.isInterior === true;
+      const historySuccess = await this.rulesService.addToHistory({
+        timestamp: Date.now(),
+        scenarioId: isInterior ? "interior" : (result.scenarioSelection?.scenarioId || "unknown"),
+        compositionId: isInterior ? "interior-default" : (result.scenarioSelection?.compositionId || "default"),
+        tableId: result.assetSelection?.table?.id || null,
+        handStyleId: result.scenarioSelection?.handStyle || null,
+        includesPet: !!result.assetSelection?.pet,
+        productType: productType,
+        productId: result.assetSelection?.product?.id || null,
+        plateId: result.assetSelection?.plate?.id || null,
+        cupId: result.assetSelection?.cup?.id || null,
+      });
+
+      if (!historySuccess) {
+        console.warn("[Orchestrator] ⚠️ Production history save failed - diversity tracking may be affected");
+      }
+      console.log(`[Orchestrator] Production history updated - product: ${result.assetSelection?.product?.id}, scenario: ${isInterior ? "interior" : result.scenarioSelection?.scenarioId}`);
+
       return result;
 
     } catch (error) {
@@ -562,6 +752,7 @@ export class Orchestrator {
     pets: Asset[];
     environments: Asset[];
     interior: Asset[];
+    exterior: Asset[];
   }> {
     const assetsRef = this.db.collection("assets");
 
@@ -577,6 +768,7 @@ export class Orchestrator {
       pets,
       environments,
       interior,
+      exterior,
     ] = await Promise.all([
       // Ürünler
       assetsRef.where("category", "==", "products").where("subType", "==", productType).where("isActive", "==", true).get(),
@@ -598,6 +790,8 @@ export class Orchestrator {
       assetsRef.where("category", "==", "environments").where("isActive", "==", true).get(),
       // Interior görselleri (pastane atmosferi - AI üretimi yapılmaz)
       assetsRef.where("category", "==", "interior").where("isActive", "==", true).get(),
+      // Exterior görselleri (dış mekan - AI üretimi yapılmaz)
+      assetsRef.where("category", "==", "exterior").where("isActive", "==", true).get(),
     ]);
 
     const allTables = [
@@ -610,7 +804,7 @@ export class Orchestrator {
       ...decorAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     ];
 
-    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}`);
+    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}`);
 
     return {
       products: products.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
@@ -621,6 +815,7 @@ export class Orchestrator {
       pets: pets.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       environments: environments.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       interior: interior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      exterior: exterior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     };
   }
 
@@ -1050,17 +1245,97 @@ LIGHTING:
    * Telegram onay mesajı gönder
    */
   public async sendTelegramApproval(result: PipelineResult): Promise<number> {
+    // Kritik alan validasyonları
     if (!result.generatedImage || !result.generatedImage.storageUrl) {
       throw new Error("Onay gönderilemedi: Görsel URL'i bulunamadı. Görsel üretimi başarısız olmuş olabilir.");
     }
 
+    if (!result.assetSelection) {
+      console.warn("[Orchestrator] sendTelegramApproval: assetSelection undefined, using defaults");
+    }
+
+    if (!result.scenarioSelection) {
+      console.warn("[Orchestrator] sendTelegramApproval: scenarioSelection undefined (interior scenario?)");
+    }
+
     // Storage URL'i public URL'e veya signed URL'e çevir
-    // Telegram'ın erişebilmesi için signed URL oluştur
+    // Telegram'ın erişebilmesi için erişilebilir URL gerekli
+    const storageUrl = result.generatedImage.storageUrl;
+    console.log(`[Orchestrator] StorageURL: ${storageUrl}`);
+
+    // Eğer storageUrl zaten HTTP/HTTPS URL ise doğrudan kullan
+    // (Interior/mekan asset'leri public URL olarak kaydedilmiş olabilir)
+    if (storageUrl.startsWith("http://") || storageUrl.startsWith("https://")) {
+      console.log(`[Orchestrator] StorageURL already HTTP, using directly`);
+      const imageUrl = storageUrl;
+
+      // Doğrudan Telegram'a gönder
+      const shortId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+      // PhotoItem oluştur (interior senaryolar için bazı alanlar boş olabilir)
+      const photoItem = {
+        id: shortId,
+        filename: result.assetSelection?.product?.filename || "interior-image.png",
+        originalUrl: storageUrl,
+        enhancedUrl: imageUrl,
+        uploadedAt: Date.now(),
+        processed: true,
+        status: "awaiting_approval",
+        schedulingMode: "immediate",
+        productName: result.assetSelection?.product?.filename || "Mekan Görseli",
+        productCategory: result.assetSelection?.product?.category || "interior",
+        captionTemplateName: result.scenarioSelection?.scenarioName || "Interior",
+        caption: result.contentPackage?.caption || "",
+        styleVariant: "interior",
+        aiModel: "none", // AI üretimi yok, mevcut fotoğraf
+        faithfulness: 1.0, // Orijinal fotoğraf
+        pipelineResultId: shortId,
+        generatedStorageUrl: storageUrl,
+        slotId: result.slotId || null,
+        orchestratorData: {
+          scenarioId: result.scenarioSelection?.scenarioId || "interior",
+          scenarioName: result.scenarioSelection?.scenarioName || "Interior",
+          compositionId: null,
+          handStyle: null,
+          mainPrompt: null,
+          negativePrompt: null,
+          aspectRatio: null,
+          assetIds: {
+            productId: null,
+            cupId: null,
+            tableId: null,
+            plateId: null,
+            decorId: null,
+            petId: null,
+            interiorId: result.assetSelection?.interior?.id || null,
+            exteriorId: null,
+          },
+        },
+      };
+
+      console.log(`[Orchestrator] 🔍 Interior photo queue - slotId check:`, {
+        resultSlotId: result.slotId,
+        photoItemSlotId: photoItem.slotId,
+        slotIdType: typeof photoItem.slotId,
+      });
+      await this.db.collection("media-queue").doc(shortId).set(photoItem);
+      console.log(`[Orchestrator] Saved interior photo to queue with ID: ${shortId}, slotId: ${photoItem.slotId}`);
+
+      const messageId = await this.telegram.sendApprovalRequest(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { ...photoItem as any },
+        imageUrl
+      );
+
+      return messageId;
+    }
+
+    // gs:// formatındaki URL'ler için normal akış
     const bucket = this.storage.bucket();
-    console.log(`[Orchestrator] Bucket: ${bucket.name}, StorageURL: ${result.generatedImage.storageUrl}`);
+    console.log(`[Orchestrator] Bucket: ${bucket.name}, processing gs:// URL`);
 
     // GS URL'den path'i çıkarırken dikkatli olalım
-    let filePath = result.generatedImage.storageUrl;
+    let filePath = storageUrl;
     if (filePath.startsWith(`gs://${bucket.name}/`)) {
       filePath = filePath.replace(`gs://${bucket.name}/`, "");
     } else if (filePath.startsWith("gs://")) {
@@ -1170,6 +1445,8 @@ LIGHTING:
           plateId: result.assetSelection?.plate?.id || null,
           decorId: result.assetSelection?.decor?.id || null,
           petId: result.assetSelection?.pet?.id || null,
+          interiorId: result.assetSelection?.interior?.id || null,
+          exteriorId: result.assetSelection?.exterior?.id || null,
         },
       },
     };

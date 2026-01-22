@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
-import type { OrchestratorAsset, AssetCategory, HoldingType } from "../types";
+import type { OrchestratorAsset, AssetCategory, EatingMethod } from "../types";
 import { useLoadingOperation } from "../contexts/LoadingContext";
 
 // Kategori etiketleri
@@ -488,7 +488,15 @@ function AssetModal({
   const [dominantColors, setDominantColors] = useState(asset?.visualProperties?.dominantColors?.join(", ") || "");
   const [style, setStyle] = useState(asset?.visualProperties?.style || "modern");
   const [material, setMaterial] = useState(asset?.visualProperties?.material || "");
-  const [holdingType, setHoldingType] = useState<HoldingType>(asset?.holdingType || "hand");
+  // Yeme şekli ve elle tutulabilirlik alanları
+  const [eatingMethod, setEatingMethod] = useState<EatingMethod>(
+    asset?.eatingMethod || asset?.holdingType || "hand"
+  );
+  const [canBeHeldByHand, setCanBeHeldByHand] = useState<boolean>(
+    asset?.canBeHeldByHand !== undefined
+      ? asset.canBeHeldByHand
+      : (asset?.holdingType === "hand" || asset?.eatingMethod === "hand")
+  );
   const [saving, setSaving] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -520,7 +528,12 @@ function AssetModal({
       setDominantColors(asset.visualProperties?.dominantColors?.join(", ") || "");
       setStyle(asset.visualProperties?.style || "modern");
       setMaterial(asset.visualProperties?.material || "");
-      setHoldingType(asset.holdingType || "hand");
+      setEatingMethod(asset.eatingMethod || asset.holdingType || "hand");
+      setCanBeHeldByHand(
+        asset.canBeHeldByHand !== undefined
+          ? asset.canBeHeldByHand
+          : (asset.holdingType === "hand" || asset.eatingMethod === "hand")
+      );
     }
   }, [asset]);
 
@@ -577,8 +590,12 @@ function AssetModal({
           style: parsedStyle,
           ...(parsedMaterial && { material: parsedMaterial }),
         },
-        // Sadece products kategorisinde holdingType kaydedilir
-        ...(category === "products" && { holdingType }),
+        // Sadece products kategorisinde yeme/tutma özellikleri kaydedilir
+        ...(category === "products" && {
+          eatingMethod,
+          canBeHeldByHand,
+          holdingType: eatingMethod, // geriye uyumluluk için
+        }),
       };
 
       if (isEditMode && asset) {
@@ -793,26 +810,49 @@ function AssetModal({
             </div>
           )}
 
-          {/* Tutma Şekli - sadece products kategorisinde */}
+          {/* Yeme Şekli ve Elle Tutulabilirlik - sadece products kategorisinde */}
           {category === "products" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tutma Şekli
-              </label>
-              <select
-                value={holdingType}
-                onChange={(e) => setHoldingType(e.target.value as HoldingType)}
-                className="input w-full"
-              >
-                <option value="hand">Elle Tutulabilir (kurabiye, kruvasan)</option>
-                <option value="fork">Çatalla Yenir (tiramisu, pasta dilimi)</option>
-                <option value="spoon">Kaşıkla Yenir (puding, sufle)</option>
-                <option value="none">Dokunulmaz (bütün kek, tart)</option>
-              </select>
-              <p className="text-xs text-gray-400 mt-1">
-                AI senaryo seçiminde "el tutma" sahneleri için kullanılır
-              </p>
-            </div>
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Yeme Şekli
+                </label>
+                <select
+                  value={eatingMethod}
+                  onChange={(e) => setEatingMethod(e.target.value as EatingMethod)}
+                  className="input w-full"
+                >
+                  <option value="hand">Elle Yenir (kurabiye, kruvasan, sandviç)</option>
+                  <option value="fork">Çatalla Yenir (tiramisu, pasta dilimi)</option>
+                  <option value="spoon">Kaşıkla Yenir (puding, sufle)</option>
+                  <option value="none">Yenmez/Servis (bütün kek, tart, dekor)</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Ürün nasıl tüketilir?
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <input
+                  type="checkbox"
+                  id="canBeHeldByHand"
+                  checked={canBeHeldByHand}
+                  onChange={(e) => setCanBeHeldByHand(e.target.checked)}
+                  className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <div>
+                  <label htmlFor="canBeHeldByHand" className="block text-sm font-medium text-gray-700 cursor-pointer">
+                    Elle Tutulabilir
+                  </label>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Bu ürün görsellerde el ile tutularak gösterilebilir mi?
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Örn: Bardakta puding kaşıkla yenir ama elle tutulabilir
+                  </p>
+                </div>
+              </div>
+            </>
           )}
 
           {/* Interior için bilgi mesajı */}

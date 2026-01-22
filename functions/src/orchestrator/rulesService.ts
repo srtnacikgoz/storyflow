@@ -523,15 +523,21 @@ export class RulesService {
 
   /**
    * Üretim geçmişine kayıt ekle
+   * @returns true başarılı, false başarısız (ama pipeline durmaz)
    */
-  async addToHistory(entry: ProductionHistoryEntry): Promise<void> {
+  async addToHistory(entry: ProductionHistoryEntry): Promise<boolean> {
     try {
       await this.db.collection("production-history").add({
         ...entry,
         timestamp: entry.timestamp || Date.now(),
       });
+      console.log(`[RulesService] History added - product: ${entry.productId}, scenario: ${entry.scenarioId}`);
+      return true;
     } catch (error) {
-      console.error("[RulesService] Error adding to history:", error);
+      // KRİTİK: Bu hata çeşitlilik algoritmasını bozar ama pipeline'ı durdurmamalı
+      console.error("[RulesService] ⚠️ CRITICAL: Failed to add to history - diversity tracking broken!", error);
+      console.error("[RulesService] Entry that failed:", JSON.stringify(entry));
+      return false;
     }
   }
 
