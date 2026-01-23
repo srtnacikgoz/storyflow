@@ -458,18 +458,24 @@ not: Rules Editor" sayfası   yapılacak
 ## [BUG-005] AI Rules Gemini Prompt'una Gitmiyor
 - **Kategori:** bug
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** closed
 - **Tarih:** 2026-01-23
+- **Çözüm Tarihi:** 2026-01-23
 - **Açıklama:** Kullanıcının AI Rules sayfasından girdiği kurallar (örn: "bardak boş olmasın") Gemini'ye gönderilen prompt'a EKLENMİYOR.
-- **Kök Neden:** `orchestrator.ts` satır 419-434'te `aiRulesHints` sadece `selectScenario()` fonksiyonuna gönderiliyor. `optimizePrompt()` fonksiyonuna bu kurallar GÖNDERİLMİYOR.
-- **Etki:** Kullanıcının tanımladığı kurallar görsellere yansımıyor - boşa yazılıyor.
+- **İlk Teşhis (YANLIŞ):** Kod incelemesinde `optimizePrompt()`'a kuralların gitmediği düşünüldü.
+- **Gerçek Kök Neden:** Firestore composite index eksikti! `ai-rules` collection'ı için `isActive + createdAt` index'i olmadan sorgu **sessizce boş sonuç** döndürüyordu.
+- **Kod Kontrolü:** `claudeService.ts` ve `orchestrator.ts`'de kod DOĞRU yapılandırılmıştı - userRules parametresi zaten mevcuttu ve geçiliyordu.
 - **Çözüm:**
-  1. `claudeService.ts`'deki `optimizePrompt()` fonksiyonuna `aiRulesHints?: string` parametresi ekle
-  2. `orchestrator.ts`'de `optimizePrompt()` çağrısına `aiRulesHints` parametresini geç
-  3. `optimizePrompt` system prompt'una kullanıcı kurallarını dahil et
+  1. `firestore.indexes.json`'a `ai-rules` için composite index eklendi
+  2. `firebase deploy --only firestore:indexes` ile index deploy edildi
+  3. Debug endpoint (`debugFeedbackHints`) eklenerek gerçek veri doğrulandı
+- **Öğrenilen Ders:**
+  - Firestore composite sorguları index gerektirir
+  - Service'ler hataları sessizce yakalayıp boş array döndürüyordu
+  - Varsayım yapmak yerine gerçek veriyle doğrulama yapılmalı
 - **Dosyalar:**
-  - `functions/src/orchestrator/claudeService.ts` (optimizePrompt fonksiyonu)
-  - `functions/src/orchestrator/orchestrator.ts` (optimizePrompt çağrısı)
+  - `firestore.indexes.json` (index tanımları)
+  - `functions/src/controllers/orchestratorController.ts` (debug endpoint)
 
 ---
 
