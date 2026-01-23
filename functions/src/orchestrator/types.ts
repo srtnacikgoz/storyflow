@@ -36,7 +36,9 @@ export type PropType =
   | "plates"      // Tabaklar
   | "cups"        // Fincanlar, bardaklar
   | "cutlery"     // Çatal, kaşık, bıçak
-  | "napkins";    // Peçeteler, örtüler
+  | "napkins"     // Peçeteler, örtüler
+  | "boxes"       // Pasta kutuları, çikolata kutuları
+  | "bags";       // Kağıt çantalar, paket çantaları
 
 /**
  * Mobilya alt kategorileri

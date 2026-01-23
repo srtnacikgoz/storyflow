@@ -385,7 +385,7 @@ export type OrchestratorProductType =
   | "coffees";
 
 // Prop tipleri
-export type PropType = "plates" | "cups" | "cutlery" | "napkins";
+export type PropType = "plates" | "cups" | "cutlery" | "napkins" | "boxes" | "bags";
 
 // Mobilya tipleri
 export type FurnitureType = "tables" | "chairs" | "decor";

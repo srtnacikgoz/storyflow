@@ -50,7 +50,8 @@
       "Bash(python3:*)",
       "Bash(python:*)",
       "Bash(gcloud functions describe:*)",
-      "Bash(jq:*)"
+      "Bash(jq:*)",
+      "Skill(mentor-pazarlama)"
     ]
   },
   "hooks": {

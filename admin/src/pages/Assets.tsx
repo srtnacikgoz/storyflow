@@ -7,7 +7,7 @@ import { useLoadingOperation } from "../contexts/LoadingContext";
 // Kategori etiketleri
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
   products: "Ürünler",
-  props: "Tabak & Fincan",
+  props: "Servis & Ambalaj",
   furniture: "Mobilya",
   environments: "Ortamlar",
   pets: "Evcil Hayvanlar",
@@ -27,6 +27,8 @@ const SUBTYPE_LABELS: Record<string, string> = {
   cups: "Fincan",
   cutlery: "Çatal-Bıçak",
   napkins: "Peçete",
+  boxes: "Kutu (Pasta/Çikolata)",
+  bags: "Kağıt Çanta",
   // Furniture
   tables: "Masa",
   chairs: "Sandalye",
@@ -62,7 +64,7 @@ const SUBTYPE_LABELS: Record<string, string> = {
 // Alt tipler kategori bazlı
 const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   products: ["croissants", "pastas", "chocolates", "coffees"],
-  props: ["plates", "cups", "cutlery", "napkins"],
+  props: ["plates", "cups", "cutlery", "napkins", "boxes", "bags"],
   furniture: ["tables", "chairs", "decor"],
   environments: ["indoor", "outdoor", "window", "cafe", "home"],
   pets: ["dogs", "cats"],
