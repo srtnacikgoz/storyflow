@@ -452,3 +452,58 @@ Telegram onayına gönder
 - **Etki:** "Yağmurlu" seçilirse → dış mekan senaryoları devre dışı
 
 not: Rules Editor" sayfası   yapılacak
+
+---
+
+## [BUG-005] AI Rules Gemini Prompt'una Gitmiyor
+- **Kategori:** bug
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-23
+- **Açıklama:** Kullanıcının AI Rules sayfasından girdiği kurallar (örn: "bardak boş olmasın") Gemini'ye gönderilen prompt'a EKLENMİYOR.
+- **Kök Neden:** `orchestrator.ts` satır 419-434'te `aiRulesHints` sadece `selectScenario()` fonksiyonuna gönderiliyor. `optimizePrompt()` fonksiyonuna bu kurallar GÖNDERİLMİYOR.
+- **Etki:** Kullanıcının tanımladığı kurallar görsellere yansımıyor - boşa yazılıyor.
+- **Çözüm:**
+  1. `claudeService.ts`'deki `optimizePrompt()` fonksiyonuna `aiRulesHints?: string` parametresi ekle
+  2. `orchestrator.ts`'de `optimizePrompt()` çağrısına `aiRulesHints` parametresini geç
+  3. `optimizePrompt` system prompt'una kullanıcı kurallarını dahil et
+- **Dosyalar:**
+  - `functions/src/orchestrator/claudeService.ts` (optimizePrompt fonksiyonu)
+  - `functions/src/orchestrator/orchestrator.ts` (optimizePrompt çağrısı)
+
+---
+
+## [BUG-006] Peçete/Çatal Asset Kategorisi Yüklenmiyor
+- **Kategori:** bug
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-23
+- **Açıklama:** Kullanıcı peçete ve çatal asset'lerini sisteme yüklemiş ancak orchestrator bunları YÜKLEMEMEKTE.
+- **Kök Neden:** `loadAvailableAssets()` fonksiyonunda (orchestrator.ts satır 769-848) `napkins` veya `cutlery` için Firestore sorgusu YOK.
+- **Araştırma Gerekli:** Firestore'da bu asset'ler hangi category ve subType altında kaydedilmiş? (props/napkins, furniture/cutlery, vs?)
+- **Çözüm:**
+  1. Firestore'da mevcut peçete/çatal asset'lerinin yapısını kontrol et
+  2. `loadAvailableAssets()` fonksiyonuna uygun sorguyu ekle
+  3. `selectAssets()` prompt'una peçete/çatal seçeneği ekle
+  4. `optimizePrompt()`'a peçete/çatal bilgisini geç
+- **Dosyalar:**
+  - `functions/src/orchestrator/orchestrator.ts` (loadAvailableAssets)
+  - `functions/src/orchestrator/claudeService.ts` (selectAssets)
+
+---
+
+## [BUG-007] Üst Üste Tabak Sorunu Devam Ediyor
+- **Kategori:** bug
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-23
+- **Açıklama:** Gemini sürekli üst üste tabak üretiyor. Mevcut statik kural ("Üst üste tabaklar müşteri masasında OLMAZ") yeterli değil.
+- **Mevcut Durum:** `claudeService.ts` satır 1007-1009'da system prompt'ta kural var ama:
+  - Negatif prompt'a EKLENMİYOR
+  - Yeterince vurgulu değil
+- **Çözüm:**
+  1. `optimizePrompt()` fonksiyonunda negatif prompt'a "stacked plates, multiple plates on top of each other" ekle
+  2. System prompt'taki kuralı daha vurgulu hale getir
+  3. Opsiyonel: QC (kalite kontrol) adımında stacked plates kontrolü ekle
+- **Dosyalar:**
+  - `functions/src/orchestrator/claudeService.ts` (optimizePrompt ve evaluateImage)
