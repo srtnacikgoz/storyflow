@@ -345,10 +345,37 @@ export interface CalendarData {
 // ==========================================
 
 // Asset kategorileri
-export type AssetCategory = "products" | "props" | "furniture" | "environments" | "pets" | "interior";
+export type AssetCategory = "products" | "props" | "furniture" | "environments" | "pets" | "interior" | "accessories";
 
 // Interior tipleri (mekan atmosferi - AI üretimi yapılmaz)
 export type InteriorType = "vitrin" | "tezgah" | "oturma-alani" | "dekorasyon" | "genel-mekan";
+
+// Aksesuar alt kategorileri (gerçekçi pastane deneyimi için masaya konulan objeler)
+export type AccessoryType =
+  | "phone"      // Akıllı telefon (jenerik, logosuz)
+  | "bag"        // El çantası, clutch
+  | "keys"       // Araba/ev anahtarı
+  | "book"       // Kitap, dergi
+  | "toy"        // Çocuk oyuncağı
+  | "tablet"     // Tablet (jenerik, logosuz)
+  | "glasses"    // Güneş gözlüğü
+  | "watch"      // Kol saati
+  | "notebook"   // Defter, ajanda
+  | "wallet";    // Cüzdan
+
+// Aksesuar kategorileri için label ve icon
+export const ACCESSORY_TYPES: Record<AccessoryType, { label: string; icon: string; description: string }> = {
+  phone: { label: "Telefon", icon: "📱", description: "Akıllı telefon (jenerik, logosuz)" },
+  bag: { label: "Çanta", icon: "👜", description: "El çantası, clutch" },
+  keys: { label: "Anahtar", icon: "🔑", description: "Araba veya ev anahtarı" },
+  book: { label: "Kitap", icon: "📚", description: "Kitap veya dergi" },
+  toy: { label: "Oyuncak", icon: "🧸", description: "Çocuk oyuncağı" },
+  tablet: { label: "Tablet", icon: "📲", description: "Tablet (jenerik, logosuz)" },
+  glasses: { label: "Gözlük", icon: "🕶️", description: "Güneş gözlüğü" },
+  watch: { label: "Saat", icon: "⌚", description: "Kol saati" },
+  notebook: { label: "Defter", icon: "📓", description: "Defter veya ajanda" },
+  wallet: { label: "Cüzdan", icon: "👛", description: "Cüzdan" },
+};
 
 // Ürün tipleri (orchestrator için)
 export type OrchestratorProductType =
@@ -707,4 +734,51 @@ export interface IssueFeedback {
   createdAt: number;
   resolved: boolean;
   resolvedAt?: number;
+}
+
+// ==========================================
+// AI Rules System Types (Öğrenme Kuralları)
+// ==========================================
+
+// AI Kural kategorileri
+export type AIRuleCategoryId =
+  | "beverage"      // İçecek kuralları
+  | "composition"   // Kompozisyon kuralları
+  | "lighting"      // Işık kuralları
+  | "product"       // Ürün kuralları
+  | "background"    // Arka plan kuralları
+  | "hand"          // El kuralları
+  | "general";      // Genel kurallar
+
+// AI Kural kategorisi açıklamaları
+export const AI_RULE_CATEGORIES: Record<AIRuleCategoryId, { label: string; icon: string }> = {
+  beverage: { label: "İçecek", icon: "☕" },
+  composition: { label: "Kompozisyon", icon: "🎨" },
+  lighting: { label: "Işık", icon: "💡" },
+  product: { label: "Ürün", icon: "🥐" },
+  background: { label: "Arka Plan", icon: "🖼️" },
+  hand: { label: "El", icon: "✋" },
+  general: { label: "Genel", icon: "📋" },
+};
+
+// AI Öğrenme Kuralı
+export interface AIRule {
+  id: string;
+  type: "do" | "dont";            // Yapılacak / Yapılmayacak
+  category: AIRuleCategoryId;
+  title: string;                   // Kısa başlık
+  description: string;             // Detaylı açıklama
+  exampleImageUrl?: string;        // Görsel örnek (opsiyonel)
+  isActive: boolean;               // Aktif/Pasif
+  createdAt: number;
+  updatedAt: number;
+}
+
+// AI Kural istatistikleri
+export interface AIRulesStats {
+  totalRules: number;
+  activeRules: number;
+  doRules: number;
+  dontRules: number;
+  byCategory: Record<string, number>;
 }

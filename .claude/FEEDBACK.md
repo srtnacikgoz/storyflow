@@ -450,3 +450,5 @@ Telegram onayına gönder
   2. **Otomatik API (karmaşık):** OpenWeather API ile konum bazlı hava durumu
 - **Öneri:** Manuel seçimle başla, otomatik sonra eklenebilir
 - **Etki:** "Yağmurlu" seçilirse → dış mekan senaryoları devre dışı
+
+not: Rules Editor" sayfası   yapılacak

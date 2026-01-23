@@ -10,6 +10,7 @@ import { GeminiService } from "../services/gemini";
 import { TelegramService } from "../services/telegram";
 import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
+import { AIRulesService } from "../services/aiRulesService";
 import {
   Asset,
   AssetSelection,
@@ -401,13 +402,22 @@ export class Orchestrator {
         console.log("[Orchestrator] Feedback hints loaded for Claude");
       }
 
+      // Kullanıcı tanımlı kuralları al (AI öğrenme sistemi)
+      const aiRulesHints = await AIRulesService.generatePromptRules();
+      if (aiRulesHints) {
+        console.log("[Orchestrator] AI Rules loaded for Claude");
+      }
+
+      // Feedback ve kuralları birleştir
+      const combinedHints = [feedbackHints, aiRulesHints].filter(Boolean).join("\n");
+
       const scenarioResponse = await this.claude.selectScenario(
         productType,
         timeOfDay,
         result.assetSelection,
         scenariosForClaude,
         effectiveRules,  // Çeşitlilik kurallarını da gönder
-        feedbackHints    // Kullanıcı geri bildirimleri
+        combinedHints    // Kullanıcı geri bildirimleri + AI kuralları
       );
 
       if (!scenarioResponse.success || !scenarioResponse.data) {
@@ -753,6 +763,7 @@ export class Orchestrator {
     environments: Asset[];
     interior: Asset[];
     exterior: Asset[];
+    accessories: Asset[];
   }> {
     const assetsRef = this.db.collection("assets");
 
@@ -769,6 +780,7 @@ export class Orchestrator {
       environments,
       interior,
       exterior,
+      accessories,
     ] = await Promise.all([
       // Ürünler
       assetsRef.where("category", "==", "products").where("subType", "==", productType).where("isActive", "==", true).get(),
@@ -792,6 +804,8 @@ export class Orchestrator {
       assetsRef.where("category", "==", "interior").where("isActive", "==", true).get(),
       // Exterior görselleri (dış mekan - AI üretimi yapılmaz)
       assetsRef.where("category", "==", "exterior").where("isActive", "==", true).get(),
+      // Aksesuarlar (telefon, çanta, anahtar, kitap vb.)
+      assetsRef.where("category", "==", "accessories").where("isActive", "==", true).get(),
     ]);
 
     const allTables = [
@@ -804,7 +818,7 @@ export class Orchestrator {
       ...decorAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     ];
 
-    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}`);
+    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}, accessories: ${accessories.docs.length}`);
 
     return {
       products: products.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
@@ -816,6 +830,7 @@ export class Orchestrator {
       environments: environments.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       interior: interior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       exterior: exterior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      accessories: accessories.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     };
   }
 
@@ -1309,6 +1324,7 @@ LIGHTING:
             petId: null,
             interiorId: result.assetSelection?.interior?.id || null,
             exteriorId: null,
+            accessoryId: null,
           },
         },
       };
@@ -1333,6 +1349,7 @@ LIGHTING:
     // gs:// formatındaki URL'ler için normal akış
     const bucket = this.storage.bucket();
     console.log(`[Orchestrator] Bucket: ${bucket.name}, processing gs:// URL`);
+    console.log(`[Orchestrator] Original storageUrl: ${storageUrl}`);
 
     // GS URL'den path'i çıkarırken dikkatli olalım
     let filePath = storageUrl;
@@ -1341,12 +1358,18 @@ LIGHTING:
     } else if (filePath.startsWith("gs://")) {
       // Farklı bir bucket veya format olabilir, manuel parse edelim
       const parts = filePath.split("gs://")[1].split("/");
-      parts.shift(); // bucket ismini at
+      const extractedBucket = parts.shift(); // bucket ismini al
       filePath = parts.join("/");
+      console.log(`[Orchestrator] Extracted bucket: ${extractedBucket}, expected: ${bucket.name}`);
+
+      // Bucket uyuşmazlığı kontrolü
+      if (extractedBucket !== bucket.name) {
+        console.warn(`[Orchestrator] ⚠️ Bucket mismatch! URL bucket: ${extractedBucket}, default bucket: ${bucket.name}`);
+      }
     }
 
+    console.log(`[Orchestrator] Resolved filePath: ${filePath}`);
     const file = bucket.file(filePath);
-    console.log(`[Orchestrator] FilePath: ${filePath}`);
 
     // Generate accessible URL for Telegram
     // Strategy 1: Firebase Download Token (Preferred)
@@ -1385,19 +1408,26 @@ LIGHTING:
 
       console.log(`[Orchestrator] Generated Download URL: ${imageUrl}`);
     } catch (urlError) {
-      console.error("[Orchestrator] URL Generation failed:", urlError);
-      // Fallback: Don't crash, just send text
-      // But sendApprovalRequest expects image... 
-      // We will let it try with signedUrl if we haven't tried
+      console.error("[Orchestrator] URL Generation failed for path:", filePath);
+      console.error("[Orchestrator] URL Error details:", urlError);
+
+      // Fallback: Try signed URL
       try {
+        console.log("[Orchestrator] Attempting signed URL fallback...");
         const [signedUrl] = await file.getSignedUrl({
           action: "read",
           expires: Date.now() + 3600 * 1000,
         });
         imageUrl = signedUrl;
+        console.log("[Orchestrator] Signed URL generated successfully");
       } catch (signError) {
         console.error("[Orchestrator] Signed URL also failed:", signError);
-        throw new Error("Görsel URL'i oluşturulamadı. Storage izinlerini kontrol edin veya tekrar deneyin.");
+        console.error("[Orchestrator] Failed storage details:", {
+          originalUrl: storageUrl,
+          resolvedPath: filePath,
+          bucketName: bucket.name,
+        });
+        throw new Error(`Görsel URL'i oluşturulamadı. Dosya bulunamadı veya erişim izni yok. Path: ${filePath}`);
       }
     }
 
@@ -1447,6 +1477,7 @@ LIGHTING:
           petId: result.assetSelection?.pet?.id || null,
           interiorId: result.assetSelection?.interior?.id || null,
           exteriorId: result.assetSelection?.exterior?.id || null,
+          accessoryId: result.assetSelection?.accessory?.id || null,
         },
       },
     };
@@ -1503,6 +1534,7 @@ LIGHTING:
     if (assetSelection.decor?.id) assetsToUpdate.push(assetSelection.decor.id);
     if (assetSelection.pet?.id) assetsToUpdate.push(assetSelection.pet.id);
     if (assetSelection.interior?.id) assetsToUpdate.push(assetSelection.interior.id);
+    if (assetSelection.accessory?.id) assetsToUpdate.push(assetSelection.accessory.id);
 
     if (assetsToUpdate.length === 0) {
       console.log("[Orchestrator] No assets to update usage count");

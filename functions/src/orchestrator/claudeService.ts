@@ -90,6 +90,7 @@ export class ClaudeService {
       decor: Asset[];
       pets: Asset[];
       environments: Asset[];
+      accessories: Asset[];
     },
     timeOfDay: string,
     mood: string,
@@ -154,7 +155,13 @@ ${[
 
 5. KÖPEK: ${shouldIncludePet ? "Bu sefer KÖPEK DAHİL ET (uygun senaryo için)" : "Köpek dahil etme"}
 6. DEKORASYON: Cozy senaryolarda bitki veya kitap eklenebilir
-7. FİNCAN SEÇİMİ KRİTİK:
+7. AKSESUAR: Gerçekçi pastane deneyimi için masaya aksesuar eklenebilir (telefon, çanta, anahtar, kitap vb.)
+   - Sabah saatleri: telefon, kitap, defter uygun
+   - Öğleden sonra: çanta, gözlük uygun
+   - Rahat/cozy: kitap, defter uygun
+   - Aksesuar eklemek ZORUNLU DEĞİL - sadece sahneye uygunsa ekle
+   - Aksesuar varsa subType'a göre seç (phone, bag, keys, book vb.)
+8. FİNCAN SEÇİMİ KRİTİK:
    - SERAMİK veya CAM fincan/bardak TERCIH ET
    - KARTON/PAPER bardak SEÇME (takeaway senaryosu hariç)
    - Material özelliğine dikkat et: "ceramic", "glass", "porcelain" tercih edilir
@@ -235,6 +242,15 @@ ${JSON.stringify(availableAssets.environments.map((a: Asset) => ({
       usageCount: a.usageCount
     })), null, 2)}
 
+AKSESUARLAR (telefon, çanta, anahtar, kitap vb. - gerçekçi pastane deneyimi için):
+${availableAssets.accessories.length > 0 ? JSON.stringify(availableAssets.accessories.map((a: Asset) => ({
+      id: a.id,
+      filename: a.filename,
+      subType: a.subType,
+      tags: a.tags,
+      usageCount: a.usageCount
+    })), null, 2) : "YOK (aksesuar asset'i eklenmemiş)"}
+
 ⚠️ ÖNEMLİ: productId ZORUNLUDUR - yukarıdaki ÜRÜNLER listesinden bir ID seçmelisin!
 
 Yanıt formatı (SADECE JSON, başka açıklama yazma):
@@ -246,8 +262,10 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
   "decorId": "id veya null",
   "petId": "${shouldIncludePet ? "KÖPEK SEÇ - PETS listesinden id" : "null"}",
   "environmentId": "id veya null",
+  "accessoryId": "id veya null (sahneye uygunsa AKSESUARLAR listesinden seç)",
   "reasoning": "Seçim gerekçesi",
-  "petReason": "${shouldIncludePet ? "Köpek seçim nedeni" : "Köpek neden dahil edilmedi"}"
+  "petReason": "${shouldIncludePet ? "Köpek seçim nedeni" : "Köpek neden dahil edilmedi"}",
+  "accessoryReason": "Aksesuar neden dahil edildi/edilmedi"
 }`;
 
     const startTime = Date.now();
@@ -288,6 +306,7 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
       const decor = selection.decorId ? availableAssets.decor.find((a: Asset) => a.id === selection.decorId) : undefined;
       const pet = selection.petId ? availableAssets.pets.find((a: Asset) => a.id === selection.petId) : undefined;
       const environment = selection.environmentId ? availableAssets.environments.find((a: Asset) => a.id === selection.environmentId) : undefined;
+      const accessory = selection.accessoryId ? availableAssets.accessories.find((a: Asset) => a.id === selection.accessoryId) : undefined;
 
       if (!product) {
         // Detaylı hata logu - Claude'un ne döndürdüğünü vs mevcut ID'leri göster
@@ -327,9 +346,12 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
           decor,
           pet,
           environment,
+          accessory,
           selectionReasoning: selection.reasoning,
           includesPet: !!pet,
           petReason: selection.petReason,
+          includesAccessory: !!accessory,
+          accessoryReason: selection.accessoryReason,
         },
         tokensUsed,
         cost,
@@ -458,6 +480,7 @@ Seçilen Asset'ler:
 - Masa: ${selectedAssets.table?.filename} (malzeme: ${selectedAssets.table?.visualProperties?.material})
 - Dekorasyon: ${selectedAssets.decor?.filename || "yok"}
 - Köpek: ${selectedAssets.pet?.filename || "yok"}
+- Aksesuar: ${selectedAssets.accessory ? `${selectedAssets.accessory.subType} - ${selectedAssets.accessory.filename}` : "yok"}
 
 ${!canUseHandScenarios ? `⚠️ UYARI: Bu ürün elle tutulamaz (yeme şekli: ${productEatingMethod}) - ${productEatingMethod === "fork" ? "Çatalla" : productEatingMethod === "spoon" ? "Kaşıkla" : "Dokunmadan"} servis edilmeli.` : ""}
 
@@ -1020,6 +1043,7 @@ ASSET'LER (SADECE BUNLAR KULLANILABİLİR):
 - Masa: ${assets.table?.visualProperties?.material || "belirtilmemiş"} malzeme, ${assets.table?.visualProperties?.style || "belirtilmemiş"} stil
 ${cupDetails}
 - Dekorasyon: ${assets.decor ? assets.decor.filename : "YOK"}
+- Aksesuar: ${assets.accessory ? `VAR - ${assets.accessory.subType} (${assets.accessory.filename}) - masada gerçekçi detay olarak eklenmeli` : "YOK"}
 - Ortam/Mekan: ${assets.environment ? "VAR - arka plan bu ortamdan alınacak" : "YOK - standart arka plan"}
 
 ⚠️ UYARI: Yukarıdaki listede OLMAYAN hiçbir obje prompt'a eklenmemeli!

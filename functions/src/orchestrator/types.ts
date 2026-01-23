@@ -17,7 +17,8 @@ export type AssetCategory =
   | "music"       // Müzik dosyaları
   | "environments" // Mekan, pencere, dış alan
   | "pets"        // Köpek, kedi
-  | "interior";   // İç mekan fotoğrafları (vitrin, tezgah, oturma alanı)
+  | "interior"    // İç mekan fotoğrafları (vitrin, tezgah, oturma alanı)
+  | "accessories"; // Aksesuar (telefon, çanta, anahtar, kitap)
 
 /**
  * Ürün alt kategorileri
@@ -72,6 +73,38 @@ export type InteriorType =
   | "oturma-alani"    // Oturma köşeleri
   | "dekorasyon"      // Çiçekler, bitkiler, detaylar
   | "genel-mekan";    // Pastane genel görünümü
+
+/**
+ * Aksesuar alt kategorileri
+ * Gerçekçi pastane deneyimi için masaya konulan objeler
+ */
+export type AccessoryType =
+  | "phone"           // Akıllı telefon (jenerik, logosuz)
+  | "bag"             // El çantası, clutch
+  | "keys"            // Araba/ev anahtarı
+  | "book"            // Kitap, dergi
+  | "toy"             // Çocuk oyuncağı
+  | "tablet"          // Tablet (jenerik, logosuz)
+  | "glasses"         // Güneş gözlüğü
+  | "watch"           // Kol saati
+  | "notebook"        // Defter, ajanda
+  | "wallet";         // Cüzdan
+
+/**
+ * Aksesuar kategorileri için label ve icon
+ */
+export const ACCESSORY_TYPES: Record<AccessoryType, { label: string; icon: string; description: string }> = {
+  phone: { label: "Telefon", icon: "📱", description: "Akıllı telefon (jenerik, logosuz)" },
+  bag: { label: "Çanta", icon: "👜", description: "El çantası, clutch" },
+  keys: { label: "Anahtar", icon: "🔑", description: "Araba veya ev anahtarı" },
+  book: { label: "Kitap", icon: "📚", description: "Kitap veya dergi" },
+  toy: { label: "Oyuncak", icon: "🧸", description: "Çocuk oyuncağı" },
+  tablet: { label: "Tablet", icon: "📲", description: "Tablet (jenerik, logosuz)" },
+  glasses: { label: "Gözlük", icon: "🕶️", description: "Güneş gözlüğü" },
+  watch: { label: "Saat", icon: "⌚", description: "Kol saati" },
+  notebook: { label: "Defter", icon: "📓", description: "Defter veya ajanda" },
+  wallet: { label: "Cüzdan", icon: "👛", description: "Cüzdan" },
+};
 
 /**
  * Özel asset tipleri (legacy - geriye uyumluluk için)
@@ -273,6 +306,7 @@ export interface AssetSelection {
   environment?: Asset;    // Mekan referansı
   interior?: Asset;       // İç mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
   exterior?: Asset;       // Dış mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
+  accessory?: Asset;      // Aksesuar (telefon, çanta, anahtar, kitap vb.)
 
   // Claude'un seçim gerekçesi
   selectionReasoning: string;
@@ -280,6 +314,10 @@ export interface AssetSelection {
   // Çeşitlilik bilgisi
   includesPet: boolean;
   petReason?: string;     // Neden köpek dahil/hariç
+
+  // Aksesuar bilgisi
+  includesAccessory?: boolean;  // Aksesuar dahil mi
+  accessoryReason?: string;     // Neden aksesuar dahil/hariç
 
   // Interior senaryo bilgisi
   isInteriorScenario?: boolean;  // true ise AI görsel üretimi atlanır
@@ -829,4 +867,62 @@ export interface IssueFeedback {
   createdAt: number;
   resolved: boolean;        // Sorun çözüldü mü?
   resolvedAt?: number;
+}
+
+// ==========================================
+// AI RULES SYSTEM (Öğrenme Kuralları)
+// ==========================================
+
+/**
+ * AI Kural kategorileri
+ * Kullanıcı Claude'a öğretirken seçer
+ */
+export type AIRuleCategoryId =
+  | "beverage"      // İçecek kuralları (bardak dolu olmalı vb.)
+  | "composition"   // Kompozisyon kuralları (aksesuar ekle vb.)
+  | "lighting"      // Işık kuralları
+  | "product"       // Ürün kuralları
+  | "background"    // Arka plan kuralları
+  | "hand"          // El kuralları
+  | "general";      // Genel kurallar
+
+/**
+ * AI Kural kategorisi açıklamaları
+ */
+export const AI_RULE_CATEGORIES: Record<AIRuleCategoryId, { label: string; icon: string }> = {
+  beverage: { label: "İçecek", icon: "☕" },
+  composition: { label: "Kompozisyon", icon: "🎨" },
+  lighting: { label: "Işık", icon: "💡" },
+  product: { label: "Ürün", icon: "🥐" },
+  background: { label: "Arka Plan", icon: "🖼️" },
+  hand: { label: "El", icon: "✋" },
+  general: { label: "Genel", icon: "📋" },
+};
+
+/**
+ * AI Öğrenme Kuralı
+ * Kullanıcının Claude'a öğrettiği yapılacak/yapılmayacak kurallar
+ */
+export interface AIRule {
+  id: string;
+
+  // Kural tipi
+  type: "do" | "dont";            // Yapılacak / Yapılmayacak
+
+  // Kategori
+  category: AIRuleCategoryId;
+
+  // İçerik
+  title: string;                   // Kısa başlık (ör: "Bardak boş olmamalı")
+  description: string;             // Detaylı açıklama
+
+  // Görsel örnek (opsiyonel)
+  exampleImageUrl?: string;        // Kural için örnek görsel
+
+  // Durum
+  isActive: boolean;               // Aktif/Pasif
+
+  // Meta
+  createdAt: number;
+  updatedAt: number;
 }

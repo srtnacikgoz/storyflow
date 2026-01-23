@@ -20,6 +20,7 @@ const Assets = lazy(() => import("./pages/Assets"));
 const TimeSlots = lazy(() => import("./pages/TimeSlots"));
 const Themes = lazy(() => import("./pages/Themes"));
 const AIMonitor = lazy(() => import("./pages/AIMonitor"));
+const AIRules = lazy(() => import("./pages/AIRules"));
 
 // Loading fallback component
 function PageLoader() {
@@ -53,6 +54,7 @@ function App() {
             <Route path="time-slots" element={<Suspense fallback={<PageLoader />}><TimeSlots /></Suspense>} />
             <Route path="themes" element={<Suspense fallback={<PageLoader />}><Themes /></Suspense>} />
             <Route path="ai-monitor" element={<Suspense fallback={<PageLoader />}><AIMonitor /></Suspense>} />
+            <Route path="ai-rules" element={<Suspense fallback={<PageLoader />}><AIRules /></Suspense>} />
           </Route>
         </Routes>
         {/* Global loading indicator */}

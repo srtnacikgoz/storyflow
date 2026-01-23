@@ -31,6 +31,9 @@ import type {
   AIProvider,
   AILogStage,
   AILogStatus,
+  // AI Rules types
+  AIRule,
+  AIRulesStats,
 } from "../types";
 
 // Firebase Functions base URL
@@ -1179,6 +1182,79 @@ class ApiService {
         resolved: boolean;
       }>;
     }>(`getFeedbackBySlot?slotId=${slotId}`);
+    return response.data;
+  }
+
+  // ==========================================
+  // AI RULES API (Öğrenme Kuralları)
+  // ==========================================
+
+  /**
+   * Tüm AI kurallarını listele
+   */
+  async listAIRules(activeOnly: boolean = false): Promise<AIRule[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: AIRule[];
+    }>(`listAIRules${activeOnly ? "?activeOnly=true" : ""}`);
+    return response.data;
+  }
+
+  /**
+   * Yeni AI kuralı oluştur
+   */
+  async createAIRule(data: {
+    type: "do" | "dont";
+    category: string;
+    title: string;
+    description: string;
+    exampleImageUrl?: string;
+    isActive?: boolean;
+  }): Promise<string> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: { id: string };
+    }>("createAIRule", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return response.data.id;
+  }
+
+  /**
+   * AI kuralı güncelle
+   */
+  async updateAIRule(id: string, updates: Partial<{
+    type: "do" | "dont";
+    category: string;
+    title: string;
+    description: string;
+    exampleImageUrl?: string;
+    isActive: boolean;
+  }>): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateAIRule", {
+      method: "PUT",
+      body: JSON.stringify({ id, ...updates }),
+    });
+  }
+
+  /**
+   * AI kuralı sil
+   */
+  async deleteAIRule(id: string): Promise<void> {
+    await this.fetch<{ success: boolean }>(`deleteAIRule?id=${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  /**
+   * AI kural istatistiklerini getir
+   */
+  async getAIRulesStats(): Promise<AIRulesStats> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: AIRulesStats;
+    }>("getAIRulesStats");
     return response.data;
   }
 }

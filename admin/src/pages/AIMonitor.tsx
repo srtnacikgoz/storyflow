@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import api from "../services/api";
 import type { AILog, AIStats, AIProvider, AILogStage, AILogStatus } from "../types";
 
@@ -539,13 +540,22 @@ export default function AIMonitor() {
             Claude ve Gemini çağrılarını izle ve debug et
           </p>
         </div>
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
-        >
-          {loading ? "Yükleniyor..." : "Yenile"}
-        </button>
+        <div className="flex gap-3">
+          <Link
+            to="/ai-rules"
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2"
+          >
+            <span>📚</span>
+            <span>AI Kuralları</span>
+          </Link>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
+          >
+            {loading ? "Yükleniyor..." : "Yenile"}
+          </button>
+        </div>
       </div>
 
       {/* Hata mesajı */}

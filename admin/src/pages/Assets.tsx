@@ -7,11 +7,12 @@ import { useLoadingOperation } from "../contexts/LoadingContext";
 // Kategori etiketleri
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
   products: "Ürünler",
-  props: "Aksesuarlar",
+  props: "Tabak & Fincan",
   furniture: "Mobilya",
   environments: "Ortamlar",
   pets: "Evcil Hayvanlar",
   interior: "Mekan Atmosferi",
+  accessories: "Aksesuarlar",
 };
 
 // Alt tip etiketleri
@@ -45,6 +46,17 @@ const SUBTYPE_LABELS: Record<string, string> = {
   "oturma-alani": "Oturma Alanı",
   dekorasyon: "Dekorasyon",
   "genel-mekan": "Genel Mekan",
+  // Accessories (aksesuarlar - gerçekçi pastane deneyimi)
+  phone: "Telefon",
+  bag: "Çanta",
+  keys: "Anahtar",
+  book: "Kitap",
+  toy: "Oyuncak",
+  tablet: "Tablet",
+  glasses: "Gözlük",
+  watch: "Saat",
+  notebook: "Defter",
+  wallet: "Cüzdan",
 };
 
 // Alt tipler kategori bazlı
@@ -55,6 +67,7 @@ const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   environments: ["indoor", "outdoor", "window", "cafe", "home"],
   pets: ["dogs", "cats"],
   interior: ["vitrin", "tezgah", "oturma-alani", "dekorasyon", "genel-mekan"],
+  accessories: ["phone", "bag", "keys", "book", "toy", "tablet", "glasses", "watch", "notebook", "wallet"],
 };
 
 // Kategori bazlı hangi alanların gösterileceği
@@ -77,6 +90,7 @@ const FIELDS_BY_CATEGORY: Record<AssetCategory, CategoryFieldConfig> = {
   environments: { tags: "optional", dominantColors: "hidden", style: "required", material: "hidden" },
   pets: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
   interior: { tags: "optional", dominantColors: "hidden", style: "hidden", material: "hidden" },
+  accessories: { tags: "optional", dominantColors: "optional", style: "optional", material: "optional" },
 };
 
 export default function Assets() {
