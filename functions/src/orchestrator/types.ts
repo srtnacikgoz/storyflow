@@ -307,6 +307,8 @@ export interface AssetSelection {
   interior?: Asset;       // İç mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
   exterior?: Asset;       // Dış mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
   accessory?: Asset;      // Aksesuar (telefon, çanta, anahtar, kitap vb.)
+  napkin?: Asset;         // Peçete (sofra düzeni için)
+  cutlery?: Asset;        // Çatal-bıçak (servis için)
 
   // Claude'un seçim gerekçesi
   selectionReasoning: string;

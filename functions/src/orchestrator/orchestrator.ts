@@ -540,7 +540,8 @@ export class Orchestrator {
         const promptResponse = await this.claude.optimizePrompt(
           basePrompt,
           result.scenarioSelection,
-          result.assetSelection
+          result.assetSelection,
+          combinedHints // Kullanıcı tanımlı kurallar + feedback'ler
         );
 
         if (!promptResponse.success || !promptResponse.data) {
@@ -777,6 +778,8 @@ export class Orchestrator {
     interior: Asset[];
     exterior: Asset[];
     accessories: Asset[];
+    napkins: Asset[];
+    cutlery: Asset[];
   }> {
     const assetsRef = this.db.collection("assets");
 
@@ -794,6 +797,8 @@ export class Orchestrator {
       interior,
       exterior,
       accessories,
+      napkins,
+      cutlery,
     ] = await Promise.all([
       // Ürünler
       assetsRef.where("category", "==", "products").where("subType", "==", productType).where("isActive", "==", true).get(),
@@ -819,6 +824,10 @@ export class Orchestrator {
       assetsRef.where("category", "==", "exterior").where("isActive", "==", true).get(),
       // Aksesuarlar (telefon, çanta, anahtar, kitap vb.)
       assetsRef.where("category", "==", "accessories").where("isActive", "==", true).get(),
+      // Peçeteler
+      assetsRef.where("category", "==", "props").where("subType", "==", "napkins").where("isActive", "==", true).get(),
+      // Çatal-Bıçak
+      assetsRef.where("category", "==", "props").where("subType", "==", "cutlery").where("isActive", "==", true).get(),
     ]);
 
     const allTables = [
@@ -831,7 +840,7 @@ export class Orchestrator {
       ...decorAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     ];
 
-    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}, accessories: ${accessories.docs.length}`);
+    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}, accessories: ${accessories.docs.length}, napkins: ${napkins.docs.length}, cutlery: ${cutlery.docs.length}`);
 
     return {
       products: products.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
@@ -844,6 +853,8 @@ export class Orchestrator {
       interior: interior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       exterior: exterior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       accessories: accessories.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      napkins: napkins.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      cutlery: cutlery.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     };
   }
 

@@ -91,6 +91,8 @@ export class ClaudeService {
       pets: Asset[];
       environments: Asset[];
       accessories: Asset[];
+      napkins: Asset[];
+      cutlery: Asset[];
     },
     timeOfDay: string,
     mood: string,
@@ -166,6 +168,14 @@ ${[
    - KARTON/PAPER bardak SEÇME (takeaway senaryosu hariç)
    - Material özelliğine dikkat et: "ceramic", "glass", "porcelain" tercih edilir
    - Seçilen fincanın rengi ve stili masa ve ürün ile uyumlu olmalı
+9. PEÇETE: Sofra düzeni için dekoratif peçete eklenebilir
+   - Peçete rengi masa ve tabak ile uyumlu olmalı
+   - Premium/zarif senaryolarda peçete eklemek görselliği artırır
+   - ZORUNLU DEĞİL - sahneye uygunsa ekle
+10. ÇATAL-BIÇAK: Servis için çatal veya kaşık eklenebilir
+   - Ürünün yeme şekline uygun olmalı (pasta için çatal, tatlı için kaşık)
+   - Material ve stil masa ile uyumlu olmalı
+   - ZORUNLU DEĞİL - sahneye uygunsa ekle
 
 JSON formatında yanıt ver.`;
 
@@ -251,6 +261,24 @@ ${availableAssets.accessories.length > 0 ? JSON.stringify(availableAssets.access
       usageCount: a.usageCount
     })), null, 2) : "YOK (aksesuar asset'i eklenmemiş)"}
 
+PEÇETELER (masa süslemesi için):
+${availableAssets.napkins.length > 0 ? JSON.stringify(availableAssets.napkins.map((a: Asset) => ({
+      id: a.id,
+      filename: a.filename,
+      colors: a.visualProperties?.dominantColors,
+      material: a.visualProperties?.material,
+      usageCount: a.usageCount
+    })), null, 2) : "YOK (peçete asset'i eklenmemiş)"}
+
+ÇATAL-BIÇAK (servis için):
+${availableAssets.cutlery.length > 0 ? JSON.stringify(availableAssets.cutlery.map((a: Asset) => ({
+      id: a.id,
+      filename: a.filename,
+      material: a.visualProperties?.material,
+      style: a.visualProperties?.style,
+      usageCount: a.usageCount
+    })), null, 2) : "YOK (çatal-bıçak asset'i eklenmemiş)"}
+
 ⚠️ ÖNEMLİ: productId ZORUNLUDUR - yukarıdaki ÜRÜNLER listesinden bir ID seçmelisin!
 
 Yanıt formatı (SADECE JSON, başka açıklama yazma):
@@ -263,6 +291,8 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
   "petId": "${shouldIncludePet ? "KÖPEK SEÇ - PETS listesinden id" : "null"}",
   "environmentId": "id veya null",
   "accessoryId": "id veya null (sahneye uygunsa AKSESUARLAR listesinden seç)",
+  "napkinId": "id veya null (sofra düzeni için PEÇETELER listesinden seç)",
+  "cutleryId": "id veya null (servis için ÇATAL-BIÇAK listesinden seç)",
   "reasoning": "Seçim gerekçesi",
   "petReason": "${shouldIncludePet ? "Köpek seçim nedeni" : "Köpek neden dahil edilmedi"}",
   "accessoryReason": "Aksesuar neden dahil edildi/edilmedi"
@@ -307,6 +337,8 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
       const pet = selection.petId ? availableAssets.pets.find((a: Asset) => a.id === selection.petId) : undefined;
       const environment = selection.environmentId ? availableAssets.environments.find((a: Asset) => a.id === selection.environmentId) : undefined;
       const accessory = selection.accessoryId ? availableAssets.accessories.find((a: Asset) => a.id === selection.accessoryId) : undefined;
+      const napkin = selection.napkinId ? availableAssets.napkins.find((a: Asset) => a.id === selection.napkinId) : undefined;
+      const cutlery = selection.cutleryId ? availableAssets.cutlery.find((a: Asset) => a.id === selection.cutleryId) : undefined;
 
       if (!product) {
         // Detaylı hata logu - Claude'un ne döndürdüğünü vs mevcut ID'leri göster
@@ -347,6 +379,8 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
           pet,
           environment,
           accessory,
+          napkin,
+          cutlery,
           selectionReasoning: selection.reasoning,
           includesPet: !!pet,
           petReason: selection.petReason,
@@ -664,12 +698,15 @@ El var mı: ${expectedScenario.includesHands ? "Evet - " + expectedScenario.hand
 Orijinal ürün: ${originalProduct.filename}
 Ürün renkleri: ${originalProduct.visualProperties?.dominantColors?.join(", ")}
 
-⚠️ ÖNCELİKLİ KONTROL - DUPLİKASYON:
+⚠️ ÖNCELİKLİ KONTROL - DUPLİKASYON VE ÜST ÜSTE TABAK:
 1. Görselde kaç adet ana ürün (pasta/kruvasan/çikolata) var? (SADECE 1 OLMALI)
 2. Görselde kaç adet kahve fincanı/bardak var? (SADECE 1 OLMALI veya HİÇ)
 3. Görselde kaç adet tabak var? (SADECE 1 OLMALI)
+4. ⚠️ KRİTİK: Tabaklar ÜST ÜSTE yığılı mı? (Müşteri masasında üst üste tabak KESİNLİKLE OLMAMALI!)
+   - Birden fazla tabak varsa: YAN YANA mı, yoksa ÜST ÜSTE mi?
+   - Üst üste tabak = KRİTİK HATA, shouldRegenerate = true
 
-Eğer herhangi birinden birden fazla varsa, bu KRİTİK HATA'dır!
+Eğer herhangi birinden birden fazla varsa VEYA tabaklar üst üste ise, bu KRİTİK HATA'dır!
 
 Görseli değerlendir ve JSON formatında yanıt ver:
 {
@@ -678,17 +715,18 @@ Görseli değerlendir ve JSON formatında yanıt ver:
   "lighting": 1-10,
   "realism": 1-10,
   "instagramReadiness": 1-10,
-  "overallScore": 1-10 (duplikasyon varsa 0),
+  "overallScore": 1-10 (duplikasyon veya stacked plates varsa 0),
   "duplicateCheck": {
     "productCount": sayı (1 olmalı),
     "cupCount": sayı (0 veya 1 olmalı),
     "plateCount": sayı (1 olmalı),
+    "hasStackedPlates": true/false (TABAKLAR ÜST ÜSTE Mİ?),
     "hasDuplication": true/false
   },
   "feedback": "Genel değerlendirme...",
   "issues": ["sorun1", "sorun2"] veya [],
-  "shouldRegenerate": true/false (duplikasyon varsa MUTLAKA true),
-  "regenerationHints": "Eğer yeniden üretilecekse, ne değişmeli... (duplikasyon varsa: ONLY ONE product, ONLY ONE cup)"
+  "shouldRegenerate": true/false (duplikasyon veya stacked plates varsa MUTLAKA true),
+  "regenerationHints": "Eğer yeniden üretilecekse, ne değişmeli... (stacked plates varsa: NEVER stack plates, plates must be SIDE BY SIDE only)"
 }`;
 
     const startTime = Date.now();
@@ -733,17 +771,21 @@ Görseli değerlendir ve JSON formatında yanıt ver:
       const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
       const durationMs = Date.now() - startTime;
 
-      // Duplikasyon kontrolü
+      // Duplikasyon ve stacked plates kontrolü
       const hasDuplication = evaluation.duplicateCheck?.hasDuplication ||
         (evaluation.duplicateCheck?.productCount > 1) ||
         (evaluation.duplicateCheck?.cupCount > 1) ||
         (evaluation.duplicateCheck?.plateCount > 1);
 
-      // Duplikasyon varsa otomatik olarak fail et
-      const finalScore = hasDuplication ? 0 : evaluation.overallScore;
-      const shouldRegenerate = hasDuplication || evaluation.shouldRegenerate;
+      // Stacked plates kontrolü (üst üste tabak)
+      const hasStackedPlates = evaluation.duplicateCheck?.hasStackedPlates === true;
 
-      // Duplikasyon uyarısını issues'a ekle
+      // Duplikasyon veya stacked plates varsa otomatik olarak fail et
+      const hasCriticalIssue = hasDuplication || hasStackedPlates;
+      const finalScore = hasCriticalIssue ? 0 : evaluation.overallScore;
+      const shouldRegenerate = hasCriticalIssue || evaluation.shouldRegenerate;
+
+      // Kritik sorunları issues'a ekle
       const issues = [...(evaluation.issues || [])];
       if (hasDuplication) {
         if (evaluation.duplicateCheck?.productCount > 1) {
@@ -757,13 +799,21 @@ Görseli değerlendir ve JSON formatında yanıt ver:
         }
       }
 
+      // Stacked plates uyarısı
+      if (hasStackedPlates) {
+        issues.unshift("KRİTİK: ÜST ÜSTE TABAK tespit edildi! Müşteri masasında tabaklar üst üste OLAMAZ.");
+      }
+
       // Regeneration hints güncelle
       let regenerationHints = evaluation.regenerationHints || "";
       if (hasDuplication && !regenerationHints.includes("ONLY ONE")) {
         regenerationHints = "CRITICAL: ONLY ONE product, ONLY ONE cup, ONLY ONE plate. NO duplicates. " + regenerationHints;
       }
+      if (hasStackedPlates && !regenerationHints.includes("stacked plates")) {
+        regenerationHints = "CRITICAL: NEVER stack plates - plates must be SIDE BY SIDE only, not on top of each other. " + regenerationHints;
+      }
 
-      console.log(`[ClaudeService] QC Result - Score: ${finalScore}, Duplication: ${hasDuplication}, Regenerate: ${shouldRegenerate}`);
+      console.log(`[ClaudeService] QC Result - Score: ${finalScore}, Duplication: ${hasDuplication}, StackedPlates: ${hasStackedPlates}, Regenerate: ${shouldRegenerate}`);
 
       // AI Log kaydet
       await AILogService.logClaude("quality-control" as AILogStage, {
@@ -784,7 +834,7 @@ Görseli değerlendir ve JSON formatında yanıt ver:
       return {
         success: true,
         data: {
-          passed: finalScore >= 7 && !hasDuplication,
+          passed: finalScore >= 7 && !hasCriticalIssue,
           score: finalScore,
           evaluation: {
             productAccuracy: evaluation.productAccuracy,
@@ -793,8 +843,8 @@ Görseli değerlendir ve JSON formatında yanıt ver:
             realism: evaluation.realism,
             instagramReadiness: evaluation.instagramReadiness,
           },
-          feedback: hasDuplication
-            ? `DUPLİKASYON TESPİT EDİLDİ! ${evaluation.feedback}`
+          feedback: hasCriticalIssue
+            ? `${hasStackedPlates ? "ÜST ÜSTE TABAK TESPİT EDİLDİ! " : ""}${hasDuplication ? "DUPLİKASYON TESPİT EDİLDİ! " : ""}${evaluation.feedback}`
             : evaluation.feedback,
           improvementSuggestions: issues,
           shouldRegenerate,
@@ -971,7 +1021,8 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
   async optimizePrompt(
     basePrompt: string,
     scenario: ScenarioSelection,
-    assets: AssetSelection
+    assets: AssetSelection,
+    userRules?: string // Kullanıcının AI Rules sayfasından tanımladığı kurallar
   ): Promise<ClaudeResponse<{ optimizedPrompt: string; negativePrompt: string; customizations: string[] }>> {
     const client = this.getClient();
 
@@ -1003,10 +1054,13 @@ FİNAN/BARDAK KURALLARI:
 - "a nice cup" veya "coffee cup" gibi belirsiz ifadeler YASAK
 - Seçilen fincanın özellikleri prompt'a dahil edilmeli
 
-FİZİKSEL MANTIK:
+FİZİKSEL MANTIK (KRİTİK):
 - Pasta/tatlı tabağının üzerine fincan KONMAZ
 - Fincan masada, ürünün YANINDA olmalı
-- Üst üste tabaklar müşteri masasında OLMAZ
+- ⚠️ ÜST ÜSTE TABAK KESİNLİKLE YASAK ⚠️
+  * Müşteri masasında SADECE 1 ADET tabak olmalı
+  * Birden fazla tabak varsa YAN YANA olmalı, ASLA üst üste değil
+  * "stacked plates", "piled plates", "plates on top" ifadeleri negatif prompt'a ZORUNLU
 - Tüm objeler yerçekimine uygun pozisyonlarda
 
 OBJE LİSTESİ KAPATMA:
@@ -1021,7 +1075,16 @@ Optimizasyon kuralları:
 5. Fincan varsa renk ve malzemesini AÇIKÇA belirt
 6. Arka plan tanımını referansa sadık yap
 
-Kısa ve etkili ol.`;
+Kısa ve etkili ol.
+
+${userRules ? `
+═══════════════════════════════════════════════════════════════
+                    KULLANICI TANIMLI KURALLAR
+═══════════════════════════════════════════════════════════════
+⚠️ AŞAĞIDAKİ KURALLAR KULLANICI TARAFINDAN TANIMLANMIŞTIR - MUTLAKA UYGULA!
+
+${userRules}
+` : ""}`;
 
     // Fincan detaylarını hazırla
     const cupDetails = assets.cup ? `
@@ -1044,6 +1107,8 @@ ASSET'LER (SADECE BUNLAR KULLANILABİLİR):
 ${cupDetails}
 - Dekorasyon: ${assets.decor ? assets.decor.filename : "YOK"}
 - Aksesuar: ${assets.accessory ? `VAR - ${assets.accessory.subType} (${assets.accessory.filename}) - masada gerçekçi detay olarak eklenmeli` : "YOK"}
+- Peçete: ${assets.napkin ? `VAR - ${assets.napkin.visualProperties?.dominantColors?.join(", ") || ""} renkli, ${assets.napkin.visualProperties?.material || "kumaş"} peçete - sofra düzeni için` : "YOK"}
+- Çatal-Bıçak: ${assets.cutlery ? `VAR - ${assets.cutlery.visualProperties?.material || "metal"} ${assets.cutlery.visualProperties?.style || ""} servis takımı` : "YOK"}
 - Ortam/Mekan: ${assets.environment ? "VAR - arka plan bu ortamdan alınacak" : "YOK - standart arka plan"}
 
 ⚠️ UYARI: Yukarıdaki listede OLMAYAN hiçbir obje prompt'a eklenmemeli!
@@ -1096,11 +1161,29 @@ Prompt'u optimize et:
         productType: this.pipelineContext.productType,
       });
 
+      // Negatif prompt'a zorunlu kuralları ekle (stacked plates, etc.)
+      const mandatoryNegatives = [
+        "stacked plates",
+        "plates on top of each other",
+        "piled plates",
+        "multiple stacked dishes",
+      ];
+
+      // Mevcut negatif prompt'a zorunlu negatifleri ekle (yoksa)
+      let enhancedNegativePrompt = result.negativePrompt || "";
+      for (const negative of mandatoryNegatives) {
+        if (!enhancedNegativePrompt.toLowerCase().includes(negative.toLowerCase())) {
+          enhancedNegativePrompt = enhancedNegativePrompt
+            ? `${enhancedNegativePrompt}, ${negative}`
+            : negative;
+        }
+      }
+
       return {
         success: true,
         data: {
           optimizedPrompt: result.optimizedPrompt,
-          negativePrompt: result.negativePrompt,
+          negativePrompt: enhancedNegativePrompt,
           customizations: result.customizations,
         },
         tokensUsed,
