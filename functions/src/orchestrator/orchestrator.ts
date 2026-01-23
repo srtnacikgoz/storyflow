@@ -616,6 +616,40 @@ export class Orchestrator {
             });
           }
 
+          // Napkin (peçete) referans görseli
+          if (result.assetSelection.napkin?.storageUrl) {
+            console.log(`[Orchestrator] Loading napkin: ${result.assetSelection.napkin.filename}`);
+            const napkinBase64 = await this.loadImageAsBase64(result.assetSelection.napkin.storageUrl);
+
+            const napkinColors = result.assetSelection.napkin.visualProperties?.dominantColors?.join(", ") || "neutral";
+            const napkinMaterial = result.assetSelection.napkin.visualProperties?.material || "fabric";
+            const napkinDescription = `This is the EXACT napkin to use - a ${napkinMaterial} napkin with ${napkinColors} colors. Use THIS EXACT napkin in the scene, do NOT substitute with a different napkin design.`;
+
+            referenceImages.push({
+              base64: napkinBase64,
+              mimeType: "image/png",
+              label: "napkin",
+              description: napkinDescription
+            });
+          }
+
+          // Cutlery (çatal-bıçak) referans görseli
+          if (result.assetSelection.cutlery?.storageUrl) {
+            console.log(`[Orchestrator] Loading cutlery: ${result.assetSelection.cutlery.filename}`);
+            const cutleryBase64 = await this.loadImageAsBase64(result.assetSelection.cutlery.storageUrl);
+
+            const cutleryMaterial = result.assetSelection.cutlery.visualProperties?.material || "metal";
+            const cutleryStyle = result.assetSelection.cutlery.visualProperties?.style || "modern";
+            const cutleryDescription = `This is the EXACT cutlery set to use - ${cutleryMaterial} ${cutleryStyle} style utensils. Use THIS EXACT cutlery in the scene, do NOT substitute with different utensils.`;
+
+            referenceImages.push({
+              base64: cutleryBase64,
+              mimeType: "image/png",
+              label: "cutlery",
+              description: cutleryDescription
+            });
+          }
+
           console.log(`[Orchestrator] Sending ${referenceImages.length} reference images to Gemini`);
 
           // Gemini ile görsel üret
