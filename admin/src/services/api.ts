@@ -1011,6 +1011,7 @@ class ApiService {
     scenarios: string[];
     mood: string;
     petAllowed: boolean;
+    accessoryAllowed: boolean;
   }): Promise<Theme> {
     const response = await this.fetch<{
       success: boolean;
@@ -1031,6 +1032,7 @@ class ApiService {
     scenarios: string[];
     mood: string;
     petAllowed: boolean;
+    accessoryAllowed: boolean;
   }>): Promise<Theme> {
     const response = await this.fetch<{
       success: boolean;

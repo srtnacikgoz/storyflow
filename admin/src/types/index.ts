@@ -455,6 +455,7 @@ export interface Theme {
   scenarios: string[];
   mood: string;
   petAllowed: boolean;
+  accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
   createdAt: number;
   updatedAt: number;
   isDefault?: boolean;

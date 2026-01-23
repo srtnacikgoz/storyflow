@@ -66,6 +66,7 @@ const emptyTheme = {
   scenarios: [] as string[],
   mood: "balanced",
   petAllowed: false,
+  accessoryAllowed: false,
 };
 
 export default function Themes() {
@@ -144,6 +145,7 @@ export default function Themes() {
         scenarios: theme.scenarios,
         mood: theme.mood,
         petAllowed: theme.petAllowed,
+        accessoryAllowed: theme.accessoryAllowed ?? false,
       });
     } else {
       setEditingId(null);
@@ -173,6 +175,7 @@ export default function Themes() {
           scenarios: form.scenarios,
           mood: form.mood,
           petAllowed: form.petAllowed,
+          accessoryAllowed: form.accessoryAllowed,
         });
       } else {
         // Yeni oluşturma
@@ -183,6 +186,7 @@ export default function Themes() {
           scenarios: form.scenarios,
           mood: form.mood,
           petAllowed: form.petAllowed,
+          accessoryAllowed: form.accessoryAllowed,
         });
       }
       await loadThemes();
@@ -304,6 +308,11 @@ export default function Themes() {
               {theme.petAllowed && (
                 <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
                   Köpek izinli
+                </span>
+              )}
+              {theme.accessoryAllowed && (
+                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                  Aksesuar izinli
                 </span>
               )}
             </div>
@@ -601,6 +610,24 @@ export default function Themes() {
                       Köpek dahil edilebilir
                     </span>
                   </label>
+                </div>
+
+                {/* Accessory Allowed */}
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.accessoryAllowed}
+                      onChange={(e) => setForm({ ...form, accessoryAllowed: e.target.checked })}
+                      className="w-5 h-5 text-blue-600 border-stone-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-stone-700">
+                      Aksesuar dahil edilebilir
+                    </span>
+                  </label>
+                  <p className="text-xs text-stone-500 mt-1 ml-8">
+                    Telefon, çanta, anahtar, kitap gibi gerçekçi pastane detayları
+                  </p>
                 </div>
 
                 {/* Scenarios */}

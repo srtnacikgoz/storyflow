@@ -1414,7 +1414,7 @@ export const createTheme = functions
           return;
         }
 
-        const { id, name, description, scenarios, mood, petAllowed } = request.body;
+        const { id, name, description, scenarios, mood, petAllowed, accessoryAllowed } = request.body;
 
         if (!id || !name || !scenarios || scenarios.length === 0) {
           response.status(400).json({
@@ -1442,6 +1442,7 @@ export const createTheme = functions
           scenarios,
           mood: mood || "balanced",
           petAllowed: petAllowed || false,
+          accessoryAllowed: accessoryAllowed || false,
           createdAt: now,
           updatedAt: now,
           isDefault: false,

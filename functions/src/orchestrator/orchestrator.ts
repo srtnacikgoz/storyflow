@@ -342,9 +342,22 @@ export class Orchestrator {
       const timeOfDay = this.getTimeOfDay();
       const mood = this.getMoodFromTime();
 
+      // Aksesuar kontrolü - tema izin vermiyorsa accessories'i gönderme
+      const accessoryAllowed = themeData?.accessoryAllowed === true;
+      const assetsForSelection = {
+        ...assets,
+        accessories: accessoryAllowed ? assets.accessories : [],
+      };
+
+      if (accessoryAllowed && assets.accessories.length > 0) {
+        console.log(`[Orchestrator] Accessory allowed - ${assets.accessories.length} accessories available`);
+      } else if (!accessoryAllowed) {
+        console.log(`[Orchestrator] Accessory not allowed for theme "${themeData?.name || "default"}"`);
+      }
+
       const assetResponse = await this.claude.selectAssets(
         productType,
-        assets,
+        assetsForSelection,
         timeOfDay,
         mood,
         effectiveRules  // Çeşitlilik kurallarını gönder (köpek dahil mi, bloklu masalar, vb.)
@@ -358,7 +371,7 @@ export class Orchestrator {
       totalCost += assetResponse.cost;
       status.completedStages.push("asset_selection");
 
-      console.log(`[Orchestrator] Asset selection complete - Pet included: ${result.assetSelection.includesPet}`);
+      console.log(`[Orchestrator] Asset selection complete - Pet: ${result.assetSelection.includesPet}, Accessory: ${result.assetSelection.includesAccessory || false}`);
 
       // ==========================================
       // STAGE 2: SCENARIO SELECTION

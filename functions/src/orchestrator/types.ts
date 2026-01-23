@@ -694,6 +694,7 @@ export interface Theme {
   scenarios: string[];     // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
   mood: string;            // "energetic"
   petAllowed: boolean;     // Köpek dahil edilebilir mi?
+  accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
 
   // Metadata
   createdAt: number;
@@ -712,6 +713,7 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     scenarios: ["cam-kenari", "zarif-tutma", "ilk-dilim"],
     mood: "energetic",
     petAllowed: false,
+    accessoryAllowed: false, // Ürün odaklı, aksesuar yok
     isDefault: true,
   },
   {
@@ -721,6 +723,7 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     scenarios: ["kahve-ani", "paylasim"],
     mood: "social",
     petAllowed: false,
+    accessoryAllowed: true, // Sosyal ortam, aksesuar uygun
     isDefault: true,
   },
   {
@@ -730,6 +733,7 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     scenarios: ["kahve-kosesi", "yarim-kaldi"],
     mood: "relaxed",
     petAllowed: true,
+    accessoryAllowed: true, // Rahat ortam, aksesuar uygun
     isDefault: true,
   },
   {
@@ -739,6 +743,7 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     scenarios: ["cam-kenari", "hediye-acilisi"],
     mood: "warm",
     petAllowed: false,
+    accessoryAllowed: false, // Romantik, minimal
     isDefault: true,
   },
   {
@@ -748,6 +753,7 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     scenarios: ["kahve-kosesi", "yarim-kaldi"],
     mood: "cozy",
     petAllowed: true,
+    accessoryAllowed: true, // Samimi ortam, aksesuar uygun
     isDefault: true,
   },
   {
@@ -768,6 +774,7 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     ],
     mood: "warm",
     petAllowed: false,
+    accessoryAllowed: false, // Mekan odaklı, aksesuar yok
     isDefault: true,
   },
 ];
