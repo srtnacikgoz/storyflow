@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
 
 /**
  * Loading operation type
@@ -7,6 +7,15 @@ export interface LoadingOperation {
   id: string;
   message: string;
   progress?: number; // 0-100, optional for determinate progress
+}
+
+/**
+ * Sayfa yüklenme süresi bilgisi
+ */
+export interface PageLoadInfo {
+  durationMs: number;
+  operationId: string;
+  timestamp: number;
 }
 
 /**
@@ -20,6 +29,9 @@ interface LoadingContextState {
   updateMessage: (id: string, message: string) => void;
   stopLoading: (id: string) => void;
   clearAll: () => void;
+  // Sayfa yüklenme süresi
+  lastPageLoadInfo: PageLoadInfo | null;
+  clearPageLoadInfo: () => void;
 }
 
 const LoadingContext = createContext<LoadingContextState | undefined>(undefined);
@@ -29,8 +41,17 @@ const LoadingContext = createContext<LoadingContextState | undefined>(undefined)
  */
 export function LoadingProvider({ children }: { children: ReactNode }) {
   const [operations, setOperations] = useState<LoadingOperation[]>([]);
+  const [lastPageLoadInfo, setLastPageLoadInfo] = useState<PageLoadInfo | null>(null);
+
+  // Her operasyon için başlangıç zamanını takip et
+  const loadStartTimes = useRef<Map<string, number>>(new Map());
 
   const startLoading = useCallback((id: string, message: string) => {
+    // Başlangıç zamanını kaydet
+    if (!loadStartTimes.current.has(id)) {
+      loadStartTimes.current.set(id, performance.now());
+    }
+
     setOperations((prev) => {
       // Aynı ID varsa güncelle
       const existing = prev.find((op) => op.id === id);
@@ -59,11 +80,30 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const stopLoading = useCallback((id: string) => {
+    // Süreyi hesapla
+    const startTime = loadStartTimes.current.get(id);
+    if (startTime) {
+      const durationMs = Math.round(performance.now() - startTime);
+      loadStartTimes.current.delete(id);
+
+      // Sayfa yüklenme bilgisini güncelle
+      setLastPageLoadInfo({
+        durationMs,
+        operationId: id,
+        timestamp: Date.now(),
+      });
+    }
+
     setOperations((prev) => prev.filter((op) => op.id !== id));
   }, []);
 
   const clearAll = useCallback(() => {
+    loadStartTimes.current.clear();
     setOperations([]);
+  }, []);
+
+  const clearPageLoadInfo = useCallback(() => {
+    setLastPageLoadInfo(null);
   }, []);
 
   const value: LoadingContextState = {
@@ -74,6 +114,8 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
     updateMessage,
     stopLoading,
     clearAll,
+    lastPageLoadInfo,
+    clearPageLoadInfo,
   };
 
   return (

@@ -1934,6 +1934,99 @@ export const getFeedbackStats = functions
     });
   });
 
+/**
+ * DEBUG: Feedback hints'in ne döndürdüğünü göster
+ * GET /debugFeedbackHints
+ */
+export const debugFeedbackHints = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const db = getFirestore();
+
+        // Direkt collection'dan tüm dokümanları say (index gerektirmez)
+        const allFeedbackSnapshot = await db.collection("ai-feedback").get();
+        const allFeedbackCount = allFeedbackSnapshot.size;
+        const allFeedbackDocs = allFeedbackSnapshot.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        // AI Rules collection'ı da kontrol et
+        const allRulesSnapshot = await db.collection("ai-rules").get();
+        const allRulesCount = allRulesSnapshot.size;
+        const allRulesDocs = allRulesSnapshot.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        // Direkt query dene (service'in error handling'ini bypass et)
+        let directQueryResult = null;
+        let directQueryError = null;
+        try {
+          const feedbackQuery = await db
+            .collection("ai-feedback")
+            .where("resolved", "==", false)
+            .orderBy("createdAt", "desc")
+            .limit(10)
+            .get();
+          directQueryResult = {
+            count: feedbackQuery.size,
+            docs: feedbackQuery.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => d.id),
+          };
+        } catch (err) {
+          directQueryError = err instanceof Error ? err.message : String(err);
+        }
+
+        // Ham feedback verileri (bu hata verebilir - index sorunu)
+        let recentFeedback = null;
+        let feedbackQueryError = null;
+        try {
+          recentFeedback = await FeedbackService.getRecentUnresolvedFeedback();
+        } catch (err) {
+          feedbackQueryError = err instanceof Error ? err.message : "Unknown error";
+        }
+
+        // generatePromptHints'in döndürdüğü string
+        const promptHints = await FeedbackService.generatePromptHints();
+
+        // AI Rules'dan gelen kurallar
+        const aiRulesHints = await AIRulesService.generatePromptRules();
+
+        response.json({
+          success: true,
+          data: {
+            // Direkt collection kontrolleri
+            directCheck: {
+              aiFeedbackCount: allFeedbackCount,
+              aiFeedbackDocs: allFeedbackDocs.slice(0, 10), // Son 10 tanesi
+              aiRulesCount: allRulesCount,
+              aiRulesDocs: allRulesDocs.slice(0, 10),
+            },
+            // Direkt query testi (index sorununu yakalamak için)
+            directQuery: {
+              result: directQueryResult,
+              error: directQueryError,
+            },
+            // Service fonksiyonları sonuçları
+            recentFeedback,
+            feedbackQueryError,
+            promptHints: promptHints || "(boş)",
+            aiRulesHints: aiRulesHints || "(boş)",
+          },
+        });
+      } catch (error) {
+        console.error("[debugFeedbackHints] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });
+
 // ==========================================
 // AI RULES ENDPOINTS
 // ==========================================

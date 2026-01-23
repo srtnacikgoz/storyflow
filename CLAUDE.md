@@ -19,6 +19,23 @@
 **Varsayım yapma, veri topla.**
 **Tahmin etme, doğrula.**
 
+### Spesifik Durumlar
+
+#### Sorun Teşhisi Yaparken
+- "Muhtemelen X'e gitmiyor" deme → Kodu oku, akışı takip et, kanıtla
+- Başarılı ve başarısız örnekleri karşılaştır
+- Eğer önceki üretimde çalıştıysa, farkın ne olduğunu bul
+
+#### Kendi Kodumuz Hakkında
+- "Bu özellik X yapıyor" deme → Gerçekten yapıp yapmadığını kontrol et
+- Eğer bir özellik eklediysen (örn: Sorun Bildir), o özellik ÇALIŞMALI
+- Sadece kayıt tutan ama etkisi olmayan özellikler KABUL EDİLEMEZ
+
+#### Kullanıcı Geri Bildirimi Verdiğinde
+- Hemen savunmaya geçme
+- Kullanıcının söylediğini doğrula (log, kod, önceki örnekler)
+- Eksiklik varsa kabul et ve düzelt
+
 ---
 
 > **🔒 KURAL SİSTEMİ AKTİF:** Bu projede `.claude/rules/` klasöründeki kurallar **otomatik yüklenir** ve `rules-enforcer.js` hook'u ile **oturum boyunca zorunlu kılınır**. Kuralları görmezden gelme - hook sistemi hatırlatacak.
