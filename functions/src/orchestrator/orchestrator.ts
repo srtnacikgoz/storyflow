@@ -864,6 +864,46 @@ export class Orchestrator {
       assetsRef.where("category", "==", "props").where("subType", "==", "cutlery").where("isActive", "==", true).get(),
     ]);
 
+    let fallbackProps: FirebaseFirestore.QuerySnapshot | null = null;
+    if (napkins.docs.length === 0 || cutlery.docs.length === 0) {
+      fallbackProps = await assetsRef.where("category", "==", "props").where("isActive", "==", true).get();
+    }
+
+    const fallbackAssets = fallbackProps
+      ? fallbackProps.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset))
+      : [];
+
+    const getSubType = (asset: Asset) => (asset.subType || "").toString().toLowerCase();
+    const fallbackNapkins = napkins.docs.length === 0
+      ? fallbackAssets.filter(asset => getSubType(asset).includes("napkin"))
+      : [];
+    const fallbackCutlery = cutlery.docs.length === 0
+      ? fallbackAssets.filter(asset => getSubType(asset).includes("cutlery"))
+      : [];
+
+    const napkinMap = new Map<string, Asset>();
+    for (const doc of napkins.docs) {
+      napkinMap.set(doc.id, { id: doc.id, ...doc.data() } as Asset);
+    }
+    for (const asset of fallbackNapkins) {
+      if (!napkinMap.has(asset.id)) {
+        napkinMap.set(asset.id, asset);
+      }
+    }
+
+    const cutleryMap = new Map<string, Asset>();
+    for (const doc of cutlery.docs) {
+      cutleryMap.set(doc.id, { id: doc.id, ...doc.data() } as Asset);
+    }
+    for (const asset of fallbackCutlery) {
+      if (!cutleryMap.has(asset.id)) {
+        cutleryMap.set(asset.id, asset);
+      }
+    }
+
+    const napkinAssets = Array.from(napkinMap.values());
+    const cutleryAssets = Array.from(cutleryMap.values());
+
     const allTables = [
       ...tables.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       ...tablesAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
@@ -874,7 +914,14 @@ export class Orchestrator {
       ...decorAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     ];
 
-    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}, accessories: ${accessories.docs.length}, napkins: ${napkins.docs.length}, cutlery: ${cutlery.docs.length}`);
+    if (fallbackProps && napkins.docs.length === 0 && napkinAssets.length === 0) {
+      console.warn("[Orchestrator] No napkin assets found. Verify assets category/subType values in Firestore.");
+    }
+    if (fallbackProps && cutlery.docs.length === 0 && cutleryAssets.length === 0) {
+      console.warn("[Orchestrator] No cutlery assets found. Verify assets category/subType values in Firestore.");
+    }
+
+    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}, accessories: ${accessories.docs.length}, napkins: ${napkinAssets.length}, cutlery: ${cutleryAssets.length}`);
 
     return {
       products: products.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
@@ -887,8 +934,8 @@ export class Orchestrator {
       interior: interior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       exterior: exterior.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
       accessories: accessories.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
-      napkins: napkins.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
-      cutlery: cutlery.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
+      napkins: napkinAssets,
+      cutlery: cutleryAssets,
     };
   }
 
@@ -1593,6 +1640,8 @@ LIGHTING:
     if (assetSelection.pet?.id) assetsToUpdate.push(assetSelection.pet.id);
     if (assetSelection.interior?.id) assetsToUpdate.push(assetSelection.interior.id);
     if (assetSelection.accessory?.id) assetsToUpdate.push(assetSelection.accessory.id);
+    if (assetSelection.napkin?.id) assetsToUpdate.push(assetSelection.napkin.id);
+    if (assetSelection.cutlery?.id) assetsToUpdate.push(assetSelection.cutlery.id);
 
     if (assetsToUpdate.length === 0) {
       console.log("[Orchestrator] No assets to update usage count");
