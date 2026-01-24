@@ -58,20 +58,29 @@ export default function AssetUpload({
   const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Callback ref'leri - stale closure problemini önler
+  // Upload sırasında parent re-render olsa bile doğru callback çağrılır
+  const onUploadCompleteRef = useRef(onUploadComplete);
+  const onErrorRef = useRef(onError);
+
+  // Her render'da ref'leri güncelle
+  onUploadCompleteRef.current = onUploadComplete;
+  onErrorRef.current = onError;
+
   const config = CONFIG[type];
 
   const validateFile = (file: File): boolean => {
     // Dosya tipi kontrolü
     const isValidType = config.mimeTypes.some(mime => file.type.startsWith(mime));
     if (!isValidType) {
-      onError?.(`Sadece ${config.label.toLowerCase()} dosyaları yüklenebilir`);
+      onErrorRef.current?.(`Sadece ${config.label.toLowerCase()} dosyaları yüklenebilir`);
       return false;
     }
 
     // Dosya boyutu kontrolü
     if (file.size > config.maxSize) {
       const maxMB = config.maxSize / (1024 * 1024);
-      onError?.(`Dosya boyutu ${maxMB}MB'dan küçük olmalı`);
+      onErrorRef.current?.(`Dosya boyutu ${maxMB}MB'dan küçük olmalı`);
       return false;
     }
 
@@ -115,16 +124,27 @@ export default function AssetUpload({
         setIsUploading(false);
         setPreview(null);
         setUploadedFilename(null);
-        onError?.("Yükleme başarısız: " + error.message);
+        onErrorRef.current?.("Yükleme başarısız: " + error.message);
       },
       async () => {
-        // Upload tamamlandı
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        setIsUploading(false);
-        onUploadComplete(downloadURL, file.name);
+        // Upload tamamlandı - URL al ve parent'a bildir
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          console.log("[AssetUpload] Upload complete, calling callback with URL");
+          // Ref üzerinden güncel callback'i çağır (stale closure önlenir)
+          onUploadCompleteRef.current(downloadURL, file.name);
+          setIsUploading(false);
+        } catch (error) {
+          console.error("Error getting download URL:", error);
+          setIsUploading(false);
+          setPreview(null);
+          setUploadedFilename(null);
+          onErrorRef.current?.("URL alınamadı: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
+        }
       }
     );
-  }, [type, folder, onUploadComplete, onError]);
+    // Ref'ler kullanıldığı için callback'ler dependency'den çıkarıldı
+  }, [type, folder]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

@@ -55,7 +55,10 @@
       "Bash(npx ts-node:*)",
       "Bash(GOOGLE_APPLICATION_CREDENTIALS=\"\" firebase emulators:exec:*)",
       "Bash(gcloud auth application-default login --project instagram-automation-ad77b)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx firebase deploy:*)",
+      "WebFetch(domain:developers.googleblog.com)"
     ]
   },
   "hooks": {

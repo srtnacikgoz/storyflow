@@ -5,6 +5,7 @@
 
 import * as admin from "firebase-admin";
 import { AILog, AILogStage, AILogStatus, AIProvider } from "../types";
+import { getSystemSettings } from "./configService";
 
 // Firestore referansı
 const getDb = () => admin.firestore();
@@ -14,7 +15,7 @@ const getDb = () => admin.firestore();
  */
 export class AILogService {
   private static readonly COLLECTION = "ai-logs";
-  private static readonly MAX_LOGS_PER_QUERY = 100;
+  // MAX_LOGS_PER_QUERY artık config'den okunuyor (runtime'da değiştirilebilir)
 
   /**
    * Yeni AI log oluştur
@@ -170,7 +171,11 @@ export class AILogService {
         query = query.startAfter(options.startAfter);
       }
 
-      query = query.limit(options?.limit || this.MAX_LOGS_PER_QUERY);
+      // Config'den max log sayısını al (runtime'da değiştirilebilir)
+      const systemSettings = await getSystemSettings();
+      const maxLogsPerQuery = systemSettings.maxLogsPerQuery;
+
+      query = query.limit(options?.limit || maxLogsPerQuery);
 
       const snapshot = await query.get();
       return snapshot.docs.map((doc) => doc.data() as AILog);

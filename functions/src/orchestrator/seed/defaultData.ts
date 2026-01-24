@@ -24,6 +24,7 @@ import {
   FirestoreAbsoluteRulesConfig,
   FirestoreOrchestratorInstructions,
   FirestoreTimeoutsConfig,
+  FirestoreSystemSettingsConfig,
   CompositionVariant,
 } from "../types";
 
@@ -489,6 +490,33 @@ export const DEFAULT_TIMEOUTS_CONFIG: Omit<FirestoreTimeoutsConfig, "updatedAt">
 };
 
 // ==========================================
+// SİSTEM AYARLARI (Hardcoded → Config)
+// ==========================================
+
+export const DEFAULT_SYSTEM_SETTINGS_CONFIG: Omit<FirestoreSystemSettingsConfig, "updatedAt"> = {
+  // AI Maliyetleri (USD per 1K token)
+  // Claude Sonnet 4 fiyatlandırması (yaklaşık)
+  claudeInputCostPer1K: 0.003,
+  claudeOutputCostPer1K: 0.015,
+
+  // AI Ayarları
+  // Gemini img2img için varsayılan faithfulness değeri (0.0-1.0)
+  geminiDefaultFaithfulness: 0.7,
+
+  // Feedback
+  // Claude prompt'una dahil edilecek maksimum geri bildirim sayısı
+  maxFeedbackForPrompt: 10,
+
+  // Sistem
+  // Bir işlemin "stuck" olarak işaretlenmesi için dakika
+  stuckWarningMinutes: 15,
+  // AI log sorgusunda maksimum kayıt sayısı
+  maxLogsPerQuery: 100,
+  // Config cache'in yaşama süresi (dakika)
+  cacheTTLMinutes: 5,
+};
+
+// ==========================================
 // ZAMAN-MOOD EŞLEŞTİRMESİ
 // ==========================================
 
@@ -706,6 +734,10 @@ export function getAllSeedData() {
     },
     timeoutsConfig: {
       ...DEFAULT_TIMEOUTS_CONFIG,
+      updatedAt: timestamp,
+    },
+    systemSettingsConfig: {
+      ...DEFAULT_SYSTEM_SETTINGS_CONFIG,
       updatedAt: timestamp,
     },
   };

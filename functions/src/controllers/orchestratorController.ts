@@ -66,6 +66,7 @@ export {
 
   // Dashboard Controller
   getOrchestratorDashboardStats,
+  loadDashboardData,
 
   // Config Controller
   getVariationConfig,
@@ -75,6 +76,8 @@ export {
   seedOrchestratorConfig,
   getTimeoutsConfig,
   updateTimeoutsConfig,
+  getSystemSettingsConfig,
+  updateSystemSettingsConfig,
 
   // Feedback Controller
   createFeedback,

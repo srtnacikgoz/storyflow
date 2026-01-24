@@ -5,6 +5,7 @@
 
 import * as admin from "firebase-admin";
 import { IssueFeedback, IssueCategoryId, ISSUE_CATEGORIES } from "../orchestrator/types";
+import { getSystemSettings } from "./configService";
 
 // Firestore referansı
 const getDb = () => admin.firestore();
@@ -14,7 +15,7 @@ const getDb = () => admin.firestore();
  */
 export class FeedbackService {
   private static readonly COLLECTION = "ai-feedback";
-  private static readonly MAX_FEEDBACK_FOR_PROMPT = 10;
+  // MAX_FEEDBACK_FOR_PROMPT artık config'den okunuyor (runtime'da değiştirilebilir)
 
   /**
    * Yeni feedback oluştur
@@ -88,8 +89,12 @@ export class FeedbackService {
         byCategory[fb.category] = (byCategory[fb.category] || 0) + 1;
       }
 
+      // Config'den max feedback sayısını al (runtime'da değiştirilebilir)
+      const systemSettings = await getSystemSettings();
+      const maxFeedback = systemSettings.maxFeedbackForPrompt;
+
       // Son birkaç issue'yu al (prompt'a eklemek için)
-      const recentIssues = feedbacks.slice(0, this.MAX_FEEDBACK_FOR_PROMPT).map((fb) => ({
+      const recentIssues = feedbacks.slice(0, maxFeedback).map((fb) => ({
         category: fb.category,
         note: fb.customNote,
         scenarioId: fb.scenarioId,

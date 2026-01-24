@@ -397,7 +397,7 @@ export type EnvironmentType = "indoor" | "outdoor" | "window" | "cafe" | "home";
 export type PetType = "dogs" | "cats";
 
 // Yeme şekli - ürün nasıl yenir
-export type EatingMethod = "hand" | "fork" | "spoon" | "none";
+export type EatingMethod = "hand" | "fork" | "fork-knife" | "spoon" | "none";
 
 // @deprecated - geriye uyumluluk için, yeni kodda EatingMethod kullanın
 export type HoldingType = EatingMethod;
@@ -516,6 +516,8 @@ export interface PipelineResult {
     plate?: OrchestratorAsset;
     cup?: OrchestratorAsset;
     table?: OrchestratorAsset;
+    pet?: OrchestratorAsset;
+    accessory?: OrchestratorAsset;
     selectionReasoning: string;
   };
   scenarioSelection?: {
@@ -524,6 +526,8 @@ export interface PipelineResult {
     reasoning: string;
     includesHands: boolean;
     handStyle?: string;
+    handStyleDetails?: { name: string; description: string };
+    compositionId?: string;
     composition: string;
   };
   optimizedPrompt?: {

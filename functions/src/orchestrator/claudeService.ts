@@ -19,6 +19,7 @@ import {
 import { getCompactTrainingContext } from "./promptTrainingService";
 import { AILogService } from "../services/aiLogService";
 import { AILogStage } from "../types";
+import { getSystemSettings } from "../services/configService";
 
 // Lazy load Anthropic SDK
 let anthropicClient: Anthropic | null = null;
@@ -64,12 +65,13 @@ export class ClaudeService {
   }
 
   /**
-   * Token maliyeti hesapla (yaklaşık)
+   * Token maliyeti hesapla (config'den okunan değerlerle)
+   * Maliyet oranları runtime'da değiştirilebilir
    */
-  private calculateCost(inputTokens: number, outputTokens: number): number {
-    // Claude Sonnet 4 fiyatlandırması (yaklaşık)
-    const inputCost = (inputTokens / 1000) * 0.003;
-    const outputCost = (outputTokens / 1000) * 0.015;
+  private async calculateCost(inputTokens: number, outputTokens: number): Promise<number> {
+    const settings = await getSystemSettings();
+    const inputCost = (inputTokens / 1000) * settings.claudeInputCostPer1K;
+    const outputCost = (outputTokens / 1000) * settings.claudeOutputCostPer1K;
     return inputCost + outputCost;
   }
 
@@ -349,7 +351,7 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
       }
 
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
-      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const cost = await this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
       const durationMs = Date.now() - startTime;
 
       // AI Log kaydet
@@ -516,7 +518,7 @@ Seçilen Asset'ler:
 - Köpek: ${selectedAssets.pet?.filename || "yok"}
 - Aksesuar: ${selectedAssets.accessory ? `${selectedAssets.accessory.subType} - ${selectedAssets.accessory.filename}` : "yok"}
 
-${!canUseHandScenarios ? `⚠️ UYARI: Bu ürün elle tutulamaz (yeme şekli: ${productEatingMethod}) - ${productEatingMethod === "fork" ? "Çatalla" : productEatingMethod === "spoon" ? "Kaşıkla" : "Dokunmadan"} servis edilmeli.` : ""}
+${!canUseHandScenarios ? `⚠️ UYARI: Bu ürün elle tutulamaz (yeme şekli: ${productEatingMethod}) - ${productEatingMethod === "fork" ? "Çatalla" : productEatingMethod === "fork-knife" ? "Çatal-bıçakla" : productEatingMethod === "spoon" ? "Kaşıkla" : "Dokunmadan"} servis edilmeli.` : ""}
 
 MEVCUT SENARYOLAR:
 ${JSON.stringify(filteredScenarios, null, 2)}
@@ -595,7 +597,7 @@ Yanıt formatı:
         : undefined;
 
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
-      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const cost = await this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
       const durationMs = Date.now() - startTime;
 
       // AI Log kaydet
@@ -768,7 +770,7 @@ Görseli değerlendir ve JSON formatında yanıt ver:
 
       const evaluation = JSON.parse(jsonMatch[0]);
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
-      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const cost = await this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
       const durationMs = Date.now() - startTime;
 
       // Duplikasyon ve stacked plates kontrolü
@@ -954,7 +956,7 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
 
       const content = JSON.parse(jsonMatch[0]);
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
-      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const cost = await this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
       const durationMs = Date.now() - startTime;
 
       // AI Log kaydet
@@ -1142,7 +1144,7 @@ Prompt'u optimize et:
 
       const result = JSON.parse(jsonMatch[0]);
       const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
-      const cost = this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const cost = await this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
       const durationMs = Date.now() - startTime;
 
       // AI Log kaydet

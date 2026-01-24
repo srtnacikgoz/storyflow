@@ -4,6 +4,7 @@
  */
 
 import { AILogService } from "./aiLogService";
+import { getSystemSettings } from "./configService";
 
 // Lazy load imports - Cloud Functions startup timeout'unu önler
 // @google/generative-ai ve sharp modülleri ilk kullanımda yüklenir
@@ -202,7 +203,9 @@ export class GeminiService {
     });
 
     // Faithfulness bilgisini prompt'a ekle (API'de parametre yok, prompt ile kontrol)
-    const faithfulness = options.faithfulness ?? 0.7;
+    // Default değer config'den okunur (runtime'da değiştirilebilir)
+    const systemSettings = await getSystemSettings();
+    const faithfulness = options.faithfulness ?? systemSettings.geminiDefaultFaithfulness;
     let faithfulnessInstruction = "";
 
     if (faithfulness >= 0.8) {
@@ -279,6 +282,9 @@ SCENE DIRECTION:
 
     // MUTLAK KISITLAMA - Her zaman eklenir (3. koruma katmanı)
     fullPrompt += `\n\nABSOLUTE RESTRICTION: Use ONLY objects from the uploaded reference images. Do NOT add ANY prop, furniture, decoration, or lighting fixture (lamp, lampshade, vase, candle, flowers, picture frame, clock, etc.) that is not in the reference. The scene must be MINIMALIST - only the product and explicitly provided assets. Nothing else.`;
+
+    // Textile/Napkin halüsinasyon önleme (semantic negative prompting)
+    fullPrompt += `\n\nTEXTILE CONSTRAINT: Do NOT add colorful, patterned, or decorative textiles (towels, napkins, tablecloths, fabric) unless explicitly provided in reference images. If a napkin is needed and not in references, use ONLY plain white or cream colored, simple paper napkin. NO colorful patterns, NO stripes, NO decorative prints.`;
 
     // Metin yanıtını engellemek için kesin talimat
     fullPrompt += "\n\nCRITICAL: Edit the image and return ONLY the edited image. Do not provide any text. The product in your output MUST be the same product from the input image.";

@@ -132,10 +132,11 @@ export type MusicMood =
  * Bu alan ürünün servis şeklini belirler
  */
 export type EatingMethod =
-  | "hand"   // Elle yenir (kurabiye, kruvasan, sandviç)
-  | "fork"   // Çatalla yenir (tiramisu, cheesecake, pasta dilimi)
-  | "spoon"  // Kaşıkla yenir (puding, sufle)
-  | "none";  // Yenmez/servis edilir (bütün kek, tart, dekor)
+  | "hand"       // Elle yenir (kurabiye, sandviç)
+  | "fork"       // Çatalla yenir (tiramisu, cheesecake, pasta dilimi)
+  | "fork-knife" // Çatal-bıçakla yenir (domatesli kruvasan, börek)
+  | "spoon"      // Kaşıkla yenir (puding, sufle)
+  | "none";      // Yenmez/servis edilir (bütün kek, tart, dekor)
 
 /**
  * @deprecated - geriye uyumluluk için tutulur, yeni kodda EatingMethod kullanın
@@ -1042,6 +1043,7 @@ export interface GlobalOrchestratorConfig {
   absoluteRules: FirestoreAbsoluteRulesConfig;
   instructions: FirestoreOrchestratorInstructions;
   timeouts: FirestoreTimeoutsConfig;
+  systemSettings: FirestoreSystemSettingsConfig;
 
   // Cache bilgisi
   loadedAt: number;
@@ -1104,4 +1106,36 @@ export interface AIRule {
   // Meta
   createdAt: number;
   updatedAt: number;
+}
+
+// ==========================================
+// SYSTEM SETTINGS (Hardcoded → Config)
+// ==========================================
+
+/**
+ * Firestore'da saklanan sistem ayarları
+ * Document: global/config/settings/system-settings
+ *
+ * Bu ayarlar runtime'da değiştirilebilir (deploy gerektirmez)
+ * Hardcoded değerlerin config'e taşınmış hali
+ */
+export interface FirestoreSystemSettingsConfig {
+  // AI Maliyetleri (USD per 1K token)
+  claudeInputCostPer1K: number;       // Default: 0.003
+  claudeOutputCostPer1K: number;      // Default: 0.015
+
+  // AI Ayarları
+  geminiDefaultFaithfulness: number;  // Default: 0.7 (0.0-1.0 arası)
+
+  // Feedback
+  maxFeedbackForPrompt: number;       // Default: 10
+
+  // Sistem
+  stuckWarningMinutes: number;        // Default: 15
+  maxLogsPerQuery: number;            // Default: 100
+  cacheTTLMinutes: number;            // Default: 5
+
+  // Meta
+  updatedAt: number;
+  updatedBy?: string;
 }

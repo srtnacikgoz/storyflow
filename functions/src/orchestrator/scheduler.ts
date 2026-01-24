@@ -17,7 +17,7 @@ import {
 // saveProductionHistory kaldırıldı ama getRecentHistory/getPetUsageStats hala burada
 import { TimeScoreService } from "../services/timeScore";
 import { DayOfWeekIndex } from "../types";
-import { getTimeouts } from "../services/configService";
+import { getTimeouts, getSystemSettings } from "../services/configService";
 
 /**
  * Undefined değerleri recursive olarak temizle (Firestore uyumluluğu için)
@@ -456,8 +456,9 @@ export class OrchestratorScheduler {
 
     // Timeout değerlerini config'den al (runtime'da değiştirilebilir)
     const timeoutConfig = await getTimeouts();
+    const systemSettings = await getSystemSettings();
     const TIMEOUT_MS = timeoutConfig.processingTimeoutMinutes * 60 * 1000; // Config'den dakika -> ms
-    const STUCK_MS = 15 * 60 * 1000; // 15 dakika (uyarı için - sabit)
+    const STUCK_MS = systemSettings.stuckWarningMinutes * 60 * 1000; // Config'den dakika -> ms (uyarı için)
 
     const result = {
       recovered: 0,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
 import type { OrchestratorAsset, AssetCategory, EatingMethod } from "../types";
@@ -25,10 +25,17 @@ const SUBTYPE_LABELS: Record<string, string> = {
   // Props
   plates: "Tabak",
   cups: "Fincan",
-  cutlery: "Çatal-Bıçak",
+  cutlery: "Çatal-Bıçak Seti",
+  fork: "Çatal",
+  knife: "Bıçak",
+  spoon: "Kaşık",
   napkins: "Peçete",
+  "cutlery-napkin-set": "Çatal-Bıçak + Peçete Seti",
   boxes: "Kutu (Pasta/Çikolata)",
   bags: "Kağıt Çanta",
+  "paper-bag": "Kese Kağıdı (Kruvasan)",
+  "sugar-stick": "Stick Şeker (Ambalajlı)",
+  straw: "Pipet (Sargılı/Logolu)",
   // Furniture
   tables: "Masa",
   chairs: "Sandalye",
@@ -64,7 +71,12 @@ const SUBTYPE_LABELS: Record<string, string> = {
 // Alt tipler kategori bazlı
 const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   products: ["croissants", "pastas", "chocolates", "coffees"],
-  props: ["plates", "cups", "cutlery", "napkins", "boxes", "bags"],
+  props: [
+    "plates", "cups", "cutlery", "fork", "knife", "spoon",
+    "napkins", "cutlery-napkin-set",
+    "boxes", "bags", "paper-bag",
+    "sugar-stick", "straw"
+  ],
   furniture: ["tables", "chairs", "decor"],
   environments: ["indoor", "outdoor", "window", "cafe", "home"],
   pets: ["dogs", "cats"],
@@ -553,15 +565,18 @@ function AssetModal({
     }
   }, [asset]);
 
-  const handleUploadComplete = (url: string, uploadedFilename: string) => {
+  // useCallback ile stabil referans - upload sırasında parent re-render olsa bile callback çalışır
+  const handleUploadComplete = useCallback((url: string, uploadedFilename: string) => {
+    console.log("[AssetModal] Upload complete:", { url: url.substring(0, 50) + "...", uploadedFilename });
     setStorageUrl(url);
     setFilename(uploadedFilename);
     setUploadError(null);
-  };
+  }, []);
 
-  const handleUploadError = (error: string) => {
+  const handleUploadError = useCallback((error: string) => {
+    console.error("[AssetModal] Upload error:", error);
     setUploadError(error);
-  };
+  }, []);
 
   // Mevcut kategorinin alan konfigürasyonu
   const fieldConfig = FIELDS_BY_CATEGORY[category];
@@ -838,8 +853,9 @@ function AssetModal({
                   onChange={(e) => setEatingMethod(e.target.value as EatingMethod)}
                   className="input w-full"
                 >
-                  <option value="hand">Elle Yenir (kurabiye, kruvasan, sandviç)</option>
+                  <option value="hand">Elle Yenir (kurabiye, sandviç)</option>
                   <option value="fork">Çatalla Yenir (tiramisu, pasta dilimi)</option>
+                  <option value="fork-knife">Çatal-Bıçakla Yenir (domatesli kruvasan, börek)</option>
                   <option value="spoon">Kaşıkla Yenir (puding, sufle)</option>
                   <option value="none">Yenmez/Servis (bütün kek, tart, dekor)</option>
                 </select>

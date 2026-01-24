@@ -16,6 +16,8 @@ import {
   getWeeklyThemes,
   getTimeouts,
   updateTimeouts,
+  getSystemSettings,
+  updateSystemSettings,
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
 import { FirestoreDiversityRules } from "../../orchestrator/types";
@@ -396,6 +398,173 @@ export const updateTimeoutsConfig = functions
         });
       } catch (error) {
         errorResponse(response, error, "updateTimeoutsConfig");
+      }
+    });
+  });
+
+/**
+ * Sistem ayarlarını getir
+ * GET /getSystemSettingsConfig
+ *
+ * Hardcoded değerlerin config'e taşınmış hali:
+ * - AI maliyetleri (Claude input/output)
+ * - Gemini faithfulness
+ * - Max feedback for prompt
+ * - Stuck warning timeout
+ * - Max logs per query
+ * - Cache TTL
+ */
+export const getSystemSettingsConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        // ConfigService üzerinden oku (cache'li)
+        const systemSettings = await getSystemSettings();
+
+        response.json({
+          success: true,
+          data: systemSettings,
+        });
+      } catch (error) {
+        errorResponse(response, error, "getSystemSettingsConfig");
+      }
+    });
+  });
+
+/**
+ * Sistem ayarlarını güncelle
+ * PUT/POST /updateSystemSettingsConfig
+ *
+ * Body: {
+ *   claudeInputCostPer1K?: number,      // 0.001 - 0.1
+ *   claudeOutputCostPer1K?: number,     // 0.001 - 0.5
+ *   geminiDefaultFaithfulness?: number, // 0.0 - 1.0
+ *   maxFeedbackForPrompt?: number,      // 1 - 50
+ *   stuckWarningMinutes?: number,       // 5 - 60
+ *   maxLogsPerQuery?: number,           // 10 - 500
+ *   cacheTTLMinutes?: number,           // 1 - 60
+ * }
+ */
+export const updateSystemSettingsConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const updates = request.body;
+
+        // Validasyon: claudeInputCostPer1K (0.001 - 0.1)
+        if (updates.claudeInputCostPer1K !== undefined) {
+          const value = Number(updates.claudeInputCostPer1K);
+          if (isNaN(value) || value < 0.001 || value > 0.1) {
+            response.status(400).json({
+              success: false,
+              error: "claudeInputCostPer1K must be between 0.001 and 0.1",
+            });
+            return;
+          }
+          updates.claudeInputCostPer1K = value;
+        }
+
+        // Validasyon: claudeOutputCostPer1K (0.001 - 0.5)
+        if (updates.claudeOutputCostPer1K !== undefined) {
+          const value = Number(updates.claudeOutputCostPer1K);
+          if (isNaN(value) || value < 0.001 || value > 0.5) {
+            response.status(400).json({
+              success: false,
+              error: "claudeOutputCostPer1K must be between 0.001 and 0.5",
+            });
+            return;
+          }
+          updates.claudeOutputCostPer1K = value;
+        }
+
+        // Validasyon: geminiDefaultFaithfulness (0.0 - 1.0)
+        if (updates.geminiDefaultFaithfulness !== undefined) {
+          const value = Number(updates.geminiDefaultFaithfulness);
+          if (isNaN(value) || value < 0.0 || value > 1.0) {
+            response.status(400).json({
+              success: false,
+              error: "geminiDefaultFaithfulness must be between 0.0 and 1.0",
+            });
+            return;
+          }
+          updates.geminiDefaultFaithfulness = value;
+        }
+
+        // Validasyon: maxFeedbackForPrompt (1 - 50)
+        if (updates.maxFeedbackForPrompt !== undefined) {
+          const value = Number(updates.maxFeedbackForPrompt);
+          if (isNaN(value) || value < 1 || value > 50) {
+            response.status(400).json({
+              success: false,
+              error: "maxFeedbackForPrompt must be between 1 and 50",
+            });
+            return;
+          }
+          updates.maxFeedbackForPrompt = value;
+        }
+
+        // Validasyon: stuckWarningMinutes (5 - 60)
+        if (updates.stuckWarningMinutes !== undefined) {
+          const value = Number(updates.stuckWarningMinutes);
+          if (isNaN(value) || value < 5 || value > 60) {
+            response.status(400).json({
+              success: false,
+              error: "stuckWarningMinutes must be between 5 and 60",
+            });
+            return;
+          }
+          updates.stuckWarningMinutes = value;
+        }
+
+        // Validasyon: maxLogsPerQuery (10 - 500)
+        if (updates.maxLogsPerQuery !== undefined) {
+          const value = Number(updates.maxLogsPerQuery);
+          if (isNaN(value) || value < 10 || value > 500) {
+            response.status(400).json({
+              success: false,
+              error: "maxLogsPerQuery must be between 10 and 500",
+            });
+            return;
+          }
+          updates.maxLogsPerQuery = value;
+        }
+
+        // Validasyon: cacheTTLMinutes (1 - 60)
+        if (updates.cacheTTLMinutes !== undefined) {
+          const value = Number(updates.cacheTTLMinutes);
+          if (isNaN(value) || value < 1 || value > 60) {
+            response.status(400).json({
+              success: false,
+              error: "cacheTTLMinutes must be between 1 and 60",
+            });
+            return;
+          }
+          updates.cacheTTLMinutes = value;
+        }
+
+        // Güncelle
+        await updateSystemSettings(updates);
+
+        // Cache temizle
+        clearConfigCache();
+
+        console.log("[updateSystemSettingsConfig] System settings updated:", updates);
+
+        response.json({
+          success: true,
+          message: "System settings updated",
+        });
+      } catch (error) {
+        errorResponse(response, error, "updateSystemSettingsConfig");
       }
     });
   });
