@@ -2233,3 +2233,67 @@ export const getAIRulesStats = functions
       }
     });
   });
+
+// ==========================================
+// CONFIG SEED
+// ==========================================
+
+import { seedFirestoreConfig, isConfigInitialized } from "../services/configService";
+
+/**
+ * Orchestrator config'lerini Firestore'a seed et
+ * POST /seedOrchestratorConfig
+ *
+ * Güvenlik: Sadece yetkili isteklere izin ver
+ */
+export const seedOrchestratorConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        // Basit güvenlik kontrolü (secret key)
+        const secretKey = request.body?.secretKey || request.query?.secretKey;
+        if (secretKey !== "maestro-seed-2026") {
+          response.status(403).json({
+            success: false,
+            error: "Unauthorized",
+          });
+          return;
+        }
+
+        // Config zaten var mı kontrol et
+        const initialized = await isConfigInitialized();
+        if (initialized) {
+          // Force parametresi yoksa hata döndür
+          if (!request.body?.force) {
+            response.status(400).json({
+              success: false,
+              error: "Config already initialized. Use force: true to overwrite.",
+            });
+            return;
+          }
+        }
+
+        // Seed işlemi
+        console.log("[seedOrchestratorConfig] Starting seed...");
+        await seedFirestoreConfig();
+
+        response.json({
+          success: true,
+          message: "Orchestrator config seeded successfully",
+        });
+      } catch (error) {
+        console.error("[seedOrchestratorConfig] Error:", error);
+        response.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  });

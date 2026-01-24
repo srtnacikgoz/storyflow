@@ -51,7 +51,10 @@
       "Bash(python:*)",
       "Bash(gcloud functions describe:*)",
       "Bash(jq:*)",
-      "Skill(mentor-pazarlama)"
+      "Skill(mentor-pazarlama)",
+      "Bash(npx ts-node:*)",
+      "Bash(GOOGLE_APPLICATION_CREDENTIALS=\"\" firebase emulators:exec:*)",
+      "Bash(gcloud auth application-default login --project instagram-automation-ad77b)"
     ]
   },
   "hooks": {
