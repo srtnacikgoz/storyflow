@@ -303,3 +303,5 @@ Yeni kural eklemek için:
 4. Claude Code bir sonraki oturumda otomatik yükleyecek
 
 > **Önemli:** `rules/` klasöründeki her `.md` dosyası Claude Code context'ine otomatik eklenir.
+
+fikir alma konularında her zaman o konu ile alakalı Gemini'nin de fikrini alabilmek içinde konuyu ona soracak şekilde bana cümle halinde sunmanı istiyorum. 

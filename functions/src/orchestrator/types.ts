@@ -881,6 +881,145 @@ export interface IssueFeedback {
 }
 
 // ==========================================
+// FIRESTORE CONFIG TYPES
+// ==========================================
+
+/**
+ * Firestore'da saklanan senaryo
+ * Collection: global/scenarios/{scenarioId}
+ */
+export interface FirestoreScenario extends Scenario {
+  // Firestore meta
+  createdAt: number;
+  updatedAt: number;
+  isActive: boolean;
+
+  // Ek detaylar (ORCHESTRATOR.md'den)
+  suggestedProducts?: ProductType[];    // Bu senaryo için önerilen ürün tipleri
+  suggestedTimeSlots?: string[];        // Uygun zaman dilimleri (morning, afternoon, vb.)
+  mood?: string;                        // Senaryo mood'u
+  lightingPreference?: string;          // Tercih edilen ışık
+}
+
+/**
+ * Firestore'da saklanan el stili
+ * Collection: global/hand-styles/{styleId}
+ */
+export interface FirestoreHandStyle extends HandStyle {
+  // Firestore meta
+  createdAt: number;
+  updatedAt: number;
+  isActive: boolean;
+
+  // Ek detaylar
+  compatibleScenarios?: string[];       // Uyumlu senaryo ID'leri
+  targetDemographic?: string;           // Hedef kitle
+}
+
+/**
+ * Firestore'da saklanan asset kişiliği
+ * Collection: global/asset-personalities/{assetId}
+ */
+export interface FirestoreAssetPersonality extends AssetPersonality {
+  // Firestore meta
+  createdAt: number;
+  updatedAt: number;
+  isActive: boolean;
+}
+
+/**
+ * Firestore'da saklanan çeşitlilik kuralları
+ * Document: global/config/diversity-rules
+ */
+export interface FirestoreDiversityRules extends VariationRules {
+  // Firestore meta
+  updatedAt: number;
+  updatedBy?: string;                   // Son güncelleyen
+}
+
+/**
+ * Firestore'da saklanan zaman-mood eşleştirmeleri
+ * Document: global/config/time-mood
+ */
+export interface FirestoreTimeMoodConfig {
+  mappings: TimeMoodMapping[];
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Firestore'da saklanan haftalık temalar
+ * Document: global/config/weekly-themes
+ */
+export interface FirestoreWeeklyThemesConfig {
+  // Gün bazlı temalar (0: Pazar, 1: Pazartesi, ...)
+  themes: Record<string, WeeklyTheme>;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Firestore'da saklanan mutlak kurallar
+ * Document: global/config/absolute-rules
+ */
+export interface FirestoreAbsoluteRulesConfig {
+  // Kategori bazlı kurallar
+  productRules: string[];               // Ürün kuralları
+  prohibitedElements: string[];         // Yasak elementler
+  qualityRules: string[];               // Kalite kuralları
+
+  // Düz liste (tümü)
+  allRules: string[];
+
+  // Meta
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Orchestrator talimatları
+ * Document: global/config/orchestrator-instructions
+ *
+ * Claude'un nasıl davranacağını belirleyen talimatlar
+ */
+export interface FirestoreOrchestratorInstructions {
+  // Seçim yaparken
+  selectionInstructions: string[];
+
+  // Prompt oluştururken
+  promptInstructions: string[];
+
+  // Kalite kontrolde
+  qualityControlInstructions: string[];
+
+  // Ek notlar
+  generalNotes?: string;
+
+  // Meta
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Tüm global config'leri birleştiren tip
+ * Orchestrator başlatılırken bu tip kullanılır
+ */
+export interface GlobalOrchestratorConfig {
+  scenarios: FirestoreScenario[];
+  handStyles: FirestoreHandStyle[];
+  assetPersonalities: FirestoreAssetPersonality[];
+  diversityRules: FirestoreDiversityRules;
+  timeMoodConfig: FirestoreTimeMoodConfig;
+  weeklyThemes: FirestoreWeeklyThemesConfig;
+  absoluteRules: FirestoreAbsoluteRulesConfig;
+  instructions: FirestoreOrchestratorInstructions;
+
+  // Cache bilgisi
+  loadedAt: number;
+  version: string;
+}
+
+// ==========================================
 // AI RULES SYSTEM (Öğrenme Kuralları)
 // ==========================================
 

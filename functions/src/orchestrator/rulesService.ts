@@ -1,6 +1,11 @@
 /**
  * Rules Service
- * ORCHESTRATOR.md ve Firestore'dan kuralları yükler ve birleştirir
+ * Firestore'dan orchestrator kurallarını yükler ve birleştirir.
+ *
+ * Config-First Mimarisi:
+ * - Tüm kurallar Firestore'da saklanır
+ * - ORCHESTRATOR.md artık kullanılmaz
+ * - ConfigService üzerinden okuma yapılır
  */
 
 import { getFirestore } from "firebase-admin/firestore";
@@ -15,17 +20,23 @@ import {
   CompositionVariant,
   ProductionHistoryEntry,
   InteriorType,
+  GlobalOrchestratorConfig,
 } from "./types";
+import {
+  getGlobalConfig,
+  clearConfigCache,
+  ensureConfigInitialized,
+} from "../services/configService";
 
-// Varsayılan çeşitlilik kuralları
+// Varsayılan çeşitlilik kuralları (fallback için)
 const DEFAULT_VARIATION_RULES: VariationRules = {
   scenarioGap: 3,
   tableGap: 2,
   handStyleGap: 4,
   compositionGap: 5,
-  productGap: 3,      // Aynı ürün 3 üretim sonra tekrar
-  plateGap: 2,        // Aynı tabak 2 üretim sonra tekrar
-  cupGap: 2,          // Aynı fincan 2 üretim sonra tekrar
+  productGap: 3,
+  plateGap: 2,
+  cupGap: 2,
   petFrequency: 15,
   outdoorFrequency: 10,
   wabiSabiFrequency: 5,
@@ -326,79 +337,81 @@ const DEFAULT_HAND_STYLES: HandStyle[] = [
 
 /**
  * Rules Service
+ * Config-First mimarisi ile Firestore'dan kuralları yükler
  */
 export class RulesService {
   private db: FirebaseFirestore.Firestore;
-  private cachedRules: OrchestratorRules | null = null;
-  private cachedConfig: DynamicConfig | null = null;
-  private cacheTimestamp: number = 0;
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 dakika cache
+  private globalConfig: GlobalOrchestratorConfig | null = null;
 
   constructor() {
     this.db = getFirestore();
   }
 
   /**
-   * Statik kuralları yükle (varsayılan değerlerden)
-   * NOT: Cloud Functions ortamında dosya sistemi erişimi sınırlı olduğu için
-   * kurallar Firestore'dan veya varsayılan değerlerden yüklenir
+   * Global config'i yükle (ConfigService üzerinden)
+   * İlk çağrıda Firestore'dan yükler, sonraki çağrılarda cache'den döner
+   */
+  private async ensureGlobalConfig(): Promise<GlobalOrchestratorConfig> {
+    if (!this.globalConfig) {
+      // Config yoksa otomatik seed yap
+      await ensureConfigInitialized();
+      this.globalConfig = await getGlobalConfig();
+    }
+    return this.globalConfig;
+  }
+
+  /**
+   * Statik kuralları yükle (Firestore'dan)
+   * Senaryolar, el stilleri, asset kişilikleri ve mutlak kurallar
    */
   async loadStaticRules(): Promise<OrchestratorRules> {
-    // Cache kontrolü
-    if (this.cachedRules && Date.now() - this.cacheTimestamp < this.CACHE_TTL) {
-      return this.cachedRules;
-    }
-
     try {
-      // Firestore'dan parse edilmiş kuralları al (hooks tarafından sync edilmiş olmalı)
-      const rulesDoc = await this.db.collection("orchestrator-config").doc("parsed-rules").get();
+      const config = await this.ensureGlobalConfig();
 
-      if (rulesDoc.exists) {
-        const data = rulesDoc.data();
-        this.cachedRules = {
-          scenarios: data?.scenarios || DEFAULT_SCENARIOS,
-          handStyles: data?.handStyles || DEFAULT_HAND_STYLES,
-          assetPersonalities: data?.assetPersonalities || [],
-          absoluteRules: data?.absoluteRules || [
-            "TEK ÜRÜN - Görselde yalnızca BİR ana ürün",
-            "TEK FİNCAN - Varsa yalnızca BİR kahve fincanı",
-            "REFERANS SADIKLIĞI - Ürün referanstan tanınabilir olmalı",
-            "DUPLİKASYON YOK - Aynı üründen birden fazla asla",
-            "BUHAR/DUMAN YOK - Steam, smoke, mist yasak",
-            "KOYU ARKA PLAN YOK - Siyah, koyu gri yasak",
-          ],
-          version: data?.version || "1.0.0",
-          parsedAt: data?.parsedAt || Date.now(),
-        };
-      } else {
-        // Fallback: Varsayılan değerler
-        this.cachedRules = {
-          scenarios: DEFAULT_SCENARIOS,
-          handStyles: DEFAULT_HAND_STYLES,
-          assetPersonalities: [],
-          absoluteRules: [
-            "TEK ÜRÜN - Görselde yalnızca BİR ana ürün",
-            "TEK FİNCAN - Varsa yalnızca BİR kahve fincanı",
-            "REFERANS SADIKLIĞI - Ürün referanstan tanınabilir olmalı",
-            "DUPLİKASYON YOK - Aynı üründen birden fazla asla",
-            "BUHAR/DUMAN YOK - Steam, smoke, mist yasak",
-            "KOYU ARKA PLAN YOK - Siyah, koyu gri yasak",
-          ],
-          version: "1.0.0-default",
-          parsedAt: Date.now(),
-        };
-      }
+      // FirestoreScenario'yu Scenario'ya dönüştür
+      const scenarios: Scenario[] = config.scenarios.map((s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        includesHands: s.includesHands,
+        compositions: s.compositions,
+        isInterior: s.isInterior,
+        interiorType: s.interiorType,
+      }));
 
-      this.cacheTimestamp = Date.now();
-      return this.cachedRules;
+      // FirestoreHandStyle'ı HandStyle'a dönüştür
+      const handStyles: HandStyle[] = config.handStyles.map((h) => ({
+        id: h.id as any, // HandStyleId
+        name: h.name,
+        description: h.description,
+        nailPolish: h.nailPolish,
+        accessories: h.accessories,
+        tattoo: h.tattoo,
+      }));
+
+      return {
+        scenarios,
+        handStyles,
+        assetPersonalities: config.assetPersonalities,
+        absoluteRules: config.absoluteRules.allRules,
+        version: config.version,
+        parsedAt: config.loadedAt,
+      };
     } catch (error) {
-      console.error("[RulesService] Error loading static rules:", error);
-      // Hata durumunda varsayılan değerleri döndür
+      console.error("[RulesService] Error loading static rules from ConfigService:", error);
+      // Fallback: Varsayılan değerler
       return {
         scenarios: DEFAULT_SCENARIOS,
         handStyles: DEFAULT_HAND_STYLES,
         assetPersonalities: [],
-        absoluteRules: [],
+        absoluteRules: [
+          "TEK ÜRÜN - Görselde yalnızca BİR ana ürün",
+          "TEK FİNCAN - Varsa yalnızca BİR kahve fincanı",
+          "REFERANS SADIKLIĞI - Ürün referanstan tanınabilir olmalı",
+          "DUPLİKASYON YOK - Aynı üründen birden fazla asla",
+          "BUHAR/DUMAN YOK - Steam, smoke, mist yasak",
+          "KOYU ARKA PLAN YOK - Siyah, koyu gri yasak",
+        ],
         version: "1.0.0-fallback",
         parsedAt: Date.now(),
       };
@@ -407,79 +420,24 @@ export class RulesService {
 
   /**
    * Dinamik konfigürasyonu Firestore'dan yükle
+   * Çeşitlilik kuralları, haftalık temalar, zaman-mood eşleştirmeleri
    */
   async loadDynamicConfig(): Promise<DynamicConfig> {
-    // Cache kontrolü
-    if (this.cachedConfig && Date.now() - this.cacheTimestamp < this.CACHE_TTL) {
-      return this.cachedConfig;
-    }
-
     try {
-      const configDoc = await this.db.collection("orchestrator-config").doc("dynamic").get();
+      const config = await this.ensureGlobalConfig();
 
-      if (configDoc.exists) {
-        const data = configDoc.data();
-        this.cachedConfig = {
-          variationRules: {
-            ...DEFAULT_VARIATION_RULES,
-            ...data?.variationRules,
-          },
-          weeklyThemes: data?.weeklyThemes || {
-            monday: { mood: "energetic", scenarios: ["zarif-tutma", "kahve-ani"], petAllowed: false },
-            tuesday: { mood: "productive", scenarios: ["mermer-zarafet", "ilk-dilim"], petAllowed: false },
-            wednesday: { mood: "balanced", scenarios: ["paylasim", "cam-kenari"], petAllowed: false },
-            thursday: { mood: "anticipation", scenarios: ["hediye-acilisi", "zarif-tutma"], petAllowed: false },
-            friday: { mood: "relaxed", scenarios: ["kahve-kosesi", "paylasim"], petAllowed: true },
-            saturday: { mood: "cozy", scenarios: ["yarim-kaldi", "kahve-kosesi"], petAllowed: true },
-            sunday: { mood: "slow", scenarios: ["cam-kenari", "yarim-kaldi"], petAllowed: true },
-          },
-          timeMoodMappings: data?.timeMoodMappings || [
-            { startHour: 7, endHour: 10, mood: "fresh-morning", lightPreference: "soft side light", suggestedScenarios: ["cam-kenari", "zarif-tutma"], notes: "Aydınlık başlangıç" },
-            { startHour: 10, endHour: 12, mood: "brunch", lightPreference: "natural bright", suggestedScenarios: ["kahve-ani", "paylasim"], notes: "Sosyal paylaşım" },
-            { startHour: 12, endHour: 14, mood: "lunch-break", lightPreference: "bright clean", suggestedScenarios: ["zarif-tutma", "mermer-zarafet"], notes: "Profesyonel" },
-            { startHour: 14, endHour: 17, mood: "afternoon", lightPreference: "warm relaxed", suggestedScenarios: ["kahve-kosesi", "yarim-kaldi"], notes: "Köpek uygun" },
-            { startHour: 17, endHour: 20, mood: "golden-hour", lightPreference: "golden warm", suggestedScenarios: ["cam-kenari", "hediye-acilisi"], notes: "Romantik" },
-            { startHour: 20, endHour: 22, mood: "evening", lightPreference: "cozy intimate", suggestedScenarios: ["kahve-kosesi", "yarim-kaldi"], notes: "Samimi" },
-          ],
-          assetPriorities: data?.assetPriorities || {
-            underusedBoost: 1.5,
-            lastUsedPenalty: 0.5,
-          },
-          updatedAt: data?.updatedAt || Date.now(),
-        };
-      } else {
-        // Varsayılan config oluştur ve kaydet
-        this.cachedConfig = {
-          variationRules: DEFAULT_VARIATION_RULES,
-          weeklyThemes: {
-            monday: { mood: "energetic", scenarios: ["zarif-tutma", "kahve-ani"], petAllowed: false },
-            tuesday: { mood: "productive", scenarios: ["mermer-zarafet", "ilk-dilim"], petAllowed: false },
-            wednesday: { mood: "balanced", scenarios: ["paylasim", "cam-kenari"], petAllowed: false },
-            thursday: { mood: "anticipation", scenarios: ["hediye-acilisi", "zarif-tutma"], petAllowed: false },
-            friday: { mood: "relaxed", scenarios: ["kahve-kosesi", "paylasim"], petAllowed: true },
-            saturday: { mood: "cozy", scenarios: ["yarim-kaldi", "kahve-kosesi"], petAllowed: true },
-            sunday: { mood: "slow", scenarios: ["cam-kenari", "yarim-kaldi"], petAllowed: true },
-          },
-          timeMoodMappings: [
-            { startHour: 7, endHour: 10, mood: "fresh-morning", lightPreference: "soft side light", suggestedScenarios: ["cam-kenari", "zarif-tutma"], notes: "Aydınlık başlangıç" },
-            { startHour: 14, endHour: 17, mood: "afternoon", lightPreference: "warm relaxed", suggestedScenarios: ["kahve-kosesi", "yarim-kaldi"], notes: "Köpek uygun" },
-            { startHour: 17, endHour: 20, mood: "golden-hour", lightPreference: "golden warm", suggestedScenarios: ["cam-kenari", "hediye-acilisi"], notes: "Romantik" },
-          ],
-          assetPriorities: {
-            underusedBoost: 1.5,
-            lastUsedPenalty: 0.5,
-          },
-          updatedAt: Date.now(),
-        };
-
-        // Firestore'a kaydet
-        await this.db.collection("orchestrator-config").doc("dynamic").set(this.cachedConfig);
-      }
-
-      this.cacheTimestamp = Date.now();
-      return this.cachedConfig;
+      return {
+        variationRules: config.diversityRules,
+        weeklyThemes: config.weeklyThemes.themes,
+        timeMoodMappings: config.timeMoodConfig.mappings,
+        assetPriorities: {
+          underusedBoost: 1.5,
+          lastUsedPenalty: 0.5,
+        },
+        updatedAt: config.loadedAt,
+      };
     } catch (error) {
-      console.error("[RulesService] Error loading dynamic config:", error);
+      console.error("[RulesService] Error loading dynamic config from ConfigService:", error);
       return {
         variationRules: DEFAULT_VARIATION_RULES,
         weeklyThemes: {},
@@ -656,8 +614,16 @@ export class RulesService {
    * Cache'i temizle
    */
   clearCache(): void {
-    this.cachedRules = null;
-    this.cachedConfig = null;
-    this.cacheTimestamp = 0;
+    this.globalConfig = null;
+    clearConfigCache();
+    console.log("[RulesService] Cache cleared");
+  }
+
+  /**
+   * Orchestrator talimatlarını getir
+   */
+  async getOrchestratorInstructions() {
+    const config = await this.ensureGlobalConfig();
+    return config.instructions;
   }
 }
