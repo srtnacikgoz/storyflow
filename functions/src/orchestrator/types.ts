@@ -1001,6 +1001,34 @@ export interface FirestoreOrchestratorInstructions {
 }
 
 /**
+ * Firestore'da saklanan timeout ayarları
+ * Document: global/config/settings/timeouts
+ *
+ * Bu ayarlar runtime'da değiştirilebilir (deploy gerektirmez)
+ */
+export interface FirestoreTimeoutsConfig {
+  // Telegram onay timeout (dakika)
+  // Kullanıcı bu süre içinde onaylamazsa işlem zaman aşımına uğrar
+  telegramApprovalMinutes: number;        // Default: 60
+
+  // İşlem timeout (dakika)
+  // Bir slot bu süre içinde tamamlanmazsa "stuck" olarak işaretlenir
+  processingTimeoutMinutes: number;       // Default: 120 (2 saat)
+
+  // Fetch timeout (saniye)
+  // Harici API çağrıları için maksimum bekleme süresi
+  fetchTimeoutSeconds: number;            // Default: 30
+
+  // Retry bekleme (milisaniye)
+  // Başarısız işlemler arasında bekleme süresi
+  retryDelayMs: number;                   // Default: 5000
+
+  // Meta
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
  * Tüm global config'leri birleştiren tip
  * Orchestrator başlatılırken bu tip kullanılır
  */
@@ -1013,6 +1041,7 @@ export interface GlobalOrchestratorConfig {
   weeklyThemes: FirestoreWeeklyThemesConfig;
   absoluteRules: FirestoreAbsoluteRulesConfig;
   instructions: FirestoreOrchestratorInstructions;
+  timeouts: FirestoreTimeoutsConfig;
 
   // Cache bilgisi
   loadedAt: number;

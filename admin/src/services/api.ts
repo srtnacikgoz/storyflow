@@ -1027,6 +1027,48 @@ class ApiService {
   }
 
   // ==========================================
+  // Orchestrator - Timeout Configuration
+  // ==========================================
+
+  /**
+   * Timeout ayarlarını getir
+   */
+  async getTimeoutsConfig(): Promise<{
+    telegramApprovalMinutes: number;
+    processingTimeoutMinutes: number;
+    fetchTimeoutSeconds: number;
+    retryDelayMs: number;
+    updatedAt: number;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        telegramApprovalMinutes: number;
+        processingTimeoutMinutes: number;
+        fetchTimeoutSeconds: number;
+        retryDelayMs: number;
+        updatedAt: number;
+      };
+    }>("getTimeoutsConfig");
+    return response.data;
+  }
+
+  /**
+   * Timeout ayarlarını güncelle
+   */
+  async updateTimeoutsConfig(updates: {
+    telegramApprovalMinutes?: number;
+    processingTimeoutMinutes?: number;
+    fetchTimeoutSeconds?: number;
+    retryDelayMs?: number;
+  }): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateTimeoutsConfig", {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  // ==========================================
   // Orchestrator - Theme Management
   // ==========================================
 

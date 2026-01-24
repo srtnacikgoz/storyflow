@@ -23,6 +23,7 @@ import {
   FirestoreWeeklyThemesConfig,
   FirestoreAbsoluteRulesConfig,
   FirestoreOrchestratorInstructions,
+  FirestoreTimeoutsConfig,
   CompositionVariant,
 } from "../types";
 
@@ -466,6 +467,28 @@ export const DEFAULT_DIVERSITY_RULES: Omit<FirestoreDiversityRules, "updatedAt">
 };
 
 // ==========================================
+// TIMEOUT AYARLARI
+// ==========================================
+
+export const DEFAULT_TIMEOUTS_CONFIG: Omit<FirestoreTimeoutsConfig, "updatedAt"> = {
+  // Telegram onay timeout (dakika)
+  // Kullanıcı bu süre içinde onaylamazsa işlem zaman aşımına uğrar
+  telegramApprovalMinutes: 60,
+
+  // İşlem timeout (dakika)
+  // Bir slot bu süre içinde tamamlanmazsa "stuck" olarak işaretlenir
+  processingTimeoutMinutes: 120, // 2 saat
+
+  // Fetch timeout (saniye)
+  // Harici API çağrıları için maksimum bekleme süresi
+  fetchTimeoutSeconds: 30,
+
+  // Retry bekleme (milisaniye)
+  // Başarısız işlemler arasında bekleme süresi
+  retryDelayMs: 5000,
+};
+
+// ==========================================
 // ZAMAN-MOOD EŞLEŞTİRMESİ
 // ==========================================
 
@@ -679,6 +702,10 @@ export function getAllSeedData() {
     },
     orchestratorInstructions: {
       ...DEFAULT_ORCHESTRATOR_INSTRUCTIONS,
+      updatedAt: timestamp,
+    },
+    timeoutsConfig: {
+      ...DEFAULT_TIMEOUTS_CONFIG,
       updatedAt: timestamp,
     },
   };

@@ -14,6 +14,8 @@ import {
   clearConfigCache,
   getDiversityRules,
   getWeeklyThemes,
+  getTimeouts,
+  updateTimeouts,
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
 import { FirestoreDiversityRules } from "../../orchestrator/types";
@@ -285,6 +287,115 @@ export const seedOrchestratorConfig = functions
         });
       } catch (error) {
         errorResponse(response, error, "seedOrchestratorConfig");
+      }
+    });
+  });
+
+/**
+ * Timeout ayarlarını getir
+ * GET /getTimeoutsConfig
+ */
+export const getTimeoutsConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        // ConfigService üzerinden oku (cache'li)
+        const timeouts = await getTimeouts();
+
+        response.json({
+          success: true,
+          data: timeouts,
+        });
+      } catch (error) {
+        errorResponse(response, error, "getTimeoutsConfig");
+      }
+    });
+  });
+
+/**
+ * Timeout ayarlarını güncelle
+ * PUT/POST /updateTimeoutsConfig
+ *
+ * Body: { telegramApprovalMinutes?: number, processingTimeoutMinutes?: number, ... }
+ */
+export const updateTimeoutsConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const updates = request.body;
+
+        // Validasyon
+        if (updates.telegramApprovalMinutes !== undefined) {
+          const value = Number(updates.telegramApprovalMinutes);
+          if (isNaN(value) || value < 5 || value > 1440) {
+            response.status(400).json({
+              success: false,
+              error: "telegramApprovalMinutes must be between 5 and 1440 minutes",
+            });
+            return;
+          }
+          updates.telegramApprovalMinutes = value;
+        }
+
+        if (updates.processingTimeoutMinutes !== undefined) {
+          const value = Number(updates.processingTimeoutMinutes);
+          if (isNaN(value) || value < 30 || value > 480) {
+            response.status(400).json({
+              success: false,
+              error: "processingTimeoutMinutes must be between 30 and 480 minutes",
+            });
+            return;
+          }
+          updates.processingTimeoutMinutes = value;
+        }
+
+        if (updates.fetchTimeoutSeconds !== undefined) {
+          const value = Number(updates.fetchTimeoutSeconds);
+          if (isNaN(value) || value < 10 || value > 120) {
+            response.status(400).json({
+              success: false,
+              error: "fetchTimeoutSeconds must be between 10 and 120 seconds",
+            });
+            return;
+          }
+          updates.fetchTimeoutSeconds = value;
+        }
+
+        if (updates.retryDelayMs !== undefined) {
+          const value = Number(updates.retryDelayMs);
+          if (isNaN(value) || value < 1000 || value > 30000) {
+            response.status(400).json({
+              success: false,
+              error: "retryDelayMs must be between 1000 and 30000 ms",
+            });
+            return;
+          }
+          updates.retryDelayMs = value;
+        }
+
+        // Güncelle
+        await updateTimeouts(updates);
+
+        // Cache temizle
+        clearConfigCache();
+
+        console.log("[updateTimeoutsConfig] Timeouts updated:", updates);
+
+        response.json({
+          success: true,
+          message: "Timeout configuration updated",
+        });
+      } catch (error) {
+        errorResponse(response, error, "updateTimeoutsConfig");
       }
     });
   });

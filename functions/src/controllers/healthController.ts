@@ -6,6 +6,7 @@ import {
     getQueueService,
     isTelegramConfiguredLazy,
 } from "../lib/serviceFactory";
+import { getTimeouts } from "../services/configService";
 
 const REGION = "europe-west1";
 const TIMEZONE = "Europe/Istanbul";
@@ -97,7 +98,12 @@ export const checkApprovalTimeouts = functions
             const queue = new QueueService();
             const telegram = new TelegramService(telegramConfig);
 
-            const timedOutItems = await queue.getTimedOutItems(telegramConfig.approvalTimeout);
+            // Timeout değerini Firestore config'den al (runtime'da değiştirilebilir)
+            const timeoutConfig = await getTimeouts();
+            const approvalTimeoutMinutes = timeoutConfig.telegramApprovalMinutes;
+
+            console.log(`[Timeout Checker] Using approval timeout: ${approvalTimeoutMinutes} minutes`);
+            const timedOutItems = await queue.getTimedOutItems(approvalTimeoutMinutes);
 
             console.log("[Timeout Checker] Found timed out items:", timedOutItems.length);
 

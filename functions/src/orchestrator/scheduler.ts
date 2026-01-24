@@ -17,6 +17,7 @@ import {
 // saveProductionHistory kaldırıldı ama getRecentHistory/getPetUsageStats hala burada
 import { TimeScoreService } from "../services/timeScore";
 import { DayOfWeekIndex } from "../types";
+import { getTimeouts } from "../services/configService";
 
 /**
  * Undefined değerleri recursive olarak temizle (Firestore uyumluluğu için)
@@ -452,8 +453,11 @@ export class OrchestratorScheduler {
    */
   async checkStuckSlots(): Promise<{ recovered: number; failed: number }> {
     const now = Date.now();
-    const TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 saat
-    const STUCK_MS = 15 * 60 * 1000; // 15 dakika (uyarı için)
+
+    // Timeout değerlerini config'den al (runtime'da değiştirilebilir)
+    const timeoutConfig = await getTimeouts();
+    const TIMEOUT_MS = timeoutConfig.processingTimeoutMinutes * 60 * 1000; // Config'den dakika -> ms
+    const STUCK_MS = 15 * 60 * 1000; // 15 dakika (uyarı için - sabit)
 
     const result = {
       recovered: 0,
@@ -473,12 +477,13 @@ export class OrchestratorScheduler {
         const lastUpdate = slot.updatedAt || slot.createdAt;
         const diff = now - lastUpdate;
 
-        // 1. Durum: Zaman aşımı (2 saattir işlem yok) -> FAILED yap
+        // 1. Durum: Zaman aşımı (processingTimeoutMinutes süre işlem yok) -> FAILED yap
         if (diff > TIMEOUT_MS) {
+          const timeoutMinutes = timeoutConfig.processingTimeoutMinutes;
           console.warn(`[Scheduler] Slot ${doc.id} timed out (${Math.floor(diff / 60000)}m). Marking as failed.`);
           await doc.ref.update({
             status: "failed",
-            error: "Timeout: İşlem 2 saatten uzun sürdü ve zaman aşımına uğradı.",
+            error: `Timeout: İşlem ${timeoutMinutes} dakikadan uzun sürdü ve zaman aşımına uğradı.`,
             updatedAt: now,
           });
           result.failed++;

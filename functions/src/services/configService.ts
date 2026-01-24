@@ -23,9 +23,10 @@ import {
   FirestoreWeeklyThemesConfig,
   FirestoreAbsoluteRulesConfig,
   FirestoreOrchestratorInstructions,
+  FirestoreTimeoutsConfig,
   GlobalOrchestratorConfig,
 } from "../orchestrator/types";
-import { getAllSeedData } from "../orchestrator/seed/defaultData";
+import { getAllSeedData, DEFAULT_TIMEOUTS_CONFIG } from "../orchestrator/seed/defaultData";
 
 // Cache süresi (5 dakika)
 const CACHE_TTL = 5 * 60 * 1000;
@@ -193,6 +194,29 @@ export async function getOrchestratorInstructions(): Promise<FirestoreOrchestrat
 }
 
 /**
+ * Timeout ayarlarını getirir
+ * Document: global/config/settings/timeouts
+ */
+export async function getTimeouts(): Promise<FirestoreTimeoutsConfig> {
+  const doc = await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("timeouts")
+    .get();
+
+  if (!doc.exists) {
+    // Varsayılan değerleri döndür
+    return {
+      ...DEFAULT_TIMEOUTS_CONFIG,
+      updatedAt: Date.now(),
+    };
+  }
+
+  return doc.data() as FirestoreTimeoutsConfig;
+}
+
+/**
  * Tüm config'leri tek seferde getirir (cache ile)
  */
 export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrchestratorConfig> {
@@ -215,6 +239,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     weeklyThemes,
     absoluteRules,
     instructions,
+    timeouts,
   ] = await Promise.all([
     getScenarios(),
     getHandStyles(),
@@ -224,6 +249,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     getWeeklyThemes(),
     getAbsoluteRules(),
     getOrchestratorInstructions(),
+    getTimeouts(),
   ]);
 
   // Config oluştur
@@ -236,6 +262,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     weeklyThemes,
     absoluteRules,
     instructions,
+    timeouts,
     loadedAt: now,
     version: "1.0.0",
   };
@@ -310,6 +337,7 @@ export async function seedFirestoreConfig(): Promise<void> {
   batch.set(configRef.doc("weekly-themes"), seedData.weeklyThemesConfig);
   batch.set(configRef.doc("absolute-rules"), seedData.absoluteRulesConfig);
   batch.set(configRef.doc("orchestrator-instructions"), seedData.orchestratorInstructions);
+  batch.set(configRef.doc("timeouts"), seedData.timeoutsConfig);
 
   await batch.commit();
 
@@ -425,6 +453,39 @@ export async function updateOrchestratorInstructions(
       ...updates,
       updatedAt: Date.now(),
     });
+
+  clearConfigCache();
+}
+
+/**
+ * Timeout ayarlarını günceller
+ * Document: global/config/settings/timeouts
+ */
+export async function updateTimeouts(
+  updates: Partial<FirestoreTimeoutsConfig>
+): Promise<void> {
+  const docRef = getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("timeouts");
+
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    // Doküman yoksa oluştur
+    await docRef.set({
+      ...DEFAULT_TIMEOUTS_CONFIG,
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  } else {
+    // Güncelle
+    await docRef.update({
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  }
 
   clearConfigCache();
 }
