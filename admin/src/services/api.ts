@@ -74,6 +74,46 @@ class ApiService {
     return data;
   }
 
+  // ==========================================
+  // Generic HTTP Methods
+  // ==========================================
+
+  /**
+   * Generic GET request
+   */
+  async get<T>(endpoint: string): Promise<T> {
+    return this.fetch<T>(endpoint);
+  }
+
+  /**
+   * Generic POST request
+   */
+  async post<T>(endpoint: string, body?: unknown): Promise<T> {
+    return this.fetch<T>(endpoint, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  /**
+   * Generic PUT request
+   */
+  async put<T>(endpoint: string, body?: unknown): Promise<T> {
+    return this.fetch<T>(endpoint, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  /**
+   * Generic DELETE request
+   */
+  async delete<T>(endpoint: string): Promise<T> {
+    return this.fetch<T>(endpoint, {
+      method: "DELETE",
+    });
+  }
+
   /**
    * Sistem sağlık durumu
    */

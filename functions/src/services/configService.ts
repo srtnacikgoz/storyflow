@@ -359,6 +359,20 @@ export async function addScenario(scenario: Omit<FirestoreScenario, "createdAt" 
 }
 
 /**
+ * Senaryo siler (hard delete)
+ */
+export async function deleteScenario(scenarioId: string): Promise<void> {
+  await getDb()
+    .collection("global")
+    .doc("scenarios")
+    .collection("items")
+    .doc(scenarioId)
+    .delete();
+
+  clearConfigCache();
+}
+
+/**
  * Çeşitlilik kurallarını günceller
  */
 export async function updateDiversityRules(

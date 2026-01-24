@@ -1,57 +1,53 @@
 /**
- * Orchestrator Controller - Export Hub
- *
- * Bu dosya artık sadece export hub görevi görür.
- * Tüm controller'lar ./orchestrator/ klasöründe modüler olarak tanımlanmıştır.
- *
- * Modüller:
- * - assetController.ts      → Asset CRUD
- * - timeslotController.ts   → TimeSlot Rules CRUD
- * - themeController.ts      → Theme CRUD
- * - scenarioController.ts   → Scenario CRUD + HandStyles
- * - pipelineController.ts   → Pipeline triggers & scheduler
- * - slotController.ts       → Scheduled slot operations
- * - dashboardController.ts  → Dashboard statistics
- * - configController.ts     → Variation config & seed
- * - feedbackController.ts   → Feedback operations
- * - aiRulesController.ts    → AI Rules CRUD
+ * Orchestrator Controllers - Export Hub
+ * Tüm orchestrator controller'larını tek noktadan export eder
  */
 
+// Asset Controller
 export {
-  // Asset Controller
   listAssets,
   createAsset,
   updateAsset,
   deleteAsset,
+} from "./assetController";
 
-  // TimeSlot Controller
+// TimeSlot Controller
+export {
   listTimeSlotRules,
   createTimeSlotRule,
   updateTimeSlotRule,
   deleteTimeSlotRule,
+} from "./timeslotController";
 
-  // Theme Controller
+// Theme Controller
+export {
   listThemes,
   createTheme,
   updateTheme,
   deleteTheme,
+} from "./themeController";
 
-  // Scenario Controller
+// Scenario Controller
+export {
   listScenarios,
   getScenario,
   createScenario,
   updateScenarioEndpoint,
   deleteScenarioEndpoint,
   listHandStyles,
+} from "./scenarioController";
 
-  // Pipeline Controller
+// Pipeline Controller
+export {
   triggerOrchestratorScheduler,
   triggerOrchestratorPipeline,
   orchestratorGenerateNow,
   orchestratorResendTelegram,
   orchestratorScheduledTrigger,
+} from "./pipelineController";
 
-  // Slot Controller
+// Slot Controller
+export {
   listScheduledSlots,
   getScheduledSlot,
   listPipelineResults,
@@ -63,27 +59,35 @@ export {
   updateSlotStatus,
   batchUpdateSlotStatus,
   updateSlotCaption,
+} from "./slotController";
 
-  // Dashboard Controller
+// Dashboard Controller
+export {
   getOrchestratorDashboardStats,
+} from "./dashboardController";
 
-  // Config Controller
+// Config Controller
+export {
   getVariationConfig,
   updateVariationConfig,
   getProductionHistory,
   getPetUsageStats,
   seedOrchestratorConfig,
+} from "./configController";
 
-  // Feedback Controller
+// Feedback Controller
+export {
   createFeedback,
   getFeedbackBySlot,
   getFeedbackStats,
   debugFeedbackHints,
+} from "./feedbackController";
 
-  // AI Rules Controller
+// AI Rules Controller
+export {
   listAIRules,
   createAIRule,
   updateAIRule,
   deleteAIRule,
   getAIRulesStats,
-} from "./orchestrator";
+} from "./aiRulesController";
