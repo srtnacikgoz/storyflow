@@ -540,7 +540,7 @@ not: Rules Editor" sayfası   yapılacak
 ## [TODO-008] Config Sync & Hardcoded Değerler Planı
 - **Kategori:** todo
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** in-progress (Phase 1-2 tamamlandı)
 - **Tarih:** 2026-01-24
 - **Açıklama:** Hardcoded değerleri Firestore'a taşıma ve config sync düzeltmesi için kapsamlı plan.
 - **Plan Dosyası:** `.planning/CONFIG-SYNC-PLAN.md`
@@ -550,11 +550,13 @@ not: Rules Editor" sayfası   yapılacak
 - [x] Cache invalidation ekle (config güncellenince `clearConfigCache()`)
 - [x] Eski collection'ı temizle (Firebase Console'dan manuel silinebilir: `orchestrator-config/variation-rules`)
 
-### Phase 2: Timeout Config (YENİ)
-- [ ] Firestore şeması oluştur (`global/config/settings/timeouts`)
-- [ ] `configService.ts`'e `getTimeouts()` ekle
-- [ ] Hardcoded timeout'ları değiştir (scheduler.ts, orchestratorScheduler.ts)
-- [ ] Admin panele Timeouts sayfası ekle
+### Phase 2: Timeout Config (YENİ) ✅
+- [x] Firestore şeması oluştur (`global/config/settings/timeouts`)
+- [x] `configService.ts`'e `getTimeouts()` ekle
+- [x] Hardcoded timeout'ları değiştir (scheduler.ts, healthController.ts)
+- [x] API endpoint'leri ekle (`getTimeoutsConfig`, `updateTimeoutsConfig`)
+- [x] Admin API servisine metodlar ekle
+- [ ] Admin panele Timeouts sayfası ekle (opsiyonel - API hazır)
 
 ### Phase 3: Time-Mood Config UI
 - [ ] Admin panele Time-Mood sayfası ekle
