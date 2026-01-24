@@ -519,17 +519,21 @@ not: Rules Editor" sayfası   yapılacak
 ## [BUG-008] Config Sync Hatası - Admin Slider'lar Çalışmıyor
 - **Kategori:** bug
 - **Öncelik:** high
-- **Durum:** open
+- **Durum:** closed
 - **Tarih:** 2026-01-24
+- **Çözüm Tarihi:** 2026-01-24
 - **Açıklama:** Admin paneldeki çeşitlilik kuralları slider'ları (scenarioGap, petFrequency vb.) değiştirildiğinde pipeline'a YANSIMIYORLAR.
 - **Kök Neden:** İki farklı Firestore collection kullanılıyor:
   - Admin Panel yazıyor → `orchestrator-config/variation-rules`
   - Pipeline okuyor → `global/config/settings/diversity-rules`
 - **Etki:** Tüm slider değişiklikleri boşa gidiyor
-- **Çözüm:** `.planning/CONFIG-SYNC-PLAN.md` dosyasında detaylı plan var
+- **Çözüm:**
+  1. `configController.ts` Firestore path'leri düzeltildi (`global/config/settings/diversity-rules`)
+  2. `clearConfigCache()` çağrısı eklendi - değişiklikler anında yansır
+  3. `configService` üzerinden okuma yapılıyor (cache-enabled)
+  4. Defaults artık `defaultData.ts`'den alınıyor (hardcoded değil)
 - **Dosyalar:**
-  - `functions/src/controllers/orchestrator/configController.ts` (düzeltilecek)
-  - `functions/src/services/configService.ts` (okuma)
+  - `functions/src/controllers/orchestrator/configController.ts` (düzeltildi)
 
 ---
 
@@ -541,10 +545,10 @@ not: Rules Editor" sayfası   yapılacak
 - **Açıklama:** Hardcoded değerleri Firestore'a taşıma ve config sync düzeltmesi için kapsamlı plan.
 - **Plan Dosyası:** `.planning/CONFIG-SYNC-PLAN.md`
 
-### Phase 1: Collection Sync Düzeltmesi (KRİTİK)
-- [ ] `configController.ts` path'lerini düzelt (`orchestrator-config` → `global/config/settings`)
-- [ ] Cache invalidation ekle (config güncellenince `clearConfigCache()`)
-- [ ] Eski collection'ı temizle
+### Phase 1: Collection Sync Düzeltmesi (KRİTİK) ✅
+- [x] `configController.ts` path'lerini düzelt (`orchestrator-config` → `global/config/settings`)
+- [x] Cache invalidation ekle (config güncellenince `clearConfigCache()`)
+- [x] Eski collection'ı temizle (Firebase Console'dan manuel silinebilir: `orchestrator-config/variation-rules`)
 
 ### Phase 2: Timeout Config (YENİ)
 - [ ] Firestore şeması oluştur (`global/config/settings/timeouts`)
