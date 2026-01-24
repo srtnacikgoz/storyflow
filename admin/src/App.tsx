@@ -7,13 +7,8 @@ import { LoadingOverlay } from "./components/LoadingOverlay";
 
 // Lazy loaded pages - sadece ihtiyaç duyulduğunda yüklenir
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Queue = lazy(() => import("./pages/Queue"));
-const AddPhoto = lazy(() => import("./pages/AddPhoto"));
-const Archive = lazy(() => import("./pages/Archive"));
-const BestTimes = lazy(() => import("./pages/BestTimes"));
-const Analytics = lazy(() => import("./pages/Analytics"));
-const Calendar = lazy(() => import("./pages/Calendar"));
 const Settings = lazy(() => import("./pages/Settings"));
+
 // Orchestrator pages
 const OrchestratorDashboard = lazy(() => import("./pages/OrchestratorDashboard"));
 const Assets = lazy(() => import("./pages/Assets"));
@@ -42,12 +37,6 @@ function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
-            <Route path="queue" element={<Suspense fallback={<PageLoader />}><Queue /></Suspense>} />
-            <Route path="add" element={<Suspense fallback={<PageLoader />}><AddPhoto /></Suspense>} />
-            <Route path="archive" element={<Suspense fallback={<PageLoader />}><Archive /></Suspense>} />
-            <Route path="best-times" element={<Suspense fallback={<PageLoader />}><BestTimes /></Suspense>} />
-            <Route path="analytics" element={<Suspense fallback={<PageLoader />}><Analytics /></Suspense>} />
-            <Route path="calendar" element={<Suspense fallback={<PageLoader />}><Calendar /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
             {/* Orchestrator routes */}
             <Route path="orchestrator" element={<Suspense fallback={<PageLoader />}><OrchestratorDashboard /></Suspense>} />
