@@ -73,6 +73,8 @@ export {
   getProductionHistory,
   getPetUsageStats,
   seedOrchestratorConfig,
+  getTimeoutsConfig,
+  updateTimeoutsConfig,
 
   // Feedback Controller
   createFeedback,
