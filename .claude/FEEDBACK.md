@@ -513,3 +513,57 @@ not: Rules Editor" sayfası   yapılacak
   3. Opsiyonel: QC (kalite kontrol) adımında stacked plates kontrolü ekle
 - **Dosyalar:**
   - `functions/src/orchestrator/claudeService.ts` (optimizePrompt ve evaluateImage)
+
+---
+
+## [BUG-008] Config Sync Hatası - Admin Slider'lar Çalışmıyor
+- **Kategori:** bug
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-24
+- **Açıklama:** Admin paneldeki çeşitlilik kuralları slider'ları (scenarioGap, petFrequency vb.) değiştirildiğinde pipeline'a YANSIMIYORLAR.
+- **Kök Neden:** İki farklı Firestore collection kullanılıyor:
+  - Admin Panel yazıyor → `orchestrator-config/variation-rules`
+  - Pipeline okuyor → `global/config/settings/diversity-rules`
+- **Etki:** Tüm slider değişiklikleri boşa gidiyor
+- **Çözüm:** `.planning/CONFIG-SYNC-PLAN.md` dosyasında detaylı plan var
+- **Dosyalar:**
+  - `functions/src/controllers/orchestrator/configController.ts` (düzeltilecek)
+  - `functions/src/services/configService.ts` (okuma)
+
+---
+
+## [TODO-008] Config Sync & Hardcoded Değerler Planı
+- **Kategori:** todo
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-24
+- **Açıklama:** Hardcoded değerleri Firestore'a taşıma ve config sync düzeltmesi için kapsamlı plan.
+- **Plan Dosyası:** `.planning/CONFIG-SYNC-PLAN.md`
+
+### Phase 1: Collection Sync Düzeltmesi (KRİTİK)
+- [ ] `configController.ts` path'lerini düzelt (`orchestrator-config` → `global/config/settings`)
+- [ ] Cache invalidation ekle (config güncellenince `clearConfigCache()`)
+- [ ] Eski collection'ı temizle
+
+### Phase 2: Timeout Config (YENİ)
+- [ ] Firestore şeması oluştur (`global/config/settings/timeouts`)
+- [ ] `configService.ts`'e `getTimeouts()` ekle
+- [ ] Hardcoded timeout'ları değiştir (scheduler.ts, orchestratorScheduler.ts)
+- [ ] Admin panele Timeouts sayfası ekle
+
+### Phase 3: Time-Mood Config UI
+- [ ] Admin panele Time-Mood sayfası ekle
+- [ ] `updateTimeMoodConfig` endpoint'i ekle
+
+### Phase 4: AI Pricing Config (İsteğe Bağlı)
+- [ ] Model fiyatlarını Firestore'a taşı
+- [ ] Maliyet raporları dinamik olsun
+
+### Referans
+| Phase | Öncelik | Etki |
+|-------|---------|------|
+| Phase 1 | 🔴 Kritik | Slider'lar çalışır |
+| Phase 2 | 🟠 Orta | Timeout'ları yönetim |
+| Phase 3 | 🟡 Düşük | Zaman-mood ayarları |
+| Phase 4 | 🟢 İsteğe bağlı | Maliyet takibi |
