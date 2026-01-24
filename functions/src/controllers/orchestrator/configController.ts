@@ -1,38 +1,55 @@
 /**
  * Config Controller
  * Çeşitlilik kuralları ve config yönetimi
+ *
+ * ÖNEMLİ: Bu controller artık doğru collection'a yazıyor:
+ * - global/config/settings/diversity-rules (pipeline'ın okuduğu yer)
+ * - Her güncelleme sonrası cache temizleniyor
  */
 
 import { functions, db, getCors, REGION, errorResponse } from "./shared";
-import { seedFirestoreConfig, isConfigInitialized } from "../../services/configService";
+import {
+  seedFirestoreConfig,
+  isConfigInitialized,
+  clearConfigCache,
+  getDiversityRules,
+  getWeeklyThemes,
+} from "../../services/configService";
+import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
+import { FirestoreDiversityRules } from "../../orchestrator/types";
 
-// Varsayılan config değerleri
-const DEFAULT_VARIATION_RULES = {
-  scenarioGap: 3,
-  tableGap: 2,
-  handStyleGap: 4,
-  compositionGap: 2,
-  petFrequency: 15,
-  similarityThreshold: 50,
-};
+// Firestore path sabitleri
+const CONFIG_COLLECTION = "global";
+const CONFIG_DOC = "config";
+const SETTINGS_SUBCOLLECTION = "settings";
+const DIVERSITY_RULES_DOC = "diversity-rules";
+const WEEKLY_THEMES_DOC = "weekly-themes";
 
-const DEFAULT_WEEKLY_THEMES = {
-  monday: { mood: "energetic", scenarios: ["zarif-tutma", "kahve-ani"], petAllowed: false },
-  tuesday: { mood: "cozy", scenarios: ["cam-kenari", "paylasim"], petAllowed: false },
-  wednesday: { mood: "energetic", scenarios: ["kahve-ani", "zarif-tutma"], petAllowed: false },
-  thursday: { mood: "relaxed", scenarios: ["kahve-kosesi", "yarim-kaldi"], petAllowed: false },
-  friday: { mood: "relaxed", scenarios: ["yarim-kaldi", "kahve-kosesi"], petAllowed: false },
-  saturday: { mood: "cozy", scenarios: ["cam-kenari", "paylasim"], petAllowed: true },
-  sunday: { mood: "slow", scenarios: ["yarim-kaldi", "cam-kenari"], petAllowed: true },
-};
+/**
+ * Diversity rules dokümanına referans al
+ */
+function getDiversityRulesRef() {
+  return db
+    .collection(CONFIG_COLLECTION)
+    .doc(CONFIG_DOC)
+    .collection(SETTINGS_SUBCOLLECTION)
+    .doc(DIVERSITY_RULES_DOC);
+}
 
-const DEFAULT_ASSET_PRIORITIES = {
-  underusedBoost: 1.5,
-  lastUsedPenalty: 0.5,
-};
+/**
+ * Weekly themes dokümanına referans al
+ */
+function getWeeklyThemesRef() {
+  return db
+    .collection(CONFIG_COLLECTION)
+    .doc(CONFIG_DOC)
+    .collection(SETTINGS_SUBCOLLECTION)
+    .doc(WEEKLY_THEMES_DOC);
+}
 
 /**
  * Orchestrator config'i getir (çeşitlilik kuralları)
+ * GET /getVariationConfig
  */
 export const getVariationConfig = functions
   .region(REGION)
@@ -40,28 +57,15 @@ export const getVariationConfig = functions
     const corsHandler = await getCors();
     corsHandler(request, response, async () => {
       try {
-        const docRef = db.collection("orchestrator-config").doc("variation-rules");
-        const doc = await docRef.get();
+        // ConfigService üzerinden oku (cache'li)
+        const diversityRules = await getDiversityRules();
+        const weeklyThemes = await getWeeklyThemes();
 
-        if (!doc.exists) {
-          response.json({
-            success: true,
-            data: {
-              variationRules: DEFAULT_VARIATION_RULES,
-              weeklyThemes: DEFAULT_WEEKLY_THEMES,
-              assetPriorities: DEFAULT_ASSET_PRIORITIES,
-            },
-          });
-          return;
-        }
-
-        const data = doc.data();
         response.json({
           success: true,
           data: {
-            variationRules: data?.variationRules || DEFAULT_VARIATION_RULES,
-            weeklyThemes: data?.weeklyThemes || DEFAULT_WEEKLY_THEMES,
-            assetPriorities: data?.assetPriorities || DEFAULT_ASSET_PRIORITIES,
+            variationRules: diversityRules,
+            weeklyThemes: weeklyThemes.themes || {},
           },
         });
       } catch (error) {
@@ -72,6 +76,9 @@ export const getVariationConfig = functions
 
 /**
  * Orchestrator config'i güncelle
+ * PUT/POST /updateVariationConfig
+ *
+ * Body: { variationRules?: Partial<VariationRules>, weeklyThemes?: object }
  */
 export const updateVariationConfig = functions
   .region(REGION)
@@ -84,42 +91,62 @@ export const updateVariationConfig = functions
           return;
         }
 
-        const { variationRules, weeklyThemes, assetPriorities } = request.body;
+        const { variationRules, weeklyThemes } = request.body;
+        const timestamp = Date.now();
+        let updated = false;
 
-        const docRef = db.collection("orchestrator-config").doc("variation-rules");
-
-        const doc = await docRef.get();
-        const currentData = doc.exists ? doc.data() : {};
-
-        const updateData: Record<string, unknown> = {
-          updatedAt: Date.now(),
-        };
-
+        // Diversity rules güncelle
         if (variationRules) {
-          updateData.variationRules = {
-            ...DEFAULT_VARIATION_RULES,
-            ...currentData?.variationRules,
+          const docRef = getDiversityRulesRef();
+          const doc = await docRef.get();
+          const currentData = doc.exists ? (doc.data() as FirestoreDiversityRules) : DEFAULT_DIVERSITY_RULES;
+
+          const updateData: FirestoreDiversityRules = {
+            // Mevcut değerler (fallback: default)
+            scenarioGap: currentData.scenarioGap ?? DEFAULT_DIVERSITY_RULES.scenarioGap,
+            tableGap: currentData.tableGap ?? DEFAULT_DIVERSITY_RULES.tableGap,
+            handStyleGap: currentData.handStyleGap ?? DEFAULT_DIVERSITY_RULES.handStyleGap,
+            compositionGap: currentData.compositionGap ?? DEFAULT_DIVERSITY_RULES.compositionGap,
+            productGap: currentData.productGap ?? DEFAULT_DIVERSITY_RULES.productGap,
+            plateGap: currentData.plateGap ?? DEFAULT_DIVERSITY_RULES.plateGap,
+            cupGap: currentData.cupGap ?? DEFAULT_DIVERSITY_RULES.cupGap,
+            petFrequency: currentData.petFrequency ?? DEFAULT_DIVERSITY_RULES.petFrequency,
+            outdoorFrequency: currentData.outdoorFrequency ?? DEFAULT_DIVERSITY_RULES.outdoorFrequency,
+            wabiSabiFrequency: currentData.wabiSabiFrequency ?? DEFAULT_DIVERSITY_RULES.wabiSabiFrequency,
+            similarityThreshold: currentData.similarityThreshold ?? DEFAULT_DIVERSITY_RULES.similarityThreshold,
+            // Yeni değerlerle override
             ...variationRules,
+            // Meta
+            updatedAt: timestamp,
           };
+
+          await docRef.set(updateData);
+          updated = true;
+          console.log("[updateVariationConfig] Diversity rules updated:", updateData);
         }
 
+        // Weekly themes güncelle
         if (weeklyThemes) {
-          updateData.weeklyThemes = {
-            ...DEFAULT_WEEKLY_THEMES,
-            ...currentData?.weeklyThemes,
-            ...weeklyThemes,
-          };
+          const docRef = getWeeklyThemesRef();
+          const doc = await docRef.get();
+          const currentThemes = doc.exists ? doc.data()?.themes : DEFAULT_WEEKLY_THEMES_CONFIG.themes;
+
+          await docRef.set({
+            themes: {
+              ...currentThemes,
+              ...weeklyThemes,
+            },
+            updatedAt: timestamp,
+          });
+          updated = true;
+          console.log("[updateVariationConfig] Weekly themes updated");
         }
 
-        if (assetPriorities) {
-          updateData.assetPriorities = {
-            ...DEFAULT_ASSET_PRIORITIES,
-            ...currentData?.assetPriorities,
-            ...assetPriorities,
-          };
+        // Cache'i temizle - yeni değerler hemen pipeline'da kullanılsın
+        if (updated) {
+          clearConfigCache();
+          console.log("[updateVariationConfig] Config cache cleared");
         }
-
-        await docRef.set(updateData, { merge: true });
 
         response.json({
           success: true,
@@ -133,6 +160,7 @@ export const updateVariationConfig = functions
 
 /**
  * Üretim geçmişini getir (çeşitlilik takibi için)
+ * GET /getProductionHistory?limit=15
  */
 export const getProductionHistory = functions
   .region(REGION)
@@ -165,6 +193,7 @@ export const getProductionHistory = functions
 
 /**
  * Köpek kullanım istatistiğini getir
+ * GET /getPetUsageStats
  */
 export const getPetUsageStats = functions
   .region(REGION)
@@ -189,10 +218,9 @@ export const getPetUsageStats = functions
           productionsSincePet++;
         }
 
-        const configDoc = await db.collection("orchestrator-config").doc("variation-rules").get();
-        const petFrequency = configDoc.exists
-          ? (configDoc.data()?.variationRules?.petFrequency || 15)
-          : 15;
+        // ConfigService üzerinden oku (doğru collection + cache)
+        const diversityRules = await getDiversityRules();
+        const petFrequency = diversityRules.petFrequency || 15;
 
         response.json({
           success: true,
@@ -247,6 +275,9 @@ export const seedOrchestratorConfig = functions
 
         console.log("[seedOrchestratorConfig] Starting seed...");
         await seedFirestoreConfig();
+
+        // Seed sonrası cache temizle
+        clearConfigCache();
 
         response.json({
           success: true,
