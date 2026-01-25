@@ -130,7 +130,6 @@ export const createScenario = functions
           suggestedProducts,
           suggestedTimeSlots,
           mood,
-          lightingPreference,
         } = request.body;
 
         // Validasyon
@@ -182,7 +181,6 @@ export const createScenario = functions
           suggestedProducts: suggestedProducts,
           suggestedTimeSlots: suggestedTimeSlots,
           mood: mood,
-          lightingPreference: lightingPreference,
         };
 
         await addScenario(scenario);

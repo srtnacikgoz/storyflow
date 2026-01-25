@@ -61,7 +61,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["croissants", "chocolates"],
     suggestedTimeSlots: ["morning", "afternoon"],
     mood: "elegant",
-    lightingPreference: "soft natural",
   },
   {
     id: "kahve-ani",
@@ -77,7 +76,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["croissants", "pastas"],
     suggestedTimeSlots: ["morning", "brunch"],
     mood: "social",
-    lightingPreference: "bright natural",
   },
   {
     id: "hediye-acilisi",
@@ -93,7 +91,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["chocolates", "pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
     mood: "exciting",
-    lightingPreference: "warm golden",
   },
   {
     id: "ilk-dilim",
@@ -109,7 +106,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
     mood: "inviting",
-    lightingPreference: "soft warm",
   },
 
   // =====================
@@ -129,7 +125,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["croissants", "pastas", "coffees"],
     suggestedTimeSlots: ["morning", "afternoon", "golden-hour"],
     mood: "fresh",
-    lightingPreference: "natural side light",
   },
   {
     id: "mermer-zarafet",
@@ -145,7 +140,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["chocolates", "pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
     mood: "luxurious",
-    lightingPreference: "soft diffused",
   },
   {
     id: "kahve-kosesi",
@@ -161,7 +155,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["croissants", "pastas", "coffees"],
     suggestedTimeSlots: ["afternoon", "evening"],
     mood: "cozy",
-    lightingPreference: "warm ambient",
   },
   {
     id: "yarim-kaldi",
@@ -177,7 +170,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["croissants", "chocolates"],
     suggestedTimeSlots: ["afternoon", "evening"],
     mood: "authentic",
-    lightingPreference: "natural casual",
   },
   {
     id: "paylasim",
@@ -193,7 +185,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["pastas", "croissants"],
     suggestedTimeSlots: ["brunch", "afternoon"],
     mood: "social",
-    lightingPreference: "bright warm",
   },
   {
     id: "paket-servis",
@@ -209,7 +200,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["croissants", "chocolates"],
     suggestedTimeSlots: ["morning", "afternoon"],
     mood: "practical",
-    lightingPreference: "clean bright",
   },
 
   // =====================
@@ -229,7 +219,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["chocolates", "pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
     mood: "festive",
-    lightingPreference: "soft warm",
   },
   {
     id: "yolda-atistirma",
@@ -245,7 +234,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["croissants", "chocolates"],
     suggestedTimeSlots: ["morning", "afternoon"],
     mood: "casual",
-    lightingPreference: "natural outdoor",
   },
   {
     id: "kutu-acilis",
@@ -261,7 +249,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     suggestedProducts: ["chocolates", "pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
     mood: "exciting",
-    lightingPreference: "warm focused",
   },
 
   // =====================

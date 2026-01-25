@@ -18,7 +18,6 @@ interface Scenario {
   interiorType?: string;
   suggestedProducts?: string[];
   mood?: string;
-  lightingPreference?: string;
   lightingPreset?: string;
   handPose?: string;
   compositionEntry?: string;
@@ -302,7 +301,6 @@ const emptyForm = {
   interiorType: "",
   suggestedProducts: [] as string[],
   mood: "",
-  lightingPreference: "",
   lightingPreset: "",
   handPose: "",
   compositionEntry: "",
@@ -382,7 +380,6 @@ export default function Scenarios() {
       interiorType: scenario.interiorType || "",
       suggestedProducts: scenario.suggestedProducts || [],
       mood: scenario.mood || "",
-      lightingPreference: scenario.lightingPreference || "",
       lightingPreset: scenario.lightingPreset || "",
       handPose: scenario.handPose || "",
       compositionEntry: scenario.compositionEntry || "",
@@ -418,7 +415,6 @@ export default function Scenarios() {
         interiorType: form.isInterior ? form.interiorType : undefined,
         suggestedProducts: form.suggestedProducts,
         mood: form.mood || undefined,
-        lightingPreference: form.lightingPreference || undefined,
         lightingPreset: form.lightingPreset || undefined,
         handPose: form.includesHands ? form.handPose || undefined : undefined,
         compositionEntry: form.includesHands ? form.compositionEntry || undefined : undefined,
@@ -811,20 +807,6 @@ export default function Scenarios() {
                       </div>
                     )}
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Ek Işık Notu <span className="text-gray-400 font-normal">(isteğe bağlı)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.lightingPreference}
-                      onChange={(e) => setForm({ ...form, lightingPreference: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                      placeholder="Örn: Pencereden gelen doğal ışık, yumuşak gölgeler"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Özel bir ışık isteğiniz varsa buraya yazın</p>
-                  </div>
                 </div>
               </fieldset>
 
@@ -1206,12 +1188,6 @@ export default function Scenarios() {
                       </div>
                     );
                   })()}
-                </div>
-              )}
-
-              {detailScenario.lightingPreference && (
-                <div>
-                  <span className="font-medium">Özel Işık Notu:</span> {detailScenario.lightingPreference}
                 </div>
               )}
 

@@ -905,7 +905,6 @@ export interface FirestoreScenario extends Scenario {
   suggestedProducts?: ProductType[];    // Bu senaryo için önerilen ürün tipleri
   suggestedTimeSlots?: string[];        // Uygun zaman dilimleri (morning, afternoon, vb.)
   mood?: string;                        // Senaryo mood'u
-  lightingPreference?: string;          // Tercih edilen ışık
 }
 
 /**
