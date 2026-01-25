@@ -1,11 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { api } from "../services/api";
-import type { TimeSlotRule, OrchestratorProductType, Theme } from "../types";
+import type { TimeSlotRule, Theme, CategorySubType } from "../types";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageTour } from "../components/PageTour";
 import type { TourStep } from "../components/PageTour";
+
+// Ürün konfigürasyonu tipi (dinamik kategorilerden oluşturulur)
+interface ProductConfig {
+  label: string;
+  emoji: string;
+}
 
 // TimeSlots sayfası tour adımları
 const TIMESLOTS_TOUR_STEPS: TourStep[] = [
@@ -33,8 +39,8 @@ const TIMESLOTS_TOUR_STEPS: TourStep[] = [
 const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
 const DAY_NAMES_SHORT = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
 
-// Ürün tipi etiketleri ve emojileri
-const PRODUCT_CONFIG: Record<OrchestratorProductType, { label: string; emoji: string }> = {
+// Varsayılan ürün konfigürasyonu (API yüklenene kadar fallback)
+const DEFAULT_PRODUCT_CONFIG: Record<string, ProductConfig> = {
   croissants: { label: "Kruvasan", emoji: "🥐" },
   pastas: { label: "Pasta", emoji: "🍰" },
   chocolates: { label: "Çikolata", emoji: "🍫" },
@@ -100,6 +106,7 @@ export default function TimeSlots() {
   const [rules, setRules] = useState<TimeSlotRule[]>([]);
   const [slots, setSlots] = useState<ScheduledSlot[]>([]);
   const [themes, setThemes] = useState<Theme[]>([]);
+  const [productCategories, setProductCategories] = useState<CategorySubType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -110,6 +117,30 @@ export default function TimeSlots() {
 
   const today = new Date().getDay();
 
+  // Dinamik kategorilerden PRODUCT_CONFIG oluştur
+  const PRODUCT_CONFIG = useMemo(() => {
+    if (productCategories.length === 0) {
+      return DEFAULT_PRODUCT_CONFIG;
+    }
+
+    const config: Record<string, ProductConfig> = {};
+    productCategories.forEach((cat) => {
+      config[cat.slug] = {
+        label: cat.displayName,
+        emoji: cat.icon || "📦",
+      };
+    });
+
+    // Bilinen kategorileri de ekle (fallback için)
+    Object.entries(DEFAULT_PRODUCT_CONFIG).forEach(([slug, data]) => {
+      if (!config[slug]) {
+        config[slug] = data;
+      }
+    });
+
+    return config;
+  }, [productCategories]);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -118,14 +149,19 @@ export default function TimeSlots() {
     setLoading(true);
     setError(null);
     try {
-      const [rulesData, slotsData, themesData] = await Promise.all([
+      const [rulesData, slotsData, themesData, categoriesData] = await Promise.all([
         api.listTimeSlotRules(),
         api.listScheduledSlots({ limit: 50 }).catch(() => []),
         api.listThemes().catch(() => []),
+        // Ürün kategorilerini çek
+        api.getCategoryByType("products")
+          .then((cat) => cat?.subTypes.filter((st) => st.isActive) || [])
+          .catch(() => []),
       ]);
       setRules(rulesData);
       setSlots(slotsData);
       setThemes(themesData);
+      setProductCategories(categoriesData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
@@ -321,6 +357,7 @@ export default function TimeSlots() {
                   rule={rule}
                   today={today}
                   lastSlot={getLastSlotForRule(rule.id)}
+                  productConfig={PRODUCT_CONFIG}
                   onEdit={() => setEditingRule(rule)}
                   onDelete={() => handleDelete(rule.id)}
                   onToggle={() => handleToggleActive(rule)}
@@ -363,7 +400,7 @@ export default function TimeSlots() {
                         <td className="px-6 py-4">
                           <div className="flex gap-1">
                             {rule.productTypes.map(pt => (
-                              <span key={pt} className="text-xl" title={PRODUCT_CONFIG[pt]?.label}>{PRODUCT_CONFIG[pt]?.emoji}</span>
+                              <span key={pt} className="text-xl" title={PRODUCT_CONFIG[pt]?.label || pt}>{PRODUCT_CONFIG[pt]?.emoji || "📦"}</span>
                             ))}
                           </div>
                         </td>
@@ -393,6 +430,8 @@ export default function TimeSlots() {
         <RuleModal
           rule={editingRule}
           themes={themes}
+          productConfig={PRODUCT_CONFIG}
+          productCategories={productCategories}
           onClose={() => {
             setShowAddModal(false);
             setEditingRule(null);
@@ -435,6 +474,7 @@ function RuleCard({
   rule,
   today,
   lastSlot,
+  productConfig,
   onEdit,
   onDelete,
   onToggle,
@@ -443,6 +483,7 @@ function RuleCard({
   rule: TimeSlotRule;
   today: number;
   lastSlot?: ScheduledSlot;
+  productConfig: Record<string, ProductConfig>;
   onEdit: () => void;
   onDelete: () => void;
   onToggle: () => void;
@@ -451,7 +492,7 @@ function RuleCard({
   const formatTime = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
   const timeSlotName = getTimeSlotName(rule.startHour);
   const mainProduct = rule.productTypes[0];
-  const productConfig = PRODUCT_CONFIG[mainProduct];
+  const mainProductConfig = productConfig[mainProduct];
 
   // Bugün için en iyi saati hesapla
   const bestTime = findBestHourInRange(rule.startHour, rule.endHour, today);
@@ -491,7 +532,7 @@ function RuleCard({
       {/* Üst Bölüm - Başlık ve Durum */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <span className="text-3xl">{productConfig?.emoji || "📦"}</span>
+          <span className="text-3xl">{mainProductConfig?.emoji || "📦"}</span>
           <div>
             <h3 className="font-bold text-lg text-gray-900">
               {timeSlotName} Paylaşımı
@@ -572,7 +613,7 @@ function RuleCard({
                 key={pt}
                 className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium"
               >
-                {PRODUCT_CONFIG[pt]?.emoji} {PRODUCT_CONFIG[pt]?.label}
+                {productConfig[pt]?.emoji || "📦"} {productConfig[pt]?.label || pt}
               </span>
             ))}
           </div>
@@ -618,18 +659,22 @@ function RuleCard({
 function RuleModal({
   rule,
   themes,
+  productConfig,
+  productCategories,
   onClose,
   onSuccess,
 }: {
   rule: TimeSlotRule | null;
   themes: Theme[];
+  productConfig: Record<string, ProductConfig>;
+  productCategories: CategorySubType[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const [startHour, setStartHour] = useState(rule?.startHour || 7);
   const [endHour, setEndHour] = useState(rule?.endHour || 11);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(rule?.daysOfWeek || [1, 2, 3, 4, 5]);
-  const [productTypes, setProductTypes] = useState<OrchestratorProductType[]>(
+  const [productTypes, setProductTypes] = useState<string[]>(
     rule?.productTypes || ["croissants"]
   );
   // Tema kullanım state'leri
@@ -645,11 +690,28 @@ function RuleModal({
     );
   };
 
-  const toggleProductType = (pt: OrchestratorProductType) => {
+  const toggleProductType = (pt: string) => {
     setProductTypes((prev) =>
       prev.includes(pt) ? prev.filter((p) => p !== pt) : [...prev, pt]
     );
   };
+
+  // Görüntülenecek ürün kategorileri: dinamik kategoriler veya fallback
+  const availableProducts = useMemo(() => {
+    if (productCategories.length > 0) {
+      return productCategories.map((cat) => ({
+        slug: cat.slug,
+        label: cat.displayName,
+        emoji: cat.icon || "📦",
+      }));
+    }
+    // Fallback - varsayılan kategoriler
+    return Object.entries(productConfig).map(([slug, cfg]) => ({
+      slug,
+      label: cfg.label,
+      emoji: cfg.emoji,
+    }));
+  }, [productCategories, productConfig]);
 
   // Tema seçilmediğinde uyarı gösterip kullanıcıya karar aldıran fonksiyon
   const handleSubmit = async (e: React.FormEvent, skipThemeWarning = false) => {
@@ -829,21 +891,26 @@ function RuleModal({
               />
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {(Object.keys(PRODUCT_CONFIG) as OrchestratorProductType[]).map((pt) => (
+              {availableProducts.map((product) => (
                 <button
-                  key={pt}
+                  key={product.slug}
                   type="button"
-                  onClick={() => toggleProductType(pt)}
-                  className={`p-3 rounded-xl text-sm transition-all flex items-center gap-2 ${productTypes.includes(pt)
+                  onClick={() => toggleProductType(product.slug)}
+                  className={`p-3 rounded-xl text-sm transition-all flex items-center gap-2 ${productTypes.includes(product.slug)
                     ? "bg-amber-100 text-amber-800 ring-2 ring-amber-300"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                 >
-                  <span className="text-xl">{PRODUCT_CONFIG[pt].emoji}</span>
-                  <span className="font-medium">{PRODUCT_CONFIG[pt].label}</span>
+                  <span className="text-xl">{product.emoji}</span>
+                  <span className="font-medium">{product.label}</span>
                 </button>
               ))}
             </div>
+            {availableProducts.length === 0 && (
+              <p className="text-sm text-gray-500 mt-2">
+                Ürün kategorileri yükleniyor...
+              </p>
+            )}
           </div>
 
           {/* Tema Kullanımı */}

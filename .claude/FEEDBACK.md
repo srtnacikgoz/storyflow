@@ -746,6 +746,50 @@ interface BusinessPreset {
 
 ---
 
+## [TODO-011] Firebase Auth - API Güvenliği
+- **Kategori:** security
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-25
+- **Açıklama:** Cloud Functions'lar şu an public erişime açık (IAM allUsers). Güvenlik için Firebase Authentication entegrasyonu yapılmalı.
+
+### Neden Gerekli?
+- Functions şu an `allUsers` IAM iznine sahip (güvenlik açığı)
+- Herkes API'ye erişebilir (kötüye kullanım riski)
+- Admin panel korumasız
+
+### Uygulama Planı
+1. **Firebase Authentication Kurulumu**
+   - Email/password auth aktifleştir
+   - İlk admin kullanıcısını oluştur
+
+2. **Custom Claims (Admin Rolü)**
+   - Admin kullanıcısına `admin: true` claim'i ekle
+   - Yetkilendirme için claim kontrolü
+
+3. **Functions Middleware**
+   - Auth token doğrulama middleware'i oluştur
+   - Tüm admin endpoint'lerine uygula
+
+4. **Admin Panel Login**
+   - Login sayfası ekle
+   - Auth context oluştur
+   - Protected routes ekle
+
+5. **IAM Güncellemesi**
+   - `allUsers` iznini kaldır
+   - Sadece authenticated istekler kabul edilsin
+
+### Referans
+- Firebase Auth: https://firebase.google.com/docs/auth
+- Custom Claims: https://firebase.google.com/docs/auth/admin/custom-claims
+- Functions Auth: https://firebase.google.com/docs/functions/callable
+
+### Not
+Bu görev geçici olarak ertelendi. Şu an `allUsers` izni ile çalışıyor. ROADMAP.md'de "What's Next" bölümüne eklendi.
+
+---
+
 ## [TODO-013] Kullanıcı Senaryo Oluşturma - Custom Scenario Builder
 - **Kategori:** todo
 - **Öncelik:** medium

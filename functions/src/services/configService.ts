@@ -28,6 +28,7 @@ import {
   FirestoreFixedAssetsConfig,
   GlobalOrchestratorConfig,
 } from "../orchestrator/types";
+import { getCategories as getCategoriesFromService } from "./categoryService";
 import {
   getAllSeedData,
   DEFAULT_TIMEOUTS_CONFIG,
@@ -319,6 +320,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     timeouts,
     systemSettings,
     fixedAssets,
+    categories,
   ] = await Promise.all([
     getScenarios(),
     getHandStyles(),
@@ -331,6 +333,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     getTimeouts(),
     getSystemSettings(),
     getFixedAssets(),
+    getCategoriesFromService(),
   ]);
 
   // Config oluştur
@@ -346,6 +349,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     timeouts,
     systemSettings,
     fixedAssets,
+    categories,
     loadedAt: now,
     version: "1.0.0",
   };

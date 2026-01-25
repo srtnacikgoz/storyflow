@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { api } from "../services/api";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageTour } from "../components/PageTour";
 import type { TourStep } from "../components/PageTour";
+import type { DynamicCategory } from "../types";
 
 // Scenarios sayfası tour adımları
 const SCENARIOS_TOUR_STEPS: TourStep[] = [
@@ -300,16 +301,16 @@ const COMPOSITION_TYPES = [
   },
 ];
 
-// Ürün tipleri
-const PRODUCT_TYPES = [
+// Varsayılan ürün tipleri (API yüklenene kadar fallback)
+const DEFAULT_PRODUCT_TYPES = [
   { id: "croissants", name: "Kruvasanlar" },
   { id: "pastas", name: "Pastalar" },
   { id: "chocolates", name: "Çikolatalar" },
   { id: "coffees", name: "Kahveler" },
 ];
 
-// Interior tipleri
-const INTERIOR_TYPES = [
+// Varsayılan interior tipleri (API yüklenene kadar fallback)
+const DEFAULT_INTERIOR_TYPES = [
   { id: "vitrin", name: "Vitrin" },
   { id: "tezgah", name: "Tezgah" },
   { id: "oturma-alani", name: "Oturma Alanı" },
@@ -339,6 +340,9 @@ export default function Scenarios() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "hands" | "noHands" | "interior">("all");
 
+  // Dinamik kategoriler
+  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
+
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -352,9 +356,47 @@ export default function Scenarios() {
   // Detay modal
   const [detailScenario, setDetailScenario] = useState<Scenario | null>(null);
 
+  // Dinamik ürün tipleri
+  const PRODUCT_TYPES = useMemo(() => {
+    const productsCategory = dynamicCategories.find((c) => c.type === "products");
+    if (productsCategory && productsCategory.subTypes.length > 0) {
+      return productsCategory.subTypes
+        .filter((st) => st.isActive)
+        .sort((a, b) => a.order - b.order)
+        .map((st) => ({ id: st.slug, name: st.displayName }));
+    }
+    return DEFAULT_PRODUCT_TYPES;
+  }, [dynamicCategories]);
+
+  // Dinamik interior tipleri
+  const INTERIOR_TYPES = useMemo(() => {
+    const interiorCategory = dynamicCategories.find((c) => c.type === "interior");
+    if (interiorCategory && interiorCategory.subTypes.length > 0) {
+      return interiorCategory.subTypes
+        .filter((st) => st.isActive)
+        .sort((a, b) => a.order - b.order)
+        .map((st) => ({ id: st.slug, name: st.displayName }));
+    }
+    return DEFAULT_INTERIOR_TYPES;
+  }, [dynamicCategories]);
+
   useEffect(() => {
-    loadScenarios();
+    loadInitialData();
   }, []);
+
+  const loadInitialData = async () => {
+    // Kategorileri ve senaryoları paralel yükle
+    try {
+      const categoriesData = await api.getCategories().catch(() => null);
+      if (categoriesData) {
+        setDynamicCategories(categoriesData.categories.filter((c) => !c.isDeleted));
+      }
+    } catch (err) {
+      console.error("[Scenarios] Kategoriler yüklenemedi:", err);
+    }
+    // Senaryoları yükle
+    loadScenarios();
+  };
 
   const loadScenarios = async () => {
     setLoading(true);

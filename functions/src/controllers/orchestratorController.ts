@@ -96,4 +96,19 @@ export {
   updateAIRule,
   deleteAIRule,
   getAIRulesStats,
+
+  // Category Controller
+  getCategories,
+  getCategoryByType,
+  getSubTypeSlugs,
+  getAllProductSlugs,
+  getCategorySummary,
+  addSubType,
+  updateSubType,
+  deactivateSubType,
+  activateSubType,
+  reorderSubTypes,
+  seedCategories,
+  clearCategoriesCache,
+  getCategoryDisplayName,
 } from "./orchestrator";

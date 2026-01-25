@@ -36,6 +36,10 @@ import type {
   AIRulesStats,
   // Setup Status types
   SetupStatusResponse,
+  // Category types
+  CategoriesConfig,
+  DynamicCategory,
+  DynamicCategoryType,
 } from "../types";
 
 // Firebase Functions base URL
@@ -1414,6 +1418,184 @@ class ApiService {
       data: AIRulesStats;
     }>("getAIRulesStats");
     return response.data;
+  }
+
+  // ==========================================
+  // Dynamic Categories
+  // ==========================================
+
+  /**
+   * Tüm kategorileri getir
+   */
+  async getCategories(): Promise<CategoriesConfig> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: CategoriesConfig;
+    }>("getCategories");
+    return response.data;
+  }
+
+  /**
+   * Belirli bir kategori türünü getir
+   */
+  async getCategoryByType(type: DynamicCategoryType): Promise<DynamicCategory | null> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: DynamicCategory;
+    }>(`getCategoryByType?type=${type}`);
+    return response.data;
+  }
+
+  /**
+   * Belirli bir kategori türünün slug listesini getir
+   */
+  async getSubTypeSlugs(type: DynamicCategoryType): Promise<string[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: string[];
+    }>(`getSubTypeSlugs?type=${type}`);
+    return response.data;
+  }
+
+  /**
+   * Tüm ürün kategorisi slug'larını getir (TimeSlotRule için)
+   */
+  async getAllProductSlugs(): Promise<string[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: string[];
+    }>("getAllProductSlugs");
+    return response.data;
+  }
+
+  /**
+   * Kategori özet bilgilerini getir
+   */
+  async getCategorySummary(): Promise<Array<{
+    type: DynamicCategoryType;
+    displayName: string;
+    icon: string;
+    activeCount: number;
+    totalCount: number;
+  }>> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: Array<{
+        type: DynamicCategoryType;
+        displayName: string;
+        icon: string;
+        activeCount: number;
+        totalCount: number;
+      }>;
+    }>("getCategorySummary");
+    return response.data;
+  }
+
+  /**
+   * Yeni alt kategori ekle
+   */
+  async addSubType(
+    type: DynamicCategoryType,
+    subType: {
+      slug: string;
+      displayName: string;
+      icon?: string;
+      description?: string;
+      isActive?: boolean;
+      eatingMethodDefault?: string;
+      canBeHeldDefault?: boolean;
+    }
+  ): Promise<void> {
+    await this.fetch<{ success: boolean }>("addSubType", {
+      method: "POST",
+      body: JSON.stringify({ type, ...subType }),
+    });
+  }
+
+  /**
+   * Alt kategori güncelle
+   */
+  async updateSubType(
+    type: DynamicCategoryType,
+    slug: string,
+    updates: {
+      displayName?: string;
+      icon?: string;
+      description?: string;
+      isActive?: boolean;
+      order?: number;
+      eatingMethodDefault?: string;
+      canBeHeldDefault?: boolean;
+    }
+  ): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateSubType", {
+      method: "POST",
+      body: JSON.stringify({ type, slug, ...updates }),
+    });
+  }
+
+  /**
+   * Alt kategoriyi deaktif et (soft delete)
+   */
+  async deactivateSubType(type: DynamicCategoryType, slug: string): Promise<void> {
+    await this.fetch<{ success: boolean }>("deactivateSubType", {
+      method: "POST",
+      body: JSON.stringify({ type, slug }),
+    });
+  }
+
+  /**
+   * Alt kategoriyi aktif et
+   */
+  async activateSubType(type: DynamicCategoryType, slug: string): Promise<void> {
+    await this.fetch<{ success: boolean }>("activateSubType", {
+      method: "POST",
+      body: JSON.stringify({ type, slug }),
+    });
+  }
+
+  /**
+   * Alt kategorilerin sırasını güncelle
+   */
+  async reorderSubTypes(type: DynamicCategoryType, slugOrder: string[]): Promise<void> {
+    await this.fetch<{ success: boolean }>("reorderSubTypes", {
+      method: "POST",
+      body: JSON.stringify({ type, slugOrder }),
+    });
+  }
+
+  /**
+   * Varsayılan kategorileri seed et
+   */
+  async seedCategories(): Promise<CategoriesConfig> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: CategoriesConfig;
+      message: string;
+    }>("seedCategories", {
+      method: "POST",
+    });
+    return response.data;
+  }
+
+  /**
+   * Kategori cache'ini temizle
+   */
+  async clearCategoriesCache(): Promise<void> {
+    await this.fetch<{ success: boolean }>("clearCategoriesCache", {
+      method: "POST",
+    });
+  }
+
+  /**
+   * Slug'ı displayName'e çevir
+   */
+  async getCategoryDisplayName(type: DynamicCategoryType, slug: string): Promise<string> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: { slug: string; displayName: string };
+    }>(`getCategoryDisplayName?type=${type}&slug=${slug}`);
+    return response.data.displayName;
   }
 }
 

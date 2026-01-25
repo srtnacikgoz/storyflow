@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
-import type { OrchestratorAsset, AssetCategory, EatingMethod } from "../types";
+import type { OrchestratorAsset, AssetCategory, EatingMethod, DynamicCategory } from "../types";
 import { useLoadingOperation } from "../contexts/LoadingContext";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
@@ -149,6 +149,9 @@ export default function Assets() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // Dinamik kategoriler
+  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
+
   // Modal state - hem create hem edit için
   const [showModal, setShowModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState<OrchestratorAsset | null>(null);
@@ -156,9 +159,67 @@ export default function Assets() {
   // Global loading hook
   const { execute: executeDelete } = useLoadingOperation("asset-delete");
 
+  // Dinamik CATEGORY_LABELS oluştur
+  const dynamicCategoryLabels = useMemo(() => {
+    const labels: Record<string, string> = { ...CATEGORY_LABELS };
+    dynamicCategories.forEach((cat) => {
+      labels[cat.type] = cat.displayName;
+    });
+    return labels as Record<AssetCategory, string>;
+  }, [dynamicCategories]);
+
+  // Dinamik SUBTYPE_LABELS oluştur
+  const dynamicSubtypeLabels = useMemo(() => {
+    const labels: Record<string, string> = { ...SUBTYPE_LABELS };
+    dynamicCategories.forEach((cat) => {
+      cat.subTypes.forEach((st) => {
+        labels[st.slug] = st.displayName;
+      });
+    });
+    return labels;
+  }, [dynamicCategories]);
+
+  // Dinamik SUBTYPES_BY_CATEGORY oluştur
+  const dynamicSubtypesByCategory = useMemo(() => {
+    const subtypes: Record<string, string[]> = {};
+    // Önce varsayılanları kopyala
+    Object.entries(SUBTYPES_BY_CATEGORY).forEach(([cat, subs]) => {
+      subtypes[cat] = [...subs];
+    });
+    // Dinamik kategorilerden güncelle (aktif olanları)
+    dynamicCategories.forEach((cat) => {
+      const activeSlugs = cat.subTypes
+        .filter((st) => st.isActive)
+        .sort((a, b) => a.order - b.order)
+        .map((st) => st.slug);
+      if (activeSlugs.length > 0) {
+        subtypes[cat.type] = activeSlugs;
+      }
+    });
+    return subtypes as Record<AssetCategory, string[]>;
+  }, [dynamicCategories]);
+
+  // Kategorileri ve asset'leri yükle
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // Seçili kategori değişince asset'leri yükle
   useEffect(() => {
     loadAssets();
   }, [selectedCategory]);
+
+  const loadInitialData = async () => {
+    try {
+      // Kategorileri yükle
+      const categoriesData = await api.getCategories().catch(() => null);
+      if (categoriesData) {
+        setDynamicCategories(categoriesData.categories.filter((c) => !c.isDeleted));
+      }
+    } catch (err) {
+      console.error("[Assets] Kategoriler yüklenemedi:", err);
+    }
+  };
 
   const loadAssets = async () => {
     setLoading(true);
@@ -262,7 +323,7 @@ export default function Assets() {
           >
             Tümü ({assets.length})
           </button>
-          {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map((cat) => (
+          {(Object.keys(dynamicCategoryLabels) as AssetCategory[]).map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -271,7 +332,7 @@ export default function Assets() {
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
             >
-              {CATEGORY_LABELS[cat]} ({groupedAssets[cat]?.length || 0})
+              {dynamicCategoryLabels[cat]} ({groupedAssets[cat]?.length || 0})
             </button>
           ))}
         </div>
@@ -358,6 +419,8 @@ export default function Assets() {
                 <AssetCard
                   key={asset.id}
                   asset={asset}
+                  categoryLabels={dynamicCategoryLabels}
+                  subtypeLabels={dynamicSubtypeLabels}
                   onEdit={() => openEditModal(asset)}
                   onDelete={() => handleDelete(asset.id)}
                   isDeleting={deletingId === asset.id}
@@ -408,7 +471,7 @@ export default function Assets() {
                             {asset.filename}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {CATEGORY_LABELS[asset.category as AssetCategory]} • {SUBTYPE_LABELS[asset.subType] || asset.subType}
+                            {dynamicCategoryLabels[asset.category as AssetCategory]} • {dynamicSubtypeLabels[asset.subType] || asset.subType}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -468,6 +531,9 @@ export default function Assets() {
       {showModal && (
         <AssetModal
           asset={editingAsset}
+          categoryLabels={dynamicCategoryLabels}
+          subtypeLabels={dynamicSubtypeLabels}
+          subtypesByCategory={dynamicSubtypesByCategory}
           onClose={closeModal}
           onSuccess={handleModalSuccess}
         />
@@ -497,11 +563,15 @@ export default function Assets() {
 // Asset kartı
 function AssetCard({
   asset,
+  categoryLabels,
+  subtypeLabels,
   onEdit,
   onDelete,
   isDeleting,
 }: {
   asset: OrchestratorAsset;
+  categoryLabels: Record<AssetCategory, string>;
+  subtypeLabels: Record<string, string>;
   onEdit: () => void;
   onDelete: () => void;
   isDeleting?: boolean;
@@ -525,7 +595,7 @@ function AssetCard({
           <div>
             <p className="font-medium text-gray-900 truncate">{asset.filename}</p>
             <p className="text-sm text-gray-500">
-              {CATEGORY_LABELS[asset.category as AssetCategory]} / {SUBTYPE_LABELS[asset.subType] || asset.subType}
+              {categoryLabels[asset.category as AssetCategory]} / {subtypeLabels[asset.subType] || asset.subType}
             </p>
           </div>
           <span className={`px-2 py-0.5 rounded-full text-xs ${asset.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
@@ -591,10 +661,16 @@ function AssetCard({
 // Asset Modal (Create/Edit birleşik)
 function AssetModal({
   asset,
+  categoryLabels,
+  subtypeLabels,
+  subtypesByCategory,
   onClose,
   onSuccess,
 }: {
   asset: OrchestratorAsset | null; // null = create mode
+  categoryLabels: Record<AssetCategory, string>;
+  subtypeLabels: Record<string, string>;
+  subtypesByCategory: Record<AssetCategory, string[]>;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -628,7 +704,7 @@ function AssetModal({
   useEffect(() => {
     if (!isEditMode) {
       // Create modda kategori değişince ilk alt tipi seç ve upload'ı temizle
-      const subtypes = SUBTYPES_BY_CATEGORY[category];
+      const subtypes = subtypesByCategory[category];
       if (subtypes.length > 0) {
         setSubType(subtypes[0]);
       }
@@ -769,8 +845,8 @@ function AssetModal({
               className="input w-full"
               disabled={isEditMode} // Edit modda kategori değiştirilemez
             >
-              {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map((cat) => (
-                <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+              {(Object.keys(categoryLabels) as AssetCategory[]).map((cat) => (
+                <option key={cat} value={cat}>{categoryLabels[cat]}</option>
               ))}
             </select>
             {isEditMode && (
@@ -788,8 +864,8 @@ function AssetModal({
               onChange={(e) => setSubType(e.target.value)}
               className="input w-full"
             >
-              {SUBTYPES_BY_CATEGORY[category].map((st) => (
-                <option key={st} value={st}>{SUBTYPE_LABELS[st] || st}</option>
+              {subtypesByCategory[category]?.map((st) => (
+                <option key={st} value={st}>{subtypeLabels[st] || st}</option>
               ))}
             </select>
           </div>

@@ -262,6 +262,15 @@ Tamamlananlar:
 
 ## What's Next (v7.0 Candidates)
 
+### 🔒 Güvenlik (Öncelikli)
+- [ ] **Firebase Auth + Custom Claims** - Admin panel ve API güvenliği
+  - Firebase Authentication entegrasyonu
+  - Admin rolü için Custom Claims
+  - Functions middleware (auth check)
+  - Admin panel login sayfası
+  - IAM "allUsers" kaldırılacak (şu an geçici olarak açık)
+
+### 📋 Diğer İyileştirmeler
 - [ ] Smart Retry Logic (3 deneme)
 - [ ] Docker Support
 - [ ] Multi-Account Support

@@ -70,7 +70,15 @@
       "Bash(firebase experiments:enable:*)",
       "WebFetch(domain:gist.github.com)",
       "Skill(radikal-durustluk)",
-      "Bash(firebase functions:secrets:list:*)"
+      "Skill(fikir-uret)",
+      "Bash(firebase functions:secrets:list:*)",
+      "Bash(echo:*)",
+      "Bash(gcloud functions add-invoker-policy-binding:*)",
+      "Bash(brew install:*)",
+      "Bash(tar:*)",
+      "Bash(/tmp/google-cloud-sdk/bin/gcloud auth list)",
+      "Bash(/tmp/google-cloud-sdk/bin/gcloud auth application-default print-access-token)",
+      "Bash(/tmp/google-cloud-sdk/bin/gcloud auth login:*)"
     ]
   },
   "hooks": {
@@ -82,6 +90,46 @@
             "type": "command",
             "command": "node .claude/hooks/rules-enforcer.js pre-write",
             "statusMessage": "📝 Yazma kuralları kontrol ediliyor..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.ts)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/idea-enforcer.js pre-write",
+            "statusMessage": "🔒 Fikir kontrolü (Write)..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.tsx)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/idea-enforcer.js pre-write",
+            "statusMessage": "🔒 Fikir kontrolü (Write)..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(*.ts)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/idea-enforcer.js pre-edit",
+            "statusMessage": "🔒 Fikir kontrolü (Edit)..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(*.tsx)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/idea-enforcer.js pre-edit",
+            "statusMessage": "🔒 Fikir kontrolü (Edit)..."
           }
         ]
       },
@@ -123,12 +171,77 @@
         ]
       },
       {
+        "matcher": "Write(.claude/IDEAS.md)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/idea-enforcer.js post-idea",
+            "statusMessage": "✅ Fikir kaydedildi, kilit açıldı..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(.claude/IDEAS.md)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/idea-enforcer.js post-idea",
+            "statusMessage": "✅ Fikir kaydedildi, kilit açıldı..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.ts)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/fikir-zorlayici.js post-feature 2>/dev/null || true",
+            "statusMessage": "💡 Fikir kontrolü..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.tsx)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/fikir-zorlayici.js post-feature 2>/dev/null || true",
+            "statusMessage": "💡 Fikir kontrolü..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(*.ts)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/fikir-zorlayici.js post-feature 2>/dev/null || true",
+            "statusMessage": "💡 Fikir kontrolü..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(*.tsx)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/fikir-zorlayici.js post-feature 2>/dev/null || true",
+            "statusMessage": "💡 Fikir kontrolü..."
+          }
+        ]
+      },
+      {
         "matcher": "Read",
         "hooks": [
           {
             "type": "command",
             "command": "node .claude/hooks/rules-enforcer.js reminder 2>/dev/null || true",
             "statusMessage": "💡 Kurallar hatırlatılıyor..."
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/fikir-zorlayici.js reminder 2>/dev/null || true",
+            "statusMessage": ""
           }
         ]
       }
@@ -140,6 +253,16 @@
             "type": "command",
             "command": "node .claude/hooks/rules-enforcer.js session-start 2>/dev/null || true",
             "statusMessage": "📋 Kurallar yükleniyor..."
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/fikir-zorlayici.js session-start 2>/dev/null || true",
+            "statusMessage": "💡 Proaktif fikir kuralı yükleniyor..."
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/idea-enforcer.js session-start 2>/dev/null || true",
+            "statusMessage": "🔒 Fikir zorlama sistemi başlatılıyor..."
           }
         ]
       }

@@ -438,9 +438,9 @@ export interface TimeSlotRule {
   startHour: number;
   endHour: number;
   daysOfWeek: number[];
-  productTypes: OrchestratorProductType[];
+  productTypes: string[];  // Dinamik kategori slug'ları - örn: "croissants", "pastas"
   allowPairing?: boolean;
-  pairingWith?: OrchestratorProductType[];
+  pairingWith?: string[];  // Dinamik kategori slug'ları
   // Tema tercihi (yeni sistem)
   themeId?: string;
   // Senaryo tercihi (eski sistem, geriye dönük uyumluluk)
@@ -790,6 +790,94 @@ export interface AIRulesStats {
   doRules: number;
   dontRules: number;
   byCategory: Record<string, number>;
+}
+
+// ==========================================
+// Dynamic Category System
+// ==========================================
+
+/**
+ * Bilinen ürün kategorileri (IDE autocomplete için)
+ * Yeni kategoriler Firestore'dan dinamik olarak gelir
+ */
+export const KNOWN_PRODUCT_TYPES = [
+  "croissants",
+  "pastas",
+  "chocolates",
+  "coffees",
+] as const;
+
+export type KnownProductType = typeof KNOWN_PRODUCT_TYPES[number];
+
+/**
+ * Ana kategori türleri
+ */
+export type DynamicCategoryType =
+  | "products"
+  | "props"
+  | "furniture"
+  | "accessories"
+  | "pets"
+  | "environments"
+  | "interior";
+
+/**
+ * Alt kategori tanımı
+ */
+export interface CategorySubType {
+  slug: string;              // "croissants" - immutable
+  displayName: string;       // "Kruvasanlar"
+  icon?: string;             // "🥐"
+  description?: string;
+  order: number;
+  isActive: boolean;
+
+  // Ürün kategorileri için özel alanlar
+  eatingMethodDefault?: EatingMethod;
+  canBeHeldDefault?: boolean;
+}
+
+/**
+ * Dinamik kategori tanımı
+ */
+export interface DynamicCategory {
+  type: DynamicCategoryType;
+  displayName: string;
+  icon: string;
+  description?: string;
+  order: number;
+  subTypes: CategorySubType[];
+  isSystem: boolean;
+  isDeleted: boolean;
+  createdAt: number;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Kategori konfigürasyonu
+ */
+export interface CategoriesConfig {
+  categories: DynamicCategory[];
+  cacheTTLMinutes: number;
+  version: string;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Kategori servisi yanıt tipleri
+ */
+export interface CategoryResponse {
+  success: boolean;
+  data?: CategoriesConfig;
+  error?: string;
+}
+
+export interface SubTypeSlugsResponse {
+  success: boolean;
+  data?: string[];
+  error?: string;
 }
 
 // ==========================================

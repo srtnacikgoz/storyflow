@@ -1055,11 +1055,239 @@ export interface GlobalOrchestratorConfig {
   timeouts: FirestoreTimeoutsConfig;
   systemSettings: FirestoreSystemSettingsConfig;
   fixedAssets: FirestoreFixedAssetsConfig;
+  categories: FirestoreCategoriesConfig;  // Dinamik kategoriler
 
   // Cache bilgisi
   loadedAt: number;
   version: string;
 }
+
+// ==========================================
+// DYNAMIC CATEGORY SYSTEM
+// ==========================================
+
+/**
+ * Bilinen ürün kategorileri (IDE autocomplete için)
+ * Yeni kategoriler Firestore'dan dinamik olarak gelir
+ * Slug'lar immutable - sadece displayName değişebilir
+ */
+export const KNOWN_PRODUCT_TYPES = [
+  "croissants",
+  "pastas",
+  "chocolates",
+  "coffees",
+] as const;
+
+export type KnownProductType = typeof KNOWN_PRODUCT_TYPES[number];
+
+/**
+ * Validation helper - slug'ın bilinen kategorilerden biri olup olmadığını kontrol eder
+ */
+export function isKnownProductType(value: string): value is KnownProductType {
+  return KNOWN_PRODUCT_TYPES.includes(value as KnownProductType);
+}
+
+/**
+ * Runtime validation - dinamik kategoriler dahil tüm geçerli slug'ları kontrol eder
+ * @param slug - Kontrol edilecek slug
+ * @param dynamicSlugs - Firestore'dan gelen dinamik kategori slug'ları
+ */
+export function isValidCategorySlug(slug: string, dynamicSlugs: string[] = []): boolean {
+  const allValidSlugs = [...KNOWN_PRODUCT_TYPES, ...dynamicSlugs];
+  return allValidSlugs.includes(slug.toLowerCase());
+}
+
+/**
+ * Ana kategori türleri (Asset kategorileri)
+ * Bu türler sabittir - alt kategoriler dinamiktir
+ */
+export type DynamicCategoryType =
+  | "products"     // Ürünler (kruvasan, pasta, çikolata, kahve)
+  | "props"        // Aksesuarlar (tabak, fincan, çatal)
+  | "furniture"    // Mobilya (masa, sandalye, dekor)
+  | "accessories"  // Kişisel aksesuarlar (telefon, çanta, kitap)
+  | "pets"         // Evcil hayvanlar (köpek, kedi)
+  | "environments" // Ortamlar (iç mekan, dış mekan)
+  | "interior";    // İç mekan fotoğrafları (vitrin, tezgah)
+
+/**
+ * Alt kategori tanımı
+ * Örn: products altında "croissants", "pastas" gibi alt kategoriler
+ */
+export interface CategorySubType {
+  slug: string;              // "croissants" - immutable, değiştirilemez
+  displayName: string;       // "Kruvasanlar" - değiştirilebilir
+  icon?: string;             // "🥐"
+  description?: string;      // "Taze kruvasanlar ve viennoiseriler"
+  order: number;             // Sıralama (1, 2, 3...)
+  isActive: boolean;         // Aktif/Pasif
+
+  // Ürün kategorileri için özel alanlar (products için)
+  eatingMethodDefault?: EatingMethod;  // Varsayılan yeme şekli
+  canBeHeldDefault?: boolean;          // Varsayılan elle tutulabilirlik
+}
+
+/**
+ * Dinamik kategori tanımı
+ * Document: global/config/settings/categories
+ */
+export interface DynamicCategory {
+  type: DynamicCategoryType;   // "products", "props", "furniture"
+  displayName: string;         // "Ürünler"
+  icon: string;                // "📦"
+  description?: string;        // "Satışa sunulan ürün görselleri"
+  order: number;               // Kategori sıralaması
+
+  // Alt kategoriler
+  subTypes: CategorySubType[];
+
+  // Sistem kategorisi mi? (true ise silinemez)
+  isSystem: boolean;
+
+  // Soft delete - silinmiş kategoriler görünmez ama referanslar korunur
+  isDeleted: boolean;
+
+  // Meta
+  createdAt: number;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Firestore'da saklanan kategori konfigürasyonu
+ * Document: global/config/settings/categories
+ *
+ * Bu yapı tüm kategorileri tek bir döküman içinde tutar
+ * Böylece tek bir okuma ile tüm kategoriler yüklenir
+ */
+export interface FirestoreCategoriesConfig {
+  // Kategori listesi (type'a göre indexed)
+  categories: DynamicCategory[];
+
+  // Cache TTL (dakika)
+  cacheTTLMinutes: number;
+
+  // Meta
+  version: string;           // "1.0.0" - şema versiyonu
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Varsayılan kategoriler - seed data için
+ */
+export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt">[] = [
+  {
+    type: "products",
+    displayName: "Ürünler",
+    icon: "🥐",
+    description: "Satışa sunulan ürün görselleri",
+    order: 1,
+    isSystem: true,
+    isDeleted: false,
+    subTypes: [
+      { slug: "croissants", displayName: "Kruvasanlar", icon: "🥐", order: 1, isActive: true, eatingMethodDefault: "hand", canBeHeldDefault: true },
+      { slug: "pastas", displayName: "Pastalar", icon: "🎂", order: 2, isActive: true, eatingMethodDefault: "fork", canBeHeldDefault: false },
+      { slug: "chocolates", displayName: "Çikolatalar", icon: "🍫", order: 3, isActive: true, eatingMethodDefault: "hand", canBeHeldDefault: true },
+      { slug: "coffees", displayName: "Kahveler", icon: "☕", order: 4, isActive: true, eatingMethodDefault: "none", canBeHeldDefault: true },
+    ],
+  },
+  {
+    type: "props",
+    displayName: "Aksesuarlar",
+    icon: "🍽️",
+    description: "Tabak, fincan, çatal-bıçak gibi servis ekipmanları",
+    order: 2,
+    isSystem: true,
+    isDeleted: false,
+    subTypes: [
+      { slug: "plates", displayName: "Tabaklar", icon: "🍽️", order: 1, isActive: true },
+      { slug: "cups", displayName: "Fincanlar", icon: "☕", order: 2, isActive: true },
+      { slug: "cutlery", displayName: "Çatal-Bıçak", icon: "🍴", order: 3, isActive: true },
+      { slug: "napkins", displayName: "Peçeteler", icon: "🧻", order: 4, isActive: true },
+      { slug: "boxes", displayName: "Kutular", icon: "📦", order: 5, isActive: true },
+      { slug: "bags", displayName: "Çantalar", icon: "🛍️", order: 6, isActive: true },
+    ],
+  },
+  {
+    type: "furniture",
+    displayName: "Mobilya",
+    icon: "🪑",
+    description: "Masa, sandalye ve dekorasyon öğeleri",
+    order: 3,
+    isSystem: true,
+    isDeleted: false,
+    subTypes: [
+      { slug: "tables", displayName: "Masalar", icon: "🪵", order: 1, isActive: true },
+      { slug: "chairs", displayName: "Sandalyeler", icon: "🪑", order: 2, isActive: true },
+      { slug: "decor", displayName: "Dekorasyon", icon: "🌸", order: 3, isActive: true },
+    ],
+  },
+  {
+    type: "accessories",
+    displayName: "Kişisel Aksesuarlar",
+    icon: "📱",
+    description: "Telefon, çanta, kitap gibi masa üstü objeler",
+    order: 4,
+    isSystem: true,
+    isDeleted: false,
+    subTypes: [
+      { slug: "phone", displayName: "Telefon", icon: "📱", order: 1, isActive: true },
+      { slug: "bag", displayName: "Çanta", icon: "👜", order: 2, isActive: true },
+      { slug: "keys", displayName: "Anahtar", icon: "🔑", order: 3, isActive: true },
+      { slug: "book", displayName: "Kitap", icon: "📚", order: 4, isActive: true },
+      { slug: "glasses", displayName: "Gözlük", icon: "🕶️", order: 5, isActive: true },
+      { slug: "watch", displayName: "Saat", icon: "⌚", order: 6, isActive: true },
+      { slug: "notebook", displayName: "Defter", icon: "📓", order: 7, isActive: true },
+      { slug: "wallet", displayName: "Cüzdan", icon: "👛", order: 8, isActive: true },
+    ],
+  },
+  {
+    type: "pets",
+    displayName: "Evcil Hayvanlar",
+    icon: "🐕",
+    description: "Köpek ve kedi görselleri",
+    order: 5,
+    isSystem: true,
+    isDeleted: false,
+    subTypes: [
+      { slug: "dogs", displayName: "Köpekler", icon: "🐕", order: 1, isActive: true },
+      { slug: "cats", displayName: "Kediler", icon: "🐈", order: 2, isActive: true },
+    ],
+  },
+  {
+    type: "environments",
+    displayName: "Ortamlar",
+    icon: "🏠",
+    description: "İç ve dış mekan görselleri",
+    order: 6,
+    isSystem: true,
+    isDeleted: false,
+    subTypes: [
+      { slug: "indoor", displayName: "İç Mekan", icon: "🏠", order: 1, isActive: true },
+      { slug: "outdoor", displayName: "Dış Mekan", icon: "🌳", order: 2, isActive: true },
+      { slug: "window", displayName: "Pencere Önü", icon: "🪟", order: 3, isActive: true },
+      { slug: "cafe", displayName: "Kafe", icon: "☕", order: 4, isActive: true },
+      { slug: "home", displayName: "Ev", icon: "🏡", order: 5, isActive: true },
+    ],
+  },
+  {
+    type: "interior",
+    displayName: "İç Mekan Fotoğrafları",
+    icon: "🏪",
+    description: "Pastane atmosferini yansıtan gerçek fotoğraflar (AI üretimi yapılmaz)",
+    order: 7,
+    isSystem: true,
+    isDeleted: false,
+    subTypes: [
+      { slug: "vitrin", displayName: "Vitrin", icon: "🪟", order: 1, isActive: true },
+      { slug: "tezgah", displayName: "Tezgah", icon: "🍰", order: 2, isActive: true },
+      { slug: "oturma-alani", displayName: "Oturma Alanı", icon: "🛋️", order: 3, isActive: true },
+      { slug: "dekorasyon", displayName: "Dekorasyon", icon: "🌺", order: 4, isActive: true },
+      { slug: "genel-mekan", displayName: "Genel Mekan", icon: "🏪", order: 5, isActive: true },
+    ],
+  },
+];
 
 // ==========================================
 // AI RULES SYSTEM (Öğrenme Kuralları)

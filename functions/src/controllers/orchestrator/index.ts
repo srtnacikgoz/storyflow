@@ -101,3 +101,20 @@ export {
   deleteAIRule,
   getAIRulesStats,
 } from "./aiRulesController";
+
+// Category Controller
+export {
+  getCategories,
+  getCategoryByType,
+  getSubTypeSlugs,
+  getAllProductSlugs,
+  getCategorySummary,
+  addSubType,
+  updateSubType,
+  deactivateSubType,
+  activateSubType,
+  reorderSubTypes,
+  seedCategories,
+  clearCache as clearCategoriesCache,
+  getDisplayName as getCategoryDisplayName,
+} from "./categoryController";
