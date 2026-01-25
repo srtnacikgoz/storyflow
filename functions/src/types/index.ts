@@ -666,3 +666,245 @@ export interface AnalyticsDashboard {
   hourlyDistribution: HourlyDistribution[];
   dayDistribution: DayDistribution[];
 }
+
+// ==========================================
+// GEMINI TERMINOLOGY SYSTEM
+// Gemini-native prompt oluşturma için type tanımları
+// Kaynak: GEMINI-TERMINOLOGY-DICTIONARY.md
+// ==========================================
+
+/**
+ * Işık Yönü (Light Direction)
+ * Gemini'nin en iyi anladığı ışık yönü terimleri
+ */
+export type LightDirection =
+  | "backlighting"      // Arkadan aydınlatma - sıvı parlaması, buhar
+  | "side-lighting-90"  // Yan ışık 90° - doku vurgulama
+  | "side-lighting-45"  // Yan ışık 45° (Rembrandt) - hacim + yumuşak gölge
+  | "rim-lighting"      // Kenar ışığı - arka plandan ayırma
+  | "diffused-window";  // Pencere ışığı - yumuşak, doğal
+
+/**
+ * Işık Kalitesi (Light Quality)
+ */
+export type LightQuality =
+  | "diffused-softbox"  // Yumuşak geçişli gölgeler
+  | "hard-light"        // Dramatik, yüksek kontrast
+  | "natural-window"    // Doğal pencere ışığı
+  | "golden-hour";      // Altın saat - sıcak tonlar
+
+/**
+ * Renk Sıcaklığı (Color Temperature)
+ * Kelvin değerleri
+ */
+export type ColorTemperature =
+  | "3000K"   // Çok sıcak (mum ışığı)
+  | "3200K"   // Sıcak (cozy evening)
+  | "3500K"   // Sıcak (golden hour)
+  | "5000K"   // Gün ışığı (nötr)
+  | "5500K"   // Parlak gün ışığı
+  | "6500K";  // Soğuk (bulutlu gün)
+
+/**
+ * Işıklandırma Preset'i
+ * Admin panelde dropdown olarak gösterilecek
+ */
+export interface LightingPreset {
+  id: string;
+  name: string;              // "Altın Saat" (TR - UI için)
+  nameEn: string;            // "Golden Hour" (EN - log için)
+  direction: LightDirection;
+  quality: LightQuality;
+  temperature: ColorTemperature;
+  geminiTerms: string[];     // ["golden hour warm sunlight", "45-degree angle", "long shadows"]
+  geminiPrompt: string;      // Tam Gemini-ready açıklama
+  bestFor: string[];         // ["warm", "romantic", "cozy", "rustic"]
+  technicalDetails: string;  // "f/2.8, ISO 100, soft diffusion"
+  isActive: boolean;
+  sortOrder: number;
+}
+
+/**
+ * El Tutuş Tipi (Grip Type)
+ */
+export type GripType =
+  | "cupping"      // Avuç içinde kavrama (kahve fincanı)
+  | "pinching"     // Parmak uçlarıyla tutma (çikolata, makaron)
+  | "cradling"     // Nazikçe taşıma (pasta tabağı)
+  | "presenting"   // Sunma pozu (ürünü gösterme)
+  | "breaking"     // Kırma/bölme (kruvasan)
+  | "dipping";     // Batırma (çikolata, sos)
+
+/**
+ * Kompozisyon Giriş Noktası
+ */
+export type EntryPoint =
+  | "bottom-right"  // Sağ alt köşe (45° açı)
+  | "bottom-left"   // Sol alt köşe (45° açı)
+  | "top-right"     // Sağ üst köşe
+  | "top-left"      // Sol üst köşe
+  | "side-right"    // Sağ kenar
+  | "side-left"     // Sol kenar
+  | "center";       // Merkez (sadece sunum)
+
+/**
+ * El Poz Şablonu
+ * Admin panelde seçilebilir el stilleri
+ */
+export interface HandPose {
+  id: string;
+  name: string;              // "Zarif Kavrama" (TR)
+  nameEn: string;            // "Elegant Grip" (EN)
+  gripType: GripType;
+  entryPoint: EntryPoint;
+  fingerPosition: string;    // "fingers slightly curved, thumb supporting"
+  wristAngle: string;        // "slight 15-degree tilt"
+  geminiTerms: string[];     // ["elegant feminine hand", "gentle grip", "natural skin texture"]
+  geminiPrompt: string;      // Tam Gemini-ready açıklama
+  skinDetails: string[];     // ["subsurface scattering", "visible pores", "natural nails"]
+  avoidTerms: string[];      // ["deformed hands", "extra fingers"]
+  bestFor: ProductCategory[]; // Hangi ürün kategorileri için uygun
+  isActive: boolean;
+  sortOrder: number;
+}
+
+/**
+ * Kompozisyon Şablonu
+ * Ürün yerleşimi ve frame yapısı
+ */
+export interface CompositionTemplate {
+  id: string;
+  name: string;              // "Köşeden Giriş" (TR)
+  nameEn: string;            // "Corner Entry" (EN)
+  entryPoint: EntryPoint;
+  angleDescription: string;  // "45-degree angle, fingers pointing upper-left"
+  productPlacement: string;  // "center-left, slightly elevated"
+  propsPlacement: string;    // "cup bottom-right, plate centered"
+  negativeSpace: string;     // "30% top, 20% sides"
+  geminiTerms: string[];     // ["rule of thirds", "leading lines", "negative space"]
+  geminiPrompt: string;      // Tam Gemini-ready açıklama
+  aspectRatio: "9:16" | "4:5" | "1:1";
+  bestFor: string[];         // ["lifestyle", "story", "product-focus"]
+  isActive: boolean;
+  sortOrder: number;
+}
+
+/**
+ * Mood Atmosfer Stili
+ */
+export type MoodStyle =
+  | "morning-ritual"     // Sabah rutini - tazelik, yeni başlangıç
+  | "rustic-heritage"    // Geleneksel miras - nostalji, el yapımı
+  | "gourmet-midnight"   // Gece yarısı gurmesi - lüks, tutku
+  | "bright-airy"        // Parlak ve hafif - enerji, canlılık
+  | "cozy-intimate";     // Sıcak ve samimi - ev sıcaklığı
+
+/**
+ * Mood Tanımı
+ * Tema ve atmosfer ayarları
+ */
+export interface MoodDefinition {
+  id: string;
+  name: string;              // "Sabah Enerjisi" (TR)
+  nameEn: string;            // "Morning Energy" (EN)
+  style: MoodStyle;
+  lightingPresetId: string;  // İlişkili ışık preset'i
+  colorPalette: string[];    // ["warm earth tones", "golden", "cream"]
+  temperature: ColorTemperature;
+  depthOfField: string;      // "shallow f/2.0" | "medium f/4.0"
+  backgroundStyle: string;   // "blurred cafe terrace", "dark slate"
+  geminiAtmosphere: string;  // Tam atmosfer açıklaması
+  geminiTerms: string[];     // ["bright and airy", "natural morning light", "fresh energy"]
+  avoidTerms: string[];      // ["dark", "moody", "dramatic"]
+  bestTimeOfDay: string[];   // ["morning", "brunch"]
+  isActive: boolean;
+  sortOrder: number;
+}
+
+/**
+ * Ürün Doku Profili
+ * Her ürün kategorisi için kritik doku terimleri
+ */
+export interface ProductTextureProfile {
+  id: string;
+  category: ProductCategory;
+  heroFeature: string;       // "lamination" | "cross-section" | "reflection"
+  criticalTerms: string[];   // ["honeycomb structure", "shattered flakes"]
+  surfaceType: string;       // "matte" | "glossy" | "porous" | "moist"
+  geminiPrompt: string;      // Ürün-spesifik doku açıklaması
+  lightingNotes: string;     // "requires rim lighting for gloss"
+  avoidTerms: string[];      // ["plastic texture", "wax"]
+}
+
+/**
+ * Negative Prompt Kategorisi
+ */
+export type NegativeCategory =
+  | "technical"      // blur, grain, watermark
+  | "food-styling"   // plastic, wax, burnt
+  | "anatomy"        // deformed hands, extra fingers
+  | "composition";   // cluttered background
+
+/**
+ * Negative Prompt Koleksiyonu
+ */
+export interface NegativePromptSet {
+  id: string;
+  name: string;
+  category: NegativeCategory;
+  terms: string[];           // ["blur", "grain", "low resolution"]
+  geminiFormat: string;      // "Avoid any blur, grain, or low resolution"
+  isDefault: boolean;        // Varsayılan olarak eklensin mi?
+  applicableTo: ProductCategory[] | "all";
+}
+
+/**
+ * Gemini Prompt Yapılandırması
+ * Orchestrator'da kullanılacak tam yapılandırma
+ */
+export interface GeminiPromptConfig {
+  // Seçilen preset'ler
+  lightingPresetId: string;
+  handPoseId?: string;        // El varsa
+  compositionTemplateId: string;
+  moodDefinitionId: string;
+  productTextureId: string;
+
+  // Negative prompt setleri
+  negativePromptSetIds: string[];
+
+  // Ek özelleştirmeler
+  customTerms?: string[];     // Ek Gemini terimleri
+  customAvoidTerms?: string[]; // Ek kaçınılacak terimler
+
+  // Teknik ayarlar
+  aspectRatio: "9:16" | "4:5" | "1:1";
+  lens: string;               // "85mm prime"
+  aperture: string;           // "f/2.2"
+}
+
+/**
+ * Oluşturulmuş Gemini Prompt
+ * buildGeminiPrompt() fonksiyonunun çıktısı
+ */
+export interface GeneratedGeminiPrompt {
+  // Ana prompt bölümleri
+  subjectMateriality: string;
+  interaction?: string;       // El varsa
+  lightingPhysics: string;
+  atmosphereComposition: string;
+  technicalSpecs: string;
+  avoidSection: string;
+
+  // Birleştirilmiş final prompt
+  fullPrompt: string;
+
+  // Meta bilgiler
+  usedPresets: {
+    lighting: string;
+    handPose?: string;
+    composition: string;
+    mood: string;
+  };
+  generatedAt: number;
+}
