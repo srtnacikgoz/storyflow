@@ -48,14 +48,63 @@ const ALL_SCENARIOS = [
   { id: "detay-cekimi", name: "Detay Çekimi", includesHands: false, isInterior: true },
 ];
 
-// Mood seçenekleri - her birinin kullanım amacı açıklanmış
+// Mood seçenekleri - Gemini terminolojisi ile zenginleştirilmiş
+// Her mood'un ışık, renk sıcaklığı ve atmosfer ayarları tanımlı
 const MOOD_OPTIONS = [
-  { id: "energetic", name: "Enerjik", hint: "Sabah temaları için ideal" },
-  { id: "social", name: "Sosyal", hint: "Brunch ve paylaşım anları" },
-  { id: "relaxed", name: "Rahat", hint: "Öğleden sonra molası" },
-  { id: "warm", name: "Sıcak", hint: "Altın saat, romantik anlar" },
-  { id: "cozy", name: "Samimi", hint: "Gece atmosferi, ev sıcaklığı" },
-  { id: "balanced", name: "Dengeli", hint: "Nötr, her zaman uygun" },
+  {
+    id: "energetic",
+    name: "Enerjik",
+    hint: "Sabah temaları için ideal",
+    lighting: "Bright natural morning light, high contrast",
+    temperature: "5500K",
+    geminiAtmosphere: "Bright and airy, fresh morning energy, clean minimal aesthetic",
+    colorPalette: ["white", "cream", "light wood", "pastel"],
+  },
+  {
+    id: "social",
+    name: "Sosyal",
+    hint: "Brunch ve paylaşım anları",
+    lighting: "Warm inviting ambient light, soft shadows",
+    temperature: "5000K",
+    geminiAtmosphere: "Welcoming cafe scene, social atmosphere, warm inviting light",
+    colorPalette: ["warm neutrals", "white", "soft gold", "natural wood"],
+  },
+  {
+    id: "relaxed",
+    name: "Rahat",
+    hint: "Öğleden sonra molası",
+    lighting: "Soft diffused window light, pastel tones",
+    temperature: "5000K",
+    geminiAtmosphere: "Calm peaceful minimal, soft natural light, gentle atmosphere",
+    colorPalette: ["soft pastels", "white", "light gray", "muted tones"],
+  },
+  {
+    id: "warm",
+    name: "Sıcak",
+    hint: "Altın saat, romantik anlar",
+    lighting: "Golden hour warm light, amber tones, cozy evening glow",
+    temperature: "3000K",
+    geminiAtmosphere: "Nostalgic rustic atmosphere, golden hour warmth, artisanal aesthetic",
+    colorPalette: ["earth tones", "dark wood", "copper", "deep browns"],
+  },
+  {
+    id: "cozy",
+    name: "Samimi",
+    hint: "Gece atmosferi, ev sıcaklığı",
+    lighting: "Intimate focused lighting, deep but soft shadows",
+    temperature: "3200K",
+    geminiAtmosphere: "Cozy intimate setting, warm homey feel, soft comfort, relaxed atmosphere",
+    colorPalette: ["warm beige", "soft brown", "cream", "muted colors"],
+  },
+  {
+    id: "balanced",
+    name: "Dengeli",
+    hint: "Nötr, her zaman uygun",
+    lighting: "Natural balanced studio-like light, neutral tones",
+    temperature: "5500K",
+    geminiAtmosphere: "Clean professional modern aesthetic, balanced natural light",
+    colorPalette: ["neutral white", "light gray", "natural wood", "clean tones"],
+  },
 ];
 
 // Boş tema formu
@@ -299,23 +348,42 @@ export default function Themes() {
               )}
             </div>
 
-            {/* Mood */}
-            <div className="flex items-center gap-2 text-sm text-stone-600 mb-3">
-              <span className="font-medium">Mood:</span>
-              <span className="bg-stone-100 px-2 py-0.5 rounded">
-                {MOOD_OPTIONS.find((m) => m.id === theme.mood)?.name || theme.mood}
-              </span>
-              {theme.petAllowed && (
-                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                  Köpek izinli
-                </span>
-              )}
-              {theme.accessoryAllowed && (
-                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                  Aksesuar izinli
-                </span>
-              )}
-            </div>
+            {/* Mood - Gemini terminolojisi ile */}
+            {(() => {
+              const moodInfo = MOOD_OPTIONS.find((m) => m.id === theme.mood);
+              return (
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 text-sm text-stone-600 mb-2">
+                    <span className="font-medium">Mood:</span>
+                    <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">
+                      {moodInfo?.name || theme.mood}
+                    </span>
+                    {moodInfo && (
+                      <span className="text-xs text-stone-500">
+                        ({moodInfo.temperature})
+                      </span>
+                    )}
+                  </div>
+                  {moodInfo && (
+                    <p className="text-xs text-stone-500 italic mb-2">
+                      {moodInfo.lighting}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-1">
+                    {theme.petAllowed && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                        Köpek izinli
+                      </span>
+                    )}
+                    {theme.accessoryAllowed && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                        Aksesuar izinli
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Senaryolar */}
             <div className="mb-4">
@@ -579,10 +647,10 @@ export default function Themes() {
                   />
                 </div>
 
-                {/* Mood */}
+                {/* Mood - Gemini Terminolojisi ile */}
                 <div>
                   <label className="block text-sm font-medium text-stone-700 mb-2">
-                    Mood
+                    Mood (Atmosfer)
                   </label>
                   <select
                     value={form.mood}
@@ -591,10 +659,56 @@ export default function Themes() {
                   >
                     {MOOD_OPTIONS.map((mood) => (
                       <option key={mood.id} value={mood.id}>
-                        {mood.name} ({mood.hint})
+                        {mood.name} - {mood.hint}
                       </option>
                     ))}
                   </select>
+
+                  {/* Gemini Atmosfer Önizleme */}
+                  {(() => {
+                    const selectedMood = MOOD_OPTIONS.find((m) => m.id === form.mood);
+                    if (!selectedMood) return null;
+                    return (
+                      <div className="mt-3 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                        <p className="text-xs font-medium text-amber-800 mb-2">
+                          Gemini Prompt Önizleme:
+                        </p>
+                        <div className="space-y-2 text-xs text-stone-700">
+                          <div className="flex gap-2">
+                            <span className="font-medium text-amber-700 w-20">Işık:</span>
+                            <span className="font-mono bg-white px-2 py-0.5 rounded">
+                              {selectedMood.lighting}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="font-medium text-amber-700 w-20">Sıcaklık:</span>
+                            <span className="font-mono bg-white px-2 py-0.5 rounded">
+                              {selectedMood.temperature}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="font-medium text-amber-700 w-20">Atmosfer:</span>
+                            <span className="font-mono bg-white px-2 py-0.5 rounded text-[11px]">
+                              {selectedMood.geminiAtmosphere}
+                            </span>
+                          </div>
+                          <div className="flex gap-2 items-start">
+                            <span className="font-medium text-amber-700 w-20">Renkler:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {selectedMood.colorPalette.map((color, i) => (
+                                <span
+                                  key={i}
+                                  className="bg-white px-2 py-0.5 rounded text-[11px] border border-stone-200"
+                                >
+                                  {color}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Pet Allowed */}

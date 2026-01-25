@@ -19,24 +19,213 @@ interface Scenario {
   suggestedProducts?: string[];
   mood?: string;
   lightingPreference?: string;
+  lightingPreset?: string;
+  handPose?: string;
+  compositionEntry?: string;
   createdAt?: number;
   updatedAt?: number;
 }
 
-// Mood seçenekleri - senaryo atmosferini tanımlar
+// Mood seçenekleri - Gemini terminolojisiyle zenginleştirildi
 const MOOD_OPTIONS = [
-  { id: "elegant", name: "Şık", hint: "Sofistike, premium sunum" },
-  { id: "social", name: "Sosyal", hint: "Paylaşım, birliktelik anları" },
-  { id: "cozy", name: "Samimi", hint: "Ev sıcaklığı, rahat ortam" },
-  { id: "fresh", name: "Taze", hint: "Canlı, enerjik başlangıçlar" },
-  { id: "luxurious", name: "Lüks", hint: "Premium, özel anlar" },
-  { id: "authentic", name: "Otantik", hint: "Doğal, samimi, gerçek" },
-  { id: "practical", name: "Pratik", hint: "Günlük kullanım, fonksiyonel" },
-  { id: "festive", name: "Şenlikli", hint: "Kutlama, özel gün" },
-  { id: "exciting", name: "Heyecanlı", hint: "Dinamik, dikkat çekici" },
-  { id: "inviting", name: "Davetkar", hint: "Sıcak karşılama, misafirperver" },
-  { id: "casual", name: "Gündelik", hint: "Rahat, informal" },
-  { id: "professional", name: "Profesyonel", hint: "Kurumsal, iş odaklı" },
+  {
+    id: "morning-ritual",
+    name: "Sabah Ritüeli",
+    hint: "Enerjik, taze başlangıç",
+    geminiAtmosphere: "Bright and airy, fresh morning energy, clean minimal aesthetic",
+    lighting: "Natural morning light, soft shadows",
+    temperature: "5500K",
+    colorPalette: ["white", "cream", "light wood", "pastel"],
+  },
+  {
+    id: "cozy-intimate",
+    name: "Samimi/Sıcak",
+    hint: "Ev sıcaklığı, rahat ortam",
+    geminiAtmosphere: "Warm and inviting, intimate gathering, comfortable homey feeling",
+    lighting: "Warm tungsten accent, soft diffused",
+    temperature: "3000K",
+    colorPalette: ["warm brown", "cream", "burnt orange", "gold"],
+  },
+  {
+    id: "rustic-heritage",
+    name: "Rustik/Geleneksel",
+    hint: "Zanaatkar, otantik, doğal",
+    geminiAtmosphere: "Rustic artisanal charm, traditional craftsmanship, authentic heritage",
+    lighting: "Golden hour warmth, directional sunlight",
+    temperature: "3200K",
+    colorPalette: ["wood", "linen", "terracotta", "olive"],
+  },
+  {
+    id: "gourmet-midnight",
+    name: "Gece Gurme",
+    hint: "Dramatik, lüks, sofistike",
+    geminiAtmosphere: "Sophisticated midnight indulgence, moody dramatic luxury",
+    lighting: "Dramatic side-lighting, deep shadows",
+    temperature: "3500K",
+    colorPalette: ["dark wood", "burgundy", "gold", "black"],
+  },
+  {
+    id: "bright-airy",
+    name: "Aydınlık/Ferah",
+    hint: "Modern, temiz, minimal",
+    geminiAtmosphere: "Clean contemporary aesthetic, bright editorial style, minimalist elegance",
+    lighting: "Soft diffused daylight, minimal shadows",
+    temperature: "5000K",
+    colorPalette: ["white", "marble", "light grey", "sage"],
+  },
+  {
+    id: "festive-celebration",
+    name: "Kutlama/Şenlik",
+    hint: "Özel gün, kutlama anları",
+    geminiAtmosphere: "Joyful celebration, special occasion warmth, festive abundance",
+    lighting: "Warm ambient with highlights",
+    temperature: "3200K",
+    colorPalette: ["gold", "cream", "burgundy", "forest green"],
+  },
+];
+
+// Işık preset'leri - Gemini native terminoloji
+const LIGHTING_PRESETS = [
+  {
+    id: "soft-diffused",
+    name: "Yumuşak Yayılmış",
+    hint: "Her zaman güvenli seçim",
+    geminiPrompt: "Soft diffused natural light, gentle shadows, even illumination",
+    direction: "diffused-window",
+    temperature: "5000K",
+    bestFor: ["croissants", "cakes", "cookies"],
+  },
+  {
+    id: "dramatic-side",
+    name: "Dramatik Yan Işık",
+    hint: "Doku ve derinlik vurgular",
+    geminiPrompt: "Dramatic side-lighting at 45 degrees, defined shadows, texture emphasis",
+    direction: "side-lighting-45",
+    temperature: "3500K",
+    bestFor: ["chocolates", "macarons", "dark pastries"],
+  },
+  {
+    id: "golden-backlight",
+    name: "Altın Arka Işık",
+    hint: "Sıcak, davetkar görünüm",
+    geminiPrompt: "Warm backlighting, golden rim light, subsurface glow",
+    direction: "backlighting",
+    temperature: "3200K",
+    bestFor: ["bread", "croissants", "honey glazed"],
+  },
+  {
+    id: "morning-window",
+    name: "Sabah Pencere Işığı",
+    hint: "Taze, enerjik sabah",
+    geminiPrompt: "Bright morning window light, clean shadows, fresh atmosphere",
+    direction: "diffused-window",
+    temperature: "5500K",
+    bestFor: ["breakfast items", "fresh pastries", "coffee"],
+  },
+  {
+    id: "rim-highlight",
+    name: "Kenar Vurgulu",
+    hint: "Premium ürün sunumu",
+    geminiPrompt: "Rim lighting with soft fill, luminous edges, professional product shot",
+    direction: "rim-lighting",
+    temperature: "5000K",
+    bestFor: ["glossy items", "chocolates", "decorated cakes"],
+  },
+  {
+    id: "warm-ambient",
+    name: "Sıcak Ortam Işığı",
+    hint: "Ev sıcaklığı, samimi",
+    geminiPrompt: "Warm ambient tungsten light, cozy atmosphere, intimate setting",
+    direction: "diffused-window",
+    temperature: "3000K",
+    bestFor: ["comfort food", "home style", "sharing moments"],
+  },
+];
+
+// El poz seçenekleri - Gemini için optimize edilmiş
+const HAND_POSE_OPTIONS = [
+  {
+    id: "cupping",
+    name: "Kavrama (Cupping)",
+    hint: "Koruyucu, özenli tutma",
+    geminiPrompt: "Elegant feminine hands gently cupping, protective hold, nurturing gesture",
+    skinTone: "warm olive",
+    nailStyle: "natural short nails, subtle nude polish",
+    bestFor: ["warm drinks", "delicate items", "round objects"],
+  },
+  {
+    id: "pinching",
+    name: "Tutma (Pinching)",
+    hint: "Zarif, hassas tutma",
+    geminiPrompt: "Delicate pinch grip between thumb and fingers, refined gesture, precise hold",
+    skinTone: "warm olive",
+    nailStyle: "natural manicure",
+    bestFor: ["small pastries", "chocolates", "macarons"],
+  },
+  {
+    id: "cradling",
+    name: "Kucaklama (Cradling)",
+    hint: "Değerli nesneyi taşıma",
+    geminiPrompt: "Hands cradling from below, supportive hold, presenting precious item",
+    skinTone: "warm olive",
+    nailStyle: "clean natural nails",
+    bestFor: ["plates", "bowls", "larger items"],
+  },
+  {
+    id: "presenting",
+    name: "Sunma (Presenting)",
+    hint: "Açık avuçla gösterme",
+    geminiPrompt: "Open palm presentation, offering gesture, welcoming hands",
+    skinTone: "warm olive",
+    nailStyle: "subtle neutral polish",
+    bestFor: ["flat items", "display shots", "invitation poses"],
+  },
+  {
+    id: "breaking",
+    name: "Kırma (Breaking)",
+    hint: "Doku gösterimi",
+    geminiPrompt: "Hands gently breaking apart, revealing interior texture, discovery moment",
+    skinTone: "warm olive",
+    nailStyle: "natural nails",
+    bestFor: ["bread", "croissants", "filled pastries"],
+  },
+  {
+    id: "dipping",
+    name: "Batırma (Dipping)",
+    hint: "Etkileşim, hareket anı",
+    geminiPrompt: "Hand dipping item into liquid, interaction moment, dynamic action",
+    skinTone: "warm olive",
+    nailStyle: "clean short nails",
+    bestFor: ["biscuits with coffee", "chocolate fondue", "sauces"],
+  },
+];
+
+// Kompozisyon giriş noktaları - Gemini optimized
+const COMPOSITION_ENTRY_POINTS = [
+  {
+    id: "bottom-right",
+    name: "Sağ Alt Köşe",
+    hint: "En doğal giriş noktası",
+    geminiPrompt: "Hand entering frame from bottom-right corner",
+  },
+  {
+    id: "bottom-left",
+    name: "Sol Alt Köşe",
+    hint: "Alternatif giriş noktası",
+    geminiPrompt: "Hand entering frame from bottom-left corner",
+  },
+  {
+    id: "right-side",
+    name: "Sağ Kenar",
+    hint: "Yatay kompozisyon",
+    geminiPrompt: "Hand reaching in from right side of frame",
+  },
+  {
+    id: "top-down",
+    name: "Yukarıdan",
+    hint: "Kuşbakışı görünüm",
+    geminiPrompt: "Overhead view with hands from top",
+  },
 ];
 
 // Ürün tipleri
@@ -68,6 +257,9 @@ const emptyForm = {
   suggestedProducts: [] as string[],
   mood: "",
   lightingPreference: "",
+  lightingPreset: "",
+  handPose: "",
+  compositionEntry: "",
 };
 
 export default function Scenarios() {
@@ -147,6 +339,9 @@ export default function Scenarios() {
       suggestedProducts: scenario.suggestedProducts || [],
       mood: scenario.mood || "",
       lightingPreference: scenario.lightingPreference || "",
+      lightingPreset: scenario.lightingPreset || "",
+      handPose: scenario.handPose || "",
+      compositionEntry: scenario.compositionEntry || "",
     });
     setShowModal(true);
   };
@@ -209,6 +404,9 @@ export default function Scenarios() {
         suggestedProducts: form.suggestedProducts,
         mood: form.mood || undefined,
         lightingPreference: form.lightingPreference || undefined,
+        lightingPreset: form.lightingPreset || undefined,
+        handPose: form.includesHands ? form.handPose || undefined : undefined,
+        compositionEntry: form.includesHands ? form.compositionEntry || undefined : undefined,
       };
 
       if (editingId) {
@@ -359,11 +557,33 @@ export default function Scenarios() {
                   ))}
                 </div>
 
-                {/* Ek bilgiler */}
-                {(scenario.mood || scenario.lightingPreference) && (
-                  <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                    {scenario.mood && <span>Mood: {scenario.mood}</span>}
-                    {scenario.lightingPreference && <span>Işık: {scenario.lightingPreference}</span>}
+                {/* Ek bilgiler - Gemini terminolojisi */}
+                {(scenario.mood || scenario.lightingPreset || scenario.handPose) && (
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                    {scenario.mood && (() => {
+                      const m = MOOD_OPTIONS.find(x => x.id === scenario.mood);
+                      return m && (
+                        <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded">
+                          {m.name} ({m.temperature})
+                        </span>
+                      );
+                    })()}
+                    {scenario.lightingPreset && (() => {
+                      const l = LIGHTING_PRESETS.find(x => x.id === scenario.lightingPreset);
+                      return l && (
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded">
+                          {l.name}
+                        </span>
+                      );
+                    })()}
+                    {scenario.handPose && (() => {
+                      const h = HAND_POSE_OPTIONS.find(x => x.id === scenario.handPose);
+                      return h && (
+                        <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded">
+                          {h.name}
+                        </span>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -456,7 +676,7 @@ export default function Scenarios() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Mood
+                    Mood (Atmosfer)
                   </label>
                   <select
                     value={form.mood}
@@ -465,7 +685,9 @@ export default function Scenarios() {
                   >
                     <option value="">Seçiniz</option>
                     {MOOD_OPTIONS.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name} ({m.hint})</option>
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.temperature}) - {m.hint}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -525,19 +747,106 @@ export default function Scenarios() {
                 </div>
               )}
 
-              {/* Işık Tercihi */}
+              {/* Işık Preset'i - Gemini Terminolojisi */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Işık Tercihi
+                  Işık Preset'i (Gemini)
+                </label>
+                <select
+                  value={form.lightingPreset}
+                  onChange={(e) => setForm({ ...form, lightingPreset: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                >
+                  <option value="">Seçiniz</option>
+                  {LIGHTING_PRESETS.map((lp) => (
+                    <option key={lp.id} value={lp.id}>
+                      {lp.name} - {lp.hint}
+                    </option>
+                  ))}
+                </select>
+                {form.lightingPreset && (
+                  <p className="text-xs text-gray-500 mt-1 font-mono">
+                    {LIGHTING_PRESETS.find(l => l.id === form.lightingPreset)?.geminiPrompt}
+                  </p>
+                )}
+              </div>
+
+              {/* Eski Işık Tercihi (opsiyonel override) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Özel Işık Notu (Opsiyonel)
                 </label>
                 <input
                   type="text"
                   value={form.lightingPreference}
                   onChange={(e) => setForm({ ...form, lightingPreference: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  placeholder="Örn: soft natural, warm golden"
+                  placeholder="Preset'e ek not (opsiyonel)"
                 />
               </div>
+
+              {/* El içeriyorsa - Poz ve Kompozisyon seçenekleri */}
+              {form.includesHands && (
+                <div className="border-t pt-4 mt-4 space-y-4">
+                  <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <span>✋</span>
+                    El Detayları (Gemini Terminolojisi)
+                  </h4>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* El Pozu */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        El Pozu
+                      </label>
+                      <select
+                        value={form.handPose}
+                        onChange={(e) => setForm({ ...form, handPose: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                      >
+                        <option value="">Seçiniz</option>
+                        {HAND_POSE_OPTIONS.map((hp) => (
+                          <option key={hp.id} value={hp.id}>
+                            {hp.name} - {hp.hint}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Kompozisyon Giriş Noktası */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Giriş Noktası
+                      </label>
+                      <select
+                        value={form.compositionEntry}
+                        onChange={(e) => setForm({ ...form, compositionEntry: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                      >
+                        <option value="">Seçiniz</option>
+                        {COMPOSITION_ENTRY_POINTS.map((ce) => (
+                          <option key={ce.id} value={ce.id}>
+                            {ce.name} - {ce.hint}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* El pozu detayları */}
+                  {form.handPose && (
+                    <div className="bg-blue-50 p-3 rounded-lg text-sm">
+                      <p className="font-medium text-blue-800 mb-1">Gemini El Prompt:</p>
+                      <p className="text-blue-700 font-mono text-xs">
+                        {HAND_POSE_OPTIONS.find(h => h.id === form.handPose)?.geminiPrompt}
+                      </p>
+                      <p className="text-blue-600 mt-1 text-xs">
+                        En iyi: {HAND_POSE_OPTIONS.find(h => h.id === form.handPose)?.bestFor.join(", ")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Önerilen Ürünler */}
               <div>
@@ -611,6 +920,83 @@ export default function Scenarios() {
                   ))}
                 </div>
               </div>
+
+              {/* Gemini Prompt Önizleme */}
+              {(form.mood || form.lightingPreset || form.handPose) && (
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
+                    <span>🎨</span>
+                    Gemini Prompt Önizleme
+                  </h4>
+                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg text-sm space-y-3">
+                    {/* Mood/Atmosfer */}
+                    {form.mood && (() => {
+                      const selectedMood = MOOD_OPTIONS.find(m => m.id === form.mood);
+                      return selectedMood && (
+                        <div>
+                          <span className="font-medium text-purple-700">Atmosfer: </span>
+                          <span className="text-gray-700">{selectedMood.geminiAtmosphere}</span>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Işık: {selectedMood.lighting} | Temp: {selectedMood.temperature} |
+                            Renkler: {selectedMood.colorPalette.join(", ")}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Işık */}
+                    {form.lightingPreset && (() => {
+                      const selectedLight = LIGHTING_PRESETS.find(l => l.id === form.lightingPreset);
+                      return selectedLight && (
+                        <div>
+                          <span className="font-medium text-blue-700">Işık: </span>
+                          <span className="text-gray-700">{selectedLight.geminiPrompt}</span>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Yön: {selectedLight.direction} | Temp: {selectedLight.temperature}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* El */}
+                    {form.includesHands && form.handPose && (() => {
+                      const selectedPose = HAND_POSE_OPTIONS.find(h => h.id === form.handPose);
+                      const selectedEntry = COMPOSITION_ENTRY_POINTS.find(c => c.id === form.compositionEntry);
+                      return selectedPose && (
+                        <div>
+                          <span className="font-medium text-green-700">El: </span>
+                          <span className="text-gray-700">{selectedPose.geminiPrompt}</span>
+                          {selectedEntry && (
+                            <span className="text-gray-600">, {selectedEntry.geminiPrompt}</span>
+                          )}
+                          <div className="text-xs text-gray-500 mt-1">
+                            Cilt: {selectedPose.skinTone} | Tırnak: {selectedPose.nailStyle}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Örnek prompt çıktısı */}
+                    <div className="border-t border-purple-200 pt-3 mt-3">
+                      <p className="text-xs font-mono text-gray-600 leading-relaxed">
+                        <span className="text-purple-600">[Ürün]</span>
+                        {form.mood && (() => {
+                          const m = MOOD_OPTIONS.find(x => x.id === form.mood);
+                          return m ? `, ${m.geminiAtmosphere}` : "";
+                        })()}
+                        {form.lightingPreset && (() => {
+                          const l = LIGHTING_PRESETS.find(x => x.id === form.lightingPreset);
+                          return l ? `, ${l.geminiPrompt}` : "";
+                        })()}
+                        {form.includesHands && form.handPose && (() => {
+                          const h = HAND_POSE_OPTIONS.find(x => x.id === form.handPose);
+                          return h ? `, ${h.geminiPrompt}` : "";
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t flex justify-end gap-3 sticky bottom-0 bg-white">
@@ -705,15 +1091,46 @@ export default function Scenarios() {
                 </div>
               </div>
 
-              {detailScenario.mood && (
-                <div>
-                  <span className="font-medium">Mood:</span> {detailScenario.mood}
+              {/* Gemini Ayarları */}
+              {(detailScenario.mood || detailScenario.lightingPreset || detailScenario.handPose) && (
+                <div className="border-t pt-3 space-y-2">
+                  <span className="font-medium text-purple-700">Gemini Ayarları:</span>
+
+                  {detailScenario.mood && (() => {
+                    const m = MOOD_OPTIONS.find(x => x.id === detailScenario.mood);
+                    return m && (
+                      <div className="bg-purple-50 p-2 rounded text-xs">
+                        <span className="font-medium">Mood:</span> {m.name} ({m.temperature})
+                        <p className="text-gray-600 mt-1">{m.geminiAtmosphere}</p>
+                      </div>
+                    );
+                  })()}
+
+                  {detailScenario.lightingPreset && (() => {
+                    const l = LIGHTING_PRESETS.find(x => x.id === detailScenario.lightingPreset);
+                    return l && (
+                      <div className="bg-amber-50 p-2 rounded text-xs">
+                        <span className="font-medium">Işık:</span> {l.name} ({l.temperature})
+                        <p className="text-gray-600 mt-1">{l.geminiPrompt}</p>
+                      </div>
+                    );
+                  })()}
+
+                  {detailScenario.handPose && (() => {
+                    const h = HAND_POSE_OPTIONS.find(x => x.id === detailScenario.handPose);
+                    return h && (
+                      <div className="bg-green-50 p-2 rounded text-xs">
+                        <span className="font-medium">El Pozu:</span> {h.name}
+                        <p className="text-gray-600 mt-1">{h.geminiPrompt}</p>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
               {detailScenario.lightingPreference && (
                 <div>
-                  <span className="font-medium">Işık:</span> {detailScenario.lightingPreference}
+                  <span className="font-medium">Özel Işık Notu:</span> {detailScenario.lightingPreference}
                 </div>
               )}
 
