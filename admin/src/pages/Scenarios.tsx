@@ -23,20 +23,20 @@ interface Scenario {
   updatedAt?: number;
 }
 
-// Mood seçenekleri
+// Mood seçenekleri - senaryo atmosferini tanımlar
 const MOOD_OPTIONS = [
-  { id: "elegant", name: "Şık" },
-  { id: "social", name: "Sosyal" },
-  { id: "cozy", name: "Samimi" },
-  { id: "fresh", name: "Taze" },
-  { id: "luxurious", name: "Lüks" },
-  { id: "authentic", name: "Otantik" },
-  { id: "practical", name: "Pratik" },
-  { id: "festive", name: "Şenlikli" },
-  { id: "exciting", name: "Heyecanlı" },
-  { id: "inviting", name: "Davetkar" },
-  { id: "casual", name: "Gündelik" },
-  { id: "professional", name: "Profesyonel" },
+  { id: "elegant", name: "Şık", hint: "Sofistike, premium sunum" },
+  { id: "social", name: "Sosyal", hint: "Paylaşım, birliktelik anları" },
+  { id: "cozy", name: "Samimi", hint: "Ev sıcaklığı, rahat ortam" },
+  { id: "fresh", name: "Taze", hint: "Canlı, enerjik başlangıçlar" },
+  { id: "luxurious", name: "Lüks", hint: "Premium, özel anlar" },
+  { id: "authentic", name: "Otantik", hint: "Doğal, samimi, gerçek" },
+  { id: "practical", name: "Pratik", hint: "Günlük kullanım, fonksiyonel" },
+  { id: "festive", name: "Şenlikli", hint: "Kutlama, özel gün" },
+  { id: "exciting", name: "Heyecanlı", hint: "Dinamik, dikkat çekici" },
+  { id: "inviting", name: "Davetkar", hint: "Sıcak karşılama, misafirperver" },
+  { id: "casual", name: "Gündelik", hint: "Rahat, informal" },
+  { id: "professional", name: "Profesyonel", hint: "Kurumsal, iş odaklı" },
 ];
 
 // Ürün tipleri
@@ -465,7 +465,7 @@ export default function Scenarios() {
                   >
                     <option value="">Seçiniz</option>
                     {MOOD_OPTIONS.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
+                      <option key={m.id} value={m.id}>{m.name} ({m.hint})</option>
                     ))}
                   </select>
                 </div>

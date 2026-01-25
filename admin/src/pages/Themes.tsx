@@ -48,14 +48,14 @@ const ALL_SCENARIOS = [
   { id: "detay-cekimi", name: "Detay Çekimi", includesHands: false, isInterior: true },
 ];
 
-// Mood seçenekleri
+// Mood seçenekleri - her birinin kullanım amacı açıklanmış
 const MOOD_OPTIONS = [
-  { id: "energetic", name: "Enerjik" },
-  { id: "social", name: "Sosyal" },
-  { id: "relaxed", name: "Rahat" },
-  { id: "warm", name: "Sıcak" },
-  { id: "cozy", name: "Samimi" },
-  { id: "balanced", name: "Dengeli" },
+  { id: "energetic", name: "Enerjik", hint: "Sabah temaları için ideal" },
+  { id: "social", name: "Sosyal", hint: "Brunch ve paylaşım anları" },
+  { id: "relaxed", name: "Rahat", hint: "Öğleden sonra molası" },
+  { id: "warm", name: "Sıcak", hint: "Altın saat, romantik anlar" },
+  { id: "cozy", name: "Samimi", hint: "Gece atmosferi, ev sıcaklığı" },
+  { id: "balanced", name: "Dengeli", hint: "Nötr, her zaman uygun" },
 ];
 
 // Boş tema formu
@@ -591,7 +591,7 @@ export default function Themes() {
                   >
                     {MOOD_OPTIONS.map((mood) => (
                       <option key={mood.id} value={mood.id}>
-                        {mood.name}
+                        {mood.name} ({mood.hint})
                       </option>
                     ))}
                   </select>

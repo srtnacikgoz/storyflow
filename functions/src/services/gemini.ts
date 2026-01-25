@@ -4,7 +4,6 @@
  */
 
 import { AILogService } from "./aiLogService";
-import { getSystemSettings } from "./configService";
 
 // Lazy load imports - Cloud Functions startup timeout'unu önler
 // @google/generative-ai ve sharp modülleri ilk kullanımda yüklenir
@@ -202,92 +201,49 @@ export class GeminiService {
       safetySettings,
     });
 
-    // Faithfulness bilgisini prompt'a ekle (API'de parametre yok, prompt ile kontrol)
-    // Default değer config'den okunur (runtime'da değiştirilebilir)
-    const systemSettings = await getSystemSettings();
-    const faithfulness = options.faithfulness ?? systemSettings.geminiDefaultFaithfulness;
-    let faithfulnessInstruction = "";
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RADİKAL SADELEŞTİRME v2.0 - Gemini Prompt Insights'a göre
+    // Hedef: 75-150 kelime, [1][2][3] tagging, --no format
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    if (faithfulness >= 0.8) {
-      faithfulnessInstruction = `
-CRITICAL INSTRUCTION - HIGH FIDELITY MODE (${Math.round(faithfulness * 100)}%):
-- Keep the EXACT product from the input image - do NOT replace, reimagine, or modify the product itself
-- Only enhance: lighting, color grading, background, and overall atmosphere
-- The product must remain 100% recognizable and identical to the original
-- Do NOT add, remove, or change any product features`;
-    } else if (faithfulness >= 0.6) {
-      faithfulnessInstruction = `
-IMPORTANT - BALANCED MODE (${Math.round(faithfulness * 100)}%):
-- Maintain the core appearance and identity of the product
-- You may enhance the presentation, styling, and environment
-- The product should remain clearly recognizable
-- Subtle artistic improvements are allowed`;
-    } else {
-      faithfulnessInstruction = `
-CREATIVE MODE (${Math.round(faithfulness * 100)}%):
-- You have more freedom to interpret and enhance the image
-- Maintain the general concept and product type
-- Creative styling and atmospheric changes are encouraged`;
-    }
-
-    // IMG2IMG EDIT PREFIX - Gemini'a bu görseli düzenlemesini açıkça söyle
-    let editPrefix = `EDIT THIS IMAGE. Multiple reference images are attached.
-The FIRST image is the MAIN PRODUCT (pastry/croissant/cake) - this MUST appear in the output exactly as shown.
+    // Reference tagging ile basit edit prefix
+    let editPrefix = `Compose a scene using attached reference images:
+[1] MAIN PRODUCT (first image) - use exactly as shown
 `;
 
-    // Add reference image instructions if they exist
+    // Add reference image instructions with [N] tagging
     if (options.referenceImages && options.referenceImages.length > 0) {
-      editPrefix += `The following additional reference images are also attached and should be used in the scene:
-`;
+      let refIndex = 2;
       for (const ref of options.referenceImages) {
-        if (ref.description) {
-          // Detaylı açıklama varsa kullan
-          editPrefix += `- ${ref.label.toUpperCase()}: ${ref.description}
+        const desc = ref.description ? `: ${ref.description}` : "";
+        editPrefix += `[${refIndex}] ${ref.label.toUpperCase()}${desc}
 `;
-        } else {
-          // Fallback: basit açıklama
-          editPrefix += `- A ${ref.label.toUpperCase()} image - use this exact ${ref.label} in the scene
-`;
-        }
+        refIndex++;
       }
     }
 
+    // Core constraint - tek seferde, net
     editPrefix += `
-Your task is to COMPOSE a scene using ALL the attached reference images.
-CRITICAL INSTRUCTION: You MUST use the provided reference images EXACTLY as they are.
-1. The PRODUCT from the first image MUST appear exactly as shown.
-2. If a PLATE reference is provided, you MUST use that EXACT plate. Do NOT generate a different plate.
-3. If a TABLE reference is provided, you MUST use that EXACT table surface/texture. Do NOT change the table color or material.
-4. If a CUP reference is provided, you MUST use that EXACT cup.
+Constraint: Maintain 100% material and color fidelity for all references. Use only provided assets.
 
-This is a COMPOSITION task. Do NOT generate new props if references are provided. Use the provided assets to build the scene.
-STRICTLY ADHERE TO THE COLORS AND MATERIALS OF THE REFERENCE IMAGES.
-For example, if the table reference is gray, the table in the output MUST be gray. If the plate has a gold rim, the output plate MUST have a gold rim.
-
-SCENE DIRECTION:
+SCENE:
 `;
 
-    // Full prompt oluştur - edit prefix ilk sırada
-    let fullPrompt = editPrefix + options.prompt + faithfulnessInstruction;
+    // Full prompt oluştur - editPrefix + Claude's optimized prompt
+    let fullPrompt = editPrefix + options.prompt;
 
-    // Text overlay varsa prompt'a ekle
+    // Text overlay (sadeleştirilmiş)
     if (options.textOverlay) {
-      fullPrompt += `\n\nSubtly render the text "${options.textOverlay}" in a modern, elegant serif font in the lower third of the image, with subtle shadow for readability.`;
+      fullPrompt += `\n\nText: "${options.textOverlay}" - elegant serif font, lower third, subtle shadow.`;
     }
 
-    // Negative prompt ekle
+    // Negative prompt - --no formatı (en etkili yöntem)
     if (options.negativePrompt) {
-      fullPrompt += `\n\nAVOID: ${options.negativePrompt}`;
+      fullPrompt += `\n\n--no ${options.negativePrompt}`;
     }
 
-    // MUTLAK KISITLAMA - Her zaman eklenir (3. koruma katmanı)
-    fullPrompt += `\n\nABSOLUTE RESTRICTION: Use ONLY objects from the uploaded reference images. Do NOT add ANY prop, furniture, decoration, or lighting fixture (lamp, lampshade, vase, candle, flowers, picture frame, clock, etc.) that is not in the reference. The scene must be MINIMALIST - only the product and explicitly provided assets. Nothing else.`;
-
-    // Textile/Napkin halüsinasyon önleme (semantic negative prompting)
-    fullPrompt += `\n\nTEXTILE CONSTRAINT: Do NOT add colorful, patterned, or decorative textiles (towels, napkins, tablecloths, fabric) unless explicitly provided in reference images. If a napkin is needed and not in references, use ONLY plain white or cream colored, simple paper napkin. NO colorful patterns, NO stripes, NO decorative prints.`;
-
-    // Metin yanıtını engellemek için kesin talimat
-    fullPrompt += "\n\nCRITICAL: Edit the image and return ONLY the edited image. Do not provide any text. The product in your output MUST be the same product from the input image.";
+    // Basit final instruction
+    fullPrompt += "\n\nReturn ONLY the edited image.";
 
     const startTime = Date.now();
     const inputImageCount = 1 + (options.referenceImages?.length || 0);

@@ -340,7 +340,8 @@ export class Orchestrator {
       }
 
       const timeOfDay = this.getTimeOfDay();
-      const mood = this.getMoodFromTime();
+      // Mood: Önce theme'den al, yoksa zaman bazlı fallback
+      const mood = themeData?.mood || this.getMoodFromTime();
 
       // Aksesuar kontrolü - tema izin vermiyorsa accessories'i gönderme
       const accessoryAllowed = themeData?.accessoryAllowed === true;
@@ -534,7 +535,8 @@ export class Orchestrator {
           result.scenarioSelection.scenarioId,
           result.scenarioSelection.compositionId,
           result.scenarioSelection.handStyle,
-          result.assetSelection.cup
+          result.assetSelection.cup,
+          mood // Tema'dan gelen mood bilgisi
         );
 
         const promptResponse = await this.claude.optimizePrompt(
@@ -602,17 +604,16 @@ export class Orchestrator {
             console.log(`[Orchestrator] Loading cup: ${result.assetSelection.cup.filename}`);
             const cupBase64 = await this.loadImageAsBase64(result.assetSelection.cup.storageUrl);
 
-            // Cup için detaylı açıklama oluştur
-            const cupColors = result.assetSelection.cup.visualProperties?.dominantColors?.join(", ") || "neutral tones";
+            // Cup için kısa açıklama (RADİKAL SADELEŞTİRME v2.0)
+            const cupColors = result.assetSelection.cup.visualProperties?.dominantColors?.join(", ") || "";
             const cupMaterial = result.assetSelection.cup.visualProperties?.material || "ceramic";
-            const cupStyle = result.assetSelection.cup.visualProperties?.style || "modern";
-            const cupDescription = `This is the EXACT cup to use - a ${cupMaterial} ${cupStyle} cup/mug with ${cupColors} colors. DO NOT substitute with paper cup, disposable cup, or any different style. The cup in your output MUST match this reference EXACTLY in color, material, and shape.`;
+            const cupDescription = `${cupColors} ${cupMaterial}`.trim();
 
             referenceImages.push({
               base64: cupBase64,
               mimeType: "image/png",
               label: "cup",
-              description: cupDescription
+              description: cupDescription || undefined
             });
           }
 
@@ -621,15 +622,15 @@ export class Orchestrator {
             console.log(`[Orchestrator] Loading napkin: ${result.assetSelection.napkin.filename}`);
             const napkinBase64 = await this.loadImageAsBase64(result.assetSelection.napkin.storageUrl);
 
-            const napkinColors = result.assetSelection.napkin.visualProperties?.dominantColors?.join(", ") || "neutral";
+            const napkinColors = result.assetSelection.napkin.visualProperties?.dominantColors?.join(", ") || "";
             const napkinMaterial = result.assetSelection.napkin.visualProperties?.material || "fabric";
-            const napkinDescription = `This is the EXACT napkin to use - a ${napkinMaterial} napkin with ${napkinColors} colors. Use THIS EXACT napkin in the scene, do NOT substitute with a different napkin design.`;
+            const napkinDescription = `${napkinColors} ${napkinMaterial}`.trim();
 
             referenceImages.push({
               base64: napkinBase64,
               mimeType: "image/png",
               label: "napkin",
-              description: napkinDescription
+              description: napkinDescription || undefined
             });
           }
 
@@ -639,8 +640,8 @@ export class Orchestrator {
             const cutleryBase64 = await this.loadImageAsBase64(result.assetSelection.cutlery.storageUrl);
 
             const cutleryMaterial = result.assetSelection.cutlery.visualProperties?.material || "metal";
-            const cutleryStyle = result.assetSelection.cutlery.visualProperties?.style || "modern";
-            const cutleryDescription = `This is the EXACT cutlery set to use - ${cutleryMaterial} ${cutleryStyle} style utensils. Use THIS EXACT cutlery in the scene, do NOT substitute with different utensils.`;
+            const cutleryStyle = result.assetSelection.cutlery.visualProperties?.style || "";
+            const cutleryDescription = `${cutleryMaterial} ${cutleryStyle}`.trim();
 
             referenceImages.push({
               base64: cutleryBase64,
@@ -1007,12 +1008,14 @@ export class Orchestrator {
   /**
    * Senaryo prompt'unu al (Firestore veya sabit)
    * compositionId ve handStyle parametreleri ile detaylı prompt üretir
+   * mood parametresi ile atmosfer bilgisi eklenir
    */
   private async getScenarioPrompt(
     scenarioId: string,
     compositionId?: string,
     handStyle?: string,
-    selectedCup?: Asset
+    selectedCup?: Asset,
+    mood?: string
   ): Promise<string> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
@@ -1026,8 +1029,8 @@ export class Orchestrator {
       return prompt;
     }
 
-    // Fallback: Dinamik prompt oluştur
-    return this.buildDynamicPrompt(scenarioId, compositionId, handStyle, selectedCup);
+    // Fallback: Dinamik prompt oluştur (mood bilgisi ile)
+    return this.buildDynamicPrompt(scenarioId, compositionId, handStyle, selectedCup, mood);
   }
 
   /**
@@ -1193,74 +1196,133 @@ HAND STYLING - SPORTY:
   private getCupReferenceDetails(cup?: Asset): string {
     if (!cup) return "";
 
-    const colors = cup.visualProperties?.dominantColors?.join(", ") || "neutral";
+    // RADİKAL SADELEŞTİRME v2.0 - Kısa ve pozitif
+    const colors = cup.visualProperties?.dominantColors?.join(", ") || "";
     const material = cup.visualProperties?.material || "ceramic";
-    const style = cup.visualProperties?.style || "modern";
 
     return `
-
-CUP REFERENCE - USE EXACTLY THIS CUP:
-- The cup from REFERENCE IMAGE must be used EXACTLY as shown
-- Cup colors: ${colors}
-- Cup material: ${material}
-- Cup style: ${style}
-- Filename reference: ${cup.filename}
-- DO NOT substitute with a different cup style
-- DO NOT use paper/disposable cup unless reference shows one
-- DO NOT change the cup color or material
-- The cup in output MUST match the reference cup precisely`;
+Cup: ${colors} ${material} (from reference)`.trim();
   }
 
   /**
    * Dinamik prompt oluştur (fallback)
+   * mood parametresi ile atmosfer bilgisi eklenir
    */
   private buildDynamicPrompt(
     scenarioId: string,
     compositionId?: string,
     handStyle?: string,
-    selectedCup?: Asset
+    selectedCup?: Asset,
+    mood?: string
   ): string {
-    const basePrompts: Record<string, string> = {
-      "zarif-tutma": `Using uploaded image as reference for the product.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RADİKAL SADELEŞTİRME v2.0 - El senaryosu vs Masada servis otomatik seçimi
+    // handStyle varsa → el senaryosu, yoksa → masada servis
+    // ═══════════════════════════════════════════════════════════════════════════
 
-Lifestyle Instagram story photo of elegant feminine hand holding the product from reference.
+    // Mood bazlı atmosfer ve ışık ayarları (Sade Patisserie mekan sınırları içinde)
+    const moodAtmosphere: Record<string, { lighting: string; atmosphere: string; location: string }> = {
+      energetic: {
+        lighting: "Bright natural morning light, high contrast, vibrant colors",
+        atmosphere: "Fresh, dynamic energy",
+        location: "at Sade Patisserie terrace, sun-lit table",
+      },
+      social: {
+        lighting: "Warm inviting ambient light, soft shadows",
+        atmosphere: "Welcoming café scene, ready to share",
+        location: "at Sade Patisserie wide café table",
+      },
+      relaxed: {
+        lighting: "Soft diffused window light, pastel tones",
+        atmosphere: "Calm, peaceful, minimal",
+        location: "at Sade Patisserie window corner, soft bokeh background",
+      },
+      warm: {
+        lighting: "Golden hour warm light, amber tones, cozy evening glow",
+        atmosphere: "Romantic, intimate warmth",
+        location: "at Sade Patisserie indoor wooden table, sunset light",
+      },
+      cozy: {
+        lighting: "Intimate focused lighting, deep but soft shadows",
+        atmosphere: "Homey, comfortable, close-up feel",
+        location: "at Sade Patisserie cozy corner seating",
+      },
+      balanced: {
+        lighting: "Natural balanced studio-like light, neutral tones",
+        atmosphere: "Clean, professional, modern aesthetic",
+        location: "at Sade Patisserie clean counter area",
+      },
+    };
 
-CRITICAL RULES:
-- Use ONLY the product from the reference image
-- Product must be clearly recognizable from reference
-- Single product, single hand composition
+    const currentMood = moodAtmosphere[mood || "balanced"] || moodAtmosphere.balanced;
+
+    // El içermeyen senaryo (handStyle null/undefined) - masada servis
+    const noHandPrompt = `Using uploaded image as reference for the product.
+
+Professional lifestyle Instagram photo ${currentMood.location}.
+
+ATMOSPHERE: ${currentMood.atmosphere}
+
+COMPOSITION:
+- Product centered on plate
+- One hand may hold/stabilize the plate (not lift)
+- Other hand with utensil taking a bite (if cutlery asset provided)
+- Cup positioned naturally beside
+
+RULES:
+- Use ONLY assets from reference images
+- Product clearly recognizable from reference
+- Single product, natural table setting
+- NO steam, NO smoke
 
 LIGHTING:
-- Soft natural side light from left
-- Warm golden tones
+- ${currentMood.lighting}
+- Shallow depth of field (f/2.0)
+
+9:16 vertical for Instagram Stories. 8K photorealistic.`;
+
+    // El içeren senaryo (handStyle belirtilmiş)
+    const handPrompt = `Using uploaded image as reference for the product.
+
+Lifestyle Instagram photo of elegant feminine hand holding the product ${currentMood.location}.
+
+ATMOSPHERE: ${currentMood.atmosphere}
+
+COMPOSITION:
+- Hand holding product naturally
+- Cup and plate on table as supporting elements
+
+RULES:
+- Use ONLY assets from reference images
+- Product clearly recognizable from reference
+- Single product, single hand
+- NO steam, NO smoke
+
+LIGHTING:
+- ${currentMood.lighting}
 - Gentle highlights on nail surface
 - Soft blurred background (f/2.0)
 
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
+9:16 vertical for Instagram Stories. 8K photorealistic.`;
 
+    // Senaryo bazlı özel prompt'lar (override)
+    const scenarioOverrides: Record<string, string> = {
       "kahve-ani": `Using uploaded image as reference for the pastry.
 
-ABSOLUTE RULES - PRODUCT COUNT:
-- EXACTLY ONE pastry (from reference image)
-- EXACTLY ONE cup (from cup reference image if provided)
-- NO additional food items
-- NO duplicate items of any kind
+RULES:
+- ONE pastry from reference
+- ONE cup from reference (if provided)
+- NO additional items
 
-Lifestyle Instagram story with the pastry from reference as the hero subject.
+Lifestyle Instagram story with pastry as hero subject on table.
 
-TABLE SURFACE:
-- Use the table surface from reference if provided
-- Clean, minimal - no extra props or decorations
+LIGHTING: Soft natural side light, warm tones.
 
-LIGHTING:
-- Soft natural side light from left
-- Warm golden tones on product
-- Product is the PRIMARY subject
-
-9:16 vertical for Instagram Stories. 8K photorealistic.`,
+9:16 vertical. 8K photorealistic.`,
     };
 
-    let prompt = basePrompts[scenarioId] || basePrompts["zarif-tutma"];
+    // Öncelik: 1) Senaryo override, 2) handStyle'a göre seçim
+    let prompt = scenarioOverrides[scenarioId] || (handStyle ? handPrompt : noHandPrompt);
 
     // Kompozisyon detayları ekle
     prompt += this.getCompositionDetails(scenarioId, compositionId);

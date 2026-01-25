@@ -4,6 +4,79 @@ import { storage } from "../config/firebase";
 
 type AssetType = "image" | "audio";
 
+// Görsel optimizasyon ayarları
+const IMAGE_OPTIMIZATION = {
+  maxDimension: 3000, // Uzun kenar max 3000px
+  quality: 0.92, // %92 kalite
+  format: "image/jpeg" as const, // JPEG formatı (en iyi sıkıştırma)
+};
+
+/**
+ * Görseli optimize eder: boyut küçültme + kalite sıkıştırma
+ * Telefon fotoğrafları (18-19MB) → ~2-5MB olur
+ */
+async function optimizeImage(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      reject(new Error("Canvas context oluşturulamadı"));
+      return;
+    }
+
+    img.onload = () => {
+      // Orijinal boyutlar
+      let { width, height } = img;
+      const originalSize = `${width}x${height}`;
+
+      // Uzun kenarı max 3000px yap (aspect ratio korunur)
+      const maxDim = IMAGE_OPTIMIZATION.maxDimension;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      // Yüksek kalite render
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // JPEG olarak export (%92 kalite)
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const originalMB = (file.size / (1024 * 1024)).toFixed(1);
+            const optimizedMB = (blob.size / (1024 * 1024)).toFixed(1);
+            console.log(
+              `[AssetUpload] Görsel optimize edildi: ${originalSize} → ${width}x${height}, ${originalMB}MB → ${optimizedMB}MB`
+            );
+            resolve(blob);
+          } else {
+            reject(new Error("Görsel sıkıştırma başarısız"));
+          }
+        },
+        IMAGE_OPTIMIZATION.format,
+        IMAGE_OPTIMIZATION.quality
+      );
+    };
+
+    img.onerror = () => reject(new Error("Görsel yüklenemedi"));
+
+    // File'ı Image'e yükle
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 interface AssetUploadProps {
   type: AssetType;
   onUploadComplete: (url: string, filename: string) => void;
@@ -22,7 +95,7 @@ const CONFIG: Record<AssetType, {
   image: {
     accept: "image/*",
     mimeTypes: ["image/"],
-    maxSize: 10 * 1024 * 1024, // 10MB
+    maxSize: 50 * 1024 * 1024, // 50MB (optimize edilecek)
     label: "Görsel",
     icon: (
       <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,28 +163,48 @@ export default function AssetUpload({
   const handleFile = useCallback(async (file: File) => {
     if (!validateFile(file)) return;
 
-    // Preview oluştur
+    setUploadedFilename(file.name);
+    setIsUploading(true);
+    setProgress(0);
+
+    // Yüklenecek blob (görsel ise optimize edilir)
+    let uploadBlob: Blob = file;
+    let finalFilename = file.name;
+
+    // Görsel ise optimize et
     if (type === "image") {
-      const reader = new FileReader();
-      reader.onload = (e) => setPreview(e.target?.result as string);
-      reader.readAsDataURL(file);
+      try {
+        // Optimizasyon sırasında progress göster
+        setProgress(5); // "İşleniyor" göster
+        uploadBlob = await optimizeImage(file);
+
+        // Dosya adını .jpg yap (JPEG'e dönüştürüldü)
+        const baseName = file.name.replace(/\.[^.]+$/, "");
+        finalFilename = `${baseName}.jpg`;
+
+        // Preview oluştur (optimize edilmiş blob'dan)
+        const previewUrl = URL.createObjectURL(uploadBlob);
+        setPreview(previewUrl);
+      } catch (error) {
+        console.error("[AssetUpload] Optimizasyon hatası:", error);
+        // Optimizasyon başarısız olursa orijinali kullan
+        uploadBlob = file;
+        const reader = new FileReader();
+        reader.onload = (e) => setPreview(e.target?.result as string);
+        reader.readAsDataURL(file);
+      }
     } else {
       // Audio için dosya adını göster
       setPreview("audio");
     }
 
-    setUploadedFilename(file.name);
-
     // Firebase Storage'a yükle
-    setIsUploading(true);
-    setProgress(0);
-
     const timestamp = Date.now();
-    const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const safeFilename = finalFilename.replace(/[^a-zA-Z0-9.-]/g, "_");
     const storagePath = `${folder}/${type}s/${timestamp}-${safeFilename}`;
     const storageRef = ref(storage, storagePath);
 
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    const uploadTask = uploadBytesResumable(storageRef, uploadBlob);
 
     uploadTask.on(
       "state_changed",

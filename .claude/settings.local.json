@@ -58,7 +58,9 @@
       "Bash(wc:*)",
       "Bash(npm run build:*)",
       "Bash(npx firebase deploy:*)",
-      "WebFetch(domain:developers.googleblog.com)"
+      "WebFetch(domain:developers.googleblog.com)",
+      "Bash(git clone:*)",
+      "WebFetch(domain:app.reve.com)"
     ]
   },
   "hooks": {
