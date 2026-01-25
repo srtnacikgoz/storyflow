@@ -977,25 +977,31 @@ export default function Scenarios() {
                 </div>
               </fieldset>
 
-              {/* Gemini Prompt Önizleme */}
-              {(form.mood || form.lightingPreset || form.handPose) && (
-                <div className="border-t pt-4 mt-4">
-                  <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
-                    <span>🎨</span>
-                    Gemini Prompt Önizleme
-                  </h4>
-                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg text-sm space-y-3">
+              {/* ========== AI PROMPT ÖNİZLEME ========== */}
+              <fieldset className="border border-purple-200 rounded-lg p-4 bg-gradient-to-r from-purple-50 to-blue-50">
+                <legend className="text-sm font-semibold text-purple-700 px-2">🎨 AI&apos;ya Gönderilecek Prompt Önizlemesi</legend>
+
+                {/* Hiçbir şey seçilmemişse */}
+                {!form.mood && !form.lightingPreset && !form.handPose && !form.compositions.length && (
+                  <p className="text-sm text-gray-500 italic">
+                    Yukarıdan seçimler yaptıkça burada AI&apos;ya gönderilecek prompt önizlemesi görünecek.
+                  </p>
+                )}
+
+                {/* Seçimler varsa detaylı göster */}
+                {(form.mood || form.lightingPreset || form.handPose || form.compositions.length > 0) && (
+                  <div className="space-y-3">
                     {/* Mood/Atmosfer */}
                     {form.mood && (() => {
                       const selectedMood = MOOD_OPTIONS.find(m => m.id === form.mood);
-                      return selectedMood && (
-                        <div>
-                          <span className="font-medium text-purple-700">Atmosfer: </span>
-                          <span className="text-gray-700">{selectedMood.geminiAtmosphere}</span>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Işık: {selectedMood.lighting} | Temp: {selectedMood.temperature} |
-                            Renkler: {selectedMood.colorPalette.join(", ")}
-                          </div>
+                      return (
+                        <div className="flex items-start gap-2">
+                          <span className="text-purple-600 font-medium shrink-0">🌈 Atmosfer:</span>
+                          {selectedMood ? (
+                            <span className="text-gray-700">{selectedMood.geminiAtmosphere}</span>
+                          ) : (
+                            <span className="text-orange-600 text-sm">Seçim: {form.mood} (tanımlı değil)</span>
+                          )}
                         </div>
                       );
                     })()}
@@ -1003,13 +1009,14 @@ export default function Scenarios() {
                     {/* Işık */}
                     {form.lightingPreset && (() => {
                       const selectedLight = LIGHTING_PRESETS.find(l => l.id === form.lightingPreset);
-                      return selectedLight && (
-                        <div>
-                          <span className="font-medium text-blue-700">Işık: </span>
-                          <span className="text-gray-700">{selectedLight.geminiPrompt}</span>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Yön: {selectedLight.direction} | Temp: {selectedLight.temperature}
-                          </div>
+                      return (
+                        <div className="flex items-start gap-2">
+                          <span className="text-amber-600 font-medium shrink-0">💡 Işık:</span>
+                          {selectedLight ? (
+                            <span className="text-gray-700">{selectedLight.geminiPrompt}</span>
+                          ) : (
+                            <span className="text-orange-600 text-sm">Seçim: {form.lightingPreset} (tanımlı değil)</span>
+                          )}
                         </div>
                       );
                     })()}
@@ -1018,41 +1025,59 @@ export default function Scenarios() {
                     {form.includesHands && form.handPose && (() => {
                       const selectedPose = HAND_POSE_OPTIONS.find(h => h.id === form.handPose);
                       const selectedEntry = COMPOSITION_ENTRY_POINTS.find(c => c.id === form.compositionEntry);
-                      return selectedPose && (
-                        <div>
-                          <span className="font-medium text-green-700">El: </span>
-                          <span className="text-gray-700">{selectedPose.geminiPrompt}</span>
-                          {selectedEntry && (
-                            <span className="text-gray-600">, {selectedEntry.geminiPrompt}</span>
+                      return (
+                        <div className="flex items-start gap-2">
+                          <span className="text-blue-600 font-medium shrink-0">✋ El:</span>
+                          {selectedPose ? (
+                            <span className="text-gray-700">
+                              {selectedPose.geminiPrompt}
+                              {selectedEntry && <span className="text-gray-500">, {selectedEntry.geminiPrompt}</span>}
+                            </span>
+                          ) : (
+                            <span className="text-orange-600 text-sm">Seçim: {form.handPose} (tanımlı değil)</span>
                           )}
-                          <div className="text-xs text-gray-500 mt-1">
-                            Cilt: {selectedPose.skinTone} | Tırnak: {selectedPose.nailStyle}
-                          </div>
                         </div>
                       );
                     })()}
 
-                    {/* Örnek prompt çıktısı */}
+                    {/* Kompozisyonlar */}
+                    {form.compositions.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-green-600 font-medium shrink-0">📐 Kompozisyon:</span>
+                        <span className="text-gray-700">
+                          {form.compositions.map(c => {
+                            const comp = COMPOSITION_TYPES.find(x => x.id === c.id);
+                            return comp ? comp.name : c.id;
+                          }).join(", ")}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Birleştirilmiş örnek prompt */}
                     <div className="border-t border-purple-200 pt-3 mt-3">
-                      <p className="text-xs font-mono text-gray-600 leading-relaxed">
-                        <span className="text-purple-600">[Ürün]</span>
+                      <p className="text-xs text-gray-500 mb-1">Birleştirilmiş prompt örneği:</p>
+                      <p className="text-xs font-mono text-gray-600 leading-relaxed bg-white p-2 rounded border">
+                        <span className="text-purple-600 font-semibold">[Seçilen Ürün Adı]</span>
                         {form.mood && (() => {
                           const m = MOOD_OPTIONS.find(x => x.id === form.mood);
-                          return m ? `, ${m.geminiAtmosphere}` : "";
+                          return m ? <span className="text-purple-700">, {m.geminiAtmosphere}</span> : null;
                         })()}
                         {form.lightingPreset && (() => {
                           const l = LIGHTING_PRESETS.find(x => x.id === form.lightingPreset);
-                          return l ? `, ${l.geminiPrompt}` : "";
+                          return l ? <span className="text-amber-700">, {l.geminiPrompt}</span> : null;
                         })()}
                         {form.includesHands && form.handPose && (() => {
                           const h = HAND_POSE_OPTIONS.find(x => x.id === form.handPose);
-                          return h ? `, ${h.geminiPrompt}` : "";
+                          return h ? <span className="text-blue-700">, {h.geminiPrompt}</span> : null;
                         })()}
+                        {(!form.mood && !form.lightingPreset && !form.handPose) && (
+                          <span className="text-gray-400"> - henüz detay seçilmedi</span>
+                        )}
                       </p>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </fieldset>
             </div>
 
             <div className="p-6 border-t flex justify-end gap-3 sticky bottom-0 bg-white">
