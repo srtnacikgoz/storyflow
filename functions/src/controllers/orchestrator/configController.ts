@@ -672,3 +672,68 @@ export const seedGeminiTerminology = functions
       }
     });
   });
+
+/**
+ * Gemini preset'lerini getir (Admin panel için)
+ * GET /getGeminiPresets
+ *
+ * Döndürülen veri:
+ * - lightingPresets: Işıklandırma preset'leri
+ * - handPoses: El pozları
+ * - compositions: Kompozisyon şablonları
+ * - moods: Mood tanımları
+ * - productTextures: Ürün doku profilleri
+ * - negativePrompts: Negative prompt setleri
+ */
+export const getGeminiPresets = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const presetsRef = db.collection("global").doc("config").collection("gemini-presets");
+
+        // Tüm preset koleksiyonlarını paralel olarak yükle
+        const [
+          lightingSnap,
+          handPosesSnap,
+          compositionsSnap,
+          moodsSnap,
+          texturesSnap,
+          negativeSnap,
+        ] = await Promise.all([
+          presetsRef.doc("lighting-presets").collection("items").where("isActive", "==", true).get(),
+          presetsRef.doc("hand-poses").collection("items").where("isActive", "==", true).get(),
+          presetsRef.doc("composition-templates").collection("items").where("isActive", "==", true).get(),
+          presetsRef.doc("mood-definitions").collection("items").where("isActive", "==", true).get(),
+          presetsRef.doc("product-textures").collection("items").get(),
+          presetsRef.doc("negative-prompts").collection("items").get(),
+        ]);
+
+        // Sonuçları dönüştür - sortOrder'a göre sırala
+        type PresetDoc = { id: string; sortOrder?: number; [key: string]: unknown };
+        const sortByOrder = (a: PresetDoc, b: PresetDoc) => (a.sortOrder || 0) - (b.sortOrder || 0);
+
+        const lightingPresets: PresetDoc[] = lightingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const handPoses: PresetDoc[] = handPosesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const compositions: PresetDoc[] = compositionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const moods: PresetDoc[] = moodsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const productTextures = texturesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const negativePrompts = negativeSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        response.json({
+          success: true,
+          data: {
+            lightingPresets: lightingPresets.sort(sortByOrder),
+            handPoses: handPoses.sort(sortByOrder),
+            compositions: compositions.sort(sortByOrder),
+            moods: moods.sort(sortByOrder),
+            productTextures,
+            negativePrompts,
+          },
+        });
+      } catch (error) {
+        errorResponse(response, error, "getGeminiPresets");
+      }
+    });
+  });

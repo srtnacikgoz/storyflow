@@ -200,31 +200,77 @@ const HAND_POSE_OPTIONS = [
   },
 ];
 
-// Kompozisyon giriş noktaları - Gemini optimized
+// Kompozisyon giriş noktaları - El senaryoları için
 const COMPOSITION_ENTRY_POINTS = [
   {
     id: "bottom-right",
-    name: "Sağ Alt Köşe",
-    hint: "En doğal giriş noktası",
+    name: "↘️ Sağ Alt Köşe",
+    hint: "En doğal giriş noktası - çoğu insan sağ elini kullanır",
     geminiPrompt: "Hand entering frame from bottom-right corner",
   },
   {
     id: "bottom-left",
-    name: "Sol Alt Köşe",
-    hint: "Alternatif giriş noktası",
+    name: "↙️ Sol Alt Köşe",
+    hint: "Sol el kullanımı veya farklılık için",
     geminiPrompt: "Hand entering frame from bottom-left corner",
   },
   {
     id: "right-side",
-    name: "Sağ Kenar",
-    hint: "Yatay kompozisyon",
+    name: "➡️ Sağ Kenar",
+    hint: "Yatay çekimler için, el yandan girer",
     geminiPrompt: "Hand reaching in from right side of frame",
   },
   {
     id: "top-down",
-    name: "Yukarıdan",
-    hint: "Kuşbakışı görünüm",
+    name: "⬇️ Yukarıdan",
+    hint: "Kuşbakışı flat-lay çekimler için",
     geminiPrompt: "Overhead view with hands from top",
+  },
+];
+
+// Fotoğraf kompozisyon türleri - Kullanıcı dostu seçenekler
+const COMPOSITION_TYPES = [
+  {
+    id: "hero-center",
+    name: "Ürün Odaklı (Merkez)",
+    description: "Ürün tam ortada, dikkat çekici",
+    icon: "🎯",
+    bestFor: "Yeni ürün tanıtımı, öne çıkarma",
+  },
+  {
+    id: "lifestyle-hand",
+    name: "Yaşam Tarzı (El ile)",
+    description: "El ürünü tutuyor, doğal görünüm",
+    icon: "✋",
+    bestFor: "Sosyal medya, samimi paylaşımlar",
+  },
+  {
+    id: "flat-lay",
+    name: "Düz Yüzey (Kuşbakışı)",
+    description: "Yukarıdan çekim, ürün ve aksesuarlar",
+    icon: "📐",
+    bestFor: "Instagram kareleri, çoklu ürün",
+  },
+  {
+    id: "close-up-detail",
+    name: "Yakın Çekim (Detay)",
+    description: "Ürünün dokusuna odaklanma",
+    icon: "🔍",
+    bestFor: "Kalite vurgulama, doku gösterme",
+  },
+  {
+    id: "ambient-scene",
+    name: "Ortam Sahnesi",
+    description: "Ürün bir sahnenin parçası",
+    icon: "☕",
+    bestFor: "Hikaye anlatımı, atmosfer",
+  },
+  {
+    id: "minimal-clean",
+    name: "Minimal / Sade",
+    description: "Temiz arka plan, sadece ürün",
+    icon: "⬜",
+    bestFor: "Profesyonel katalog, e-ticaret",
   },
 ];
 
@@ -251,7 +297,7 @@ const emptyForm = {
   name: "",
   description: "",
   includesHands: false,
-  compositions: [{ id: "", description: "" }],
+  compositions: [] as { id: string; description: string }[],
   isInterior: false,
   interiorType: "",
   suggestedProducts: [] as string[],
@@ -331,9 +377,7 @@ export default function Scenarios() {
       name: scenario.name,
       description: scenario.description,
       includesHands: scenario.includesHands,
-      compositions: scenario.compositions.length > 0
-        ? scenario.compositions
-        : [{ id: "", description: "" }],
+      compositions: scenario.compositions || [],
       isInterior: scenario.isInterior || false,
       interiorType: scenario.interiorType || "",
       suggestedProducts: scenario.suggestedProducts || [],
@@ -344,35 +388,6 @@ export default function Scenarios() {
       compositionEntry: scenario.compositionEntry || "",
     });
     setShowModal(true);
-  };
-
-  // Kompozisyon ekle
-  const addComposition = () => {
-    setForm({
-      ...form,
-      compositions: [...form.compositions, { id: "", description: "" }],
-    });
-  };
-
-  // Kompozisyon sil
-  const removeComposition = (index: number) => {
-    if (form.compositions.length > 1) {
-      setForm({
-        ...form,
-        compositions: form.compositions.filter((_, i) => i !== index),
-      });
-    }
-  };
-
-  // Kompozisyon güncelle
-  const updateComposition = (index: number, field: "id" | "description", value: string) => {
-    const newComps = [...form.compositions];
-    newComps[index] = { ...newComps[index], [field]: value };
-    // ID'yi description'dan otomatik oluştur
-    if (field === "description" && !newComps[index].id) {
-      newComps[index].id = value.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    }
-    setForm({ ...form, compositions: newComps });
   };
 
   // Kaydet
@@ -386,8 +401,8 @@ export default function Scenarios() {
       alert("Açıklama zorunludur");
       return;
     }
-    if (form.compositions.every((c) => !c.id.trim())) {
-      alert("En az bir kompozisyon gereklidir");
+    if (form.compositions.length === 0) {
+      alert("En az bir kompozisyon türü seçmelisiniz");
       return;
     }
 
@@ -398,7 +413,7 @@ export default function Scenarios() {
         name: form.name.trim(),
         description: form.description.trim(),
         includesHands: form.includesHands,
-        compositions: form.compositions.filter((c) => c.id.trim()),
+        compositions: form.compositions,
         isInterior: form.isInterior,
         interiorType: form.isInterior ? form.interiorType : undefined,
         suggestedProducts: form.suggestedProducts,
@@ -659,267 +674,308 @@ export default function Scenarios() {
               </h2>
             </div>
 
-            <div className="p-6 space-y-4">
-              {/* Temel Bilgiler */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Senaryo Adı *
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                    placeholder="Örn: Zarif Tutma"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Mood (Atmosfer)
-                  </label>
-                  <select
-                    value={form.mood}
-                    onChange={(e) => setForm({ ...form, mood: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  >
-                    <option value="">Seçiniz</option>
-                    {MOOD_OPTIONS.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.temperature}) - {m.hint}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+            <div className="p-6 space-y-5">
+              {/* ========== TEMEL BİLGİLER ========== */}
+              <fieldset className="border border-gray-200 rounded-lg p-4">
+                <legend className="text-sm font-semibold text-gray-700 px-2">📝 Temel Bilgiler</legend>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Açıklama *
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  rows={2}
-                  placeholder="Senaryo açıklaması..."
-                />
-              </div>
-
-              {/* Özellikler */}
-              <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.includesHands}
-                    onChange={(e) => setForm({ ...form, includesHands: e.target.checked })}
-                    className="w-4 h-4 text-amber-600 rounded"
-                  />
-                  <span className="text-sm">El içeriyor</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.isInterior}
-                    onChange={(e) => setForm({ ...form, isInterior: e.target.checked })}
-                    className="w-4 h-4 text-amber-600 rounded"
-                  />
-                  <span className="text-sm">Interior (AI atlanır)</span>
-                </label>
-              </div>
-
-              {/* Interior ise tip seç */}
-              {form.isInterior && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Interior Tipi
-                  </label>
-                  <select
-                    value={form.interiorType}
-                    onChange={(e) => setForm({ ...form, interiorType: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  >
-                    <option value="">Seçiniz</option>
-                    {INTERIOR_TYPES.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Işık Preset'i - Gemini Terminolojisi */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Işık Preset'i (Gemini)
-                </label>
-                <select
-                  value={form.lightingPreset}
-                  onChange={(e) => setForm({ ...form, lightingPreset: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                >
-                  <option value="">Seçiniz</option>
-                  {LIGHTING_PRESETS.map((lp) => (
-                    <option key={lp.id} value={lp.id}>
-                      {lp.name} - {lp.hint}
-                    </option>
-                  ))}
-                </select>
-                {form.lightingPreset && (
-                  <p className="text-xs text-gray-500 mt-1 font-mono">
-                    {LIGHTING_PRESETS.find(l => l.id === form.lightingPreset)?.geminiPrompt}
-                  </p>
-                )}
-              </div>
-
-              {/* Eski Işık Tercihi (opsiyonel override) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Özel Işık Notu (Opsiyonel)
-                </label>
-                <input
-                  type="text"
-                  value={form.lightingPreference}
-                  onChange={(e) => setForm({ ...form, lightingPreference: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  placeholder="Preset'e ek not (opsiyonel)"
-                />
-              </div>
-
-              {/* El içeriyorsa - Poz ve Kompozisyon seçenekleri */}
-              {form.includesHands && (
-                <div className="border-t pt-4 mt-4 space-y-4">
-                  <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <span>✋</span>
-                    El Detayları (Gemini Terminolojisi)
-                  </h4>
-
+                <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    {/* El Pozu */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        El Pozu
+                        Senaryo Adı *
                       </label>
-                      <select
-                        value={form.handPose}
-                        onChange={(e) => setForm({ ...form, handPose: e.target.value })}
+                      <input
+                        type="text"
+                        value={form.name}
+                        onChange={(e) => setForm({ ...form, name: e.target.value })}
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                      >
-                        <option value="">Seçiniz</option>
-                        {HAND_POSE_OPTIONS.map((hp) => (
-                          <option key={hp.id} value={hp.id}>
-                            {hp.name} - {hp.hint}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="Örn: Sabah Kahve Keyfi"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Kısa ve akılda kalıcı bir isim verin</p>
                     </div>
-
-                    {/* Kompozisyon Giriş Noktası */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Giriş Noktası
+                        Atmosfer / Ruh Hali
                       </label>
                       <select
-                        value={form.compositionEntry}
-                        onChange={(e) => setForm({ ...form, compositionEntry: e.target.value })}
+                        value={form.mood}
+                        onChange={(e) => setForm({ ...form, mood: e.target.value })}
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                       >
-                        <option value="">Seçiniz</option>
-                        {COMPOSITION_ENTRY_POINTS.map((ce) => (
-                          <option key={ce.id} value={ce.id}>
-                            {ce.name} - {ce.hint}
+                        <option value="">-- Atmosfer seçin --</option>
+                        {MOOD_OPTIONS.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} - {m.hint}
                           </option>
                         ))}
                       </select>
+                      <p className="text-xs text-gray-500 mt-1">Fotoğrafın genel havası nasıl olsun?</p>
                     </div>
                   </div>
 
-                  {/* El pozu detayları */}
-                  {form.handPose && (
-                    <div className="bg-blue-50 p-3 rounded-lg text-sm">
-                      <p className="font-medium text-blue-800 mb-1">Gemini El Prompt:</p>
-                      <p className="text-blue-700 font-mono text-xs">
-                        {HAND_POSE_OPTIONS.find(h => h.id === form.handPose)?.geminiPrompt}
-                      </p>
-                      <p className="text-blue-600 mt-1 text-xs">
-                        En iyi: {HAND_POSE_OPTIONS.find(h => h.id === form.handPose)?.bestFor.join(", ")}
-                      </p>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Açıklama *
+                    </label>
+                    <textarea
+                      value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                      rows={2}
+                      placeholder="Örn: Kahve fincanını zarif bir şekilde tutan eller, sıcak sabah ışığında"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Bu senaryo nasıl bir görsel oluşturacak? Kısaca anlatın.</p>
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* ========== SENARYO TİPİ ========== */}
+              <fieldset className="border border-gray-200 rounded-lg p-4">
+                <legend className="text-sm font-semibold text-gray-700 px-2">🎬 Senaryo Tipi</legend>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-amber-50 transition">
+                      <input
+                        type="checkbox"
+                        checked={form.includesHands}
+                        onChange={(e) => setForm({ ...form, includesHands: e.target.checked })}
+                        className="w-5 h-5 text-amber-600 rounded mt-0.5"
+                      />
+                      <div>
+                        <span className="text-sm font-medium">✋ El İçeren Senaryo</span>
+                        <p className="text-xs text-gray-500 mt-0.5">Fotoğrafta insan eli görünecek (ürünü tutan, kıran, sunan)</p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-purple-50 transition">
+                      <input
+                        type="checkbox"
+                        checked={form.isInterior}
+                        onChange={(e) => setForm({ ...form, isInterior: e.target.checked })}
+                        className="w-5 h-5 text-purple-600 rounded mt-0.5"
+                      />
+                      <div>
+                        <span className="text-sm font-medium">🏠 Mekan Fotoğrafı</span>
+                        <p className="text-xs text-gray-500 mt-0.5">Dükkan içi, vitrin, dekorasyon (AI üretim atlanır)</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Interior ise tip seç */}
+                  {form.isInterior && (
+                    <div className="bg-purple-50 p-3 rounded-lg">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Mekan Türü
+                      </label>
+                      <select
+                        value={form.interiorType}
+                        onChange={(e) => setForm({ ...form, interiorType: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                      >
+                        <option value="">-- Mekan türü seçin --</option>
+                        {INTERIOR_TYPES.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
                     </div>
                   )}
                 </div>
+              </fieldset>
+
+              {/* ========== IŞIKLANDIRMA ========== */}
+              <fieldset className="border border-gray-200 rounded-lg p-4">
+                <legend className="text-sm font-semibold text-gray-700 px-2">💡 Işıklandırma</legend>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Işık Stili
+                    </label>
+                    <select
+                      value={form.lightingPreset}
+                      onChange={(e) => setForm({ ...form, lightingPreset: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    >
+                      <option value="">-- Işık stili seçin --</option>
+                      {LIGHTING_PRESETS.map((lp) => (
+                        <option key={lp.id} value={lp.id}>
+                          {lp.name} - {lp.hint}
+                        </option>
+                      ))}
+                    </select>
+                    {form.lightingPreset && (
+                      <div className="mt-2 p-2 bg-amber-50 rounded text-xs">
+                        <span className="font-medium">AI&apos;ya gidecek:</span>{" "}
+                        <span className="text-gray-600">{LIGHTING_PRESETS.find(l => l.id === form.lightingPreset)?.geminiPrompt}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ek Işık Notu <span className="text-gray-400 font-normal">(isteğe bağlı)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={form.lightingPreference}
+                      onChange={(e) => setForm({ ...form, lightingPreference: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                      placeholder="Örn: Pencereden gelen doğal ışık, yumuşak gölgeler"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Özel bir ışık isteğiniz varsa buraya yazın</p>
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* ========== EL DETAYLARI (sadece el içeren senaryolar) ========== */}
+              {form.includesHands && (
+                <fieldset className="border border-blue-200 rounded-lg p-4 bg-blue-50/30">
+                  <legend className="text-sm font-semibold text-blue-700 px-2">✋ El Detayları</legend>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          El Nasıl Tutsun?
+                        </label>
+                        <select
+                          value={form.handPose}
+                          onChange={(e) => setForm({ ...form, handPose: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        >
+                          <option value="">-- El pozu seçin --</option>
+                          {HAND_POSE_OPTIONS.map((hp) => (
+                            <option key={hp.id} value={hp.id}>
+                              {hp.name} - {hp.hint}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          El Nereden Girsin?
+                        </label>
+                        <select
+                          value={form.compositionEntry}
+                          onChange={(e) => setForm({ ...form, compositionEntry: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        >
+                          <option value="">-- Giriş noktası seçin --</option>
+                          {COMPOSITION_ENTRY_POINTS.map((ce) => (
+                            <option key={ce.id} value={ce.id}>
+                              {ce.name} - {ce.hint}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {form.handPose && (
+                      <div className="bg-white p-3 rounded-lg border border-blue-200 text-sm">
+                        <p className="font-medium text-blue-800 mb-1">AI&apos;ya gidecek el tarifi:</p>
+                        <p className="text-blue-700 text-xs">
+                          {HAND_POSE_OPTIONS.find(h => h.id === form.handPose)?.geminiPrompt}
+                        </p>
+                        <p className="text-blue-600 mt-2 text-xs">
+                          <span className="font-medium">En uygun ürünler:</span>{" "}
+                          {HAND_POSE_OPTIONS.find(h => h.id === form.handPose)?.bestFor.join(", ")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </fieldset>
               )}
 
-              {/* Önerilen Ürünler */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Önerilen Ürünler
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {PRODUCT_TYPES.map((p) => (
-                    <label key={p.id} className="flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form.suggestedProducts.includes(p.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setForm({ ...form, suggestedProducts: [...form.suggestedProducts, p.id] });
-                          } else {
-                            setForm({ ...form, suggestedProducts: form.suggestedProducts.filter((x) => x !== p.id) });
-                          }
-                        }}
-                        className="w-4 h-4 text-amber-600 rounded"
-                      />
-                      <span className="text-sm">{p.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              {/* ========== KOMPOZİSYON TÜRLERİ ========== */}
+              <fieldset className="border border-gray-200 rounded-lg p-4">
+                <legend className="text-sm font-semibold text-gray-700 px-2">📐 Fotoğraf Kompozisyonu *</legend>
+                <p className="text-xs text-gray-500 mb-3">Bu senaryo için hangi çekim tarzları kullanılabilir? (En az 1 seçin)</p>
 
-              {/* Kompozisyonlar */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Kompozisyonlar *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addComposition}
-                    className="text-sm text-amber-600 hover:text-amber-700"
-                  >
-                    + Ekle
-                  </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {COMPOSITION_TYPES.map((comp) => {
+                    const isSelected = form.compositions.some(c => c.id === comp.id);
+                    return (
+                      <label
+                        key={comp.id}
+                        className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition ${
+                          isSelected
+                            ? "bg-amber-50 border-amber-300"
+                            : "hover:bg-gray-50 border-gray-200"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setForm({
+                                ...form,
+                                compositions: [...form.compositions, { id: comp.id, description: comp.name }]
+                              });
+                            } else {
+                              setForm({
+                                ...form,
+                                compositions: form.compositions.filter(c => c.id !== comp.id)
+                              });
+                            }
+                          }}
+                          className="w-4 h-4 text-amber-600 rounded mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{comp.icon}</span>
+                            <span className="text-sm font-medium">{comp.name}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">{comp.description}</p>
+                          <p className="text-xs text-amber-600 mt-1">İyi: {comp.bestFor}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
-                <div className="space-y-2">
-                  {form.compositions.map((comp, index) => (
-                    <div key={index} className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={comp.id}
-                        onChange={(e) => updateComposition(index, "id", e.target.value)}
-                        className="w-1/3 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
-                        placeholder="ID (ör: bottom-right)"
-                      />
-                      <input
-                        type="text"
-                        value={comp.description}
-                        onChange={(e) => updateComposition(index, "description", e.target.value)}
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
-                        placeholder="Açıklama"
-                      />
-                      {form.compositions.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeComposition(index)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  ))}
+
+                {form.compositions.length === 0 && (
+                  <p className="text-xs text-red-500 mt-2">En az bir kompozisyon türü seçmelisiniz</p>
+                )}
+              </fieldset>
+
+              {/* ========== ÖNERİLEN ÜRÜNLER ========== */}
+              <fieldset className="border border-gray-200 rounded-lg p-4">
+                <legend className="text-sm font-semibold text-gray-700 px-2">🍰 Uygun Ürün Kategorileri</legend>
+                <p className="text-xs text-gray-500 mb-3">Bu senaryo hangi ürünlerle iyi sonuç verir? (Birden fazla seçilebilir)</p>
+
+                <div className="flex flex-wrap gap-3">
+                  {PRODUCT_TYPES.map((p) => {
+                    const isSelected = form.suggestedProducts.includes(p.id);
+                    return (
+                      <label
+                        key={p.id}
+                        className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition ${
+                          isSelected
+                            ? "bg-green-50 border-green-300 text-green-700"
+                            : "hover:bg-gray-50 border-gray-200"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setForm({ ...form, suggestedProducts: [...form.suggestedProducts, p.id] });
+                            } else {
+                              setForm({ ...form, suggestedProducts: form.suggestedProducts.filter((x) => x !== p.id) });
+                            }
+                          }}
+                          className="w-4 h-4 text-green-600 rounded"
+                        />
+                        <span className="text-sm">{p.name}</span>
+                      </label>
+                    );
+                  })}
                 </div>
-              </div>
+              </fieldset>
 
               {/* Gemini Prompt Önizleme */}
               {(form.mood || form.lightingPreset || form.handPose) && (

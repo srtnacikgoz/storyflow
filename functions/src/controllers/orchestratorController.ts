@@ -75,6 +75,7 @@ export {
   getPetUsageStats,
   seedOrchestratorConfig,
   seedGeminiTerminology,
+  getGeminiPresets,
   getTimeoutsConfig,
   updateTimeoutsConfig,
   getSystemSettingsConfig,
