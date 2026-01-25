@@ -60,7 +60,10 @@
       "Bash(npx firebase deploy:*)",
       "WebFetch(domain:developers.googleblog.com)",
       "Bash(git clone:*)",
-      "WebFetch(domain:app.reve.com)"
+      "WebFetch(domain:app.reve.com)",
+      "Bash(gcloud auth application-default login:*)",
+      "Bash(firebase login:list:*)",
+      "Bash(firebase login:ci:*)"
     ]
   },
   "hooks": {

@@ -20,6 +20,7 @@ import {
   updateSystemSettings,
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
+import { getGeminiTerminologySeedData } from "../../orchestrator/seed/geminiTerminologyData";
 import { FirestoreDiversityRules } from "../../orchestrator/types";
 
 // Firestore path sabitleri
@@ -565,6 +566,109 @@ export const updateSystemSettingsConfig = functions
         });
       } catch (error) {
         errorResponse(response, error, "updateSystemSettingsConfig");
+      }
+    });
+  });
+
+/**
+ * Gemini terminoloji preset'lerini Firestore'a seed et
+ * POST /seedGeminiTerminology
+ *
+ * Bu endpoint aşağıdaki verileri yükler:
+ * - Işıklandırma preset'leri (lighting-presets)
+ * - El pozları (hand-poses)
+ * - Kompozisyon şablonları (composition-templates)
+ * - Mood tanımları (mood-definitions)
+ * - Ürün doku profilleri (product-textures)
+ * - Negative prompt setleri (negative-prompts)
+ */
+export const seedGeminiTerminology = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        // Basit güvenlik kontrolü (secret key)
+        const secretKey = request.body?.secretKey || request.query?.secretKey;
+        if (secretKey !== "maestro-seed-2026") {
+          response.status(403).json({
+            success: false,
+            error: "Unauthorized",
+          });
+          return;
+        }
+
+        console.log("[seedGeminiTerminology] Starting Gemini terminology seed...");
+
+        const geminiData = getGeminiTerminologySeedData();
+        const batch = db.batch();
+
+        const presetsRef = db.collection("global").doc("config").collection("gemini-presets");
+
+        // Işıklandırma preset'leri
+        console.log(`[seedGeminiTerminology] Seeding ${geminiData.lightingPresets.length} lighting presets...`);
+        for (const preset of geminiData.lightingPresets) {
+          batch.set(presetsRef.doc("lighting-presets").collection("items").doc(preset.id), preset);
+        }
+
+        // El pozları
+        console.log(`[seedGeminiTerminology] Seeding ${geminiData.handPoses.length} hand poses...`);
+        for (const pose of geminiData.handPoses) {
+          batch.set(presetsRef.doc("hand-poses").collection("items").doc(pose.id), pose);
+        }
+
+        // Kompozisyon şablonları
+        console.log(`[seedGeminiTerminology] Seeding ${geminiData.compositionTemplates.length} composition templates...`);
+        for (const template of geminiData.compositionTemplates) {
+          batch.set(presetsRef.doc("composition-templates").collection("items").doc(template.id), template);
+        }
+
+        // Mood tanımları
+        console.log(`[seedGeminiTerminology] Seeding ${geminiData.moodDefinitions.length} mood definitions...`);
+        for (const mood of geminiData.moodDefinitions) {
+          batch.set(presetsRef.doc("mood-definitions").collection("items").doc(mood.id), mood);
+        }
+
+        // Ürün doku profilleri
+        console.log(`[seedGeminiTerminology] Seeding ${geminiData.productTextureProfiles.length} product texture profiles...`);
+        for (const profile of geminiData.productTextureProfiles) {
+          batch.set(presetsRef.doc("product-textures").collection("items").doc(profile.id), profile);
+        }
+
+        // Negative prompt setleri
+        console.log(`[seedGeminiTerminology] Seeding ${geminiData.negativePromptSets.length} negative prompt sets...`);
+        for (const npSet of geminiData.negativePromptSets) {
+          batch.set(presetsRef.doc("negative-prompts").collection("items").doc(npSet.id), npSet);
+        }
+
+        await batch.commit();
+
+        // Cache temizle
+        clearConfigCache();
+
+        const summary = {
+          lightingPresets: geminiData.lightingPresets.length,
+          handPoses: geminiData.handPoses.length,
+          compositionTemplates: geminiData.compositionTemplates.length,
+          moodDefinitions: geminiData.moodDefinitions.length,
+          productTextureProfiles: geminiData.productTextureProfiles.length,
+          negativePromptSets: geminiData.negativePromptSets.length,
+        };
+
+        console.log("[seedGeminiTerminology] Seed completed:", summary);
+
+        response.json({
+          success: true,
+          message: "Gemini terminology seeded successfully",
+          data: summary,
+        });
+      } catch (error) {
+        errorResponse(response, error, "seedGeminiTerminology");
       }
     });
   });
