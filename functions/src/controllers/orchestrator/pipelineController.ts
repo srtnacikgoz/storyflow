@@ -85,7 +85,11 @@ export const orchestratorGenerateNow = functions
           return;
         }
 
-        const { productType, themeId } = request.body as { productType: ProductType; themeId?: string };
+        const { productType, themeId, aspectRatio } = request.body as {
+          productType: ProductType;
+          themeId?: string;
+          aspectRatio?: "1:1" | "3:4" | "9:16";
+        };
 
         if (!productType) {
           response.status(400).json({
@@ -98,8 +102,8 @@ export const orchestratorGenerateNow = functions
         const config = await getOrchestratorConfig();
         const scheduler = new OrchestratorScheduler(config);
 
-        // Pipeline tamamlanana kadar bekle
-        const result = await scheduler.generateNow(productType, themeId);
+        // Pipeline tamamlanana kadar bekle (aspectRatio ile)
+        const result = await scheduler.generateNow(productType, themeId, aspectRatio);
 
         if (result.success) {
           response.json({

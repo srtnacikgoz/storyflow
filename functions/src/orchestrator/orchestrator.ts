@@ -92,6 +92,7 @@ export class Orchestrator {
    * Tam pipeline'ı çalıştır
    * @param onProgress - Her aşamada çağrılan callback (opsiyonel)
    * @param overrideThemeId - Manuel tema seçimi (Dashboard'dan "Şimdi Üret" ile)
+   * @param overrideAspectRatio - Manuel aspect ratio seçimi (Instagram formatı için)
    */
   async runPipeline(
     productType: ProductType,
@@ -99,7 +100,8 @@ export class Orchestrator {
     onProgress?: (stage: string, stageIndex: number, totalStages: number) => Promise<void>,
     slotId?: string,
     scheduledHour?: number,
-    overrideThemeId?: string
+    overrideThemeId?: string,
+    overrideAspectRatio?: "1:1" | "3:4" | "9:16"
   ): Promise<PipelineResult> {
     const TOTAL_STAGES = 6; // asset, scenario, prompt, image, quality, telegram (caption kaldırıldı)
     const startedAt = Date.now();
@@ -235,6 +237,8 @@ export class Orchestrator {
           handStyle: undefined,
           isInterior: true,
           interiorType: randomScenario.interiorType,
+          themeId: effectiveThemeId,
+          themeName: themeData?.name,
         };
 
         // Stage 1, 2, 3, 4, 5 tamamlandı (interior için hepsi atlanır)
@@ -274,7 +278,7 @@ export class Orchestrator {
         result.optimizedPrompt = {
           mainPrompt: `Interior photo: ${selectedInterior.filename}`,
           negativePrompt: "",
-          aspectRatio: "1:1",
+          aspectRatio: overrideAspectRatio || "1:1",
           faithfulness: 1.0,
           customizations: ["interior-asset", "no-ai-generation"],
         };
@@ -452,6 +456,8 @@ export class Orchestrator {
         ...scenarioResponse.data,
         isInterior: isInteriorScenario,
         interiorType: interiorType,
+        themeId: effectiveThemeId,
+        themeName: themeData?.name,
       };
       totalCost += scenarioResponse.cost;
       status.completedStages.push("scenario_selection");
@@ -516,7 +522,7 @@ export class Orchestrator {
           mainPrompt: `Interior photo: ${selectedInterior.filename}`,
           negativePrompt: "",
           customizations: [],
-          aspectRatio: "9:16",
+          aspectRatio: overrideAspectRatio || "9:16",
           faithfulness: 1.0, // Gerçek fotoğraf olduğu için 1.0
         };
 
@@ -578,7 +584,7 @@ export class Orchestrator {
           mainPrompt: promptResponse.data.optimizedPrompt,
           negativePrompt: combinedNegativePrompt,
           customizations: promptResponse.data.customizations,
-          aspectRatio: "9:16",
+          aspectRatio: overrideAspectRatio || "9:16",
           faithfulness: 0.8,
         };
         totalCost += promptResponse.cost;

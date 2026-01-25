@@ -63,7 +63,11 @@
       "WebFetch(domain:app.reve.com)",
       "Bash(gcloud auth application-default login:*)",
       "Bash(firebase login:list:*)",
-      "Bash(firebase login:ci:*)"
+      "Bash(firebase login:ci:*)",
+      "Bash(firebase functions:secrets:access:*)",
+      "Bash(firebase functions:config:get:*)",
+      "Bash(firebase functions:config:set:*)",
+      "Bash(firebase experiments:enable:*)"
     ]
   },
   "hooks": {

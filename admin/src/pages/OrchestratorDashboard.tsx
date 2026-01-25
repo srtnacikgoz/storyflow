@@ -19,6 +19,15 @@ const PRODUCT_LABELS: Record<OrchestratorProductType, string> = {
   coffees: "Kahve",
 };
 
+// Instagram aspect ratio seçenekleri
+// Gemini desteklediği formatlar: 1:1, 3:4, 9:16
+type InstagramAspectRatio = "1:1" | "3:4" | "9:16";
+const ASPECT_RATIO_OPTIONS: Record<InstagramAspectRatio, { label: string; dimensions: string; usage: string }> = {
+  "1:1": { label: "Kare", dimensions: "1080×1080", usage: "Feed Post" },
+  "3:4": { label: "Portre", dimensions: "1080×1440", usage: "Feed Post" },
+  "9:16": { label: "Dikey", dimensions: "1080×1920", usage: "Story / Reel" },
+};
+
 // Slot durumu renkleri ve etiketleri
 const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string; icon: string }> = {
   pending: { bg: "bg-gray-100", text: "text-gray-700", label: "Bekliyor", icon: "⏳" },
@@ -87,6 +96,7 @@ export default function OrchestratorDashboard() {
   // Üretim
   const [generating, setGenerating] = useState(false);
   const [selectedProductType, setSelectedProductType] = useState<OrchestratorProductType>("croissants");
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<InstagramAspectRatio>("1:1");
 
   // Tema seçimi
   const [themes, setThemes] = useState<Theme[]>([]);
@@ -212,10 +222,11 @@ export default function OrchestratorDashboard() {
     setShowProgressModal(true);
 
     try {
-      // themeId varsa gönder, yoksa undefined
+      // themeId ve aspectRatio ile üret
       const result = await api.orchestratorGenerateNow(
         selectedProductType,
-        selectedThemeId || undefined
+        selectedThemeId || undefined,
+        selectedAspectRatio
       );
       setCurrentSlotId(result.slotId);
 
@@ -516,6 +527,18 @@ export default function OrchestratorDashboard() {
                     </div>
                   </div>
                 )}
+
+                {/* Görsel Formatı */}
+                {selectedSlot.pipelineResult?.optimizedPrompt?.aspectRatio && (
+                  <div className="mt-3 p-3 bg-blue-50 rounded-xl flex items-center justify-between">
+                    <span className="text-sm text-blue-800">📐 Görsel Formatı</span>
+                    <span className="font-medium text-blue-900">
+                      {selectedSlot.pipelineResult.optimizedPrompt.aspectRatio === "1:1" && "Kare (1:1)"}
+                      {selectedSlot.pipelineResult.optimizedPrompt.aspectRatio === "3:4" && "Portre (3:4)"}
+                      {selectedSlot.pipelineResult.optimizedPrompt.aspectRatio === "9:16" && "Dikey (9:16)"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Sağ: Detaylar */}
@@ -535,6 +558,13 @@ export default function OrchestratorDashboard() {
                   <div className="p-4 bg-purple-50 rounded-xl">
                     <h4 className="font-medium mb-2 text-purple-800">🎬 Senaryo & Kompozisyon</h4>
                     <div className="grid grid-cols-2 gap-2 text-sm">
+                      {/* Tema bilgisi - varsa en üstte göster */}
+                      {selectedSlot.pipelineResult.scenarioSelection.themeName && (
+                        <div className="col-span-2 pb-2 mb-2 border-b border-purple-200">
+                          <span className="text-gray-500">Tema:</span>
+                          <p className="font-medium text-purple-700">🎨 {selectedSlot.pipelineResult.scenarioSelection.themeName}</p>
+                        </div>
+                      )}
                       <div>
                         <span className="text-gray-500">Senaryo:</span>
                         <p className="font-medium">{selectedSlot.pipelineResult.scenarioSelection.scenarioName || selectedSlot.pipelineResult.scenarioSelection.scenarioId}</p>
@@ -837,6 +867,20 @@ export default function OrchestratorDashboard() {
             >
               {Object.entries(PRODUCT_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Görsel Formatı</label>
+            <select
+              value={selectedAspectRatio}
+              onChange={(e) => setSelectedAspectRatio(e.target.value as InstagramAspectRatio)}
+              className="input w-56"
+            >
+              {Object.entries(ASPECT_RATIO_OPTIONS).map(([value, option]) => (
+                <option key={value} value={value}>
+                  {option.label} ({value}) - {option.usage}
+                </option>
               ))}
             </select>
           </div>

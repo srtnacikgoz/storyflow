@@ -715,17 +715,25 @@ class ApiService {
    * Hemen içerik üret (pipeline tamamlanana kadar bekler)
    * @param productType Ürün tipi
    * @param themeId Opsiyonel tema ID'si - senaryoları filtreler
+   * @param aspectRatio Görsel formatı (1:1, 3:4, 9:16)
    */
-  async orchestratorGenerateNow(productType: string, themeId?: string): Promise<{
+  async orchestratorGenerateNow(
+    productType: string,
+    themeId?: string,
+    aspectRatio?: "1:1" | "3:4" | "9:16"
+  ): Promise<{
     success: boolean;
     message: string;
     slotId: string;
     duration?: number;
     error?: string;
   }> {
-    const body: { productType: string; themeId?: string } = { productType };
+    const body: { productType: string; themeId?: string; aspectRatio?: string } = { productType };
     if (themeId) {
       body.themeId = themeId;
+    }
+    if (aspectRatio) {
+      body.aspectRatio = aspectRatio;
     }
 
     const response = await this.fetch<{

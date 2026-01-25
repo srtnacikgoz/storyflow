@@ -214,13 +214,14 @@ Telegram onayına gönder
 - **Öncelik:** medium
 - **Durum:** open
 - **Tarih:** 2026-01-21
+- **Güncelleme:** 2026-01-25 - İzin alındı ✅
 - **Açıklama:** Instagram Graph API ile post/story istatistiklerini çekme ve analiz etme özelliği.
 
 ### Gereksinimler
 - Business veya Creator hesabı (mevcut ✓)
 - Facebook Page'e bağlı olması (mevcut ✓)
 - Facebook App (mevcut ✓)
-- **Yeni izin gerekli:** `instagram_manage_insights` scope
+- ~~**Yeni izin gerekli:** `instagram_manage_insights` scope~~ ✅ **Alındı (2026-01-25)**
 
 ### Çekilebilecek Veriler
 
@@ -573,3 +574,272 @@ not: Rules Editor" sayfası   yapılacak
 | Phase 2 | 🟠 Orta | Timeout'ları yönetim |
 | Phase 3 | 🟡 Düşük | Zaman-mood ayarları |
 | Phase 4 | 🟢 İsteğe bağlı | Maliyet takibi |
+
+---
+
+## [TODO-009] Instagram Shopping - Ürün Etiketleme
+- **Kategori:** todo
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-25
+- **Açıklama:** Paylaşımlara otomatik ürün etiketi ekleme. Müşteri görsele tıklayınca ürün bilgisi ve satın alma linki görür.
+
+### Gereksinimler
+- ~~`instagram_shopping_tag_products` izni~~ ✅ Alındı (2026-01-25)
+- ~~`catalog_management` izni~~ ✅ Alındı (2026-01-25)
+- Facebook Commerce Manager kurulumu ❓ Kontrol edilmeli
+- Ürün Kataloğu oluşturma ❓ Kontrol edilmeli
+- Commerce onayı ❓ Kontrol edilmeli
+
+### Uygulama Planı
+1. **Ön Koşullar Kontrolü:**
+   - Facebook Commerce Manager aktif mi?
+   - Ürün kataloğu var mı?
+   - Katalogdaki ürünler Instagram'a bağlı mı?
+
+2. **Backend:**
+   - `functions/src/services/instagramShopping.ts` servisi oluştur
+   - Katalog ürünlerini çekme: `GET /{catalog-id}/products`
+   - Paylaşıma ürün etiketi ekleme: Product tagging API
+
+3. **Asset-Ürün Eşleştirmesi:**
+   - Admin panelde asset'e "Katalog Ürün ID" alanı ekle
+   - Veya ürün adından otomatik eşleştirme
+
+4. **Orchestrator Entegrasyonu:**
+   - Görsel paylaşılırken ilgili ürün ID'si varsa etiketle
+   - Caption'a ürün linki ekle
+
+### Akış
+```
+Görsel üretildi → Asset'in katalog ürünü var mı? → EVET → Etiketi ekle → Paylaş
+                                                → HAYIR → Normal paylaş
+```
+
+### Referans
+- [Instagram Product Tagging API](https://developers.facebook.com/docs/instagram-api/guides/product-tagging)
+
+---
+
+## [TODO-010] Instagram API - Tüm Yeni İzinlerin Kullanımı
+- **Kategori:** todo
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-25
+- **Açıklama:** 2026-01-25 tarihinde alınan tüm yeni Instagram API izinlerinin aktif kullanıma alınması.
+
+### Alınan İzinler ve Kullanım Durumları
+
+| İzin | Durum | Kullanım |
+|------|-------|----------|
+| `instagram_basic` | ✅ Aktif | Hesap bilgileri |
+| `instagram_content_publish` | ✅ Aktif | Görsel paylaşımı |
+| `instagram_manage_insights` | ⏳ Bekliyor | TODO-006 kapsamında |
+| `instagram_shopping_tag_products` | ⏳ Bekliyor | TODO-009 kapsamında |
+| `catalog_management` | ⏳ Bekliyor | TODO-009 kapsamında |
+| `pages_show_list` | ✅ Aktif | Sayfa listesi |
+| `pages_read_engagement` | ⏳ Bekliyor | TODO-006 kapsamında |
+| `business_management` | ✅ Aktif | İşletme yönetimi |
+
+### Öncelik Sırası
+1. **İstatistikler (TODO-006)** - En değerli veri kaynağı
+2. **Ürün Etiketleme (TODO-009)** - Satış kanalı
+3. **Engagement Verileri** - Analitik dashboard
+
+### Token Bilgisi
+- **Yenilenme Tarihi:** 2026-01-25
+- **Geçerlilik:** 60 gün (Long-lived token)
+- **Sonraki Yenileme:** ~2026-03-25
+- **Hatırlatma:** Token expire olmadan önce yenileme yapılmalı
+
+---
+
+## [TODO-012] SaaS Business Type Presets - İşletme Tipi Ön Ayarları
+- **Kategori:** todo
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-25
+- **Açıklama:** Farklı işletme tipleri (cafe, pizzacı, dönerci, bireysel kullanım vb.) için hazır preset sistemleri.
+
+### Konsept
+Bu uygulama SaaS'a dönüştüğünde, her işletme tipi için önceden tanımlanmış kurallar ve senaryolar sunulmalı. Kullanıcı "Cafe" seçince:
+- Uygun senaryolar otomatik aktif olur
+- Renk paleti, ışık tercihleri belirlenir
+- Prompt dili sektöre uygun hale gelir
+- Negative prompt'lar otomatik eklenir
+
+### Önerilen Preset Tipleri
+| Tip | Senaryolar | Özellikler |
+|-----|-----------|------------|
+| 🥐 Pastane/Fırın | Vitrin, tezgah, sabah ışığı | Sıcak tonlar, ahşap, doğal ışık |
+| ☕ Cafe/Kahveci | Barista, masa üstü, latte art | Samimi, trendy, minimal |
+| 🍕 Pizzacı | Dilim close-up, fırın çekimi | Dinamik, iştah açıcı |
+| 🥙 Dönerci/Fast Food | Servis anı, paket görünümü | Enerjik, canlı renkler |
+| 🍪 Cookie Shop | Makro çekim, sıralama | Pastel, şeker renkleri |
+| 📸 Bireysel | Selfie, lifestyle | Trend odaklı, deneysel |
+| ⚙️ Özel | Kullanıcı tanımlı | Tam özelleştirme |
+
+### Mimari Tasarım (AI Analizlerinden)
+
+**Üç Katmanlı Yapı:**
+1. **Ontolojik Katman (Sektör DNA'sı):** İşletme tipine göre en-boy oranları, varsayılan objeler, görsel normlar
+2. **Stilistik Katman (Design Tokens):** Renk paleti, tipografi, ışık sıcaklığı, kompozisyon kuralları
+3. **Semantik Katman (AI Prompt Wrapper):** Arka planda prompt'ları sektöre göre zenginleştirme
+
+**Operasyonel Ritim Parametreleri:**
+- Günün saati → Mesaj tonu değişimi (sabah: "Günaydın", akşam: "İyi akşamlar")
+- Marka olgunluğu → Yeni açılan vs köklü işletme farklı dil kullanır
+- Müşteri segmenti → İlk ziyaret vs düzenli müşteri farklı CTA'lar
+
+### Veritabanı Şeması (Öneri)
+```typescript
+interface BusinessPreset {
+  id: string;
+  name: string;                    // "Artisan Pastane"
+  type: BusinessType;              // "bakery"
+
+  // Görsel Kurallar
+  visualRules: {
+    colorPalette: string[];        // ["#F5E6D3", "#8B4513", ...]
+    lightingTemp: "warm" | "neutral" | "cool";
+    defaultAspectRatio: "1:1" | "3:4" | "9:16";
+    compositionStyle: "flat-lay" | "45-angle" | "profile";
+  };
+
+  // AI Prompt Kuralları
+  promptRules: {
+    styleKeywords: string[];       // ["artisanal", "handcrafted", "cozy"]
+    avoidKeywords: string[];       // ["industrial", "commercial"]
+    moodModifiers: string[];       // ["warm", "inviting", "premium"]
+  };
+
+  // Senaryo Filtreleme
+  allowedScenarios: string[];      // Bu işletme tipi için uygun senaryolar
+  blockedScenarios: string[];      // Bu tip için uygun olmayan senaryolar
+
+  // Meta
+  isDefault: boolean;
+  createdAt: number;
+}
+```
+
+### Firestore Collection
+`business-presets`
+
+### Admin Panel UI
+**Sayfa:** `/settings` veya yeni `/business-type`
+
+**Akış:**
+1. Kullanıcı işletme tipini seçer
+2. Sistem ilgili preset'i yükler
+3. Kullanıcı özelleştirme yapabilir
+4. Tüm üretimler bu kurallara göre yapılır
+
+### Kritik Tasarım Prensibi
+> "İyi bir preset sistemi **kısıtlayıcı değil, yönlendirici** olmalıdır."
+> Kullanıcı "tasarımcı değilim" demeden profesyonel görsel üretebilmeli.
+
+### Referans
+- Canva Sektör Şablonları
+- Adobe Firefly Style Presets
+- Gemini, Claude, ChatGPT analizleri (2026-01-25)
+
+---
+
+## [TODO-013] Kullanıcı Senaryo Oluşturma - Custom Scenario Builder
+- **Kategori:** todo
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-25
+- **Açıklama:** Kullanıcının kendi özel senaryolarını oluşturabilmesi için arayüz ve altyapı.
+
+### Konsept
+SaaS kullanıcısı mevcut senaryolar yetersiz geldiğinde (örn: "fırın kenarı" senaryosu istiyorsa):
+1. Mevcut bir senaryoyu şablon olarak seçer
+2. Parametreleri özelleştirir
+3. Test üretimi yapar
+4. Kendi havuzuna kaydeder
+
+### Özelleştirilebilir Parametreler
+| Parametre | Açıklama | Örnek |
+|-----------|----------|-------|
+| Senaryo Adı | Kullanıcı tanımlı | "Fırın Kenarı" |
+| Kompozisyon | Ürün yerleşimi | "Sağda ürün, solda fırın" |
+| Arka Plan | Ortam tanımı | "Tuğla fırın, sıcak aydınlatma" |
+| El Kullanımı | El var mı? | true/false |
+| Işık Yönü | Işık kaynağı | "Sol üst, sıcak" |
+| Mood | Atmosfer | "Nostaljik, geleneksel" |
+| Negative Prompts | İstenmeyen öğeler | "modern, minimalist" |
+
+### Veritabanı Şeması (Öneri)
+```typescript
+interface CustomScenario {
+  id: string;
+  userId: string;                  // Sahibi
+  name: string;
+  description: string;
+
+  // Prompt şablonu
+  promptTemplate: {
+    composition: string;
+    background: string;
+    lighting: string;
+    mood: string;
+    additionalKeywords: string[];
+    negativePrompts: string[];
+  };
+
+  // Senaryo özellikleri
+  includesHands: boolean;
+  defaultHandStyle?: string;
+  preferredProducts: string[];     // Bu senaryo için uygun ürün tipleri
+
+  // Test sonuçları
+  testGenerations: {
+    imageUrl: string;
+    score: number;
+    timestamp: number;
+  }[];
+
+  // Meta
+  isActive: boolean;
+  usageCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+### Firestore Collection
+`custom-scenarios` (userId ile filtreleme)
+
+### Admin Panel UI
+**Sayfa:** `/custom-scenarios`
+
+**Adımlar:**
+1. **Şablon Seç:** Mevcut senaryolardan birini başlangıç noktası olarak seç
+2. **Özelleştir:** Form ile parametreleri değiştir
+3. **Önizle:** Sistem prompt'u göster, kullanıcı anlasın ne üretilecek
+4. **Test Et:** Tek görsel üret, sonucu göster
+5. **Kaydet:** Kaliteli çıktıysa kendi havuzuna kaydet
+6. **Kullan:** Tema'ya veya zaman kuralına bağla
+
+### Güvenlik Önlemleri
+- Kullanıcı sadece kendi senaryolarını görebilir
+- Admin tüm senaryoları görebilir (moderasyon)
+- Prompt injection koruması (zararlı içerik engelleme)
+- Rate limiting (spam önleme)
+
+### İlişkili TODO'lar
+- TODO-004: Özel Senaryo Ekleme Özelliği (Admin tarafı - bu TODO'nun alt kümesi)
+- TODO-012: Business Type Presets (Senaryo şablonları buradan beslenebilir)
+
+### Akış Diyagramı
+```
+Kullanıcı → Senaryo Oluştur → Şablon Seç → Özelleştir → Test Et → Beğendi mi?
+                                                                    ↓ EVET
+                                                                  Kaydet
+                                                                    ↓
+                                                         Tema/Kurala Bağla
+                                                                    ↓
+                                                        Üretimlerde Kullan
+```

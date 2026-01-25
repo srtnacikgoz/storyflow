@@ -529,6 +529,8 @@ export interface PipelineResult {
     handStyleDetails?: { name: string; description: string };
     compositionId?: string;
     composition: string;
+    themeId?: string;
+    themeName?: string;
   };
   optimizedPrompt?: {
     mainPrompt: string;

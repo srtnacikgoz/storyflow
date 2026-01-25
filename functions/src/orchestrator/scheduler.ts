@@ -255,12 +255,14 @@ export class OrchestratorScheduler {
    * @param slotId - Slot ID
    * @param scheduledHour - İçeriğin hedeflediği saat (zaman dilimine göre içerik üretimi için)
    * @param overrideThemeId - Manuel tema override (Dashboard'dan "Şimdi Üret" için)
+   * @param overrideAspectRatio - Manuel aspect ratio override (Dashboard'dan seçim için)
    */
   private async runPipelineAsync(
     rule: TimeSlotRule,
     slotId: string,
     scheduledHour?: number,
-    overrideThemeId?: string
+    overrideThemeId?: string,
+    overrideAspectRatio?: "1:1" | "3:4" | "9:16"
   ): Promise<void> {
     const orchestrator = new Orchestrator(this.config);
 
@@ -281,14 +283,15 @@ export class OrchestratorScheduler {
         });
       };
 
-      // Pipeline çalıştır (progress callback ile, slotId ile, scheduledHour ile, themeId ile)
+      // Pipeline çalıştır (progress callback ile, slotId ile, scheduledHour ile, themeId ve aspectRatio ile)
       const result = await orchestrator.runPipeline(
         productType,
         rule,
         onProgress,
         slotId,
         scheduledHour,
-        overrideThemeId
+        overrideThemeId,
+        overrideAspectRatio
       );
 
       // Slot'u güncelle (undefined değerleri temizle)
@@ -358,8 +361,13 @@ export class OrchestratorScheduler {
    * Pipeline tamamlanana kadar bekler
    * @param productType - Ürün tipi
    * @param overrideThemeId - Opsiyonel tema ID'si (senaryo filtreleme için)
+   * @param overrideAspectRatio - Opsiyonel aspect ratio (Instagram formatı için)
    */
-  async generateNow(productType: ProductType, overrideThemeId?: string): Promise<{
+  async generateNow(
+    productType: ProductType,
+    overrideThemeId?: string,
+    overrideAspectRatio?: "1:1" | "3:4" | "9:16"
+  ): Promise<{
     slotId: string;
     success: boolean;
     error?: string;
@@ -383,8 +391,8 @@ export class OrchestratorScheduler {
     const slot = await this.createSlot(tempRule, new Date());
 
     try {
-      // Pipeline'ı bekleyerek çalıştır (themeId override ile)
-      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId);
+      // Pipeline'ı bekleyerek çalıştır (themeId ve aspectRatio override ile)
+      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId, overrideAspectRatio);
 
       return {
         slotId: slot.id,

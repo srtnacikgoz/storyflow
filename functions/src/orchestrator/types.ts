@@ -394,6 +394,10 @@ export interface ScenarioSelection {
   // Interior senaryolar için
   isInterior?: boolean;           // true ise AI görsel üretimi ATLANIR
   interiorType?: InteriorType;    // Kullanılacak interior asset tipi
+
+  // Tema bilgisi
+  themeId?: string;               // Kullanılan tema ID'si
+  themeName?: string;             // Tema adı (görüntüleme için)
 }
 
 /**
