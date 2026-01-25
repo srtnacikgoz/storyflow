@@ -111,4 +111,18 @@ export {
   seedCategories,
   clearCategoriesCache,
   getCategoryDisplayName,
+  // Main Category Controller (v2)
+  addMainCategory,
+  updateMainCategory,
+  deleteMainCategory,
+  // ID-based endpoints (v2)
+  getSubTypeById,
+  getSubTypeIds,
+  getSubTypeIdBySlug,
+  validateSubTypeId,
+  // Migration endpoints
+  migrateCategoriesToIdBased,
+  migrateAssetsToIdBased,
+  migrateTimeSlotRulesToIdBased,
+  runFullMigration,
 } from "./orchestrator";

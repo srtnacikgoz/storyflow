@@ -12,6 +12,7 @@ import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import { AIRulesService } from "../services/aiRulesService";
 import { getFixedAssets } from "../services/configService";
+import * as categoryService from "../services/categoryService";
 import {
   buildGeminiPrompt,
   extractGeminiParamsFromScenario,
@@ -849,8 +850,15 @@ export class Orchestrator {
 
   /**
    * Mevcut asset'leri yükle (genişletilmiş - tüm asset tipleri)
+   *
+   * v2: Dinamik kategori desteği
+   * - productType parametresi slug veya ID olabilir
+   * - Kategori validasyonu dinamik kategorilerden yapılır
+   * - Graceful skip: Geçersiz kategoriler loglanır ama hata fırlatmaz
+   *
+   * @param productType - Ürün alt kategorisi (slug: "croissants" veya ID: "products_croissants")
    */
-  private async loadAvailableAssets(productType: ProductType): Promise<{
+  private async loadAvailableAssets(productType: string): Promise<{
     products: Asset[];
     plates: Asset[];
     cups: Asset[];
@@ -865,6 +873,29 @@ export class Orchestrator {
     cutlery: Asset[];
   }> {
     const assetsRef = this.db.collection("assets");
+
+    // Dinamik kategori validasyonu
+    // productType bir ID olabilir (products_croissants) veya slug (croissants)
+    let resolvedSlug = productType;
+
+    // ID formatında mı kontrol et (categoryType_slug formatı)
+    if (productType.includes("_")) {
+      const slug = await categoryService.getSlugBySubTypeId(productType);
+      if (slug) {
+        resolvedSlug = slug;
+        console.log(`[Orchestrator] Resolved ID '${productType}' to slug '${resolvedSlug}'`);
+      } else {
+        // Graceful skip: ID bulunamadı, slug olarak dene
+        console.warn(`[Orchestrator] ID '${productType}' not found, trying as slug`);
+        resolvedSlug = productType.split("_").pop() || productType;
+      }
+    }
+
+    // Slug validasyonu (graceful - sadece warning)
+    const isValidSlug = await categoryService.validateSlug(resolvedSlug, "products");
+    if (!isValidSlug) {
+      console.warn(`[Orchestrator] Product type '${resolvedSlug}' not found in dynamic categories. Proceeding anyway (graceful skip).`);
+    }
 
     // Tüm asset tiplerini paralel yükle
     const [
@@ -883,19 +914,19 @@ export class Orchestrator {
       napkins,
       cutlery,
     ] = await Promise.all([
-      // Ürünler
-      assetsRef.where("category", "==", "products").where("subType", "==", productType).where("isActive", "==", true).get(),
+      // Ürünler - dinamik slug kullan
+      assetsRef.where("category", "==", "products").where("subType", "==", resolvedSlug).where("isActive", "==", true).get(),
       // Tabaklar
       assetsRef.where("category", "==", "props").where("subType", "==", "plates").where("isActive", "==", true).get(),
       // Fincanlar
       assetsRef.where("category", "==", "props").where("subType", "==", "cups").where("isActive", "==", true).get(),
       // Masalar (İngilizce)
       assetsRef.where("category", "==", "furniture").where("subType", "==", "tables").where("isActive", "==", true).get(),
-      // Masalar (Türkçe)
+      // Masalar (Türkçe - legacy fallback)
       assetsRef.where("category", "==", "Mobilya").where("subType", "==", "Masa").where("isActive", "==", true).get(),
       // Dekorasyon (İngilizce)
       assetsRef.where("category", "==", "furniture").where("subType", "==", "decor").where("isActive", "==", true).get(),
-      // Dekorasyon (Türkçe) - bitkiler, kitaplar
+      // Dekorasyon (Türkçe - legacy fallback)
       assetsRef.where("category", "==", "Aksesuar").where("isActive", "==", true).get(),
       // Evcil hayvanlar (köpek)
       assetsRef.where("category", "==", "pets").where("isActive", "==", true).get(),
@@ -963,6 +994,10 @@ export class Orchestrator {
       ...decorAlt.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),
     ];
 
+    // Graceful skip pattern: Asset bulunamadığında warning ver ama devam et
+    if (products.docs.length === 0) {
+      console.warn(`[Orchestrator] No product assets found for '${resolvedSlug}'. Check if assets exist for this category.`);
+    }
     if (fallbackProps && napkins.docs.length === 0 && napkinAssets.length === 0) {
       console.warn("[Orchestrator] No napkin assets found. Verify assets category/subType values in Firestore.");
     }
@@ -970,7 +1005,7 @@ export class Orchestrator {
       console.warn("[Orchestrator] No cutlery assets found. Verify assets category/subType values in Firestore.");
     }
 
-    console.log(`[Orchestrator] Assets found - products: ${products.docs.length}, plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}, accessories: ${accessories.docs.length}, napkins: ${napkinAssets.length}, cutlery: ${cutleryAssets.length}`);
+    console.log(`[Orchestrator] Assets found - products: ${products.docs.length} (${resolvedSlug}), plates: ${plates.docs.length}, cups: ${cups.docs.length}, tables: ${allTables.length}, decor: ${allDecor.length}, pets: ${pets.docs.length}, environments: ${environments.docs.length}, interior: ${interior.docs.length}, exterior: ${exterior.docs.length}, accessories: ${accessories.docs.length}, napkins: ${napkinAssets.length}, cutlery: ${cutleryAssets.length}`);
 
     return {
       products: products.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)),

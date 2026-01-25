@@ -491,3 +491,491 @@ export const getDisplayName = functions
       }
     });
   });
+
+// ==========================================
+// MAIN CATEGORY ENDPOINTS
+// ==========================================
+
+/**
+ * Yeni ana kategori ekle
+ * POST /addMainCategory
+ * Body: { type, displayName, icon, description?, subTypes?: [] }
+ *
+ * NOT: Yeni ana kategoriler orchestrator'da loadAvailableAssets()
+ * güncellemesi gerektirebilir. Alt kategoriler için bu gerekli değil.
+ */
+export const addMainCategory = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      if (request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        const {
+          type,
+          displayName,
+          icon,
+          description,
+          subTypes,
+        } = request.body as {
+          type: string;
+          displayName: string;
+          icon: string;
+          description?: string;
+          subTypes?: CategorySubType[];
+        };
+
+        // Zorunlu alan kontrolü
+        if (!type || !displayName || !icon) {
+          response.status(400).json({
+            success: false,
+            error: "type, displayName ve icon zorunludur",
+          });
+          return;
+        }
+
+        const result = await categoryService.addMainCategory({
+          type: type.toLowerCase().trim() as DynamicCategoryType,
+          displayName: displayName.trim(),
+          icon,
+          description,
+          order: 0, // Service'de otomatik hesaplanacak
+          isSystem: false,
+          isDeleted: false,
+          subTypes,
+        });
+
+        if (!result.success) {
+          response.status(400).json(result);
+          return;
+        }
+
+        response.json({
+          ...result,
+          warning: "Yeni ana kategoriler orchestrator'da loadAvailableAssets() güncellemesi gerektirebilir.",
+        });
+      } catch (error) {
+        errorResponse(response, error, "addMainCategory");
+      }
+    });
+  });
+
+/**
+ * Ana kategori güncelle (type değiştirilemez)
+ * PUT /updateMainCategory
+ * Body: { type, displayName?, icon?, description?, order?, isDeleted? }
+ */
+export const updateMainCategory = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      if (request.method !== "PUT" && request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        const {
+          type,
+          displayName,
+          icon,
+          description,
+          order,
+          isDeleted,
+        } = request.body as {
+          type: string;
+          displayName?: string;
+          icon?: string;
+          description?: string;
+          order?: number;
+          isDeleted?: boolean;
+        };
+
+        if (!type) {
+          response.status(400).json({
+            success: false,
+            error: "type zorunludur",
+          });
+          return;
+        }
+
+        const result = await categoryService.updateMainCategory(type, {
+          ...(displayName && { displayName: displayName.trim() }),
+          ...(icon !== undefined && { icon }),
+          ...(description !== undefined && { description }),
+          ...(order !== undefined && { order }),
+          ...(isDeleted !== undefined && { isDeleted }),
+        });
+
+        if (!result.success) {
+          response.status(400).json(result);
+          return;
+        }
+
+        response.json(result);
+      } catch (error) {
+        errorResponse(response, error, "updateMainCategory");
+      }
+    });
+  });
+
+/**
+ * Ana kategori sil (soft delete)
+ * POST /deleteMainCategory
+ * Body: { type }
+ */
+export const deleteMainCategory = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      if (request.method !== "POST" && request.method !== "DELETE") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        const { type } = request.body as { type: string };
+
+        if (!type) {
+          response.status(400).json({
+            success: false,
+            error: "type zorunludur",
+          });
+          return;
+        }
+
+        const result = await categoryService.deleteMainCategory(type);
+
+        if (!result.success) {
+          response.status(400).json(result);
+          return;
+        }
+
+        response.json(result);
+      } catch (error) {
+        errorResponse(response, error, "deleteMainCategory");
+      }
+    });
+  });
+
+// ==========================================
+// ID-BASED ENDPOINTS (v2)
+// ==========================================
+
+/**
+ * ID ile alt kategori getir
+ * GET /getSubTypeById?id=products_croissants
+ */
+export const getSubTypeById = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const id = request.query.id as string;
+
+        if (!id) {
+          response.status(400).json({
+            success: false,
+            error: "id parametresi zorunludur",
+          });
+          return;
+        }
+
+        const result = await categoryService.getSubTypeById(id);
+
+        if (!result.subType) {
+          response.status(404).json({
+            success: false,
+            error: `SubType bulunamadı: ${id}`,
+          });
+          return;
+        }
+
+        response.json({
+          success: true,
+          data: {
+            subType: result.subType,
+            categoryType: result.categoryType,
+          },
+        });
+      } catch (error) {
+        errorResponse(response, error, "getSubTypeById");
+      }
+    });
+  });
+
+/**
+ * Belirli bir kategori türünün ID listesini getir
+ * GET /getSubTypeIds?type=products
+ */
+export const getSubTypeIds = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const type = request.query.type as string;
+
+        if (!type) {
+          response.status(400).json({
+            success: false,
+            error: "type parametresi zorunludur",
+          });
+          return;
+        }
+
+        const ids = await categoryService.getSubTypeIds(type as DynamicCategoryType);
+
+        response.json({
+          success: true,
+          data: ids,
+        });
+      } catch (error) {
+        errorResponse(response, error, "getSubTypeIds");
+      }
+    });
+  });
+
+/**
+ * Slug'dan ID'ye çevir
+ * GET /getSubTypeIdBySlug?type=products&slug=croissants
+ */
+export const getSubTypeIdBySlug = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const type = request.query.type as string;
+        const slug = request.query.slug as string;
+
+        if (!type || !slug) {
+          response.status(400).json({
+            success: false,
+            error: "type ve slug parametreleri zorunludur",
+          });
+          return;
+        }
+
+        const id = await categoryService.getSubTypeIdBySlug(type as DynamicCategoryType, slug);
+
+        if (!id) {
+          response.status(404).json({
+            success: false,
+            error: `Slug için ID bulunamadı: ${type}/${slug}`,
+          });
+          return;
+        }
+
+        response.json({
+          success: true,
+          data: { slug, id },
+        });
+      } catch (error) {
+        errorResponse(response, error, "getSubTypeIdBySlug");
+      }
+    });
+  });
+
+/**
+ * SubType ID validation
+ * GET /validateSubTypeId?id=products_croissants&type=products (type optional)
+ */
+export const validateSubTypeId = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const id = request.query.id as string;
+        const type = request.query.type as string | undefined;
+
+        if (!id) {
+          response.status(400).json({
+            success: false,
+            error: "id parametresi zorunludur",
+          });
+          return;
+        }
+
+        const result = await categoryService.validateSubTypeId(
+          id,
+          type as DynamicCategoryType | undefined
+        );
+
+        response.json({
+          success: true,
+          data: result,
+        });
+      } catch (error) {
+        errorResponse(response, error, "validateSubTypeId");
+      }
+    });
+  });
+
+// ==========================================
+// MIGRATION ENDPOINTS
+// ==========================================
+
+/**
+ * Mevcut kategorilere ID ekle (migration)
+ * POST /migrateCategoriesToIdBased
+ */
+export const migrateCategoriesToIdBased = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 300, memory: "512MB" })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      if (request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        const result = await categoryService.migrateCategoriesToIdBased();
+        response.json({
+          success: result.success,
+          data: {
+            migratedCount: result.migratedCount,
+          },
+          error: result.error,
+        });
+      } catch (error) {
+        errorResponse(response, error, "migrateCategoriesToIdBased");
+      }
+    });
+  });
+
+/**
+ * Asset'leri ID-based sisteme migrate et
+ * POST /migrateAssetsToIdBased
+ */
+export const migrateAssetsToIdBased = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 540, memory: "1GB" })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      if (request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        const result = await categoryService.migrateAssetsToIdBased();
+        response.json({
+          success: result.success,
+          data: {
+            migratedCount: result.migratedCount,
+            skippedCount: result.skippedCount,
+          },
+          error: result.error,
+        });
+      } catch (error) {
+        errorResponse(response, error, "migrateAssetsToIdBased");
+      }
+    });
+  });
+
+/**
+ * TimeSlotRule'ları ID-based sisteme migrate et
+ * POST /migrateTimeSlotRulesToIdBased
+ */
+export const migrateTimeSlotRulesToIdBased = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 300, memory: "512MB" })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      if (request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        const result = await categoryService.migrateTimeSlotRulesToIdBased();
+        response.json({
+          success: result.success,
+          data: {
+            migratedCount: result.migratedCount,
+            skippedCount: result.skippedCount,
+          },
+          error: result.error,
+        });
+      } catch (error) {
+        errorResponse(response, error, "migrateTimeSlotRulesToIdBased");
+      }
+    });
+  });
+
+/**
+ * Tüm migration'ları sırayla çalıştır
+ * POST /runFullMigration
+ */
+export const runFullMigration = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 540, memory: "1GB" })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      if (request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        console.log("[Migration] Full migration başlıyor...");
+
+        // 1. Kategorilere ID ekle
+        console.log("[Migration] Step 1: Kategorilere ID ekleniyor...");
+        const categoriesResult = await categoryService.migrateCategoriesToIdBased();
+        if (!categoriesResult.success) {
+          throw new Error(`Kategori migration başarısız: ${categoriesResult.error}`);
+        }
+
+        // 2. Asset'leri migrate et
+        console.log("[Migration] Step 2: Asset'ler migrate ediliyor...");
+        const assetsResult = await categoryService.migrateAssetsToIdBased();
+        if (!assetsResult.success) {
+          throw new Error(`Asset migration başarısız: ${assetsResult.error}`);
+        }
+
+        // 3. TimeSlotRule'ları migrate et
+        console.log("[Migration] Step 3: TimeSlotRule'lar migrate ediliyor...");
+        const rulesResult = await categoryService.migrateTimeSlotRulesToIdBased();
+        if (!rulesResult.success) {
+          throw new Error(`TimeSlotRule migration başarısız: ${rulesResult.error}`);
+        }
+
+        console.log("[Migration] Full migration tamamlandı!");
+
+        response.json({
+          success: true,
+          data: {
+            categories: {
+              migratedCount: categoriesResult.migratedCount,
+            },
+            assets: {
+              migratedCount: assetsResult.migratedCount,
+              skippedCount: assetsResult.skippedCount,
+            },
+            timeSlotRules: {
+              migratedCount: rulesResult.migratedCount,
+              skippedCount: rulesResult.skippedCount,
+            },
+          },
+          message: "Full migration tamamlandı!",
+        });
+      } catch (error) {
+        errorResponse(response, error, "runFullMigration");
+      }
+    });
+  });

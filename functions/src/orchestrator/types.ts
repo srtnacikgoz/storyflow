@@ -1113,9 +1113,17 @@ export type DynamicCategoryType =
 /**
  * Alt kategori tanımı
  * Örn: products altında "croissants", "pastas" gibi alt kategoriler
+ *
+ * ID-Based Architecture (SaaS-Ready):
+ * - `id`: Otomatik üretilen unique ID (referanslar için kullanılır)
+ * - `slug`: İnsan-okunabilir, URL-friendly identifier (display için)
+ *
+ * Referanslar (Asset.subTypeId, TimeSlotRule.productTypeIds) ID kullanır.
+ * Slug'lar sadece UI gösterimi ve backward-compatibility için tutulur.
  */
 export interface CategorySubType {
-  slug: string;              // "croissants" - immutable, değiştirilemez
+  id: string;                // Auto-generated unique ID (referanslar bu ID'yi kullanır)
+  slug: string;              // "croissants" - human-readable, URL-friendly
   displayName: string;       // "Kruvasanlar" - değiştirilebilir
   icon?: string;             // "🥐"
   description?: string;      // "Taze kruvasanlar ve viennoiseriler"
@@ -1175,6 +1183,9 @@ export interface FirestoreCategoriesConfig {
 
 /**
  * Varsayılan kategoriler - seed data için
+ *
+ * ID Format: {categoryType}_{slug}
+ * Bu format hem okunabilir hem de unique. Migration için deterministik.
  */
 export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt">[] = [
   {
@@ -1186,10 +1197,10 @@ export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt"
     isSystem: true,
     isDeleted: false,
     subTypes: [
-      { slug: "croissants", displayName: "Kruvasanlar", icon: "🥐", order: 1, isActive: true, eatingMethodDefault: "hand", canBeHeldDefault: true },
-      { slug: "pastas", displayName: "Pastalar", icon: "🎂", order: 2, isActive: true, eatingMethodDefault: "fork", canBeHeldDefault: false },
-      { slug: "chocolates", displayName: "Çikolatalar", icon: "🍫", order: 3, isActive: true, eatingMethodDefault: "hand", canBeHeldDefault: true },
-      { slug: "coffees", displayName: "Kahveler", icon: "☕", order: 4, isActive: true, eatingMethodDefault: "none", canBeHeldDefault: true },
+      { id: "products_croissants", slug: "croissants", displayName: "Kruvasanlar", icon: "🥐", order: 1, isActive: true, eatingMethodDefault: "hand", canBeHeldDefault: true },
+      { id: "products_pastas", slug: "pastas", displayName: "Pastalar", icon: "🎂", order: 2, isActive: true, eatingMethodDefault: "fork", canBeHeldDefault: false },
+      { id: "products_chocolates", slug: "chocolates", displayName: "Çikolatalar", icon: "🍫", order: 3, isActive: true, eatingMethodDefault: "hand", canBeHeldDefault: true },
+      { id: "products_coffees", slug: "coffees", displayName: "Kahveler", icon: "☕", order: 4, isActive: true, eatingMethodDefault: "none", canBeHeldDefault: true },
     ],
   },
   {
@@ -1201,12 +1212,12 @@ export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt"
     isSystem: true,
     isDeleted: false,
     subTypes: [
-      { slug: "plates", displayName: "Tabaklar", icon: "🍽️", order: 1, isActive: true },
-      { slug: "cups", displayName: "Fincanlar", icon: "☕", order: 2, isActive: true },
-      { slug: "cutlery", displayName: "Çatal-Bıçak", icon: "🍴", order: 3, isActive: true },
-      { slug: "napkins", displayName: "Peçeteler", icon: "🧻", order: 4, isActive: true },
-      { slug: "boxes", displayName: "Kutular", icon: "📦", order: 5, isActive: true },
-      { slug: "bags", displayName: "Çantalar", icon: "🛍️", order: 6, isActive: true },
+      { id: "props_plates", slug: "plates", displayName: "Tabaklar", icon: "🍽️", order: 1, isActive: true },
+      { id: "props_cups", slug: "cups", displayName: "Fincanlar", icon: "☕", order: 2, isActive: true },
+      { id: "props_cutlery", slug: "cutlery", displayName: "Çatal-Bıçak", icon: "🍴", order: 3, isActive: true },
+      { id: "props_napkins", slug: "napkins", displayName: "Peçeteler", icon: "🧻", order: 4, isActive: true },
+      { id: "props_boxes", slug: "boxes", displayName: "Kutular", icon: "📦", order: 5, isActive: true },
+      { id: "props_bags", slug: "bags", displayName: "Çantalar", icon: "🛍️", order: 6, isActive: true },
     ],
   },
   {
@@ -1218,9 +1229,9 @@ export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt"
     isSystem: true,
     isDeleted: false,
     subTypes: [
-      { slug: "tables", displayName: "Masalar", icon: "🪵", order: 1, isActive: true },
-      { slug: "chairs", displayName: "Sandalyeler", icon: "🪑", order: 2, isActive: true },
-      { slug: "decor", displayName: "Dekorasyon", icon: "🌸", order: 3, isActive: true },
+      { id: "furniture_tables", slug: "tables", displayName: "Masalar", icon: "🪵", order: 1, isActive: true },
+      { id: "furniture_chairs", slug: "chairs", displayName: "Sandalyeler", icon: "🪑", order: 2, isActive: true },
+      { id: "furniture_decor", slug: "decor", displayName: "Dekorasyon", icon: "🌸", order: 3, isActive: true },
     ],
   },
   {
@@ -1232,14 +1243,14 @@ export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt"
     isSystem: true,
     isDeleted: false,
     subTypes: [
-      { slug: "phone", displayName: "Telefon", icon: "📱", order: 1, isActive: true },
-      { slug: "bag", displayName: "Çanta", icon: "👜", order: 2, isActive: true },
-      { slug: "keys", displayName: "Anahtar", icon: "🔑", order: 3, isActive: true },
-      { slug: "book", displayName: "Kitap", icon: "📚", order: 4, isActive: true },
-      { slug: "glasses", displayName: "Gözlük", icon: "🕶️", order: 5, isActive: true },
-      { slug: "watch", displayName: "Saat", icon: "⌚", order: 6, isActive: true },
-      { slug: "notebook", displayName: "Defter", icon: "📓", order: 7, isActive: true },
-      { slug: "wallet", displayName: "Cüzdan", icon: "👛", order: 8, isActive: true },
+      { id: "accessories_phone", slug: "phone", displayName: "Telefon", icon: "📱", order: 1, isActive: true },
+      { id: "accessories_bag", slug: "bag", displayName: "Çanta", icon: "👜", order: 2, isActive: true },
+      { id: "accessories_keys", slug: "keys", displayName: "Anahtar", icon: "🔑", order: 3, isActive: true },
+      { id: "accessories_book", slug: "book", displayName: "Kitap", icon: "📚", order: 4, isActive: true },
+      { id: "accessories_glasses", slug: "glasses", displayName: "Gözlük", icon: "🕶️", order: 5, isActive: true },
+      { id: "accessories_watch", slug: "watch", displayName: "Saat", icon: "⌚", order: 6, isActive: true },
+      { id: "accessories_notebook", slug: "notebook", displayName: "Defter", icon: "📓", order: 7, isActive: true },
+      { id: "accessories_wallet", slug: "wallet", displayName: "Cüzdan", icon: "👛", order: 8, isActive: true },
     ],
   },
   {
@@ -1251,8 +1262,8 @@ export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt"
     isSystem: true,
     isDeleted: false,
     subTypes: [
-      { slug: "dogs", displayName: "Köpekler", icon: "🐕", order: 1, isActive: true },
-      { slug: "cats", displayName: "Kediler", icon: "🐈", order: 2, isActive: true },
+      { id: "pets_dogs", slug: "dogs", displayName: "Köpekler", icon: "🐕", order: 1, isActive: true },
+      { id: "pets_cats", slug: "cats", displayName: "Kediler", icon: "🐈", order: 2, isActive: true },
     ],
   },
   {
@@ -1264,11 +1275,11 @@ export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt"
     isSystem: true,
     isDeleted: false,
     subTypes: [
-      { slug: "indoor", displayName: "İç Mekan", icon: "🏠", order: 1, isActive: true },
-      { slug: "outdoor", displayName: "Dış Mekan", icon: "🌳", order: 2, isActive: true },
-      { slug: "window", displayName: "Pencere Önü", icon: "🪟", order: 3, isActive: true },
-      { slug: "cafe", displayName: "Kafe", icon: "☕", order: 4, isActive: true },
-      { slug: "home", displayName: "Ev", icon: "🏡", order: 5, isActive: true },
+      { id: "environments_indoor", slug: "indoor", displayName: "İç Mekan", icon: "🏠", order: 1, isActive: true },
+      { id: "environments_outdoor", slug: "outdoor", displayName: "Dış Mekan", icon: "🌳", order: 2, isActive: true },
+      { id: "environments_window", slug: "window", displayName: "Pencere Önü", icon: "🪟", order: 3, isActive: true },
+      { id: "environments_cafe", slug: "cafe", displayName: "Kafe", icon: "☕", order: 4, isActive: true },
+      { id: "environments_home", slug: "home", displayName: "Ev", icon: "🏡", order: 5, isActive: true },
     ],
   },
   {
@@ -1280,14 +1291,33 @@ export const DEFAULT_CATEGORIES: Omit<DynamicCategory, "createdAt" | "updatedAt"
     isSystem: true,
     isDeleted: false,
     subTypes: [
-      { slug: "vitrin", displayName: "Vitrin", icon: "🪟", order: 1, isActive: true },
-      { slug: "tezgah", displayName: "Tezgah", icon: "🍰", order: 2, isActive: true },
-      { slug: "oturma-alani", displayName: "Oturma Alanı", icon: "🛋️", order: 3, isActive: true },
-      { slug: "dekorasyon", displayName: "Dekorasyon", icon: "🌺", order: 4, isActive: true },
-      { slug: "genel-mekan", displayName: "Genel Mekan", icon: "🏪", order: 5, isActive: true },
+      { id: "interior_vitrin", slug: "vitrin", displayName: "Vitrin", icon: "🪟", order: 1, isActive: true },
+      { id: "interior_tezgah", slug: "tezgah", displayName: "Tezgah", icon: "🍰", order: 2, isActive: true },
+      { id: "interior_oturma-alani", slug: "oturma-alani", displayName: "Oturma Alanı", icon: "🛋️", order: 3, isActive: true },
+      { id: "interior_dekorasyon", slug: "dekorasyon", displayName: "Dekorasyon", icon: "🌺", order: 4, isActive: true },
+      { id: "interior_genel-mekan", slug: "genel-mekan", displayName: "Genel Mekan", icon: "🏪", order: 5, isActive: true },
     ],
   },
 ];
+
+/**
+ * SubType ID üretme helper fonksiyonu
+ * Format: {categoryType}_{slug}_{timestamp}
+ * Yeni alt kategoriler için kullanılır
+ */
+export function generateSubTypeId(categoryType: DynamicCategoryType, slug: string): string {
+  // Deterministic ID for existing slugs (migration için)
+  return `${categoryType}_${slug}`;
+}
+
+/**
+ * Yeni/custom alt kategoriler için unique ID üretir
+ * Format: {categoryType}_{slug}_{timestamp}
+ */
+export function generateUniqueSubTypeId(categoryType: DynamicCategoryType, slug: string): string {
+  const timestamp = Date.now().toString(36); // Base36 for shorter IDs
+  return `${categoryType}_${slug}_${timestamp}`;
+}
 
 // ==========================================
 // AI RULES SYSTEM (Öğrenme Kuralları)

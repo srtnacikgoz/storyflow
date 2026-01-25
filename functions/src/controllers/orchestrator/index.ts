@@ -117,4 +117,18 @@ export {
   seedCategories,
   clearCache as clearCategoriesCache,
   getDisplayName as getCategoryDisplayName,
+  // Main category endpoints
+  addMainCategory,
+  updateMainCategory,
+  deleteMainCategory,
+  // v2 ID-based endpoints
+  getSubTypeById,
+  getSubTypeIds,
+  getSubTypeIdBySlug,
+  validateSubTypeId,
+  // Migration endpoints
+  migrateCategoriesToIdBased,
+  migrateAssetsToIdBased,
+  migrateTimeSlotRulesToIdBased,
+  runFullMigration,
 } from "./categoryController";
