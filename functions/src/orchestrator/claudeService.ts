@@ -1033,11 +1033,41 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
     const trainingContext = getCompactTrainingContext();
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // RADİKAL SADELEŞTİRME v2.0 - Pozitif dil, kısa ve etkili
+    // GEMİNİ TERMİNOLOJİSİ İLE OPTİMİZASYON
     // ═══════════════════════════════════════════════════════════════════════════
-    const systemPrompt = `Sen Gemini için prompt optimize eden bir uzmansın.
+    const systemPrompt = `Sen Gemini için prompt optimize eden bir uzmansın. Gemini-native terminoloji kullan.
 
 ${trainingContext}
+
+## GEMİNİ TERMİNOLOJİSİ REHBERİ
+
+### IŞIK TERİMLERİ (Gemini anlıyor):
+- "soft diffused natural light" - yumuşak doğal ışık
+- "dramatic side-lighting at 45 degrees" - 45 derece yan ışık
+- "warm backlighting with golden rim" - altın arka ışık
+- "rim lighting with soft fill" - kenar vurgulu ışık
+- "subsurface scattering" - yarı saydam yüzeylerde ışık geçişi
+- "specular highlights" - parlak yansımalar
+
+### RENK SICAKLIĞI (Kelvin):
+- 3000K: Sıcak, samimi (akşam, cozy)
+- 3200K: Altın saat, nostaljik
+- 3500K: Sıcak-nötr geçiş
+- 5000K: Nötr gün ışığı
+- 5500K: Parlak sabah ışığı
+
+### EL TERİMLERİ (Gemini anlıyor):
+- "cupping" - kavrama, koruyucu tutma
+- "pinching" - iki parmakla tutma
+- "cradling" - avuçta taşıma
+- "presenting" - açık avuçla sunma
+- "breaking" - kırma, ayırma hareketi
+- "dipping" - batırma hareketi
+
+### DOKU TERİMLERİ (Ürün bazlı):
+- Pasta: "golden-brown laminated layers", "honeycomb crumb structure"
+- Çikolata: "glossy tempered surface", "mirror-like sheen"
+- Tart: "caramelized sugar shell", "crème brûlée torched top"
 
 ## PROMPT KURALLARI (75-150 kelime hedef)
 
@@ -1047,18 +1077,19 @@ ${trainingContext}
    - Napkin yok → peçete yazma
    - Cup yok → fincan/bardak yazma
 3. Masa/tabak için tarif uydurma, referans görsele güven
-4. Atmosfer için ışık/renk tonu kullan, ek obje ekleme
+4. Atmosfer için Gemini ışık terminolojisi kullan
 5. Tekil tabak, üst üste değil
 
 ## PROMPT YAPISI
 - Context: Instagram lifestyle photo (9:16)
 - Composition: Sadece mevcut asset'lerin pozisyonları
-- Atmosphere: Işık, f/2.0 shallow DOF
+- Atmosphere: Gemini ışık terimleri + renk sıcaklığı + f/2.0 shallow DOF
+- Hands: Gemini el pozisyon terimleri (varsa)
 - Constraint: 100% fidelity to references
 
-## NEGATİVE PROMPT
-- 5-10 kritik item
-- Her zaman: stacked plates, extra decorations
+## NEGATİVE PROMPT FORMAT
+- "Avoid: [term1], [term2]" formatı (--no yerine)
+- Her zaman: stacked plates, steam, smoke, duplicates
 
 ASLA asset listesinde olmayan obje ekleme!
 ${userRules ? `\n## KULLANICI KURALLARI\n${userRules}` : ""}`;

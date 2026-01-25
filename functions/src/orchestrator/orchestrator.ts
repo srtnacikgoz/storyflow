@@ -12,6 +12,11 @@ import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import { AIRulesService } from "../services/aiRulesService";
 import {
+  buildGeminiPrompt,
+  extractGeminiParamsFromScenario,
+  buildNegativePrompt,
+} from "./geminiPromptBuilder";
+import {
   Asset,
   AssetSelection,
   ProductType,
@@ -525,22 +530,35 @@ export class Orchestrator {
         // ══════════════════════════════════════════════════════════════════════
 
         // ==========================================
-        // STAGE 3: PROMPT OPTIMIZATION
+        // STAGE 3: PROMPT OPTIMIZATION (Gemini Terminolojisi)
         // ==========================================
         console.log("[Orchestrator] Stage 3: Prompt Optimization");
         status.currentStage = "prompt_optimization";
         if (onProgress) await onProgress("prompt_optimization", 3, TOTAL_STAGES);
 
-        const basePrompt = await this.getScenarioPrompt(
+        // Senaryo Gemini ayarlarını al (varsa)
+        const scenarioGeminiData = selectedScenario ? {
+          lightingPreset: selectedScenario.lightingPreset,
+          handPose: selectedScenario.handPose,
+          compositionEntry: selectedScenario.compositionEntry,
+        } : undefined;
+
+        // Gemini-native prompt oluştur
+        const basePromptResult = await this.getScenarioPrompt(
           result.scenarioSelection.scenarioId,
           result.scenarioSelection.compositionId,
           result.scenarioSelection.handStyle,
           result.assetSelection.cup,
-          mood // Tema'dan gelen mood bilgisi
+          mood, // Tema'dan gelen mood bilgisi
+          productType,
+          timeOfDay,
+          scenarioGeminiData
         );
 
+        console.log(`[Orchestrator] Base prompt built with Gemini terminology`);
+
         const promptResponse = await this.claude.optimizePrompt(
-          basePrompt,
+          basePromptResult.mainPrompt,
           result.scenarioSelection,
           result.assetSelection,
           combinedHints // Kullanıcı tanımlı kurallar + feedback'ler
@@ -550,9 +568,15 @@ export class Orchestrator {
           throw new Error(`Prompt oluşturma başarısız: ${promptResponse.error || "Bilinmeyen hata"}`);
         }
 
+        // Gemini'den gelen negative prompt ile Claude'dan gelen negative prompt'u birleştir
+        const combinedNegativePrompt = [
+          basePromptResult.negativePrompt,
+          promptResponse.data.negativePrompt,
+        ].filter(Boolean).join(", ");
+
         result.optimizedPrompt = {
           mainPrompt: promptResponse.data.optimizedPrompt,
-          negativePrompt: promptResponse.data.negativePrompt,
+          negativePrompt: combinedNegativePrompt,
           customizations: promptResponse.data.customizations,
           aspectRatio: "9:16",
           faithfulness: 0.8,
@@ -1006,17 +1030,26 @@ export class Orchestrator {
   }
 
   /**
-   * Senaryo prompt'unu al (Firestore veya sabit)
+   * Senaryo prompt'unu al (Firestore veya Gemini builder)
    * compositionId ve handStyle parametreleri ile detaylı prompt üretir
    * mood parametresi ile atmosfer bilgisi eklenir
+   *
+   * Yeni: Gemini terminolojisi ile zenginleştirilmiş prompt
    */
   private async getScenarioPrompt(
     scenarioId: string,
     compositionId?: string,
     handStyle?: string,
     selectedCup?: Asset,
-    mood?: string
-  ): Promise<string> {
+    mood?: string,
+    productType?: string,
+    timeOfDay?: string,
+    scenarioData?: {
+      lightingPreset?: string;
+      handPose?: string;
+      compositionEntry?: string;
+    }
+  ): Promise<{ mainPrompt: string; negativePrompt?: string }> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
 
@@ -1026,11 +1059,24 @@ export class Orchestrator {
       prompt += this.getCompositionDetails(scenarioId, compositionId);
       prompt += this.getHandStyleDetails(handStyle);
       prompt += this.getCupReferenceDetails(selectedCup);
-      return prompt;
+
+      // Negative prompt'u da oluştur
+      const negativePrompt = await buildNegativePrompt(handStyle ? ["always", "hands"] : ["always"]);
+
+      return { mainPrompt: prompt, negativePrompt };
     }
 
-    // Fallback: Dinamik prompt oluştur (mood bilgisi ile)
-    return this.buildDynamicPrompt(scenarioId, compositionId, handStyle, selectedCup, mood);
+    // Gemini builder ile dinamik prompt oluştur
+    return this.buildDynamicPromptWithGemini(
+      scenarioId,
+      compositionId,
+      handStyle,
+      selectedCup,
+      mood,
+      productType,
+      timeOfDay,
+      scenarioData
+    );
   }
 
   /**
@@ -1205,10 +1251,75 @@ Cup: ${colors} ${material} (from reference)`.trim();
   }
 
   /**
-   * Dinamik prompt oluştur (fallback)
-   * mood parametresi ile atmosfer bilgisi eklenir
+   * Dinamik prompt oluştur (Gemini terminolojisi ile)
+   * Yeni sistem: Firestore'daki Gemini preset'lerini kullanır
+   * Fallback: Hardcoded Gemini terminolojisi
    */
-  private buildDynamicPrompt(
+  private async buildDynamicPromptWithGemini(
+    scenarioId: string,
+    compositionId?: string,
+    handStyle?: string,
+    selectedCup?: Asset,
+    mood?: string,
+    productType?: string,
+    timeOfDay?: string,
+    scenarioData?: {
+      lightingPreset?: string;
+      handPose?: string;
+      compositionEntry?: string;
+    }
+  ): Promise<{ mainPrompt: string; negativePrompt: string }> {
+    // Senaryo verilerinden Gemini parametrelerini çıkar
+    const scenarioParams = scenarioData
+      ? extractGeminiParamsFromScenario({
+          mood,
+          lightingPreset: scenarioData.lightingPreset,
+          handPose: scenarioData.handPose,
+          compositionEntry: scenarioData.compositionEntry,
+          includesHands: !!handStyle,
+        })
+      : { moodId: mood };
+
+    try {
+      // Gemini prompt builder kullan
+      const geminiResult = await buildGeminiPrompt({
+        moodId: scenarioParams.moodId,
+        lightingPresetId: scenarioParams.lightingPresetId,
+        handPoseId: scenarioParams.handPoseId,
+        compositionId: scenarioParams.compositionId || compositionId,
+        productType,
+        includesHands: !!handStyle,
+        timeOfDay: timeOfDay || this.getTimeOfDay(),
+      });
+
+      let prompt = geminiResult.mainPrompt;
+
+      // Ek detaylar ekle (eski sistem ile uyumluluk)
+      prompt += this.getCompositionDetails(scenarioId, compositionId);
+      prompt += this.getHandStyleDetails(handStyle);
+      prompt += this.getCupReferenceDetails(selectedCup);
+
+      console.log(`[Orchestrator] Built Gemini prompt with mood: ${geminiResult.metadata.mood?.id}, lighting: ${geminiResult.metadata.lighting?.id}`);
+
+      return {
+        mainPrompt: prompt,
+        negativePrompt: geminiResult.negativePrompt,
+      };
+    } catch (error) {
+      console.warn("[Orchestrator] Gemini prompt builder failed, using fallback:", error);
+      // Fallback to legacy prompt
+      return {
+        mainPrompt: this.buildDynamicPromptLegacy(scenarioId, compositionId, handStyle, selectedCup, mood),
+        negativePrompt: await buildNegativePrompt(handStyle ? ["always", "hands"] : ["always"]),
+      };
+    }
+  }
+
+  /**
+   * Legacy prompt builder (fallback)
+   * Gemini preset'leri yüklenemezse bu kullanılır
+   */
+  private buildDynamicPromptLegacy(
     scenarioId: string,
     compositionId?: string,
     handStyle?: string,
@@ -1216,41 +1327,81 @@ Cup: ${colors} ${material} (from reference)`.trim();
     mood?: string
   ): string {
     // ═══════════════════════════════════════════════════════════════════════════
-    // RADİKAL SADELEŞTİRME v2.0 - El senaryosu vs Masada servis otomatik seçimi
-    // handStyle varsa → el senaryosu, yoksa → masada servis
+    // Gemini-native terminoloji ile mood bazlı atmosfer
     // ═══════════════════════════════════════════════════════════════════════════
-
-    // Mood bazlı atmosfer ve ışık ayarları (Sade Patisserie mekan sınırları içinde)
-    const moodAtmosphere: Record<string, { lighting: string; atmosphere: string; location: string }> = {
+    const moodAtmosphere: Record<string, { lighting: string; atmosphere: string; temperature: string; colorPalette: string }> = {
+      "morning-ritual": {
+        lighting: "Natural morning light through window, soft diffused shadows",
+        atmosphere: "Bright and airy, fresh morning energy, clean minimal aesthetic",
+        temperature: "5500K daylight",
+        colorPalette: "white, cream, light wood, pastel tones",
+      },
+      "cozy-intimate": {
+        lighting: "Warm tungsten accent lighting, soft diffused ambient",
+        atmosphere: "Warm and inviting, intimate gathering, comfortable homey feeling",
+        temperature: "3000K warm",
+        colorPalette: "warm brown, cream, burnt orange, gold accents",
+      },
+      "rustic-heritage": {
+        lighting: "Golden hour directional sunlight, warm side-lighting",
+        atmosphere: "Rustic artisanal charm, traditional craftsmanship, authentic heritage",
+        temperature: "3200K golden",
+        colorPalette: "natural wood, linen, terracotta, olive green",
+      },
+      "gourmet-midnight": {
+        lighting: "Dramatic side-lighting at 45 degrees, deep defined shadows",
+        atmosphere: "Sophisticated midnight indulgence, moody dramatic luxury",
+        temperature: "3500K amber",
+        colorPalette: "dark wood, burgundy, gold, deep black",
+      },
+      "bright-airy": {
+        lighting: "Soft diffused daylight, minimal shadows, even illumination",
+        atmosphere: "Clean contemporary aesthetic, bright editorial style, minimalist elegance",
+        temperature: "5000K neutral",
+        colorPalette: "white, marble, light grey, sage green",
+      },
+      "festive-celebration": {
+        lighting: "Warm ambient with specular highlights, celebratory glow",
+        atmosphere: "Joyful celebration, special occasion warmth, festive abundance",
+        temperature: "3200K festive",
+        colorPalette: "gold, cream, burgundy, forest green",
+      },
+      // Legacy mood mappings for backward compatibility
       energetic: {
-        lighting: "Bright natural morning light, high contrast, vibrant colors",
-        atmosphere: "Fresh, dynamic energy",
-        location: "at Sade Patisserie terrace, sun-lit table",
+        lighting: "Bright natural morning light, high contrast",
+        atmosphere: "Fresh, dynamic energy, clean aesthetic",
+        temperature: "5500K",
+        colorPalette: "white, cream, bright accents",
       },
       social: {
         lighting: "Warm inviting ambient light, soft shadows",
         atmosphere: "Welcoming café scene, ready to share",
-        location: "at Sade Patisserie wide café table",
+        temperature: "4000K",
+        colorPalette: "warm neutrals, wood tones",
       },
       relaxed: {
-        lighting: "Soft diffused window light, pastel tones",
+        lighting: "Soft diffused window light",
         atmosphere: "Calm, peaceful, minimal",
-        location: "at Sade Patisserie window corner, soft bokeh background",
+        temperature: "5000K",
+        colorPalette: "soft pastels, white, grey",
       },
       warm: {
-        lighting: "Golden hour warm light, amber tones, cozy evening glow",
+        lighting: "Golden hour warm light, amber tones",
         atmosphere: "Romantic, intimate warmth",
-        location: "at Sade Patisserie indoor wooden table, sunset light",
+        temperature: "3200K",
+        colorPalette: "amber, gold, warm brown",
       },
       cozy: {
-        lighting: "Intimate focused lighting, deep but soft shadows",
+        lighting: "Intimate focused lighting, soft shadows",
         atmosphere: "Homey, comfortable, close-up feel",
-        location: "at Sade Patisserie cozy corner seating",
+        temperature: "3000K",
+        colorPalette: "warm brown, cream, terracotta",
       },
       balanced: {
-        lighting: "Natural balanced studio-like light, neutral tones",
+        lighting: "Natural balanced light, neutral tones",
         atmosphere: "Clean, professional, modern aesthetic",
-        location: "at Sade Patisserie clean counter area",
+        temperature: "5000K",
+        colorPalette: "neutral, white, grey",
       },
     };
 
@@ -1259,9 +1410,10 @@ Cup: ${colors} ${material} (from reference)`.trim();
     // El içermeyen senaryo (handStyle null/undefined) - masada servis
     const noHandPrompt = `Using uploaded image as reference for the product.
 
-Professional lifestyle Instagram photo ${currentMood.location}.
+Professional lifestyle Instagram photo at Sade Patisserie.
 
 ATMOSPHERE: ${currentMood.atmosphere}
+Color palette: ${currentMood.colorPalette}
 
 COMPOSITION:
 - Product centered on plate
@@ -1277,6 +1429,7 @@ RULES:
 
 LIGHTING:
 - ${currentMood.lighting}
+- Color temperature: ${currentMood.temperature}
 - Shallow depth of field (f/2.0)
 
 9:16 vertical for Instagram Stories. 8K photorealistic.`;
@@ -1284,12 +1437,18 @@ LIGHTING:
     // El içeren senaryo (handStyle belirtilmiş)
     const handPrompt = `Using uploaded image as reference for the product.
 
-Lifestyle Instagram photo of elegant feminine hand holding the product ${currentMood.location}.
+Lifestyle Instagram photo of elegant feminine hand holding the product at Sade Patisserie.
 
 ATMOSPHERE: ${currentMood.atmosphere}
+Color palette: ${currentMood.colorPalette}
+
+HANDS:
+- Elegant feminine hands with warm olive skin tone
+- Natural short nails, subtle nude polish
+- Hand entering frame naturally
 
 COMPOSITION:
-- Hand holding product naturally
+- Hand holding product with natural grip
 - Cup and plate on table as supporting elements
 
 RULES:
@@ -1300,7 +1459,9 @@ RULES:
 
 LIGHTING:
 - ${currentMood.lighting}
+- Color temperature: ${currentMood.temperature}
 - Gentle highlights on nail surface
+- Subsurface scattering on skin
 - Soft blurred background (f/2.0)
 
 9:16 vertical for Instagram Stories. 8K photorealistic.`;
@@ -1316,7 +1477,7 @@ RULES:
 
 Lifestyle Instagram story with pastry as hero subject on table.
 
-LIGHTING: Soft natural side light, warm tones.
+LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
 
 9:16 vertical. 8K photorealistic.`,
     };

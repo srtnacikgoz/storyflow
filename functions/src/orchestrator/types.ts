@@ -366,6 +366,12 @@ export interface Scenario {
   // Interior senaryolar için (AI görsel üretimi atlanır)
   isInterior?: boolean;           // true ise AI görsel üretimi ATLANIR
   interiorType?: InteriorType;    // Hangi interior kategorisinden asset seçilecek
+
+  // Gemini Terminoloji Ayarları (Admin panelden seçilen)
+  mood?: string;                  // Mood ID (morning-ritual, cozy-intimate, etc.)
+  lightingPreset?: string;        // Lighting preset ID (soft-diffused, dramatic-side, etc.)
+  handPose?: string;              // Hand pose ID (cupping, pinching, breaking, etc.)
+  compositionEntry?: string;      // Composition entry point (bottom-right, overhead, etc.)
 }
 
 /**
