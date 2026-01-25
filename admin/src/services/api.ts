@@ -34,6 +34,8 @@ import type {
   // AI Rules types
   AIRule,
   AIRulesStats,
+  // Setup Status types
+  SetupStatusResponse,
 } from "../types";
 
 // Firebase Functions base URL
@@ -868,6 +870,18 @@ class ApiService {
     };
   }
 
+  /**
+   * Sistem kurulum durumunu al (Onboarding Progress)
+   * Ürünler, asset'ler, senaryolar, temalar ve zaman dilimlerinin durumunu döner
+   */
+  async getSetupStatus(): Promise<SetupStatusResponse> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: SetupStatusResponse;
+    }>("getSetupStatus");
+    return response.data;
+  }
+
   // ==========================================
   // Orchestrator - Slot CRUD Operations
   // ==========================================
@@ -1104,6 +1118,33 @@ class ApiService {
   // ==========================================
   // Orchestrator - Theme Management
   // ==========================================
+
+  /**
+   * Tüm senaryoları listele
+   */
+  async listScenarios(): Promise<{
+    all: Array<{ id: string; name: string; includesHands?: boolean; isInterior?: boolean }>;
+    byCategory: {
+      withHands: Array<{ id: string; name: string }>;
+      withoutHands: Array<{ id: string; name: string }>;
+      interior: Array<{ id: string; name: string }>;
+    };
+    total: number;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        all: Array<{ id: string; name: string; includesHands?: boolean; isInterior?: boolean }>;
+        byCategory: {
+          withHands: Array<{ id: string; name: string }>;
+          withoutHands: Array<{ id: string; name: string }>;
+          interior: Array<{ id: string; name: string }>;
+        };
+        total: number;
+      };
+    }>("listScenarios");
+    return response.data;
+  }
 
   /**
    * Tüm temaları listele

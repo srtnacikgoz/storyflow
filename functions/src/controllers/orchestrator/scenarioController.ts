@@ -165,7 +165,7 @@ export const createScenario = functions
           return;
         }
 
-        // Senaryo oluştur
+        // Senaryo oluştur - undefined değerleri Firestore'a gönderme
         const scenario: Omit<FirestoreScenario, "createdAt" | "updatedAt"> = {
           id,
           name,
@@ -177,10 +177,11 @@ export const createScenario = functions
           })),
           isActive: true,
           isInterior: isInterior ?? false,
-          interiorType: interiorType,
-          suggestedProducts: suggestedProducts,
-          suggestedTimeSlots: suggestedTimeSlots,
-          mood: mood,
+          // Opsiyonel alanları sadece tanımlı ise ekle
+          ...(interiorType !== undefined && { interiorType }),
+          ...(suggestedProducts !== undefined && { suggestedProducts }),
+          ...(suggestedTimeSlots !== undefined && { suggestedTimeSlots }),
+          ...(mood !== undefined && { mood }),
         };
 
         await addScenario(scenario);
@@ -260,6 +261,7 @@ export const updateScenarioEndpoint = functions
 /**
  * Senaryo sil (soft delete)
  * DELETE /deleteScenario?id=xxx
+ * Not: Temalarda kullanılan senaryolar kalıcı silinemez (cascade kontrolü)
  */
 export const deleteScenarioEndpoint = functions
   .region(REGION)
@@ -294,7 +296,42 @@ export const deleteScenarioEndpoint = functions
           return;
         }
 
+        // CASCADE KONTROLÜ: Kalıcı silme için tema bağımlılığını kontrol et
         if (hardDelete) {
+          // Bu senaryoyu kullanan temaları bul
+          // Temalarda scenarios array'i senaryo ID'lerini tutuyor
+          const themesSnapshot = await db.collection("themes").get();
+          const affectedThemes: Array<{ id: string; name: string }> = [];
+
+          themesSnapshot.docs.forEach((doc) => {
+            const themeData = doc.data();
+            // scenarios array'i string[] veya {id: string}[] olabilir
+            const scenarios = themeData.scenarios || [];
+            const hasScenario = scenarios.some((s: string | { id: string }) =>
+              typeof s === "string" ? s === scenarioId : s.id === scenarioId
+            );
+
+            if (hasScenario) {
+              affectedThemes.push({
+                id: doc.id,
+                name: themeData.name || doc.id,
+              });
+            }
+          });
+
+          if (affectedThemes.length > 0) {
+            console.log(`[deleteScenario] Scenario ${scenarioId} is used by ${affectedThemes.length} themes`);
+
+            response.status(400).json({
+              success: false,
+              error: `Bu senaryo ${affectedThemes.length} temada kullanılıyor. Kalıcı silmek için önce bu temalardan senaryoyu kaldırın.`,
+              affectedThemes,
+              code: "SCENARIO_IN_USE",
+              hint: "Soft delete (devre dışı bırakma) yapabilirsiniz: hardDelete=false",
+            });
+            return;
+          }
+
           // Kalıcı silme
           await db
             .collection("global")
@@ -303,7 +340,7 @@ export const deleteScenarioEndpoint = functions
             .doc(scenarioId)
             .delete();
         } else {
-          // Soft delete - isActive: false
+          // Soft delete - isActive: false (bu her zaman çalışır)
           await updateScenario(scenarioId, { isActive: false });
         }
 

@@ -25,6 +25,7 @@ import {
   FirestoreOrchestratorInstructions,
   FirestoreTimeoutsConfig,
   FirestoreSystemSettingsConfig,
+  FirestoreFixedAssetsConfig,
   CompositionVariant,
 } from "../types";
 
@@ -504,6 +505,30 @@ export const DEFAULT_SYSTEM_SETTINGS_CONFIG: Omit<FirestoreSystemSettingsConfig,
 };
 
 // ==========================================
+// SABİT ASSET AYARLARI
+// ==========================================
+
+/**
+ * Varsayılan sabit asset konfigürasyonu
+ *
+ * "Mermer masa sabit, üzerindekiler serbest" kullanım senaryosu için.
+ * Varsayılan olarak devre dışı - kullanıcı admin panelden aktifleştirir.
+ */
+export const DEFAULT_FIXED_ASSETS_CONFIG: Omit<FirestoreFixedAssetsConfig, "updatedAt"> = {
+  // Sabit masa - null ise normal diversity çalışır
+  fixedTableId: null,
+
+  // Sabit tabak (opsiyonel)
+  fixedPlateId: null,
+
+  // Sabit fincan (opsiyonel)
+  fixedCupId: null,
+
+  // Varsayılan olarak devre dışı
+  isEnabled: false,
+};
+
+// ==========================================
 // ZAMAN-MOOD EŞLEŞTİRMESİ
 // ==========================================
 
@@ -725,6 +750,10 @@ export function getAllSeedData() {
     },
     systemSettingsConfig: {
       ...DEFAULT_SYSTEM_SETTINGS_CONFIG,
+      updatedAt: timestamp,
+    },
+    fixedAssetsConfig: {
+      ...DEFAULT_FIXED_ASSETS_CONFIG,
       updatedAt: timestamp,
     },
   };

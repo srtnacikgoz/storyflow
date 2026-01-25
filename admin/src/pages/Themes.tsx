@@ -1,6 +1,41 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import type { Theme } from "../types";
+import { Tooltip } from "../components/Tooltip";
+import { SetupStepper } from "../components/SetupStepper";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { PageTour } from "../components/PageTour";
+import type { TourStep } from "../components/PageTour";
+
+// Themes sayfası tour adımları
+const THEMES_TOUR_STEPS: TourStep[] = [
+  {
+    target: "[data-tour='themes-header']",
+    title: "Tema Yönetimi",
+    content: "Temalar, senaryoları ve atmosfer ayarlarını gruplar. Her zaman dilimine bir tema atanır.",
+    position: "bottom",
+  },
+  {
+    target: "[data-tour='themes-add']",
+    title: "Yeni Tema",
+    content: "Buradan yeni tema oluşturabilirsiniz. Her tema belirli senaryoları ve mood ayarlarını içerir.",
+    position: "left",
+  },
+  {
+    target: "[data-tour='variation-rules']",
+    title: "Çeşitlilik Kuralları",
+    content: "Bu ayarlar AI'ın aynı öğeleri ne sıklıkta tekrar kullanabileceğini belirler. Monotonluğu önler.",
+    position: "top",
+  },
+];
+
+// Senaryo tipi (API'den gelen)
+interface Scenario {
+  id: string;
+  name: string;
+  includesHands: boolean;
+  isInterior: boolean;
+}
 
 // Çeşitlilik kuralları tipi
 interface VariationRules {
@@ -21,32 +56,6 @@ const DEFAULT_VARIATION_RULES: VariationRules = {
   petFrequency: 15,
   similarityThreshold: 50,
 };
-
-// Tüm senaryolar
-const ALL_SCENARIOS = [
-  // Normal senaryolar (AI görsel üretimi yapılır)
-  { id: "zarif-tutma", name: "Zarif Tutma", includesHands: true, isInterior: false },
-  { id: "kahve-ani", name: "Kahve Anı", includesHands: true, isInterior: false },
-  { id: "kahve-kosesi", name: "Kahve Köşesi", includesHands: false, isInterior: false },
-  { id: "yarim-kaldi", name: "Yarım Kaldı", includesHands: false, isInterior: false },
-  { id: "cam-kenari", name: "Cam Kenarı", includesHands: false, isInterior: false },
-  { id: "mermer-zarafet", name: "Mermer Zarafet", includesHands: false, isInterior: false },
-  { id: "hediye-acilisi", name: "Hediye Açılışı", includesHands: true, isInterior: false },
-  { id: "ilk-dilim", name: "İlk Dilim", includesHands: true, isInterior: false },
-  { id: "paylasim", name: "Paylaşım", includesHands: false, isInterior: false },
-  { id: "paket-servis", name: "Paket Servis", includesHands: false, isInterior: false },
-  // Interior senaryolar (AI görsel üretimi ATLANIR, gerçek fotoğraf kullanılır)
-  { id: "vitrin-sergisi", name: "Vitrin Sergisi", includesHands: false, isInterior: true },
-  { id: "kruvasan-tezgahi", name: "Kruvasan Tezgahı", includesHands: false, isInterior: true },
-  { id: "pastane-ici", name: "Pastane İçi", includesHands: false, isInterior: true },
-  { id: "oturma-kosesi", name: "Oturma Köşesi", includesHands: false, isInterior: true },
-  { id: "cicek-detay", name: "Çiçek Detay", includesHands: false, isInterior: true },
-  { id: "kahve-hazirligi", name: "Kahve Hazırlığı", includesHands: false, isInterior: true },
-  { id: "sabah-acilis", name: "Sabah Açılış", includesHands: false, isInterior: true },
-  { id: "pencere-isigi", name: "Pencere Işığı", includesHands: false, isInterior: true },
-  { id: "raf-zenginligi", name: "Raf Zenginliği", includesHands: false, isInterior: true },
-  { id: "detay-cekimi", name: "Detay Çekimi", includesHands: false, isInterior: true },
-];
 
 // Mood seçenekleri - Gemini terminolojisi ile zenginleştirilmiş
 // Her mood'un ışık, renk sıcaklığı ve atmosfer ayarları tanımlı
@@ -123,6 +132,10 @@ export default function Themes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Senaryolar state (API'den dinamik yüklenir)
+  const [allScenarios, setAllScenarios] = useState<Scenario[]>([]);
+  const [scenariosLoading, setScenariosLoading] = useState(true);
+
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -139,8 +152,31 @@ export default function Themes() {
 
   useEffect(() => {
     loadThemes();
+    loadScenarios();
     loadVariationRules();
   }, []);
+
+  // Senaryoları API'den yükle
+  const loadScenarios = async () => {
+    setScenariosLoading(true);
+    try {
+      const response = await api.listScenarios();
+      // API'den gelen senaryoları Scenario tipine dönüştür
+      const scenarios: Scenario[] = response.all.map((s: { id: string; name: string; includesHands?: boolean; isInterior?: boolean }) => ({
+        id: s.id,
+        name: s.name,
+        includesHands: s.includesHands ?? false,
+        isInterior: s.isInterior ?? false,
+      }));
+      setAllScenarios(scenarios);
+    } catch (err) {
+      console.error("Senaryolar yüklenemedi:", err);
+      // Hata durumunda boş liste
+      setAllScenarios([]);
+    } finally {
+      setScenariosLoading(false);
+    }
+  };
 
   const loadThemes = async () => {
     setLoading(true);
@@ -307,9 +343,16 @@ export default function Themes() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
+      {/* Setup Stepper */}
+      <SetupStepper />
+
+      {/* Page Tour */}
+      <PageTour tourId="themes-page" steps={THEMES_TOUR_STEPS} />
+
+      <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between" data-tour="themes-header">
         <div>
           <h1 className="text-2xl font-semibold text-stone-900">Temalar</h1>
           <p className="text-sm text-stone-500 mt-1">
@@ -319,6 +362,7 @@ export default function Themes() {
         <button
           onClick={() => openModal()}
           className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2"
+          data-tour="themes-add"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -327,13 +371,48 @@ export default function Themes() {
         </button>
       </div>
 
-      {/* Tema Listesi */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {themes.map((theme) => (
-          <div
-            key={theme.id}
-            className="bg-white rounded-xl border border-stone-200 p-5 hover:shadow-md transition-shadow"
+      {/* Empty State - Hiç tema yoksa */}
+      {themes.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-12 text-center">
+          <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="text-4xl">🎨</span>
+          </div>
+          <h2 className="text-xl font-bold text-stone-900 mb-2">
+            Henüz tema oluşturmadınız
+          </h2>
+          <p className="text-stone-600 mb-6 max-w-md mx-auto">
+            Temalar, görsel üretimde kullanılacak senaryo gruplarını ve atmosferi belirler.
+            Her zaman dilimine farklı tema atayabilirsiniz.
+          </p>
+
+          <div className="bg-purple-50 rounded-xl p-4 mb-6 max-w-md mx-auto text-left">
+            <p className="text-sm font-medium text-purple-800 mb-2">💡 Tema ne işe yarar?</p>
+            <ul className="text-sm text-purple-700 space-y-1">
+              <li>• <strong>Senaryo gruplaması</strong> - Hangi senaryolar birlikte kullanılacak</li>
+              <li>• <strong>Atmosfer belirleme</strong> - Sıcak, soğuk, enerjik vb.</li>
+              <li>• <strong>Tutarlılık</strong> - Mağazanızın görsel kimliği korunur</li>
+            </ul>
+          </div>
+
+          <button
+            onClick={() => openModal()}
+            className="bg-amber-600 text-white px-6 py-3 rounded-xl hover:bg-amber-700 font-medium inline-flex items-center gap-2"
           >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            İlk Temanı Oluştur
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Tema Listesi */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {themes.map((theme) => (
+              <div
+                key={theme.id}
+                className="bg-white rounded-xl border border-stone-200 p-5 hover:shadow-md transition-shadow"
+              >
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h3 className="font-medium text-stone-900">{theme.name}</h3>
@@ -390,7 +469,7 @@ export default function Themes() {
               <p className="text-xs text-stone-500 mb-2">Senaryolar:</p>
               <div className="flex flex-wrap gap-1">
                 {theme.scenarios.map((scenarioId) => {
-                  const scenario = ALL_SCENARIOS.find((s) => s.id === scenarioId);
+                  const scenario = allScenarios.find((s) => s.id === scenarioId);
                   return (
                     <span
                       key={scenarioId}
@@ -428,17 +507,13 @@ export default function Themes() {
               )}
             </div>
           </div>
-        ))}
-      </div>
-
-      {themes.length === 0 && (
-        <div className="text-center py-12 text-stone-500">
-          Henüz tema eklenmemiş.
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Çeşitlilik Kuralları Bölümü */}
-      <div className="bg-white rounded-xl border border-stone-200 p-6">
+      <div className="bg-white rounded-xl border border-stone-200 p-6" data-tour="variation-rules">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg font-semibold text-stone-900">Çeşitlilik Kuralları</h2>
@@ -458,8 +533,12 @@ export default function Themes() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Senaryo Aralığı */}
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-2">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-2">
               Senaryo Aralığı: {variationRules.scenarioGap}
+              <Tooltip
+                content="Örn: 3 = aynı senaryo en az 3 üretim sonra tekrar kullanılabilir"
+                position="top"
+              />
             </label>
             <input
               type="range"
@@ -558,8 +637,12 @@ export default function Themes() {
 
           {/* Benzerlik Eşiği */}
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-2">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-2">
               Benzerlik Eşiği: %{variationRules.similarityThreshold}
+              <Tooltip
+                content="Yüksek değer = daha farklı görseller. Düşük değer = benzer görsellere izin."
+                position="top"
+              />
             </label>
             <input
               type="range"
@@ -649,8 +732,12 @@ export default function Themes() {
 
                 {/* Mood - Gemini Terminolojisi ile */}
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-2">
                     Mood (Atmosfer)
+                    <Tooltip
+                      content="Temanın genel havası. AI bu değere göre ışık, renk sıcaklığı ve atmosfer ayarlarını uygular."
+                      position="right"
+                    />
                   </label>
                   <select
                     value={form.mood}
@@ -720,8 +807,12 @@ export default function Themes() {
                       onChange={(e) => setForm({ ...form, petAllowed: e.target.checked })}
                       className="w-5 h-5 text-amber-600 border-stone-300 rounded focus:ring-amber-500"
                     />
-                    <span className="text-sm font-medium text-stone-700">
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-stone-700">
                       Köpek dahil edilebilir
+                      <Tooltip
+                        content="İzin verilirse köpek 'Çeşitlilik Kuralları'ndaki frekansa göre görsellere eklenir."
+                        position="right"
+                      />
                     </span>
                   </label>
                 </div>
@@ -749,37 +840,50 @@ export default function Themes() {
                   <label className="block text-sm font-medium text-stone-700 mb-3">
                     Senaryolar
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {ALL_SCENARIOS.map((scenario) => (
-                      <label
-                        key={scenario.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                          form.scenarios.includes(scenario.id)
-                            ? "bg-amber-50 border-amber-300"
-                            : "bg-stone-50 border-stone-200 hover:bg-stone-100"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.scenarios.includes(scenario.id)}
-                          onChange={() => toggleScenario(scenario.id)}
-                          className="w-4 h-4 text-amber-600 border-stone-300 rounded focus:ring-amber-500"
-                        />
-                        <div>
-                          <span className="text-sm font-medium text-stone-800">
-                            {scenario.name}
-                          </span>
-                          {scenario.isInterior && (
-                            <span className="ml-2 text-xs text-green-600">📍 Interior</span>
-                          )}
-                          {scenario.includesHands && (
-                            <span className="ml-2 text-xs text-purple-600">El var</span>
-                          )}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                  {form.scenarios.length === 0 && (
+                  {scenariosLoading ? (
+                    <div className="text-center py-4 text-stone-500">
+                      Senaryolar yükleniyor...
+                    </div>
+                  ) : allScenarios.length === 0 ? (
+                    <div className="text-center py-4 text-stone-500">
+                      Henüz senaryo tanımlanmamış.{" "}
+                      <a href="/scenarios" className="text-amber-600 underline">
+                        Senaryo ekle
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {allScenarios.map((scenario) => (
+                        <label
+                          key={scenario.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                            form.scenarios.includes(scenario.id)
+                              ? "bg-amber-50 border-amber-300"
+                              : "bg-stone-50 border-stone-200 hover:bg-stone-100"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.scenarios.includes(scenario.id)}
+                            onChange={() => toggleScenario(scenario.id)}
+                            className="w-4 h-4 text-amber-600 border-stone-300 rounded focus:ring-amber-500"
+                          />
+                          <div>
+                            <span className="text-sm font-medium text-stone-800">
+                              {scenario.name}
+                            </span>
+                            {scenario.isInterior && (
+                              <span className="ml-2 text-xs text-green-600">📍 Interior</span>
+                            )}
+                            {scenario.includesHands && (
+                              <span className="ml-2 text-xs text-purple-600">El var</span>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {form.scenarios.length === 0 && !scenariosLoading && allScenarios.length > 0 && (
                     <p className="text-sm text-red-500 mt-2">
                       En az bir senaryo seçmelisiniz
                     </p>
@@ -809,33 +913,26 @@ export default function Themes() {
       )}
 
       {/* Delete Confirmation Modal */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-stone-900 mb-2">
-              Temayı Sil
-            </h3>
-            <p className="text-stone-600 mb-6">
-              Bu temayı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteId(null)}
-                className="px-4 py-2 border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors"
-              >
-                İptal
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {deleting ? "Siliniyor..." : "Sil"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDelete}
+        title={`"${themes.find(t => t.id === deleteId)?.name || "Tema"}" Silinecek`}
+        description="Bu temayı silmek istediğinize emin misiniz?"
+        consequences={[
+          "Tema kalıcı olarak silinecektir",
+          "Bu işlem geri alınamaz",
+        ]}
+        affectedItems={(() => {
+          const theme = themes.find(t => t.id === deleteId);
+          return theme?.scenarios || [];
+        })()}
+        confirmText="Evet, Sil"
+        cancelText="Vazgeç"
+        variant="danger"
+        isLoading={deleting}
+      />
+      </div>
     </div>
   );
 }

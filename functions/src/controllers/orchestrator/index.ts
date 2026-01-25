@@ -65,6 +65,7 @@ export {
 export {
   getOrchestratorDashboardStats,
   loadDashboardData,
+  getSetupStatus,
 } from "./dashboardController";
 
 // Config Controller
@@ -80,6 +81,8 @@ export {
   updateTimeoutsConfig,
   getSystemSettingsConfig,
   updateSystemSettingsConfig,
+  getFixedAssetsConfig,
+  updateFixedAssetsConfig,
 } from "./configController";
 
 // Feedback Controller

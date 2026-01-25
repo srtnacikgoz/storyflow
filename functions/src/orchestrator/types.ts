@@ -380,6 +380,7 @@ export interface Scenario {
 export interface ScenarioSelection {
   scenarioId: string;
   scenarioName: string;
+  scenarioDescription: string;  // KRİTİK: Senaryo açıklaması - Gemini'ye ortam bilgisi için
 
   // Neden bu senaryo seçildi
   reasoning: string;
@@ -1053,6 +1054,7 @@ export interface GlobalOrchestratorConfig {
   instructions: FirestoreOrchestratorInstructions;
   timeouts: FirestoreTimeoutsConfig;
   systemSettings: FirestoreSystemSettingsConfig;
+  fixedAssets: FirestoreFixedAssetsConfig;
 
   // Cache bilgisi
   loadedAt: number;
@@ -1143,6 +1145,37 @@ export interface FirestoreSystemSettingsConfig {
   stuckWarningMinutes: number;        // Default: 15
   maxLogsPerQuery: number;            // Default: 100
   cacheTTLMinutes: number;            // Default: 5
+
+  // Meta
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Sabit Asset Konfigürasyonu
+ * Document: global/config/settings/fixed-assets
+ *
+ * Belirli asset'lerin her zaman seçilmesini sağlar.
+ * "Mermer masa sabit, üzerindekiler serbest" kullanım senaryosu için.
+ *
+ * Sabit asset'ler diversity algoritmasından muaf tutulur:
+ * - blockedTables kontrolünden geçmez
+ * - Her üretimde otomatik seçilir
+ * - Diğer asset'ler (tabak, fincan vb.) normal rotation'a devam eder
+ */
+export interface FirestoreFixedAssetsConfig {
+  // Sabit masa (her zaman bu masa seçilir)
+  // null ise normal diversity algoritması çalışır
+  fixedTableId: string | null;
+
+  // Sabit tabak (opsiyonel)
+  fixedPlateId: string | null;
+
+  // Sabit fincan (opsiyonel)
+  fixedCupId: string | null;
+
+  // Aktif mi? (false ise tüm sabit seçimler devre dışı)
+  isEnabled: boolean;
 
   // Meta
   updatedAt: number;

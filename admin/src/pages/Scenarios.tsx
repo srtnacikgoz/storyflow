@@ -1,5 +1,32 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
+import { Tooltip } from "../components/Tooltip";
+import { SetupStepper } from "../components/SetupStepper";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { PageTour } from "../components/PageTour";
+import type { TourStep } from "../components/PageTour";
+
+// Scenarios sayfası tour adımları
+const SCENARIOS_TOUR_STEPS: TourStep[] = [
+  {
+    target: "[data-tour='scenarios-header']",
+    title: "Senaryo Yönetimi",
+    content: "Senaryolar, ürün fotoğraflarının nasıl çekileceğini tanımlar: ışık, açı, el kullanımı, kompozisyon gibi detaylar.",
+    position: "bottom",
+  },
+  {
+    target: "[data-tour='scenarios-add']",
+    title: "Yeni Senaryo",
+    content: "Buradan yeni senaryo oluşturabilirsiniz. Her senaryo farklı bir çekim tarzını temsil eder.",
+    position: "left",
+  },
+  {
+    target: "[data-tour='scenarios-list']",
+    title: "Senaryo Listesi",
+    content: "Mevcut senaryolarınız burada listelenir. Her birini düzenleyebilir veya detaylarını görebilirsiniz.",
+    position: "top",
+  },
+];
 
 // Senaryo tipi
 interface Composition {
@@ -447,7 +474,7 @@ export default function Scenarios() {
       loadScenarios();
     } catch (err) {
       console.error(err);
-      alert("Silme hatası");
+      alert(err instanceof Error ? err.message : "Silme hatası");
     } finally {
       setDeleting(false);
     }
@@ -476,9 +503,16 @@ export default function Scenarios() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto">
+      {/* Setup Stepper */}
+      <SetupStepper />
+
+      {/* Page Tour */}
+      <PageTour tourId="scenarios-page" steps={SCENARIOS_TOUR_STEPS} />
+
+      <div className="p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-6" data-tour="scenarios-header">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Senaryolar</h1>
           <p className="text-gray-500 mt-1">
@@ -488,6 +522,7 @@ export default function Scenarios() {
         <button
           onClick={openNewModal}
           className="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 flex items-center gap-2"
+          data-tour="scenarios-add"
         >
           <span>+</span>
           <span>Yeni Senaryo</span>
@@ -498,37 +533,70 @@ export default function Scenarios() {
         <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">{error}</div>
       )}
 
-      {/* Filtreler */}
-      <div className="flex gap-2 mb-6">
-        {[
-          { key: "all", label: "Tümü", count: scenarios.length },
-          { key: "hands", label: "El İçeren", count: scenarios.filter((s) => s.includesHands && !s.isInterior).length },
-          { key: "noHands", label: "El İçermeyen", count: scenarios.filter((s) => !s.includesHands && !s.isInterior).length },
-          { key: "interior", label: "Interior", count: scenarios.filter((s) => s.isInterior).length },
-        ].map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key as typeof filter)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              filter === f.key
-                ? "bg-amber-100 text-amber-800"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {f.label} ({f.count})
-          </button>
-        ))}
-      </div>
+      {/* Empty State - Hiç senaryo yoksa */}
+      {scenarios.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="text-4xl">🎬</span>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            Henüz senaryo oluşturmadınız
+          </h2>
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            Senaryolar, ürün görsellerinizin nasıl kompoze edileceğini belirler.
+            Örneğin: "Ellerle tutma", "Masada servis", "Vitrinde sergileme"
+          </p>
 
-      {/* Senaryo Listesi */}
-      <div className="grid gap-4">
-        {filteredScenarios.map((scenario) => (
-          <div
-            key={scenario.id}
-            className={`bg-white rounded-lg shadow-sm border p-4 ${
-              !scenario.isActive ? "opacity-60" : ""
-            }`}
+          <div className="bg-amber-50 rounded-xl p-4 mb-6 max-w-md mx-auto text-left">
+            <p className="text-sm font-medium text-amber-800 mb-2">💡 Popüler başlangıç senaryoları:</p>
+            <ul className="text-sm text-amber-700 space-y-1">
+              <li>• <strong>Ellerle Tutma</strong> - Ürün ellerde tutularak gösterilir</li>
+              <li>• <strong>Masada Servis</strong> - Ürün masada tabakta sunulur</li>
+              <li>• <strong>Kahve Eşliği</strong> - Ürün kahve fincanı ile birlikte</li>
+            </ul>
+          </div>
+
+          <button
+            onClick={openNewModal}
+            className="bg-amber-600 text-white px-6 py-3 rounded-xl hover:bg-amber-700 font-medium inline-flex items-center gap-2"
           >
+            <span>+</span>
+            <span>İlk Senaryonu Oluştur</span>
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Filtreler */}
+          <div className="flex gap-2 mb-6">
+            {[
+              { key: "all", label: "Tümü", count: scenarios.length },
+              { key: "hands", label: "El İçeren", count: scenarios.filter((s) => s.includesHands && !s.isInterior).length },
+              { key: "noHands", label: "El İçermeyen", count: scenarios.filter((s) => !s.includesHands && !s.isInterior).length },
+              { key: "interior", label: "Interior", count: scenarios.filter((s) => s.isInterior).length },
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key as typeof filter)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  filter === f.key
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {f.label} ({f.count})
+              </button>
+            ))}
+          </div>
+
+          {/* Senaryo Listesi */}
+          <div className="grid gap-4" data-tour="scenarios-list">
+            {filteredScenarios.map((scenario) => (
+              <div
+                key={scenario.id}
+                className={`bg-white rounded-lg shadow-sm border p-4 ${
+                  !scenario.isActive ? "opacity-60" : ""
+                }`}
+              >
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-3">
@@ -654,10 +722,12 @@ export default function Scenarios() {
         ))}
       </div>
 
-      {filteredScenarios.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          Bu kategoride senaryo bulunamadı
-        </div>
+          {filteredScenarios.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+              Bu kategoride senaryo bulunamadı
+            </div>
+          )}
+        </>
       )}
 
       {/* Yeni/Düzenle Modal */}
@@ -691,8 +761,12 @@ export default function Scenarios() {
                       <p className="text-xs text-gray-500 mt-1">Kısa ve akılda kalıcı bir isim verin</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
                         Atmosfer / Ruh Hali
+                        <Tooltip
+                          content="Fotoğrafın genel havası. AI bu atmosfere uygun renk paleti, ışık sıcaklığı ve kompozisyon uygular."
+                          position="right"
+                        />
                       </label>
                       <select
                         value={form.mood}
@@ -785,8 +859,12 @@ export default function Scenarios() {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
                       Işık Stili
+                      <Tooltip
+                        content="Fotoğraftaki ışık yönü ve karakteri. Dramatik ışık doku vurgular, yumuşak ışık ürünü eşit aydınlatır."
+                        position="right"
+                      />
                     </label>
                     <select
                       value={form.lightingPreset}
@@ -818,8 +896,12 @@ export default function Scenarios() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
                           El Nasıl Tutsun?
+                          <Tooltip
+                            content="Elin ürünü tutma şekli. Her poz farklı ürünler için optimize edilmiştir."
+                            position="right"
+                          />
                         </label>
                         <select
                           value={form.handPose}
@@ -872,7 +954,13 @@ export default function Scenarios() {
 
               {/* ========== KOMPOZİSYON TÜRLERİ ========== */}
               <fieldset className="border border-gray-200 rounded-lg p-4">
-                <legend className="text-sm font-semibold text-gray-700 px-2">📐 Fotoğraf Kompozisyonu *</legend>
+                <legend className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 px-2">
+                  📐 Fotoğraf Kompozisyonu *
+                  <Tooltip
+                    content="Ürünün karede nasıl konumlandırılacağını belirler. Birden fazla seçerseniz AI rastgele birini kullanır."
+                    position="right"
+                  />
+                </legend>
                 <p className="text-xs text-gray-500 mb-3">Bu senaryo için hangi çekim tarzları kullanılabilir? (En az 1 seçin)</p>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -1082,31 +1170,22 @@ export default function Scenarios() {
       )}
 
       {/* Silme Onay Modal */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold mb-4">Senaryoyu Sil</h3>
-            <p className="text-gray-600 mb-6">
-              Bu senaryoyu silmek istediğinize emin misiniz? Senaryo pasif hale getirilecektir.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteId(null)}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-              >
-                İptal
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                {deleting ? "Siliniyor..." : "Sil"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDelete}
+        title={`"${scenarios.find(s => s.id === deleteId)?.name || "Senaryo"}" Silinecek`}
+        description="Bu senaryoyu silmek istediğinize emin misiniz?"
+        consequences={[
+          "Senaryo pasif hale getirilecektir",
+          "Mevcut temalarda kullanılamaz hale gelir",
+          "Geçmiş üretimler etkilenmez",
+        ]}
+        confirmText="Evet, Sil"
+        cancelText="Vazgeç"
+        variant="danger"
+        isLoading={deleting}
+      />
 
       {/* Detay Modal */}
       {detailScenario && (
@@ -1213,6 +1292,7 @@ export default function Scenarios() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -1,11 +1,39 @@
 /**
  * Environment Configuration
  *
- * Reads environment variables from Firebase Functions config
+ * Reads environment variables from:
+ * 1. process.env (v2 functions, Cloud Run)
+ * 2. Firebase Functions config (v1 functions - deprecated)
+ *
+ * V2 Migration: March 2026'ya kadar tamamlanmalı
  */
 
 import * as functions from "firebase-functions";
 import {Config, TelegramConfig} from "../types";
+
+/**
+ * Get config value from process.env or functions.config()
+ * @param envKey - process.env key (e.g., "INSTAGRAM_ACCOUNT_ID")
+ * @param configPath - functions.config() path (e.g., ["instagram", "account_id"])
+ */
+function getConfigValue(envKey: string, configPath: string[]): string | undefined {
+  // Önce process.env'den dene
+  if (process.env[envKey]) {
+    return process.env[envKey];
+  }
+
+  // Sonra functions.config()'dan dene (v1)
+  try {
+    const config = functions.config();
+    let value: unknown = config;
+    for (const key of configPath) {
+      value = (value as Record<string, unknown>)?.[key];
+    }
+    return value as string | undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Get application configuration from Firebase Functions config
@@ -14,38 +42,44 @@ import {Config, TelegramConfig} from "../types";
  * @throws {Error} If required configuration is missing
  */
 export function getConfig(): Config {
-  const config = functions.config();
+  const instagramAccountId = getConfigValue("INSTAGRAM_ACCOUNT_ID", ["instagram", "account_id"]);
+  const instagramAccessToken = getConfigValue("INSTAGRAM_ACCESS_TOKEN", ["instagram", "access_token"]);
+  const geminiApiKey = getConfigValue("GEMINI_API_KEY", ["gemini", "api_key"]);
 
   // Validate required configurations
-  if (!config.instagram?.account_id) {
-    throw new Error("Missing required config: instagram.account_id");
+  if (!instagramAccountId) {
+    throw new Error("Missing required config: INSTAGRAM_ACCOUNT_ID or instagram.account_id");
   }
 
-  if (!config.instagram?.access_token) {
-    throw new Error("Missing required config: instagram.access_token");
+  if (!instagramAccessToken) {
+    throw new Error("Missing required config: INSTAGRAM_ACCESS_TOKEN or instagram.access_token");
   }
 
-  if (!config.gemini?.api_key) {
-    throw new Error("Missing required config: gemini.api_key");
+  if (!geminiApiKey) {
+    throw new Error("Missing required config: GEMINI_API_KEY or gemini.api_key");
   }
 
   // Build config object
   const appConfig: Config = {
     instagram: {
-      accountId: config.instagram.account_id,
-      accessToken: config.instagram.access_token,
+      accountId: instagramAccountId,
+      accessToken: instagramAccessToken,
     },
     gemini: {
-      apiKey: config.gemini.api_key,
+      apiKey: geminiApiKey,
     },
   };
 
   // Telegram config (opsiyonel)
-  if (config.telegram?.bot_token && config.telegram?.chat_id) {
+  const telegramBotToken = getConfigValue("TELEGRAM_BOT_TOKEN", ["telegram", "bot_token"]);
+  const telegramChatId = getConfigValue("TELEGRAM_CHAT_ID", ["telegram", "chat_id"]);
+  const telegramApprovalTimeout = getConfigValue("TELEGRAM_APPROVAL_TIMEOUT", ["telegram", "approval_timeout"]);
+
+  if (telegramBotToken && telegramChatId) {
     appConfig.telegram = {
-      botToken: config.telegram.bot_token,
-      chatId: config.telegram.chat_id,
-      approvalTimeout: parseInt(config.telegram?.approval_timeout || "15", 10),
+      botToken: telegramBotToken,
+      chatId: telegramChatId,
+      approvalTimeout: parseInt(telegramApprovalTimeout || "15", 10),
     };
   }
 
@@ -60,20 +94,22 @@ export function getConfig(): Config {
  * @throws {Error} If Telegram configuration is missing
  */
 export function getTelegramConfig(): TelegramConfig {
-  const config = functions.config();
+  const botToken = getConfigValue("TELEGRAM_BOT_TOKEN", ["telegram", "bot_token"]);
+  const chatId = getConfigValue("TELEGRAM_CHAT_ID", ["telegram", "chat_id"]);
+  const approvalTimeout = getConfigValue("TELEGRAM_APPROVAL_TIMEOUT", ["telegram", "approval_timeout"]);
 
-  if (!config.telegram?.bot_token) {
-    throw new Error("Missing required config: telegram.bot_token");
+  if (!botToken) {
+    throw new Error("Missing required config: TELEGRAM_BOT_TOKEN or telegram.bot_token");
   }
 
-  if (!config.telegram?.chat_id) {
-    throw new Error("Missing required config: telegram.chat_id");
+  if (!chatId) {
+    throw new Error("Missing required config: TELEGRAM_CHAT_ID or telegram.chat_id");
   }
 
   return {
-    botToken: config.telegram.bot_token,
-    chatId: config.telegram.chat_id,
-    approvalTimeout: parseInt(config.telegram?.approval_timeout || "15", 10),
+    botToken,
+    chatId,
+    approvalTimeout: parseInt(approvalTimeout || "15", 10),
   };
 }
 
@@ -82,6 +118,7 @@ export function getTelegramConfig(): TelegramConfig {
  * @return {boolean} True if Telegram config exists
  */
 export function isTelegramConfigured(): boolean {
-  const config = functions.config();
-  return !!(config.telegram?.bot_token && config.telegram?.chat_id);
+  const botToken = getConfigValue("TELEGRAM_BOT_TOKEN", ["telegram", "bot_token"]);
+  const chatId = getConfigValue("TELEGRAM_CHAT_ID", ["telegram", "chat_id"]);
+  return !!(botToken && chatId);
 }

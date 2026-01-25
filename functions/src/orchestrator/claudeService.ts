@@ -15,6 +15,7 @@ import {
   ProductType,
   EffectiveRules,
   HandStyleId,
+  FirestoreFixedAssetsConfig,
 } from "./types";
 import { getCompactTrainingContext } from "./promptTrainingService";
 import { AILogService } from "../services/aiLogService";
@@ -98,7 +99,8 @@ export class ClaudeService {
     },
     timeOfDay: string,
     mood: string,
-    effectiveRules?: EffectiveRules
+    effectiveRules?: EffectiveRules,
+    fixedAssets?: FirestoreFixedAssetsConfig
   ): Promise<ClaudeResponse<AssetSelection>> {
     const client = this.getClient();
 
@@ -333,10 +335,44 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
         product = availableAssets.products[0];
       }
 
-      const plate = selection.plateId ? availableAssets.plates.find((a: Asset) => a.id === selection.plateId) : undefined;
-      const cup = selection.cupId ? availableAssets.cups.find((a: Asset) => a.id === selection.cupId) : undefined;
-      const table = selection.tableId ? availableAssets.tables.find((a: Asset) => a.id === selection.tableId) : undefined;
+      // Claude'un seçimlerini al
+      let plate = selection.plateId ? availableAssets.plates.find((a: Asset) => a.id === selection.plateId) : undefined;
+      let cup = selection.cupId ? availableAssets.cups.find((a: Asset) => a.id === selection.cupId) : undefined;
+      let table = selection.tableId ? availableAssets.tables.find((a: Asset) => a.id === selection.tableId) : undefined;
       const decor = selection.decorId ? availableAssets.decor.find((a: Asset) => a.id === selection.decorId) : undefined;
+
+      // SABİT ASSET OVERRIDE
+      // "Mermer masa sabit, üzerindekiler serbest" kullanım senaryosu
+      if (fixedAssets?.isEnabled) {
+        // Sabit masa
+        if (fixedAssets.fixedTableId) {
+          const fixedTable = availableAssets.tables.find((a: Asset) => a.id === fixedAssets.fixedTableId);
+          if (fixedTable) {
+            console.log(`[ClaudeService] 🔒 SABİT MASA: ${fixedTable.id} (Claude: ${selection.tableId || "seçmedi"} → Fixed: ${fixedAssets.fixedTableId})`);
+            table = fixedTable;
+          } else {
+            console.warn(`[ClaudeService] ⚠️ Sabit masa ID geçersiz: ${fixedAssets.fixedTableId} - mevcut asset'lerde bulunamadı`);
+          }
+        }
+
+        // Sabit tabak (opsiyonel)
+        if (fixedAssets.fixedPlateId) {
+          const fixedPlate = availableAssets.plates.find((a: Asset) => a.id === fixedAssets.fixedPlateId);
+          if (fixedPlate) {
+            console.log(`[ClaudeService] 🔒 SABİT TABAK: ${fixedPlate.id}`);
+            plate = fixedPlate;
+          }
+        }
+
+        // Sabit fincan (opsiyonel)
+        if (fixedAssets.fixedCupId) {
+          const fixedCup = availableAssets.cups.find((a: Asset) => a.id === fixedAssets.fixedCupId);
+          if (fixedCup) {
+            console.log(`[ClaudeService] 🔒 SABİT FİNCAN: ${fixedCup.id}`);
+            cup = fixedCup;
+          }
+        }
+      }
       const pet = selection.petId ? availableAssets.pets.find((a: Asset) => a.id === selection.petId) : undefined;
       const environment = selection.environmentId ? availableAssets.environments.find((a: Asset) => a.id === selection.environmentId) : undefined;
       const accessory = selection.accessoryId ? availableAssets.accessories.find((a: Asset) => a.id === selection.accessoryId) : undefined;
@@ -474,11 +510,18 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
     if (!canUseHandScenarios) {
       const nonHandScenarios = availableScenarios.filter(s => !s.includesHands);
 
-      // Eğer filtreleme sonrası senaryo kalmazsa, TÜM senaryoları kullan (fallback)
+      // KRİTİK: Eğer filtreleme sonrası senaryo kalmazsa, HATA döndür (FALLBACK YOK!)
+      // Kullanıcı tercihi: Yanlış içerik üretmektense hiç üretmemek daha iyi
       if (nonHandScenarios.length === 0) {
-        console.warn(`[ClaudeService] UYARI: Elle tutulamayan ürün için el içermeyen senaryo bulunamadı. Tüm senaryolar kullanılacak.`);
-        console.warn(`[ClaudeService] Ürün: ${selectedAssets.product.filename}, canBeHeldByHand: ${selectedAssets.product.canBeHeldByHand}, eatingMethod: ${productEatingMethod}`);
-        // filteredScenarios = availableScenarios olarak kalır (değişiklik yok)
+        const scenarioNames = availableScenarios.map(s => `${s.id} (hands: ${s.includesHands})`).join(", ");
+        const errorMsg = `TEMA KISITLAMASI: Elle tutulamayan ürün (${selectedAssets.product.filename}) için tema senaryolarında el içermeyen seçenek yok. Tema senaryoları: [${scenarioNames}]. Çözüm: Temaya el içermeyen senaryo ekleyin VEYA ürünün "canBeHeldByHand" özelliğini true yapın.`;
+        console.error(`[ClaudeService] ${errorMsg}`);
+        return {
+          success: false,
+          error: errorMsg,
+          tokensUsed: 0,
+          cost: 0,
+        };
       } else {
         filteredScenarios = nonHandScenarios;
         console.log(`[ClaudeService] Hand scenarios filtered - canBeHeldByHand: ${selectedAssets.product.canBeHeldByHand}, eatingMethod: ${productEatingMethod}, original: ${availableScenarios.length}, filtered: ${filteredScenarios.length}`);
@@ -579,17 +622,40 @@ Yanıt formatı:
         }
       }
 
-      // Hala bulunamazsa, FALLBACK: filteredScenarios'un ilkini seç
+      // KRİTİK: Hala bulunamazsa, HATA döndür (FALLBACK YOK!)
+      // Kullanıcı tercihi: Yanlış senaryo ile üretmektense üretmemek daha iyi
       if (!scenario) {
         const availableIds = filteredScenarios.map(s => s.id).join(", ");
-        console.error(`[ClaudeService] Claude geçersiz senaryo ID döndürdü: "${selection.scenarioId}". Mevcut ID'ler: ${availableIds}`);
+        const errorMsg = `GEÇERSİZ SENARYO: Claude'un döndürdüğü senaryo ID "${selection.scenarioId}" tema listesinde bulunamadı. Mevcut tema senaryoları: [${availableIds}]. Bu bir AI yanıt hatası - pipeline durduruldu.`;
+        console.error(`[ClaudeService] ${errorMsg}`);
 
-        if (filteredScenarios.length > 0) {
-          scenario = filteredScenarios[0];
-          console.warn(`[ClaudeService] FALLBACK: İlk senaryo seçildi: "${scenario.id}"`);
-        } else {
-          throw new Error(`Senaryo bulunamadı. Claude'un seçtiği: "${selection.scenarioId}", Mevcut: ${availableIds}`);
-        }
+        const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+        const cost = await this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+        const durationMs = Date.now() - startTime;
+
+        // Hata logla
+        await AILogService.logClaude("scenario-selection" as AILogStage, {
+          model: this.model,
+          systemPrompt,
+          userPrompt,
+          response: textContent.text,
+          responseData: selection,
+          status: "error",
+          error: errorMsg,
+          tokensUsed,
+          cost,
+          durationMs,
+          pipelineId: this.pipelineContext.pipelineId,
+          slotId: this.pipelineContext.slotId,
+          productType: productType,
+        });
+
+        return {
+          success: false,
+          error: errorMsg,
+          tokensUsed,
+          cost,
+        };
       }
 
       // El stili detaylarını bul (varsa)
@@ -622,6 +688,7 @@ Yanıt formatı:
         data: {
           scenarioId: scenario.id,
           scenarioName: scenario.name,
+          scenarioDescription: scenario.description,  // KRİTİK: Gemini'ye ortam bilgisi için
           reasoning: selection.reasoning,
           includesHands: scenario.includesHands,
           handStyle: selection.handStyle as HandStyleId || undefined,

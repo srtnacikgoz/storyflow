@@ -67,7 +67,10 @@
       "Bash(firebase functions:secrets:access:*)",
       "Bash(firebase functions:config:get:*)",
       "Bash(firebase functions:config:set:*)",
-      "Bash(firebase experiments:enable:*)"
+      "Bash(firebase experiments:enable:*)",
+      "WebFetch(domain:gist.github.com)",
+      "Skill(radikal-durustluk)",
+      "Bash(firebase functions:secrets:list:*)"
     ]
   },
   "hooks": {

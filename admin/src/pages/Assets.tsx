@@ -3,6 +3,39 @@ import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
 import type { OrchestratorAsset, AssetCategory, EatingMethod } from "../types";
 import { useLoadingOperation } from "../contexts/LoadingContext";
+import { Tooltip } from "../components/Tooltip";
+import { SetupStepper } from "../components/SetupStepper";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { PageTour } from "../components/PageTour";
+import type { TourStep } from "../components/PageTour";
+
+// Assets sayfası tour adımları
+const ASSETS_TOUR_STEPS: TourStep[] = [
+  {
+    target: "[data-tour='assets-header']",
+    title: "Görsel Yönetimi",
+    content: "Bu sayfada AI görsel üretiminde kullanılacak tüm görselleri yönetebilirsiniz: ürünler, masalar, aksesuarlar ve daha fazlası.",
+    position: "bottom",
+  },
+  {
+    target: "[data-tour='assets-add']",
+    title: "Yeni Görsel Ekle",
+    content: "Buradan yeni görsel yükleyebilirsiniz. Her görselin kategorisi, renkleri ve stili AI tarafından kullanılır.",
+    position: "left",
+  },
+  {
+    target: "[data-tour='assets-filters']",
+    title: "Kategori Filtreleri",
+    content: "Görselleri kategoriye göre filtreleyin: Ürünler, Mobilya, Aksesuarlar vb. Her kategori farklı amaçlar için kullanılır.",
+    position: "bottom",
+  },
+  {
+    target: "[data-tour='setup-stepper']",
+    title: "Kurulum Adımları",
+    content: "Üstteki adımlar kurulum sürecinizi gösterir. Görseller ilk adımdır - sonra Senaryolar, Temalar ve Zamanlar gelir.",
+    position: "bottom",
+  },
+];
 
 // Kategori etiketleri
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
@@ -114,6 +147,7 @@ export default function Assets() {
   const [selectedCategory, setSelectedCategory] = useState<AssetCategory | "all">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Modal state - hem create hem edit için
   const [showModal, setShowModal] = useState(false);
@@ -164,14 +198,21 @@ export default function Assets() {
     loadAssets();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Bu gorseli silmek istediginizden emin misiniz?")) return;
-    setDeletingId(id);
+  // Silme onay modalını aç
+  const handleDelete = (id: string) => {
+    setConfirmDeleteId(id);
+  };
+
+  // Gerçek silme işlemi
+  const confirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    setDeletingId(confirmDeleteId);
     try {
       await executeDelete(async () => {
-        await api.deleteAsset(id);
+        await api.deleteAsset(confirmDeleteId);
         await loadAssets();
       }, "Gorsel siliniyor...");
+      setConfirmDeleteId(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Silme hatasi");
     } finally {
@@ -188,22 +229,30 @@ export default function Assets() {
   }, {} as Record<string, OrchestratorAsset[]>);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Setup Stepper */}
+      <div data-tour="setup-stepper">
+        <SetupStepper />
+      </div>
+
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start" data-tour="assets-header">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Görsel Yönetimi</h1>
           <p className="text-gray-500 mt-1">Ürün, aksesuar, mobilya, ortam ve evcil hayvan görselleri</p>
         </div>
-        <button onClick={openCreateModal} className="btn-primary">
+        <button onClick={openCreateModal} className="btn-primary" data-tour="assets-add">
           + Yeni Görsel
         </button>
       </div>
 
+      {/* Page Tour */}
+      <PageTour tourId="assets-page" steps={ASSETS_TOUR_STEPS} />
+
       {/* View Toggle & Filters */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         {/* Filtreler */}
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap" data-tour="assets-filters">
           <button
             onClick={() => setSelectedCategory("all")}
             className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === "all"
@@ -271,10 +320,36 @@ export default function Assets() {
       {!loading && !error && (
         <>
           {assets.length === 0 ? (
-            <div className="card text-center py-12">
-              <p className="text-gray-500 mb-4">Henüz görsel yok</p>
-              <button onClick={openCreateModal} className="btn-primary">
-                İlk Görseli Ekle
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <span className="text-4xl">📸</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                Henüz asset yüklenmedi
+              </h2>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                Asset'ler, görsel üretimde kullanılan ürün fotoğrafları, masa, tabak,
+                dekorasyon gibi görsellerdir.
+              </p>
+
+              <div className="bg-blue-50 rounded-xl p-4 mb-6 max-w-lg mx-auto text-left">
+                <p className="text-sm font-medium text-blue-800 mb-2">💡 Asset kategorileri:</p>
+                <div className="grid grid-cols-2 gap-2 text-sm text-blue-700">
+                  <div>• <strong>Ürünler</strong> - Pasta, çikolata vb.</div>
+                  <div>• <strong>Props</strong> - Tabak, bardak, çatal</div>
+                  <div>• <strong>Mobilya</strong> - Masa, sandalye</div>
+                  <div>• <strong>Ortam</strong> - İç/dış mekan</div>
+                  <div>• <strong>Evcil</strong> - Kedi, köpek</div>
+                  <div>• <strong>Aksesuar</strong> - Çiçek, mum vb.</div>
+                </div>
+              </div>
+
+              <button
+                onClick={openCreateModal}
+                className="bg-brand-blue text-white px-6 py-3 rounded-xl hover:bg-brand-blue/90 font-medium inline-flex items-center gap-2"
+              >
+                <span>+</span>
+                <span>İlk Asset'i Yükle</span>
               </button>
             </div>
           ) : viewMode === "grid" ? (
@@ -397,6 +472,24 @@ export default function Assets() {
           onSuccess={handleModalSuccess}
         />
       )}
+
+      {/* Silme Onay Modal */}
+      <ConfirmDialog
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={confirmDelete}
+        title="Görsel Silinecek"
+        description={`"${assets.find(a => a.id === confirmDeleteId)?.filename || "Görsel"}" dosyasını silmek istediğinize emin misiniz?`}
+        consequences={[
+          "Görsel kalıcı olarak silinecektir",
+          "Bu işlem geri alınamaz",
+          "Eğer bu görsel üretimlerde kullanıldıysa, geçmiş üretimler etkilenmez",
+        ]}
+        confirmText="Evet, Sil"
+        cancelText="Vazgeç"
+        variant="danger"
+        isLoading={!!deletingId}
+      />
     </div>
   );
 }
@@ -663,8 +756,12 @@ function AssetModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Kategori */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
               Kategori
+              <Tooltip
+                content="Görselin kullanım alanı. Ürünler AI ile işlenir, Interior doğrudan paylaşılır."
+                position="right"
+              />
             </label>
             <select
               value={category}
@@ -781,11 +878,15 @@ function AssetModal({
           {/* Dominant Renkler - kategori bazlı göster/gizle */}
           {fieldConfig.dominantColors !== "hidden" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
                 {getFieldLabel("Dominant Renkler (virgülle ayır)", fieldConfig.dominantColors)}
                 {fieldConfig.dominantColors === "required" && (
                   <span className="text-red-500 ml-1">*</span>
                 )}
+                <Tooltip
+                  content="AI renk uyumlu görseller üretir. Hex kodları (#D4A574) veya isimler (gold, cream) kullanın."
+                  position="right"
+                />
               </label>
               <input
                 type="text"
@@ -803,8 +904,12 @@ function AssetModal({
           {/* Stil - kategori bazlı göster/gizle */}
           {fieldConfig.style !== "hidden" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
                 {getFieldLabel("Stil", fieldConfig.style)}
+                <Tooltip
+                  content="AI aynı stildeki öğeleri eşleştirir. Modern masa + Rustic tabak kombinasyonundan kaçınır."
+                  position="right"
+                />
               </label>
               <select
                 value={style}
@@ -845,8 +950,12 @@ function AssetModal({
           {category === "products" && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
                   Yeme Şekli
+                  <Tooltip
+                    content="AI uygun servisi seçer: çatalla yenen ürüne çatal, elle yenene el pozu ekler."
+                    position="right"
+                  />
                 </label>
                 <select
                   value={eatingMethod}

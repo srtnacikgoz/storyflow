@@ -1,10 +1,15 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
-import { getConfig } from "../lib/serviceFactory";
 import { OrchestratorScheduler as SchedulerClass } from "../orchestrator/scheduler";
 import { OrchestratorConfig } from "../orchestrator/types";
 
+// v2 secrets - tüm hassas değerler burada tanımlanmalı
 const claudeApiKey = defineSecret("CLAUDE_API_KEY");
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
+const instagramAccountId = defineSecret("INSTAGRAM_ACCOUNT_ID");
+const instagramAccessToken = defineSecret("INSTAGRAM_ACCESS_TOKEN");
+const telegramBotToken = defineSecret("TELEGRAM_BOT_TOKEN");
+const telegramChatId = defineSecret("TELEGRAM_CHAT_ID");
 
 /**
  * Orchestrator Scheduler
@@ -19,26 +24,24 @@ export const orchestratorScheduler = onSchedule(
         region: "europe-west1",
         retryCount: 3,
         memory: "1GiB", // Using 1GB to be safe with image processing if needed
-        secrets: [claudeApiKey],
+        secrets: [claudeApiKey, geminiApiKey, instagramAccountId, instagramAccessToken, telegramBotToken, telegramChatId],
         timeoutSeconds: 540, // 9 minutes max
     },
     async (event) => {
         console.log("⏰ Orchestrator Scheduler triggered:", new Date().toISOString());
 
         try {
-            // 1. Prepare Configuration
-            const config = await getConfig();
-
+            // 1. Prepare Configuration - v2'de doğrudan secret'lardan oku
             const orchestratorConfig: OrchestratorConfig = {
                 claudeApiKey: claudeApiKey.value(),
                 claudeModel: "claude-sonnet-4-20250514", // Hardcoded model preference
-                geminiApiKey: config.gemini.apiKey,
+                geminiApiKey: geminiApiKey.value(),
                 geminiModel: "gemini-3-pro-image-preview",
                 qualityThreshold: 7,
                 maxRetries: 3,
-                telegramBotToken: config.telegram?.botToken || "",
-                telegramChatId: config.telegram?.chatId || "",
-                approvalTimeout: config.telegram?.approvalTimeout || 60,
+                telegramBotToken: telegramBotToken.value() || "",
+                telegramChatId: telegramChatId.value() || "",
+                approvalTimeout: 60,
                 timezone: "Europe/Istanbul",
                 scheduleBuffer: 30, // 30 mins buffer for optimal time triggering
             };

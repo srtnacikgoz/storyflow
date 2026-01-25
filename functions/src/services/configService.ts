@@ -25,9 +25,15 @@ import {
   FirestoreOrchestratorInstructions,
   FirestoreTimeoutsConfig,
   FirestoreSystemSettingsConfig,
+  FirestoreFixedAssetsConfig,
   GlobalOrchestratorConfig,
 } from "../orchestrator/types";
-import { getAllSeedData, DEFAULT_TIMEOUTS_CONFIG, DEFAULT_SYSTEM_SETTINGS_CONFIG } from "../orchestrator/seed/defaultData";
+import {
+  getAllSeedData,
+  DEFAULT_TIMEOUTS_CONFIG,
+  DEFAULT_SYSTEM_SETTINGS_CONFIG,
+  DEFAULT_FIXED_ASSETS_CONFIG,
+} from "../orchestrator/seed/defaultData";
 
 // Cache süresi (5 dakika)
 const CACHE_TTL = 5 * 60 * 1000;
@@ -263,6 +269,31 @@ export async function getSystemSettings(): Promise<FirestoreSystemSettingsConfig
 }
 
 /**
+ * Sabit asset ayarlarını getirir
+ * Document: global/config/settings/fixed-assets
+ *
+ * "Mermer masa sabit, üzerindekiler serbest" kullanım senaryosu için.
+ */
+export async function getFixedAssets(): Promise<FirestoreFixedAssetsConfig> {
+  const doc = await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("fixed-assets")
+    .get();
+
+  if (!doc.exists) {
+    // Varsayılan değerleri döndür
+    return {
+      ...DEFAULT_FIXED_ASSETS_CONFIG,
+      updatedAt: Date.now(),
+    };
+  }
+
+  return doc.data() as FirestoreFixedAssetsConfig;
+}
+
+/**
  * Tüm config'leri tek seferde getirir (cache ile)
  */
 export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrchestratorConfig> {
@@ -287,6 +318,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     instructions,
     timeouts,
     systemSettings,
+    fixedAssets,
   ] = await Promise.all([
     getScenarios(),
     getHandStyles(),
@@ -298,6 +330,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     getOrchestratorInstructions(),
     getTimeouts(),
     getSystemSettings(),
+    getFixedAssets(),
   ]);
 
   // Config oluştur
@@ -312,6 +345,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     instructions,
     timeouts,
     systemSettings,
+    fixedAssets,
     loadedAt: now,
     version: "1.0.0",
   };
@@ -390,6 +424,7 @@ export async function seedFirestoreConfig(): Promise<void> {
   batch.set(configRef.doc("orchestrator-instructions"), seedData.orchestratorInstructions);
   batch.set(configRef.doc("timeouts"), seedData.timeoutsConfig);
   batch.set(configRef.doc("system-settings"), seedData.systemSettingsConfig);
+  batch.set(configRef.doc("fixed-assets"), seedData.fixedAssetsConfig);
 
   await batch.commit();
 
@@ -583,6 +618,43 @@ export async function updateSystemSettings(
 
   clearConfigCache();
   console.log("[ConfigService] System settings updated:", Object.keys(updates));
+}
+
+/**
+ * Sabit asset ayarlarını günceller
+ * Document: global/config/settings/fixed-assets
+ *
+ * "Mermer masa sabit, üzerindekiler serbest" kullanım senaryosu için.
+ * Admin panelden aktifleştirilir/deaktifleştirilir.
+ */
+export async function updateFixedAssets(
+  updates: Partial<FirestoreFixedAssetsConfig>
+): Promise<void> {
+  const docRef = getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("fixed-assets");
+
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    // Doküman yoksa oluştur
+    await docRef.set({
+      ...DEFAULT_FIXED_ASSETS_CONFIG,
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  } else {
+    // Güncelle
+    await docRef.update({
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  }
+
+  clearConfigCache();
+  console.log("[ConfigService] Fixed assets updated:", Object.keys(updates));
 }
 
 // ==========================================

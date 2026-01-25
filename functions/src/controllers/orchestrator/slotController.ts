@@ -9,14 +9,16 @@ import { OrchestratorScheduler } from "../../orchestrator/scheduler";
 
 /**
  * Scheduled slot'ları listele
+ * Memory optimize: pipelineResult hariç tutulur (çok büyük olabilir)
  */
 export const listScheduledSlots = functions
   .region(REGION)
+  .runWith({ memory: "512MB" }) // Memory artırıldı
   .https.onRequest(async (request, response) => {
     const corsHandler = await getCors();
     corsHandler(request, response, async () => {
       try {
-        const { status, limit = "20" } = request.query;
+        const { status, limit = "20", includePipelineResult = "false" } = request.query;
 
         let query: FirebaseFirestore.Query = db.collection("scheduled-slots");
 
@@ -29,7 +31,27 @@ export const listScheduledSlots = functions
           .limit(parseInt(limit as string))
           .get();
 
-        const slots = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // pipelineResult çok büyük olabilir, opsiyonel olarak dahil et
+        const includeFullResult = includePipelineResult === "true";
+
+        const slots = snapshot.docs.map(doc => {
+          const data = doc.data();
+
+          if (includeFullResult) {
+            return { id: doc.id, ...data };
+          }
+
+          // pipelineResult'tan sadece özet bilgileri al
+          const { pipelineResult, ...rest } = data;
+          return {
+            id: doc.id,
+            ...rest,
+            // Sadece önemli alanları dahil et
+            hasPipelineResult: !!pipelineResult,
+            imageUrl: pipelineResult?.generatedImage?.storageUrl || pipelineResult?.selectedPhoto?.url,
+            caption: pipelineResult?.caption?.text || pipelineResult?.contentPackage?.caption,
+          };
+        });
 
         response.json({
           success: true,

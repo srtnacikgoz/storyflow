@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import type { QueueStats, HealthCheckResponse, UsageStats, UsageRecord } from "../types";
+import type { QueueStats, HealthCheckResponse, UsageStats, UsageRecord, SetupStatusResponse } from "../types";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
   const [recentUsage, setRecentUsage] = useState<UsageRecord[]>([]);
+  const [setupStatus, setSetupStatus] = useState<SetupStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,15 +21,17 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [statsData, healthData, usageData] = await Promise.all([
+      const [statsData, healthData, usageData, setupData] = await Promise.all([
         api.getQueueStats(),
         api.getHealthCheck(),
         api.getUsageStats().catch(() => ({ stats: null, recent: [] })),
+        api.getSetupStatus().catch(() => null),
       ]);
       setStats(statsData);
       setHealth(healthData);
       setUsageStats(usageData.stats);
       setRecentUsage(usageData.recent);
+      setSetupStatus(setupData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
@@ -85,39 +90,224 @@ export default function Dashboard() {
         <p className="text-gray-500 mt-1">Sistem durumu ve istatistikler</p>
       </div>
 
-      {/* Sistem Durumu */}
+      {/* Setup Progress - Sadece eksik veya uyarı varsa göster */}
+      {setupStatus && setupStatus.summary.overallStatus !== "complete" && (
+        <div className="card bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <span className="text-xl">📋</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Sistem Kurulum Durumu</h2>
+                <p className="text-sm text-gray-600">
+                  {setupStatus.summary.overallStatus === "incomplete"
+                    ? "Bazı ayarlar eksik"
+                    : "İyileştirme önerileri var"}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-amber-600">
+                {setupStatus.summary.progress}%
+              </div>
+              <div className="text-xs text-gray-500">
+                {setupStatus.summary.completed}/{setupStatus.summary.total} tamamlandı
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full bg-amber-100 rounded-full h-2 mb-4">
+            <div
+              className={`h-2 rounded-full transition-all ${
+                setupStatus.summary.overallStatus === "warning"
+                  ? "bg-amber-500"
+                  : "bg-amber-400"
+              }`}
+              style={{ width: `${setupStatus.summary.progress}%` }}
+            />
+          </div>
+
+          {/* Setup Items */}
+          <div className="space-y-2">
+            {setupStatus.items
+              .filter((item) => item.status !== "complete")
+              .map((item) => (
+                <div
+                  key={item.id}
+                  className={`flex items-center justify-between p-3 rounded-xl ${
+                    item.status === "incomplete"
+                      ? "bg-red-50 border border-red-100"
+                      : "bg-amber-100/50 border border-amber-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">
+                      {item.status === "incomplete" ? "❌" : "⚠️"}
+                    </span>
+                    <div>
+                      <p className="font-medium text-gray-900">{item.label}</p>
+                      {item.message && (
+                        <p className="text-sm text-gray-600">{item.message}</p>
+                      )}
+                    </div>
+                  </div>
+                  {item.action && (
+                    <button
+                      onClick={() => navigate(item.action!.route)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        item.status === "incomplete"
+                          ? "bg-red-500 text-white hover:bg-red-600"
+                          : "bg-amber-500 text-white hover:bg-amber-600"
+                      }`}
+                    >
+                      {item.action.label}
+                    </button>
+                  )}
+                </div>
+              ))}
+          </div>
+
+          {/* Tamamlanan maddeler (collapsed) */}
+          {setupStatus.summary.completed > 0 && (
+            <div className="mt-4 pt-4 border-t border-amber-200">
+              <p className="text-sm text-gray-600 mb-2">
+                ✅ Tamamlanan: {setupStatus.items
+                  .filter((item) => item.status === "complete")
+                  .map((item) => item.label)
+                  .join(", ")}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sistem Sağlığı - Gelişmiş */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Sistem Durumu</h2>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+              <span className="text-xl">🏥</span>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Sistem Sağlığı</h2>
+              <p className="text-xs text-gray-500">Bileşen durumları ve bağlantılar</p>
+            </div>
+          </div>
           <span
             className={`px-3 py-1 rounded-full text-sm font-medium ${
               health?.status === "healthy"
-                ? "bg-brand-green/20 text-green-800"
-                : "bg-brand-orange/20 text-orange-800"
+                ? "bg-green-100 text-green-800"
+                : "bg-orange-100 text-orange-800"
             }`}
           >
             {health?.status === "healthy" ? "Sağlıklı" : "Sorunlu"}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-gray-50 rounded-xl">
-            <p className="text-sm text-gray-500">Instagram API</p>
-            <p className={`font-medium ${
+        {/* Bağlantı Durumları */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div className={`p-3 rounded-xl border ${
+            health?.checks.instagram.status === "ok"
+              ? "bg-green-50 border-green-200"
+              : "bg-red-50 border-red-200"
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span>{health?.checks.instagram.status === "ok" ? "✅" : "❌"}</span>
+              <p className="text-sm font-medium text-gray-700">Instagram API</p>
+            </div>
+            <p className={`text-xs ${
               health?.checks.instagram.status === "ok" ? "text-green-600" : "text-red-600"
             }`}>
-              {health?.checks.instagram.status === "ok" ? "Bağlı" : "Hata"}
+              {health?.checks.instagram.status === "ok" ? "Bağlantı aktif" : "Bağlantı hatası"}
             </p>
           </div>
-          <div className="p-4 bg-gray-50 rounded-xl">
-            <p className="text-sm text-gray-500">Kuyruk Sistemi</p>
-            <p className={`font-medium ${
+
+          <div className={`p-3 rounded-xl border ${
+            health?.checks.queue.status === "ok"
+              ? "bg-green-50 border-green-200"
+              : "bg-red-50 border-red-200"
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span>{health?.checks.queue.status === "ok" ? "✅" : "❌"}</span>
+              <p className="text-sm font-medium text-gray-700">Kuyruk Sistemi</p>
+            </div>
+            <p className={`text-xs ${
               health?.checks.queue.status === "ok" ? "text-green-600" : "text-red-600"
             }`}>
-              {health?.checks.queue.status === "ok" ? "Aktif" : "Hata"}
+              {health?.checks.queue.status === "ok" ? "Çalışıyor" : "Durduruldu"}
+            </p>
+          </div>
+
+          <div className={`p-3 rounded-xl border ${
+            health?.checks.gemini?.status === "ok"
+              ? "bg-green-50 border-green-200"
+              : "bg-gray-50 border-gray-200"
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span>{health?.checks.gemini?.status === "ok" ? "✅" : "⚪"}</span>
+              <p className="text-sm font-medium text-gray-700">Gemini AI</p>
+            </div>
+            <p className="text-xs text-gray-500">
+              {health?.checks.gemini?.status === "ok" ? "Hazır" : "Beklemede"}
+            </p>
+          </div>
+
+          <div className={`p-3 rounded-xl border ${
+            health?.checks.storage?.status === "ok"
+              ? "bg-green-50 border-green-200"
+              : "bg-gray-50 border-gray-200"
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span>{health?.checks.storage?.status === "ok" ? "✅" : "⚪"}</span>
+              <p className="text-sm font-medium text-gray-700">Depolama</p>
+            </div>
+            <p className="text-xs text-gray-500">
+              {health?.checks.storage?.status === "ok" ? "Erişilebilir" : "Beklemede"}
             </p>
           </div>
         </div>
+
+        {/* İçerik Durumları - setupStatus'tan */}
+        {setupStatus && (
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-sm font-medium text-gray-600 mb-3">İçerik Durumu</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {setupStatus.items.map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all hover:shadow-sm ${
+                    item.status === "complete"
+                      ? "bg-green-50 border-green-200"
+                      : item.status === "warning"
+                      ? "bg-amber-50 border-amber-200"
+                      : "bg-red-50 border-red-200"
+                  }`}
+                  onClick={() => item.action && navigate(item.action.route)}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span>
+                      {item.status === "complete" ? "✅" : item.status === "warning" ? "⚠️" : "❌"}
+                    </span>
+                    <p className="text-sm font-medium text-gray-700">{item.label}</p>
+                  </div>
+                  {item.message && (
+                    <p className={`text-xs ${
+                      item.status === "complete"
+                        ? "text-green-600"
+                        : item.status === "warning"
+                        ? "text-amber-600"
+                        : "text-red-600"
+                    }`}>
+                      {item.message}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* İstatistikler */}

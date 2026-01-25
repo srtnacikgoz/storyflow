@@ -85,6 +85,8 @@ export interface HealthCheckResponse {
   checks: {
     instagram: { status: string; message?: string };
     queue: { status: string; message?: string };
+    gemini?: { status: string; message?: string };
+    storage?: { status: string; message?: string };
   };
   version: string;
 }
@@ -788,4 +790,43 @@ export interface AIRulesStats {
   doRules: number;
   dontRules: number;
   byCategory: Record<string, number>;
+}
+
+// ==========================================
+// Setup Status (Onboarding)
+// ==========================================
+
+export type SetupItemStatus = "complete" | "incomplete" | "warning";
+
+export interface SetupItem {
+  id: string;
+  label: string;
+  status: SetupItemStatus;
+  count: number;
+  message?: string;
+  action?: {
+    label: string;
+    route: string;
+  };
+}
+
+export interface SetupStatusSummary {
+  total: number;
+  completed: number;
+  warnings: number;
+  incomplete: number;
+  overallStatus: SetupItemStatus;
+  progress: number;
+}
+
+export interface SetupStatusDetails {
+  timeSlotsWithTheme: number;
+  timeSlotsWithoutTheme: number;
+  timeSlotsWithoutThemeList: Array<{ id: string; name: string }>;
+}
+
+export interface SetupStatusResponse {
+  items: SetupItem[];
+  summary: SetupStatusSummary;
+  details: SetupStatusDetails;
 }

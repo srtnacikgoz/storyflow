@@ -11,6 +11,7 @@ import { TelegramService } from "../services/telegram";
 import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import { AIRulesService } from "../services/aiRulesService";
+import { getFixedAssets } from "../services/configService";
 import {
   buildGeminiPrompt,
   extractGeminiParamsFromScenario,
@@ -147,8 +148,16 @@ export class Orchestrator {
       // PRE-STAGE: Kuralları yükle (tüm aşamalar için)
       // ==========================================
       console.log("[Orchestrator] Loading effective rules...");
-      const effectiveRules = await this.rulesService.getEffectiveRules();
+      const [effectiveRules, fixedAssets] = await Promise.all([
+        this.rulesService.getEffectiveRules(),
+        getFixedAssets(),
+      ]);
       console.log(`[Orchestrator] Rules loaded - shouldIncludePet: ${effectiveRules.shouldIncludePet}, blockedScenarios: ${effectiveRules.blockedScenarios.length}`);
+
+      // Sabit asset bilgisini logla
+      if (fixedAssets.isEnabled) {
+        console.log(`[Orchestrator] 🔒 SABİT ASSET AKTİF - Table: ${fixedAssets.fixedTableId || "yok"}, Plate: ${fixedAssets.fixedPlateId || "yok"}, Cup: ${fixedAssets.fixedCupId || "yok"}`);
+      }
 
       // Tüm senaryoları al (tema kontrolü için de lazım)
       const allScenarios = effectiveRules.staticRules.scenarios;
@@ -230,6 +239,7 @@ export class Orchestrator {
         result.scenarioSelection = {
           scenarioId: randomScenario.id,
           scenarioName: randomScenario.name,
+          scenarioDescription: randomScenario.description || "Interior mekan görseli",  // KRİTİK: Senaryo açıklaması
           reasoning: `Interior senaryo seçildi: ${randomScenario.name} - Mevcut pastane fotoğrafı kullanılacak`,
           includesHands: false,
           compositionId: "interior-default",
@@ -300,7 +310,10 @@ export class Orchestrator {
         });
 
         if (!historySuccess) {
-          console.warn("[Orchestrator] ⚠️ Interior history kaydedilemedi - çeşitlilik takibi etkilenebilir");
+          // KRİTİK HATA: Çeşitlilik takibi bozulacak! Ama görsel zaten üretildi, pipeline'ı durdurmuyoruz.
+          console.error("[Orchestrator] ❌ KRİTİK: Interior history kaydedilemedi!");
+          console.error("[Orchestrator] Sonuç: Çeşitlilik takibi bozulacak, aynı interior tekrar seçilebilir.");
+          console.error("[Orchestrator] Slot ID:", result.slotId, "Scenario:", result.scenarioSelection?.scenarioId);
         }
 
         // Telegram'a gönder
@@ -370,7 +383,8 @@ export class Orchestrator {
         assetsForSelection,
         timeOfDay,
         mood,
-        effectiveRules  // Çeşitlilik kurallarını gönder (köpek dahil mi, bloklu masalar, vb.)
+        effectiveRules,  // Çeşitlilik kurallarını gönder (köpek dahil mi, bloklu masalar, vb.)
+        fixedAssets      // Sabit asset konfigürasyonu (mermer masa sabit vb.)
       );
 
       if (!assetResponse.success || !assetResponse.data) {
@@ -454,6 +468,8 @@ export class Orchestrator {
 
       result.scenarioSelection = {
         ...scenarioResponse.data,
+        // KRİTİK: scenarioDescription'ı Firestore'dan al (Claude döndürmezse fallback)
+        scenarioDescription: scenarioResponse.data.scenarioDescription || selectedScenario?.description || "",
         isInterior: isInteriorScenario,
         interiorType: interiorType,
         themeId: effectiveThemeId,
@@ -550,6 +566,7 @@ export class Orchestrator {
         } : undefined;
 
         // Gemini-native prompt oluştur
+        // KRİTİK: scenarioDescription'ı Gemini'ye aktarıyoruz (ortam/mekan bilgisi)
         const basePromptResult = await this.getScenarioPrompt(
           result.scenarioSelection.scenarioId,
           result.scenarioSelection.compositionId,
@@ -558,7 +575,8 @@ export class Orchestrator {
           mood, // Tema'dan gelen mood bilgisi
           productType,
           timeOfDay,
-          scenarioGeminiData
+          scenarioGeminiData,
+          result.scenarioSelection.scenarioDescription  // KRİTİK: Ortam bilgisi
         );
 
         console.log(`[Orchestrator] Base prompt built with Gemini terminology`);
@@ -1041,6 +1059,7 @@ export class Orchestrator {
    * mood parametresi ile atmosfer bilgisi eklenir
    *
    * Yeni: Gemini terminolojisi ile zenginleştirilmiş prompt
+   * KRİTİK: scenarioDescription parametresi ortam bilgisi için zorunlu
    */
   private async getScenarioPrompt(
     scenarioId: string,
@@ -1054,7 +1073,8 @@ export class Orchestrator {
       lightingPreset?: string;
       handPose?: string;
       compositionEntry?: string;
-    }
+    },
+    scenarioDescription?: string  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
   ): Promise<{ mainPrompt: string; negativePrompt?: string }> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
@@ -1062,6 +1082,12 @@ export class Orchestrator {
     if (promptDoc.exists) {
       // Firestore'dan gelen prompt'a kompozisyon ve el stili ekle
       let prompt = promptDoc.data()?.prompt || "";
+
+      // KRİTİK: Senaryo açıklamasını prompt'a ekle (ortam/mekan bilgisi)
+      if (scenarioDescription) {
+        prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
+      }
+
       prompt += this.getCompositionDetails(scenarioId, compositionId);
       prompt += this.getHandStyleDetails(handStyle);
       prompt += this.getCupReferenceDetails(selectedCup);
@@ -1081,7 +1107,8 @@ export class Orchestrator {
       mood,
       productType,
       timeOfDay,
-      scenarioData
+      scenarioData,
+      scenarioDescription  // KRİTİK: Senaryo açıklamasını aktar
     );
   }
 
@@ -1273,7 +1300,8 @@ Cup: ${colors} ${material} (from reference)`.trim();
       lightingPreset?: string;
       handPose?: string;
       compositionEntry?: string;
-    }
+    },
+    scenarioDescription?: string  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
   ): Promise<{ mainPrompt: string; negativePrompt: string }> {
     // Senaryo verilerinden Gemini parametrelerini çıkar
     const scenarioParams = scenarioData
@@ -1300,6 +1328,12 @@ Cup: ${colors} ${material} (from reference)`.trim();
 
       let prompt = geminiResult.mainPrompt;
 
+      // KRİTİK: Senaryo açıklamasını prompt'a ekle (ortam/mekan bilgisi)
+      if (scenarioDescription) {
+        prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
+        console.log(`[Orchestrator] Added scenario description to prompt: ${scenarioDescription.substring(0, 50)}...`);
+      }
+
       // Ek detaylar ekle (eski sistem ile uyumluluk)
       prompt += this.getCompositionDetails(scenarioId, compositionId);
       prompt += this.getHandStyleDetails(handStyle);
@@ -1315,7 +1349,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
       console.warn("[Orchestrator] Gemini prompt builder failed, using fallback:", error);
       // Fallback to legacy prompt
       return {
-        mainPrompt: this.buildDynamicPromptLegacy(scenarioId, compositionId, handStyle, selectedCup, mood),
+        mainPrompt: this.buildDynamicPromptLegacy(scenarioId, compositionId, handStyle, selectedCup, mood, scenarioDescription),
         negativePrompt: await buildNegativePrompt(handStyle ? ["always", "hands"] : ["always"]),
       };
     }
@@ -1330,7 +1364,8 @@ Cup: ${colors} ${material} (from reference)`.trim();
     compositionId?: string,
     handStyle?: string,
     selectedCup?: Asset,
-    mood?: string
+    mood?: string,
+    scenarioDescription?: string  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
   ): string {
     // ═══════════════════════════════════════════════════════════════════════════
     // Gemini-native terminoloji ile mood bazlı atmosfer
@@ -1490,6 +1525,11 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
 
     // Öncelik: 1) Senaryo override, 2) handStyle'a göre seçim
     let prompt = scenarioOverrides[scenarioId] || (handStyle ? handPrompt : noHandPrompt);
+
+    // KRİTİK: Senaryo açıklamasını prompt'un başına ekle (ortam/mekan bilgisi)
+    if (scenarioDescription) {
+      prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
+    }
 
     // Kompozisyon detayları ekle
     prompt += this.getCompositionDetails(scenarioId, compositionId);

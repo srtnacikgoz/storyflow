@@ -1,6 +1,33 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import type { TimeSlotRule, OrchestratorProductType, Theme } from "../types";
+import { Tooltip } from "../components/Tooltip";
+import { SetupStepper } from "../components/SetupStepper";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { PageTour } from "../components/PageTour";
+import type { TourStep } from "../components/PageTour";
+
+// TimeSlots sayfası tour adımları
+const TIMESLOTS_TOUR_STEPS: TourStep[] = [
+  {
+    target: "[data-tour='timeslots-header']",
+    title: "Otomatik Paylaşım",
+    content: "Bu sayfa, içeriklerin hangi saatlerde otomatik üretileceğini belirler. Her zaman dilimi bir üretim tetikler.",
+    position: "bottom",
+  },
+  {
+    target: "[data-tour='timeslots-add']",
+    title: "Yeni Zaman Dilimi",
+    content: "Buradan yeni bir otomatik paylaşım zamanı ekleyebilirsiniz. Sistem, belirlediğiniz aralıkta en optimal saati seçer.",
+    position: "left",
+  },
+  {
+    target: "[data-tour='timeslots-list']",
+    title: "Aktif Kurallar",
+    content: "Mevcut zaman dilimleriniz burada listelenir. Her biri için tema, ürün tipi ve aktiflik durumu görünür.",
+    position: "top",
+  },
+];
 
 // Gün isimleri
 const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
@@ -78,6 +105,8 @@ export default function TimeSlots() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRule, setEditingRule] = useState<TimeSlotRule | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const today = new Date().getDay();
 
@@ -104,13 +133,23 @@ export default function TimeSlots() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Bu kuralı silmek istediğinizden emin misiniz?")) return;
+  // Silme onay modalını aç
+  const handleDelete = (id: string) => {
+    setConfirmDeleteId(id);
+  };
+
+  // Gerçek silme işlemi
+  const confirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    setDeleting(true);
     try {
-      await api.deleteTimeSlotRule(id);
+      await api.deleteTimeSlotRule(confirmDeleteId);
       loadData();
+      setConfirmDeleteId(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Silme hatası");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -142,16 +181,22 @@ export default function TimeSlots() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Setup Stepper */}
+      <SetupStepper />
+
+      {/* Page Tour */}
+      <PageTour tourId="timeslots-page" steps={TIMESLOTS_TOUR_STEPS} />
+
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start" data-tour="timeslots-header">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Otomatik Paylaşım Zamanları</h1>
           <p className="text-gray-500 mt-1">
             Her zaman dilimi için en uygun saatte otomatik içerik üretilir
           </p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="btn-primary">
+        <button onClick={() => setShowAddModal(true)} className="btn-primary" data-tour="timeslots-add">
           + Yeni Zaman Dilimi
         </button>
       </div>
@@ -212,14 +257,58 @@ export default function TimeSlots() {
 
       {/* Kurallar Listesi */}
       {!loading && !error && (
-        <>
+        <div data-tour="timeslots-list">
           {rules.length === 0 ? (
             <div className="card text-center py-12">
-              <div className="text-4xl mb-4">📅</div>
-              <p className="text-gray-600 mb-2">Henüz otomatik paylaşım zamanı eklenmemiş</p>
-              <p className="text-gray-500 text-sm mb-6">
-                İlk zaman dilimini ekleyerek otomatik içerik üretimine başlayın
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                <span className="text-4xl">📅</span>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Henüz Otomatik Paylaşım Zamanı Yok
+              </h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                Zaman dilimleri, Instagram içeriklerinizin hangi gün ve saatlerde
+                otomatik üretileceğini belirler.
               </p>
+
+              {/* Nasıl Çalışır */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-6 max-w-lg mx-auto text-left">
+                <p className="font-medium text-gray-800 mb-3">Nasıl Çalışır?</p>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-500 mt-0.5">•</span>
+                    <span>Bir saat aralığı belirlersiniz (örn: 08:00 - 11:00)</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-500 mt-0.5">•</span>
+                    <span>Sistem, Instagram verilerine göre en optimal saati seçer</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-500 mt-0.5">•</span>
+                    <span>O saatte AI görsel üretir ve Telegram'dan onayınızı bekler</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Örnek Kullanımlar */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 max-w-2xl mx-auto text-left">
+                <div className="p-3 bg-amber-50 rounded-xl">
+                  <p className="font-medium text-amber-800 text-sm">☀️ Sabah</p>
+                  <p className="text-xs text-amber-600 mt-1">07:00-10:00 arası</p>
+                  <p className="text-xs text-gray-500 mt-1">Kahvaltı, kruvasan</p>
+                </div>
+                <div className="p-3 bg-orange-50 rounded-xl">
+                  <p className="font-medium text-orange-800 text-sm">🌤️ Öğle</p>
+                  <p className="text-xs text-orange-600 mt-1">11:00-14:00 arası</p>
+                  <p className="text-xs text-gray-500 mt-1">Pasta, tatlılar</p>
+                </div>
+                <div className="p-3 bg-purple-50 rounded-xl">
+                  <p className="font-medium text-purple-800 text-sm">🌙 Akşam</p>
+                  <p className="text-xs text-purple-600 mt-1">17:00-20:00 arası</p>
+                  <p className="text-xs text-gray-500 mt-1">Çikolata, hediyeler</p>
+                </div>
+              </div>
+
               <button onClick={() => setShowAddModal(true)} className="btn-primary">
                 İlk Zaman Dilimini Ekle
               </button>
@@ -296,7 +385,7 @@ export default function TimeSlots() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Add/Edit Modal */}
@@ -315,6 +404,28 @@ export default function TimeSlots() {
           }}
         />
       )}
+
+      {/* Silme Onay Modal */}
+      <ConfirmDialog
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={confirmDelete}
+        title="Zaman Dilimi Silinecek"
+        description={(() => {
+          const rule = rules.find(r => r.id === confirmDeleteId);
+          if (!rule) return "Bu zaman dilimini silmek istediğinize emin misiniz?";
+          return `${rule.startHour}:00 - ${rule.endHour}:00 arası zaman dilimini silmek istediğinize emin misiniz?`;
+        })()}
+        consequences={[
+          "Bu zaman dilimi için otomatik üretim duracaktır",
+          "Bekleyen üretimler iptal edilecektir",
+          "Bu işlem geri alınamaz",
+        ]}
+        confirmText="Evet, Sil"
+        cancelText="Vazgeç"
+        variant="danger"
+        isLoading={deleting}
+      />
     </div>
   );
 }
@@ -525,6 +636,8 @@ function RuleModal({
   const [useTheme, setUseTheme] = useState<boolean>(!!rule?.themeId);
   const [themeId, setThemeId] = useState<string>(rule?.themeId || "");
   const [saving, setSaving] = useState(false);
+  // Tema uyarısı için state
+  const [showThemeWarning, setShowThemeWarning] = useState(false);
 
   const toggleDay = (day: number) => {
     setDaysOfWeek((prev) =>
@@ -538,7 +651,8 @@ function RuleModal({
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Tema seçilmediğinde uyarı gösterip kullanıcıya karar aldıran fonksiyon
+  const handleSubmit = async (e: React.FormEvent, skipThemeWarning = false) => {
     e.preventDefault();
     if (productTypes.length === 0) {
       alert("En az bir ürün tipi seçmelisiniz");
@@ -553,6 +667,18 @@ function RuleModal({
       return;
     }
 
+    // Tema seçilmemiş ve henüz uyarı gösterilmediyse uyarı göster
+    const hasNoTheme = !useTheme || (useTheme && !themeId);
+    if (hasNoTheme && !skipThemeWarning) {
+      setShowThemeWarning(true);
+      return;
+    }
+
+    await doSave();
+  };
+
+  // Gerçek kaydetme işlemi
+  const doSave = async () => {
     setSaving(true);
     try {
       const data: Partial<TimeSlotRule> = {
@@ -601,8 +727,12 @@ function RuleModal({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Zaman Aralığı */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
               ⏰ Saat Aralığı
+              <Tooltip
+                content="Sistem bu aralıkta Instagram verilerine göre en optimal saati seçer. Geniş aralık = daha iyi optimizasyon."
+                position="right"
+              />
             </label>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -642,8 +772,12 @@ function RuleModal({
 
           {/* Günler */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
               📅 Hangi Günler Çalışsın?
+              <Tooltip
+                content="Seçili günlerde otomatik içerik üretimi yapılır. Hafta içi ve hafta sonu için farklı etkileşim oranları vardır."
+                position="right"
+              />
             </label>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5, 6, 0].map((day) => (
@@ -687,8 +821,12 @@ function RuleModal({
 
           {/* Ürün Tipleri */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
               📦 Hangi Ürünler İçin?
+              <Tooltip
+                content="Bu zaman diliminde hangi ürün kategorilerinden seçim yapılsın? Birden fazla seçerseniz sistem rastgele birini seçer."
+                position="right"
+              />
             </label>
             <div className="grid grid-cols-2 gap-2">
               {(Object.keys(PRODUCT_CONFIG) as OrchestratorProductType[]).map((pt) => (
@@ -724,8 +862,12 @@ function RuleModal({
                   }}
                   className="w-5 h-5 text-brand-blue border-gray-300 rounded focus:ring-brand-blue"
                 />
-                <span className="text-sm font-medium text-gray-700">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
                   🎨 Tema Kullan
+                  <Tooltip
+                    content="Tema, belirli senaryolar ve asset'leri gruplar. Tutarlı görsel kimlik için önerilir."
+                    position="right"
+                  />
                 </span>
               </label>
 
@@ -789,6 +931,62 @@ function RuleModal({
             </button>
           </div>
         </form>
+
+        {/* Tema Uyarı Modal'ı */}
+        {showThemeWarning && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+              <div className="flex items-start gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">⚠️</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    Tema Seçilmedi
+                  </h3>
+                  <p className="text-gray-600 mt-1">
+                    Bu zaman dilimi için tema seçmediniz.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 rounded-xl p-4 mb-6">
+                <p className="text-sm text-amber-800 font-medium mb-2">
+                  Tema seçilmediğinde ne olur?
+                </p>
+                <ul className="text-sm text-amber-700 space-y-1">
+                  <li>• Tüm senaryolar arasından rastgele seçim yapılır</li>
+                  <li>• Asset'ler (masa, sandalye vb.) rastgele kombinasyonlar olabilir</li>
+                  <li>• Mağazanızın görsel tutarlılığı bozulabilir</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowThemeWarning(false);
+                    // Tema seçim alanına scroll yap
+                    setUseTheme(true);
+                  }}
+                  className="flex-1 px-4 py-3 bg-brand-blue text-white rounded-xl font-medium hover:bg-brand-blue/90 transition-colors"
+                >
+                  Tema Seç
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowThemeWarning(false);
+                    doSave();
+                  }}
+                  className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                >
+                  Temasız Devam Et
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -167,6 +167,7 @@ export const updateTheme = functions
 /**
  * Tema sil
  * Not: Varsayılan temalar silinemez
+ * Not: TimeSlot'larda kullanılan temalar silinemez (cascade kontrolü)
  */
 export const deleteTheme = functions
   .region(REGION)
@@ -199,6 +200,33 @@ export const deleteTheme = functions
           response.status(400).json({
             success: false,
             error: "Varsayılan temalar silinemez",
+          });
+          return;
+        }
+
+        // CASCADE KONTROLÜ: Bu temayı kullanan TimeSlot'ları kontrol et
+        const timeSlotsUsingTheme = await db
+          .collection("time-slot-rules")
+          .where("themeId", "==", id)
+          .get();
+
+        if (!timeSlotsUsingTheme.empty) {
+          // TimeSlot isimlerini al
+          const affectedTimeSlots = timeSlotsUsingTheme.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              name: data.name || `${data.startHour}:00 - ${data.endHour}:00`,
+            };
+          });
+
+          console.log(`[deleteTheme] Theme ${id} is used by ${affectedTimeSlots.length} time slots`);
+
+          response.status(400).json({
+            success: false,
+            error: `Bu tema ${affectedTimeSlots.length} zaman diliminde kullanılıyor. Önce bu zaman dilimlerinden temayı kaldırın.`,
+            affectedTimeSlots,
+            code: "THEME_IN_USE",
           });
           return;
         }

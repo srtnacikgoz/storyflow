@@ -18,6 +18,8 @@ import {
   updateTimeouts,
   getSystemSettings,
   updateSystemSettings,
+  getFixedAssets,
+  updateFixedAssets,
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
 import { getGeminiTerminologySeedData } from "../../orchestrator/seed/geminiTerminologyData";
@@ -734,6 +736,132 @@ export const getGeminiPresets = functions
         });
       } catch (error) {
         errorResponse(response, error, "getGeminiPresets");
+      }
+    });
+  });
+
+/**
+ * Sabit asset ayarlarını getir
+ * GET /getFixedAssetsConfig
+ *
+ * "Mermer masa sabit, üzerindekiler serbest" kullanım senaryosu için.
+ *
+ * Döndürülen veri:
+ * - fixedTableId: Sabit masa ID'si (null ise normal diversity)
+ * - fixedPlateId: Sabit tabak ID'si (opsiyonel)
+ * - fixedCupId: Sabit fincan ID'si (opsiyonel)
+ * - isEnabled: Aktif mi?
+ */
+export const getFixedAssetsConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        // ConfigService üzerinden oku
+        const fixedAssets = await getFixedAssets();
+
+        response.json({
+          success: true,
+          data: fixedAssets,
+        });
+      } catch (error) {
+        errorResponse(response, error, "getFixedAssetsConfig");
+      }
+    });
+  });
+
+/**
+ * Sabit asset ayarlarını güncelle
+ * PUT/POST /updateFixedAssetsConfig
+ *
+ * Body: {
+ *   isEnabled?: boolean,           // Özelliği aktif/deaktif et
+ *   fixedTableId?: string | null,  // Sabit masa ID'si (null: devre dışı)
+ *   fixedPlateId?: string | null,  // Sabit tabak ID'si (null: devre dışı)
+ *   fixedCupId?: string | null,    // Sabit fincan ID'si (null: devre dışı)
+ * }
+ *
+ * Validasyon:
+ * - ID değerleri string veya null olmalı
+ * - isEnabled boolean olmalı
+ */
+export const updateFixedAssetsConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const updates = request.body;
+        const validatedUpdates: Record<string, unknown> = {};
+
+        // Validasyon: isEnabled (boolean)
+        if (updates.isEnabled !== undefined) {
+          if (typeof updates.isEnabled !== "boolean") {
+            response.status(400).json({
+              success: false,
+              error: "isEnabled must be a boolean",
+            });
+            return;
+          }
+          validatedUpdates.isEnabled = updates.isEnabled;
+        }
+
+        // Validasyon: fixedTableId (string | null)
+        if (updates.fixedTableId !== undefined) {
+          if (updates.fixedTableId !== null && typeof updates.fixedTableId !== "string") {
+            response.status(400).json({
+              success: false,
+              error: "fixedTableId must be a string or null",
+            });
+            return;
+          }
+          validatedUpdates.fixedTableId = updates.fixedTableId;
+        }
+
+        // Validasyon: fixedPlateId (string | null)
+        if (updates.fixedPlateId !== undefined) {
+          if (updates.fixedPlateId !== null && typeof updates.fixedPlateId !== "string") {
+            response.status(400).json({
+              success: false,
+              error: "fixedPlateId must be a string or null",
+            });
+            return;
+          }
+          validatedUpdates.fixedPlateId = updates.fixedPlateId;
+        }
+
+        // Validasyon: fixedCupId (string | null)
+        if (updates.fixedCupId !== undefined) {
+          if (updates.fixedCupId !== null && typeof updates.fixedCupId !== "string") {
+            response.status(400).json({
+              success: false,
+              error: "fixedCupId must be a string or null",
+            });
+            return;
+          }
+          validatedUpdates.fixedCupId = updates.fixedCupId;
+        }
+
+        // Güncelle
+        await updateFixedAssets(validatedUpdates);
+
+        // Cache temizle
+        clearConfigCache();
+
+        console.log("[updateFixedAssetsConfig] Fixed assets updated:", validatedUpdates);
+
+        response.json({
+          success: true,
+          message: "Fixed assets configuration updated",
+        });
+      } catch (error) {
+        errorResponse(response, error, "updateFixedAssetsConfig");
       }
     });
   });
