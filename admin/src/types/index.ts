@@ -398,6 +398,88 @@ export type EnvironmentType = "indoor" | "outdoor" | "window" | "cafe" | "home";
 // Evcil hayvan tipleri
 export type PetType = "dogs" | "cats";
 
+// ==========================================
+// OBJECT IDENTITY ENUMS
+// ==========================================
+// Gemini'nin nesneleri doğru yorumlaması için standart enum değerleri
+
+// Masa üst tabla şekli
+export type TableTopShape = "circular" | "square" | "rectangular" | "oval";
+
+// Masa ayak yapısı
+export type TableBaseType = "pedestal" | "four-legged" | "tripod" | "trestle";
+
+// Fincan/bardak tipi
+export type CupType =
+  | "latte-mug"
+  | "espresso-cup"
+  | "traditional-tea-glass"
+  | "ceramic-teacup"
+  | "tulip-glass"
+  | "cappuccino-cup"
+  | "glass-mug";
+
+// Çatal-bıçak tipi
+export type CutleryType =
+  | "dessert-fork"
+  | "dinner-fork"
+  | "teaspoon"
+  | "dessert-spoon"
+  | "pastry-knife"
+  | "butter-knife"
+  | "cake-server";
+
+// Tabak tipi
+export type PlateType =
+  | "dessert-plate"
+  | "dinner-plate"
+  | "side-plate"
+  | "serving-plate"
+  | "cake-stand";
+
+// Object Identity label'ları (Admin UI dropdown'ları için)
+export const TABLE_TOP_SHAPES: Record<TableTopShape, string> = {
+  circular: "Yuvarlak",
+  square: "Kare",
+  rectangular: "Dikdörtgen",
+  oval: "Oval",
+};
+
+export const TABLE_BASE_TYPES: Record<TableBaseType, string> = {
+  pedestal: "Tek Ayak (Merkezi)",
+  "four-legged": "Dört Ayak",
+  tripod: "Üç Ayak",
+  trestle: "Köprü Ayak",
+};
+
+export const CUP_TYPES: Record<CupType, string> = {
+  "latte-mug": "Latte Kupası (geniş ağızlı)",
+  "espresso-cup": "Espresso Fincanı (küçük)",
+  "traditional-tea-glass": "Çay Bardağı (ince belli)",
+  "ceramic-teacup": "Porselen Çay Fincanı (kulplu)",
+  "tulip-glass": "Lale Bardak (çay)",
+  "cappuccino-cup": "Cappuccino Fincanı (orta)",
+  "glass-mug": "Cam Kupa (latte/americano)",
+};
+
+export const CUTLERY_TYPES: Record<CutleryType, string> = {
+  "dessert-fork": "Tatlı Çatalı (küçük)",
+  "dinner-fork": "Yemek Çatalı (standart)",
+  teaspoon: "Çay Kaşığı",
+  "dessert-spoon": "Tatlı Kaşığı",
+  "pastry-knife": "Pasta Bıçağı",
+  "butter-knife": "Tereyağı Bıçağı",
+  "cake-server": "Pasta Spatulası",
+};
+
+export const PLATE_TYPES: Record<PlateType, string> = {
+  "dessert-plate": "Tatlı Tabağı (küçük)",
+  "dinner-plate": "Yemek Tabağı (büyük)",
+  "side-plate": "Yan Tabak",
+  "serving-plate": "Servis Tabağı",
+  "cake-stand": "Kek Standı (ayaklı)",
+};
+
 // Yeme şekli - ürün nasıl yenir
 export type EatingMethod = "hand" | "fork" | "fork-knife" | "spoon" | "none";
 
@@ -417,6 +499,13 @@ export interface OrchestratorAsset {
     style: string;
     material?: string;
     shape?: string;
+
+    // Object Identity alanları - Gemini'ye net geometrik/fonksiyonel bilgi verir
+    tableTopShape?: TableTopShape;
+    tableBaseType?: TableBaseType;
+    cupType?: CupType;
+    cutleryType?: CutleryType;
+    plateType?: PlateType;
   };
   // Yeme şekli (sadece products için)
   eatingMethod?: EatingMethod;

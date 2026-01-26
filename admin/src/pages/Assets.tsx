@@ -1,7 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
-import type { OrchestratorAsset, AssetCategory, EatingMethod, DynamicCategory } from "../types";
+import TagInput from "../components/TagInput";
+import type {
+  OrchestratorAsset,
+  AssetCategory,
+  EatingMethod,
+  DynamicCategory,
+} from "../types";
 import { useLoading, useLoadingOperation } from "../contexts/LoadingContext";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
@@ -199,6 +205,13 @@ export default function Assets() {
     });
     return subtypes as Record<AssetCategory, string[]>;
   }, [dynamicCategories]);
+
+  // Tüm asset'lerdeki unique tag'leri topla (autocomplete önerileri için)
+  const allUniqueTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    assets.forEach((a) => a.tags?.forEach((t) => tagSet.add(t)));
+    return Array.from(tagSet).sort();
+  }, [assets]);
 
   // Kategorileri ve asset'leri yükle
   useEffect(() => {
@@ -537,6 +550,7 @@ export default function Assets() {
           categoryLabels={dynamicCategoryLabels}
           subtypeLabels={dynamicSubtypeLabels}
           subtypesByCategory={dynamicSubtypesByCategory}
+          tagSuggestions={allUniqueTags}
           onClose={closeModal}
           onSuccess={handleModalSuccess}
         />
@@ -667,6 +681,7 @@ function AssetModal({
   categoryLabels,
   subtypeLabels,
   subtypesByCategory,
+  tagSuggestions,
   onClose,
   onSuccess,
 }: {
@@ -674,6 +689,7 @@ function AssetModal({
   categoryLabels: Record<AssetCategory, string>;
   subtypeLabels: Record<string, string>;
   subtypesByCategory: Record<AssetCategory, string[]>;
+  tagSuggestions: string[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -684,7 +700,7 @@ function AssetModal({
   const [subType, setSubType] = useState(asset?.subType || "");
   const [filename, setFilename] = useState(asset?.filename || "");
   const [storageUrl, setStorageUrl] = useState(asset?.storageUrl || "");
-  const [tags, setTags] = useState(asset?.tags?.join(", ") || "");
+  const [tags, setTags] = useState<string[]>(asset?.tags || []);
   const [dominantColors, setDominantColors] = useState(asset?.visualProperties?.dominantColors?.join(", ") || "");
   const [style, setStyle] = useState(asset?.visualProperties?.style || "modern");
   const [material, setMaterial] = useState(asset?.visualProperties?.material || "");
@@ -697,6 +713,8 @@ function AssetModal({
       ? asset.canBeHeldByHand
       : (asset?.holdingType === "hand" || asset?.eatingMethod === "hand")
   );
+
+
   const [saving, setSaving] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -724,7 +742,7 @@ function AssetModal({
       setSubType(asset.subType);
       setFilename(asset.filename);
       setStorageUrl(asset.storageUrl);
-      setTags(asset.tags?.join(", ") || "");
+      setTags(asset.tags || []);
       setDominantColors(asset.visualProperties?.dominantColors?.join(", ") || "");
       setStyle(asset.visualProperties?.style || "modern");
       setMaterial(asset.visualProperties?.material || "");
@@ -765,9 +783,7 @@ function AssetModal({
     setSaving(true);
     try {
       // Alan değerlerini kategori bazlı hazırla
-      const parsedTags = fieldConfig.tags !== "hidden"
-        ? tags.split(",").map(t => t.trim()).filter(Boolean)
-        : [];
+      const parsedTags = fieldConfig.tags !== "hidden" ? tags : [];
 
       const parsedColors = fieldConfig.dominantColors !== "hidden"
         ? dominantColors.split(",").map(c => c.trim()).filter(Boolean)
@@ -942,14 +958,13 @@ function AssetModal({
           {fieldConfig.tags !== "hidden" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {getFieldLabel("Etiketler (virgülle ayır)", fieldConfig.tags)}
+                {getFieldLabel("Kullanım Amacı / Etiketler", fieldConfig.tags)}
               </label>
-              <input
-                type="text"
+              <TagInput
                 value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="gold-rim, white, elegant"
-                className="input w-full"
+                onChange={setTags}
+                suggestions={tagSuggestions}
+                placeholder="Örn: çay içmek için, cheesecake tabağı, gold-rim"
               />
             </div>
           )}
@@ -1024,6 +1039,8 @@ function AssetModal({
               </select>
             </div>
           )}
+
+          {/* Object Identity Alanları - kategori+subType bazlı koşullu */}
 
           {/* Yeme Şekli ve Elle Tutulabilirlik - sadece products kategorisinde */}
           {category === "products" && (

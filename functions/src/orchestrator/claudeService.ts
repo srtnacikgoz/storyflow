@@ -25,6 +25,103 @@ import { getSystemSettings, getPromptTemplate, interpolatePrompt } from "../serv
 // Lazy load Anthropic SDK
 let anthropicClient: Anthropic | null = null;
 
+// ==========================================
+// OBJECT IDENTITY HELPER
+// ==========================================
+// Formül: [Type] + [Geometry/Shape] + [Material/Texture] + [Functional Detail]
+// Gemini'ye net, belirsizliksiz asset tanımı verir.
+// Serbest metin yerine enum label'ları kullanılır.
+
+/**
+ * Asset için Object Identity açıklaması oluşturur
+ * Kategori bazlı farklı özellikler birleştirilir
+ *
+ * Örnek çıktılar:
+ * - Table: "circular marble tabletop on pedestal base"
+ * - Cup: "espresso cup, white ceramic"
+ * - Cutlery: "dessert fork, silver metal"
+ * - Plate: "dessert plate, white porcelain"
+ */
+function buildAssetIdentity(asset: Asset, assetRole: string): string {
+  const vp = asset.visualProperties;
+  if (!vp) return assetRole;
+
+  const parts: string[] = [];
+
+  switch (assetRole.toLowerCase()) {
+    case "table": {
+      // [Geometry] + [Material] + "tabletop" + [Base]
+      if (vp.tableTopShape) {
+        parts.push(vp.tableTopShape);
+      }
+      if (vp.material) parts.push(vp.material);
+      parts.push("tabletop");
+      if (vp.tableBaseType) {
+        parts.push(`on ${vp.tableBaseType} base`);
+      }
+      break;
+    }
+    case "cup": {
+      // [CupType label] + [Color] + [Material]
+      if (vp.cupType) {
+        // İngilizce enum değerini okunabilir hale getir: "espresso-cup" → "espresso cup"
+        parts.push(vp.cupType.replace(/-/g, " "));
+      }
+      if (vp.dominantColors?.length) {
+        parts.push(vp.dominantColors[0]);
+      }
+      if (vp.material) parts.push(vp.material);
+      break;
+    }
+    case "cutlery": {
+      // [CutleryType label] + [Material]
+      if (vp.cutleryType) {
+        parts.push(vp.cutleryType.replace(/-/g, " "));
+      }
+      if (vp.material) parts.push(vp.material);
+      break;
+    }
+    case "plate": {
+      // [PlateType label] + [Color] + [Material]
+      if (vp.plateType) {
+        parts.push(vp.plateType.replace(/-/g, " "));
+      }
+      if (vp.dominantColors?.length) {
+        parts.push(vp.dominantColors[0]);
+      }
+      if (vp.material) parts.push(vp.material);
+      break;
+    }
+    case "napkin": {
+      // [Color] + [Material] + "napkin"
+      if (vp.dominantColors?.length) {
+        parts.push(vp.dominantColors[0]);
+      }
+      if (vp.material) parts.push(vp.material);
+      break;
+    }
+    default: {
+      // Genel fallback: material + style
+      if (vp.material) parts.push(vp.material);
+      if (vp.style) parts.push(vp.style);
+      break;
+    }
+  }
+
+  // Boş parçaları filtrele ve birleştir
+  const identity = parts.filter(Boolean).join(" ").trim();
+
+  // Etiket bilgisini kontekst olarak ekle (Gemini'nin doğru içerik üretmesi için)
+  if (asset.tags && asset.tags.length > 0) {
+    const tagsStr = asset.tags.join(", ");
+    return identity
+      ? `${identity} [tags: ${tagsStr}]`
+      : `${assetRole} [tags: ${tagsStr}]`;
+  }
+
+  return identity || assetRole;
+}
+
 /**
  * Claude Service
  */
@@ -198,7 +295,8 @@ ${JSON.stringify(availableAssets.plates.map((a: Asset) => ({
       colors: a.visualProperties?.dominantColors,
       material: a.visualProperties?.material,
       style: a.visualProperties?.style,
-      usageCount: a.usageCount
+      usageCount: a.usageCount,
+      tags: a.tags
     })), null, 2)}
 
 FİNCANLAR:
@@ -218,7 +316,8 @@ ${JSON.stringify(availableAssets.tables.map((a: Asset) => ({
       filename: a.filename,
       material: a.visualProperties?.material,
       style: a.visualProperties?.style,
-      usageCount: a.usageCount
+      usageCount: a.usageCount,
+      tags: a.tags
     })), null, 2)}
 
 DEKORASYON (bitki, kitap, vb.):
@@ -261,7 +360,8 @@ ${availableAssets.napkins.length > 0 ? JSON.stringify(availableAssets.napkins.ma
       filename: a.filename,
       colors: a.visualProperties?.dominantColors,
       material: a.visualProperties?.material,
-      usageCount: a.usageCount
+      usageCount: a.usageCount,
+      tags: a.tags
     })), null, 2) : "YOK (peçete asset'i eklenmemiş)"}
 
 ÇATAL-BIÇAK (servis için):
@@ -270,8 +370,11 @@ ${availableAssets.cutlery.length > 0 ? JSON.stringify(availableAssets.cutlery.ma
       filename: a.filename,
       material: a.visualProperties?.material,
       style: a.visualProperties?.style,
-      usageCount: a.usageCount
+      usageCount: a.usageCount,
+      tags: a.tags
     })), null, 2) : "YOK (çatal-bıçak asset'i eklenmemiş)"}
+
+🏷️ ETİKET (TAGS) KULLANIMI: Asset'lerdeki "tags" bilgisi o asset'in kullanım bağlamını ve amacını belirtir. Etiketleri mood ve ürün tipi ile eşleştirerek seç. Örn: çay temalı üretim → "çay içmek için" etiketli bardak; lüks sunum → "gold-rim" etiketli tabak; cheesecake sunumu → "cheesecake tabağı" etiketli tabak tercih et.
 
 ⚠️ ÖNEMLİ: productId ZORUNLUDUR - yukarıdaki ÜRÜNLER listesinden bir ID seçmelisin!
 
@@ -1078,55 +1181,38 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
     });
 
     // Asset bilgilerini [N] tagging formatında hazırla
-    // RADİKAL SADELEŞTİRME v2.0: Sadece mevcut bilgileri kullan, varsayım yapma!
+    // OBJECT IDENTITY v1.0: Enum tabanlı net tanımlar → Gemini belirsizliğe düşmez
     const assetList: string[] = [];
-
-    // Helper: Bilgileri birleştir, boşları atla
-    const buildAssetDesc = (parts: (string | undefined)[]): string =>
-      parts.filter(Boolean).join(" ").trim();
 
     assetList.push(`[1] Product`); // Referans görsel yeterli
 
     if (assets.plate) {
-      const plateDesc = buildAssetDesc([
-        assets.plate.visualProperties?.material,
-        assets.plate.visualProperties?.dominantColors?.join(", ")
-      ]);
-      assetList.push(`[${assetList.length + 1}] Plate${plateDesc ? `: ${plateDesc}` : ""}`);
+      const plateIdentity = buildAssetIdentity(assets.plate, "plate");
+      assetList.push(`[${assetList.length + 1}] Plate: ${plateIdentity}`);
     }
     if (assets.table) {
-      const tableDesc = buildAssetDesc([
-        assets.table.visualProperties?.material,
-        assets.table.visualProperties?.style
-      ]);
-      assetList.push(`[${assetList.length + 1}] Table${tableDesc ? `: ${tableDesc}` : ""}`);
+      const tableIdentity = buildAssetIdentity(assets.table, "table");
+      assetList.push(`[${assetList.length + 1}] Table: ${tableIdentity}`);
     }
     if (assets.cup) {
-      const cupDesc = buildAssetDesc([
-        assets.cup.visualProperties?.dominantColors?.join(", "),
-        assets.cup.visualProperties?.material
-      ]);
-      assetList.push(`[${assetList.length + 1}] Cup${cupDesc ? `: ${cupDesc}` : ""}`);
+      const cupIdentity = buildAssetIdentity(assets.cup, "cup");
+      assetList.push(`[${assetList.length + 1}] Cup: ${cupIdentity}`);
     }
     if (assets.napkin) {
-      const napkinDesc = buildAssetDesc([
-        assets.napkin.visualProperties?.dominantColors?.join(", "),
-        assets.napkin.visualProperties?.material
-      ]);
-      assetList.push(`[${assetList.length + 1}] Napkin${napkinDesc ? `: ${napkinDesc}` : ""}`);
+      const napkinIdentity = buildAssetIdentity(assets.napkin, "napkin");
+      assetList.push(`[${assetList.length + 1}] Napkin: ${napkinIdentity}`);
     }
     if (assets.cutlery) {
-      const cutleryDesc = buildAssetDesc([
-        assets.cutlery.visualProperties?.material,
-        assets.cutlery.visualProperties?.style
-      ]);
-      assetList.push(`[${assetList.length + 1}] Cutlery${cutleryDesc ? `: ${cutleryDesc}` : ""}`);
+      const cutleryIdentity = buildAssetIdentity(assets.cutlery, "cutlery");
+      assetList.push(`[${assetList.length + 1}] Cutlery: ${cutleryIdentity}`);
     }
     if (assets.accessory) {
-      assetList.push(`[${assetList.length + 1}] Accessory: ${assets.accessory.subType}`);
+      const accTags = assets.accessory.tags?.length ? ` [tags: ${assets.accessory.tags.join(", ")}]` : "";
+      assetList.push(`[${assetList.length + 1}] Accessory: ${assets.accessory.subType}${accTags}`);
     }
     if (assets.environment) {
-      assetList.push(`[${assetList.length + 1}] Environment`);
+      const envTags = assets.environment.tags?.length ? ` [tags: ${assets.environment.tags.join(", ")}]` : "";
+      assetList.push(`[${assetList.length + 1}] Environment${envTags}`);
     }
 
     const userPrompt = `

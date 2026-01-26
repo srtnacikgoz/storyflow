@@ -127,6 +127,111 @@ export type MusicMood =
   | "afternoon-chill" // Öğleden sonra
   | "golden-hour";    // Altın saat
 
+// ==========================================
+// OBJECT IDENTITY ENUMS
+// ==========================================
+// Gemini'nin nesneleri doğru yorumlaması için standart enum değerleri.
+// Serbest metin yerine enum kullanılır → tutarsızlık ve belirsizlik önlenir.
+
+/**
+ * Masa üst tabla şekli
+ * Gemini'ye geometrik bilgi vermek için (hibrit masa sorununun çözümü)
+ */
+export type TableTopShape = "circular" | "square" | "rectangular" | "oval";
+
+/**
+ * Masa ayak yapısı
+ * Üst tabla + ayak yapısı birlikte tanımlanarak geometrik çatışma önlenir
+ */
+export type TableBaseType = "pedestal" | "four-legged" | "tripod" | "trestle";
+
+/**
+ * Fincan/bardak tipi
+ * "white ceramic" yerine "espresso cup" gibi net tanım (çay bardağı-kahve fincanı karışıklığının çözümü)
+ */
+export type CupType =
+  | "latte-mug"             // Geniş ağızlı kahve kupası
+  | "espresso-cup"          // Küçük espresso fincanı
+  | "traditional-tea-glass" // İnce belli çay bardağı
+  | "ceramic-teacup"        // Kulplu porselen çay fincanı
+  | "tulip-glass"           // Lale bardak (çay)
+  | "cappuccino-cup"        // Orta boy cappuccino fincanı
+  | "glass-mug";            // Cam kupa (latte, americano)
+
+/**
+ * Çatal-bıçak tipi
+ * "metal trendy" yerine "dessert fork" gibi fonksiyonel tanım
+ */
+export type CutleryType =
+  | "dessert-fork"     // Küçük tatlı çatalı
+  | "dinner-fork"      // Standart yemek çatalı
+  | "teaspoon"         // Çay kaşığı
+  | "dessert-spoon"    // Tatlı kaşığı
+  | "pastry-knife"     // Pasta bıçağı
+  | "butter-knife"     // Tereyağı bıçağı
+  | "cake-server";     // Pasta servis spatulası
+
+/**
+ * Tabak tipi
+ * Tabak boyutu ve kullanım amacı
+ */
+export type PlateType =
+  | "dessert-plate"    // Küçük tatlı tabağı
+  | "dinner-plate"     // Büyük yemek tabağı
+  | "side-plate"       // Yan tabak
+  | "serving-plate"    // Servis tabağı
+  | "cake-stand";      // Kek standı / ayaklı tabak
+
+/**
+ * Object Identity enum label'ları
+ * Admin panel dropdown'ları için Türkçe etiketler
+ */
+export const TABLE_TOP_SHAPES: Record<TableTopShape, string> = {
+  circular: "Yuvarlak",
+  square: "Kare",
+  rectangular: "Dikdörtgen",
+  oval: "Oval",
+};
+
+export const TABLE_BASE_TYPES: Record<TableBaseType, string> = {
+  pedestal: "Tek Ayak (Merkezi)",
+  "four-legged": "Dört Ayak",
+  tripod: "Üç Ayak",
+  trestle: "Köprü Ayak",
+};
+
+export const CUP_TYPES: Record<CupType, string> = {
+  "latte-mug": "Latte Kupası (geniş ağızlı)",
+  "espresso-cup": "Espresso Fincanı (küçük)",
+  "traditional-tea-glass": "Çay Bardağı (ince belli)",
+  "ceramic-teacup": "Porselen Çay Fincanı (kulplu)",
+  "tulip-glass": "Lale Bardak (çay)",
+  "cappuccino-cup": "Cappuccino Fincanı (orta)",
+  "glass-mug": "Cam Kupa (latte/americano)",
+};
+
+export const CUTLERY_TYPES: Record<CutleryType, string> = {
+  "dessert-fork": "Tatlı Çatalı (küçük)",
+  "dinner-fork": "Yemek Çatalı (standart)",
+  teaspoon: "Çay Kaşığı",
+  "dessert-spoon": "Tatlı Kaşığı",
+  "pastry-knife": "Pasta Bıçağı",
+  "butter-knife": "Tereyağı Bıçağı",
+  "cake-server": "Pasta Spatulası",
+};
+
+export const PLATE_TYPES: Record<PlateType, string> = {
+  "dessert-plate": "Tatlı Tabağı (küçük)",
+  "dinner-plate": "Yemek Tabağı (büyük)",
+  "side-plate": "Yan Tabak",
+  "serving-plate": "Servis Tabağı",
+  "cake-stand": "Kek Standı (ayaklı)",
+};
+
+// ==========================================
+// EATING & HOLDING TYPES
+// ==========================================
+
 /**
  * Yeme şekli - ürün nasıl yenir
  * Bu alan ürünün servis şeklini belirler
@@ -163,6 +268,13 @@ export interface Asset {
     style: string;                // "modern", "rustic", "minimal"
     material?: string;            // "ceramic", "wood", "marble"
     shape?: string;               // "round", "square", "rectangular"
+
+    // Object Identity alanları - Gemini'ye net geometrik/fonksiyonel bilgi verir
+    tableTopShape?: TableTopShape;   // Masa üst tabla şekli (furniture kategorisi)
+    tableBaseType?: TableBaseType;   // Masa ayak yapısı (furniture kategorisi)
+    cupType?: CupType;               // Fincan/bardak tipi (props kategorisi)
+    cutleryType?: CutleryType;       // Çatal-bıçak tipi (props kategorisi)
+    plateType?: PlateType;           // Tabak tipi (props kategorisi)
   };
 
   // Yeme şekli (sadece products kategorisi için)
