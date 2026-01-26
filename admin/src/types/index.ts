@@ -882,6 +882,48 @@ export interface SubTypeSlugsResponse {
 }
 
 // ==========================================
+// Prompt Studio Types
+// ==========================================
+
+// Prompt aşama ID'leri
+export type PromptStageId =
+  | "asset-selection"
+  | "scenario-selection"
+  | "prompt-optimization"
+  | "quality-control"
+  | "content-generation";
+
+// Prompt versiyon geçmişi
+export interface PromptVersion {
+  version: number;
+  systemPrompt: string;
+  updatedAt: number;
+  updatedBy?: string;
+  changeNote?: string;
+}
+
+// Prompt template
+export interface PromptTemplate {
+  id: PromptStageId;
+  name: string;
+  description: string;
+  stage: string;
+  systemPrompt: string;
+  variables: string[];
+  version: number;
+  history: PromptVersion[];
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+// Prompt Studio config
+export interface PromptStudioConfig {
+  prompts: Record<PromptStageId, PromptTemplate>;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+// ==========================================
 // Setup Status (Onboarding)
 // ==========================================
 

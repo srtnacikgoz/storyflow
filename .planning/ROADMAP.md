@@ -19,8 +19,6 @@ Sıfırdan başlayarak Instagram paylaşım otomasyonunu hayata geçiriyoruz. Fi
 - [ ] **Phase 15: Yerel Takvim** - Türkiye özel günleri için otomatik tema
 - [ ] **Phase 16: Operasyonel Veri** - Stok durumu ↔ içerik motoru bağlantısı
 - [ ] **Phase 17: QR Menü Köprüsü** - QR menü analytics → içerik önceliği
-- [ ] **Phase 18: Multi-AI Provider** - DALL-E, Midjourney seçimi
-- [ ] **Phase 19: Video İçerik** - Veo3/Sora ile Reels üretimi
 - [ ] **Phase 20: Multi-Tenant SaaS** - Çoklu müşteri altyapısı
 
 ## Phase Details

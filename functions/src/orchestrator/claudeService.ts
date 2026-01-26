@@ -20,7 +20,7 @@ import {
 import { getCompactTrainingContext } from "./promptTrainingService";
 import { AILogService } from "../services/aiLogService";
 import { AILogStage } from "../types";
-import { getSystemSettings } from "../services/configService";
+import { getSystemSettings, getPromptTemplate, interpolatePrompt } from "../services/configService";
 
 // Lazy load Anthropic SDK
 let anthropicClient: Anthropic | null = null;
@@ -153,36 +153,25 @@ export class ClaudeService {
     };
     const moodRule = moodGuidelines[mood] || moodGuidelines.balanced;
 
-    const systemPrompt = `Sen bir görsel içerik direktörüsün. Sade Patisserie için Instagram içerikleri hazırlıyorsun.
+    // Config'den system prompt template'ini al (fallback: hardcoded)
+    const assetSelectionTemplate = await getPromptTemplate("asset-selection");
 
-Görevin: Verilen asset listelerinden en uyumlu kombinasyonu seç.
-
-🎨 MOOD KURALI (${mood.toUpperCase()}):
-${moodRule}
-
-Seçim kriterleri:
-1. RENK UYUMU: Ürün, tabak ve masa renkleri uyumlu olmalı
-2. STİL TUTARLILIĞI: Modern/rustic/minimal tarzlar karışmamalı
-3. MOOD UYUMU: Yukarıdaki mood kuralına göre asset seç
-4. KULLANIM ROTASYONU: Az kullanılmış asset'lere öncelik ver
-
-${[
+    // Template değişkenleri hazırla
+    const blockedAssetsSection = [
       blockedProducts.length > 0 ? `⚠️ BLOKLANMIŞ ÜRÜNLER (SEÇME): ${blockedProducts.join(", ")}` : "",
       blockedPlates.length > 0 ? `⚠️ BLOKLANMIŞ TABAKLAR (SEÇME): ${blockedPlates.join(", ")}` : "",
       blockedCups.length > 0 ? `⚠️ BLOKLANMIŞ FİNCANLAR (SEÇME): ${blockedCups.join(", ")}` : "",
       blockedTables.length > 0 ? `⚠️ BLOKLANMIŞ MASALAR (SEÇME): ${blockedTables.join(", ")}` : "",
-    ].filter(Boolean).join("\n")}
+    ].filter(Boolean).join("\n");
 
-5. KÖPEK: ${shouldIncludePet ? "Bu sefer KÖPEK DAHİL ET (listeden seç)" : "Köpek dahil etme"}
-6. DEKORASYON: Listede varsa uygun dekorasyon seçilebilir
-7. AKSESUAR: Listede varsa uygun aksesuar seçilebilir (opsiyonel)
-8. FİNCAN: Seramik/cam tercih et, karton bardak seçme
-9. PEÇETE: Listede varsa seçilebilir (opsiyonel)
-10. ÇATAL-BIÇAK: Listede varsa seçilebilir, ürün yeme şekline uygun olmalı
+    const petInstruction = shouldIncludePet ? "Bu sefer KÖPEK DAHİL ET (listeden seç)" : "Köpek dahil etme";
 
-⚠️ SADECE LİSTEDE OLAN ASSET'LERİ SEÇ - hayal etme, uydurma!
-
-JSON formatında yanıt ver.`;
+    const systemPrompt = interpolatePrompt(assetSelectionTemplate.systemPrompt, {
+      moodUpper: mood.toUpperCase(),
+      moodRule,
+      blockedAssetsSection,
+      petInstruction,
+    });
 
     const userPrompt = `
 Ürün tipi: ${productType}
@@ -528,25 +517,33 @@ Yanıt formatı (SADECE JSON, başka açıklama yazma):
       }
     }
 
-    const systemPrompt = `Sen bir içerik stratejistisin. Instagram için en etkili senaryoyu seçiyorsun.
+    // Config'den system prompt template'ini al (fallback: hardcoded)
+    const scenarioSelectionTemplate = await getPromptTemplate("scenario-selection");
 
-Seçim kriterleri:
-1. ÜRÜN UYUMU: Senaryo ürün tipine uygun olmalı
-2. ZAMAN UYUMU: Sabah senaryoları sabah için, akşam senaryoları akşam için
-3. ASSET UYUMU: Seçilen masa/tabak/fincan senaryoya uymalı
-4. ÇEŞİTLİLİK: Son paylaşımlardan FARKLI senaryo ve kompozisyon seç
-5. ETKİLEŞİM: Yüksek etkileşim potansiyeli olan senaryolar öncelikli
-6. KÖPEK: ${shouldIncludePet ? "Köpek dahil edildi, KÖPEK UYUMLU senaryo seç (kahve-kosesi, yarim-kaldi, cam-kenari)" : "Köpek yok, herhangi senaryo uygun"}
-7. TUTMA ŞEKLİ: ${canUseHandScenarios
+    // Template değişkenleri hazırla
+    const scenarioPetInstruction = shouldIncludePet
+      ? "Köpek dahil edildi, KÖPEK UYUMLU senaryo seç (kahve-kosesi, yarim-kaldi, cam-kenari)"
+      : "Köpek yok, herhangi senaryo uygun";
+
+    const holdingInstruction = canUseHandScenarios
       ? "Bu ürün elle tutulabilir - el içeren senaryolar uygundur"
-      : `⚠️ KRİTİK: Bu ürün elle tutulamaz (yeme şekli: ${productEatingMethod}) - EL İÇEREN SENARYO SEÇME! Sadece tabakta/servis halinde gösterilmeli.`}
+      : `⚠️ KRİTİK: Bu ürün elle tutulamaz (yeme şekli: ${productEatingMethod}) - EL İÇEREN SENARYO SEÇME! Sadece tabakta/servis halinde gösterilmeli.`;
 
-ÖNEMLİ ÇEŞİTLİLİK KURALLARI:
-- ${blockedHandStyles.length > 0 ? `Bu el stillerini KULLANMA (son kullanılmış): ${blockedHandStyles.join(", ")}` : "Tüm el stilleri kullanılabilir"}
-- ${blockedCompositions.length > 0 ? `Bu kompozisyonları KULLANMA (son kullanılmış): ${blockedCompositions.join(", ")}` : "Tüm kompozisyonlar kullanılabilir"}
-${feedbackHints || ""}
+    const blockedHandStylesRule = blockedHandStyles.length > 0
+      ? `Bu el stillerini KULLANMA (son kullanılmış): ${blockedHandStyles.join(", ")}`
+      : "Tüm el stilleri kullanılabilir";
 
-JSON formatında yanıt ver.`;
+    const blockedCompositionsRule = blockedCompositions.length > 0
+      ? `Bu kompozisyonları KULLANMA (son kullanılmış): ${blockedCompositions.join(", ")}`
+      : "Tüm kompozisyonlar kullanılabilir";
+
+    const systemPrompt = interpolatePrompt(scenarioSelectionTemplate.systemPrompt, {
+      petInstruction: scenarioPetInstruction,
+      holdingInstruction,
+      blockedHandStylesRule,
+      blockedCompositionsRule,
+      feedbackHints: feedbackHints || "",
+    });
 
     const userPrompt = `
 Ürün: ${productType}
@@ -740,25 +737,10 @@ Yanıt formatı:
   ): Promise<ClaudeResponse<QualityControlResult>> {
     const client = this.getClient();
 
-    const systemPrompt = `Sen bir görsel kalite kontrol uzmanısın. Üretilen görseli değerlendir.
-
-Değerlendirme kriterleri (her biri 1-10):
-1. ÜRÜN DOĞRULUĞU: Orijinal ürüne ne kadar sadık?
-2. KOMPOZİSYON: Çerçeveleme, denge, boşluk kullanımı
-3. IŞIK: Doğal mı, sıcak mı, Instagram'a uygun mu?
-4. GERÇEKÇİLİK: Yapay görünüyor mu, gerçek fotoğraf gibi mi?
-5. INSTAGRAM HAZIRLIĞI: Direkt paylaşılabilir mi?
-
-⚠️ KRİTİK DUPLİKASYON KONTROLÜ:
-- Görselde BİRDEN FAZLA AYNI ÜRÜN var mı? (2 kruvasan, 2 pasta, vb.)
-- Görselde BİRDEN FAZLA FİNCAN/BARDAK var mı?
-- Görselde BİRDEN FAZLA TABAK var mı?
-
-Duplikasyon tespit edilirse: overallScore = 0, shouldRegenerate = true
-
-Minimum geçme skoru: 7/10 (ortalama)
-
-JSON formatında yanıt ver.`;
+    // Config'den system prompt template'ini al (fallback: hardcoded)
+    // QC prompt'u tamamen statik - template değişken yok
+    const qcTemplate = await getPromptTemplate("quality-control");
+    const systemPrompt = qcTemplate.systemPrompt;
 
     const userPrompt = `
 Beklenen senaryo: ${expectedScenario.scenarioName}
@@ -963,28 +945,10 @@ Görseli değerlendir ve JSON formatında yanıt ver:
   ): Promise<ClaudeResponse<ContentPackage>> {
     const client = this.getClient();
 
-    const systemPrompt = `Sen Sade Patisserie'nin sosyal medya yazarısın.
-
-Marka tonu:
-- Samimi ama profesyonel
-- Türkçe, günlük dil
-- Emoji kullanımı minimal ve zarif
-- Çağrı içeren ama baskıcı olmayan
-
-Caption kuralları:
-- Maximum 150 karakter
-- İlk satır dikkat çekici
-- Lokasyon ipucu verebilir (Antalya)
-- Ürün adı geçebilir ama zorunlu değil
-
-Hashtag kuralları:
-- 5-8 hashtag
-- #sadepatisserie her zaman dahil
-- #antalya veya #antalyacafe dahil
-- Ürüne özel hashtagler
-- Trend hashtagler
-
-JSON formatında yanıt ver.`;
+    // Config'den system prompt template'ini al (fallback: hardcoded)
+    // Content generation prompt'u tamamen statik - template değişken yok
+    const contentTemplate = await getPromptTemplate("content-generation");
+    const systemPrompt = contentTemplate.systemPrompt;
 
     const userPrompt = `
 Ürün: ${productType}
@@ -1102,64 +1066,16 @@ El var mı: ${scenario.includesHands ? "Evet" : "Hayır"}
     // ═══════════════════════════════════════════════════════════════════════════
     // GEMİNİ TERMİNOLOJİSİ İLE OPTİMİZASYON
     // ═══════════════════════════════════════════════════════════════════════════
-    const systemPrompt = `Sen Gemini için prompt optimize eden bir uzmansın. Gemini-native terminoloji kullan.
+    // Config'den system prompt template'ini al (fallback: hardcoded)
+    const optimizationTemplate = await getPromptTemplate("prompt-optimization");
 
-${trainingContext}
+    // Template değişkenleri hazırla
+    const userRulesSection = userRules ? `\n## KULLANICI KURALLARI\n${userRules}` : "";
 
-## GEMİNİ TERMİNOLOJİSİ REHBERİ
-
-### IŞIK TERİMLERİ (Gemini anlıyor):
-- "soft diffused natural light" - yumuşak doğal ışık
-- "dramatic side-lighting at 45 degrees" - 45 derece yan ışık
-- "warm backlighting with golden rim" - altın arka ışık
-- "rim lighting with soft fill" - kenar vurgulu ışık
-- "subsurface scattering" - yarı saydam yüzeylerde ışık geçişi
-- "specular highlights" - parlak yansımalar
-
-### RENK SICAKLIĞI (Kelvin):
-- 3000K: Sıcak, samimi (akşam, cozy)
-- 3200K: Altın saat, nostaljik
-- 3500K: Sıcak-nötr geçiş
-- 5000K: Nötr gün ışığı
-- 5500K: Parlak sabah ışığı
-
-### EL TERİMLERİ (Gemini anlıyor):
-- "cupping" - kavrama, koruyucu tutma
-- "pinching" - iki parmakla tutma
-- "cradling" - avuçta taşıma
-- "presenting" - açık avuçla sunma
-- "breaking" - kırma, ayırma hareketi
-- "dipping" - batırma hareketi
-
-### DOKU TERİMLERİ (Ürün bazlı):
-- Pasta: "golden-brown laminated layers", "honeycomb crumb structure"
-- Çikolata: "glossy tempered surface", "mirror-like sheen"
-- Tart: "caramelized sugar shell", "crème brûlée torched top"
-
-## PROMPT KURALLARI (75-150 kelime hedef)
-
-1. SADECE asset listesindeki objeleri kullan
-2. Asset listesinde YOKSA prompt'a EKLEME:
-   - Cutlery yok → kaşık/çatal/bıçak yazma
-   - Napkin yok → peçete yazma
-   - Cup yok → fincan/bardak yazma
-3. Masa/tabak için tarif uydurma, referans görsele güven
-4. Atmosfer için Gemini ışık terminolojisi kullan
-5. Tekil tabak, üst üste değil
-
-## PROMPT YAPISI
-- Context: Instagram lifestyle photo (9:16)
-- Composition: Sadece mevcut asset'lerin pozisyonları
-- Atmosphere: Gemini ışık terimleri + renk sıcaklığı + f/2.0 shallow DOF
-- Hands: Gemini el pozisyon terimleri (varsa)
-- Constraint: 100% fidelity to references
-
-## NEGATİVE PROMPT FORMAT
-- "Avoid: [term1], [term2]" formatı (--no yerine)
-- Her zaman: stacked plates, steam, smoke, duplicates
-
-ASLA asset listesinde olmayan obje ekleme!
-${userRules ? `\n## KULLANICI KURALLARI\n${userRules}` : ""}`;
+    const systemPrompt = interpolatePrompt(optimizationTemplate.systemPrompt, {
+      trainingContext,
+      userRulesSection,
+    });
 
     // Asset bilgilerini [N] tagging formatında hazırla
     // RADİKAL SADELEŞTİRME v2.0: Sadece mevcut bilgileri kullan, varsayım yapma!

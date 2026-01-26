@@ -83,6 +83,12 @@ export {
   updateSystemSettingsConfig,
   getFixedAssetsConfig,
   updateFixedAssetsConfig,
+  // Prompt Studio
+  getPromptStudioConfig,
+  getPromptTemplateById,
+  updatePromptTemplateEndpoint,
+  revertPromptTemplateEndpoint,
+  clearPromptStudioCacheEndpoint,
 
   // Feedback Controller
   createFeedback,

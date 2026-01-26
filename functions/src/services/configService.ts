@@ -26,6 +26,10 @@ import {
   FirestoreTimeoutsConfig,
   FirestoreSystemSettingsConfig,
   FirestoreFixedAssetsConfig,
+  FirestorePromptStudioConfig,
+  PromptTemplate,
+  PromptVersion,
+  PromptStageId,
   GlobalOrchestratorConfig,
 } from "../orchestrator/types";
 import { getCategories as getCategoriesFromService } from "./categoryService";
@@ -34,6 +38,8 @@ import {
   DEFAULT_TIMEOUTS_CONFIG,
   DEFAULT_SYSTEM_SETTINGS_CONFIG,
   DEFAULT_FIXED_ASSETS_CONFIG,
+  DEFAULT_PROMPT_STUDIO_CONFIG,
+  DEFAULT_PROMPT_TEMPLATES,
 } from "../orchestrator/seed/defaultData";
 
 // Cache süresi (5 dakika)
@@ -46,6 +52,10 @@ let cacheTimestamp = 0;
 // System Settings Cache (ayrı cache - daha sık kullanılıyor)
 let systemSettingsCache: FirestoreSystemSettingsConfig | null = null;
 let systemSettingsCacheTimestamp = 0;
+
+// Prompt Studio Cache (ayrı cache - pipeline'da sık kullanılıyor)
+let promptStudioCache: FirestorePromptStudioConfig | null = null;
+let promptStudioCacheTimestamp = 0;
 
 /**
  * Firestore referansı
@@ -295,6 +305,223 @@ export async function getFixedAssets(): Promise<FirestoreFixedAssetsConfig> {
 }
 
 /**
+ * Prompt Studio config'ini getirir (CACHE'Lİ)
+ * Document: global/config/settings/prompt-studio
+ *
+ * 5 system prompt'u tek bir dokümanda saklar.
+ * Fallback: Firestore okunamazsa hardcoded default'lar kullanılır.
+ */
+export async function getPromptStudioConfig(): Promise<FirestorePromptStudioConfig> {
+  const now = Date.now();
+
+  // Cache geçerliyse döndür
+  if (promptStudioCache && now - promptStudioCacheTimestamp < CACHE_TTL) {
+    return promptStudioCache;
+  }
+
+  try {
+    const doc = await getDb()
+      .collection("global")
+      .doc("config")
+      .collection("settings")
+      .doc("prompt-studio")
+      .get();
+
+    if (!doc.exists) {
+      // Varsayılan değerleri döndür ve cache'le
+      const defaultConfig: FirestorePromptStudioConfig = {
+        ...DEFAULT_PROMPT_STUDIO_CONFIG,
+        prompts: Object.fromEntries(
+          Object.entries(DEFAULT_PROMPT_TEMPLATES).map(([key, template]) => [
+            key,
+            { ...template, updatedAt: now },
+          ])
+        ) as FirestorePromptStudioConfig["prompts"],
+        updatedAt: now,
+      };
+      promptStudioCache = defaultConfig;
+      promptStudioCacheTimestamp = now;
+      return defaultConfig;
+    }
+
+    // Cache'e kaydet
+    promptStudioCache = doc.data() as FirestorePromptStudioConfig;
+    promptStudioCacheTimestamp = now;
+
+    return promptStudioCache;
+  } catch (error) {
+    console.error("[ConfigService] Error loading prompt studio, using defaults:", error);
+    // Hata durumunda fallback: hardcoded default'lar
+    const fallbackConfig: FirestorePromptStudioConfig = {
+      ...DEFAULT_PROMPT_STUDIO_CONFIG,
+      prompts: Object.fromEntries(
+        Object.entries(DEFAULT_PROMPT_TEMPLATES).map(([key, template]) => [
+          key,
+          { ...template, updatedAt: now },
+        ])
+      ) as FirestorePromptStudioConfig["prompts"],
+      updatedAt: now,
+    };
+    return fallbackConfig;
+  }
+}
+
+/**
+ * Tek bir prompt template'i getirir (cache üzerinden)
+ * Fallback: default template
+ */
+export async function getPromptTemplate(stageId: PromptStageId): Promise<PromptTemplate> {
+  const config = await getPromptStudioConfig();
+  const template = config.prompts[stageId];
+
+  if (!template) {
+    console.warn(`[ConfigService] Prompt template "${stageId}" not found, using default`);
+    const defaultTemplate = DEFAULT_PROMPT_TEMPLATES[stageId];
+    return { ...defaultTemplate, updatedAt: Date.now() };
+  }
+
+  return template;
+}
+
+/**
+ * Prompt template'i günceller (versiyon takibi ile)
+ *
+ * Her güncelleme:
+ * 1. version++ (otomatik artırır)
+ * 2. Eski prompt'u history dizisine ekler (son 10)
+ * 3. Cache'i temizler
+ */
+export async function updatePromptTemplate(
+  stageId: PromptStageId,
+  newSystemPrompt: string,
+  updatedBy?: string,
+  changeNote?: string
+): Promise<PromptTemplate> {
+  const docRef = getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("prompt-studio");
+
+  const now = Date.now();
+
+  // Mevcut config'i oku
+  const doc = await docRef.get();
+  let config: FirestorePromptStudioConfig;
+
+  if (!doc.exists) {
+    // Yoksa default ile oluştur
+    config = {
+      ...DEFAULT_PROMPT_STUDIO_CONFIG,
+      prompts: Object.fromEntries(
+        Object.entries(DEFAULT_PROMPT_TEMPLATES).map(([key, template]) => [
+          key,
+          { ...template, updatedAt: now },
+        ])
+      ) as FirestorePromptStudioConfig["prompts"],
+      updatedAt: now,
+    };
+  } else {
+    config = doc.data() as FirestorePromptStudioConfig;
+  }
+
+  // Mevcut template'i al
+  const currentTemplate = config.prompts[stageId];
+  if (!currentTemplate) {
+    throw new Error(`Prompt template "${stageId}" not found`);
+  }
+
+  // Eski versiyonu history'ye ekle (undefined alanları temizle - Firestore kabul etmez)
+  const historyEntry: PromptVersion = {
+    version: currentTemplate.version,
+    systemPrompt: currentTemplate.systemPrompt,
+    updatedAt: currentTemplate.updatedAt,
+  };
+  if (currentTemplate.updatedBy) historyEntry.updatedBy = currentTemplate.updatedBy;
+  if (changeNote) historyEntry.changeNote = changeNote;
+
+  // Son 10 versiyon tut
+  const history = [historyEntry, ...(currentTemplate.history || [])].slice(0, 10);
+
+  // Yeni template oluştur (undefined alanları temizle)
+  const updatedTemplate: PromptTemplate = {
+    ...currentTemplate,
+    systemPrompt: newSystemPrompt,
+    version: currentTemplate.version + 1,
+    history,
+    updatedAt: now,
+  };
+  if (updatedBy) updatedTemplate.updatedBy = updatedBy;
+
+  // Config'i güncelle
+  config.prompts[stageId] = updatedTemplate;
+  config.updatedAt = now;
+  if (updatedBy) config.updatedBy = updatedBy;
+
+  // Firestore'a yaz
+  await docRef.set(config);
+
+  // Cache'i temizle (anlık etki)
+  clearPromptStudioCache();
+  clearConfigCache();
+
+  console.log(`[ConfigService] Prompt template "${stageId}" updated to v${updatedTemplate.version}`);
+
+  return updatedTemplate;
+}
+
+/**
+ * Prompt template'i eski bir versiyona geri döndürür
+ */
+export async function revertPromptTemplate(
+  stageId: PromptStageId,
+  targetVersion: number,
+  updatedBy?: string
+): Promise<PromptTemplate> {
+  const config = await getPromptStudioConfig();
+  const currentTemplate = config.prompts[stageId];
+
+  if (!currentTemplate) {
+    throw new Error(`Prompt template "${stageId}" not found`);
+  }
+
+  // History'den hedef versiyonu bul
+  const targetEntry = currentTemplate.history.find(h => h.version === targetVersion);
+  if (!targetEntry) {
+    throw new Error(`Version ${targetVersion} not found in history for "${stageId}"`);
+  }
+
+  // Geri dönüş işlemi = yeni güncelleme (changeNote ile)
+  return updatePromptTemplate(
+    stageId,
+    targetEntry.systemPrompt,
+    updatedBy,
+    `Reverted to v${targetVersion}`
+  );
+}
+
+/**
+ * Prompt Studio cache'ini temizler
+ */
+export function clearPromptStudioCache(): void {
+  promptStudioCache = null;
+  promptStudioCacheTimestamp = 0;
+  console.log("[ConfigService] Prompt studio cache cleared");
+}
+
+/**
+ * Template değişkenleri çözümler
+ * {{variable}} formatındaki yer tutucuları verilen değerlerle değiştirir
+ *
+ * Tanınmayan değişkenler olduğu gibi bırakılır (hata fırlatmaz)
+ */
+export function interpolatePrompt(template: string, variables: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    return variables[key] !== undefined ? variables[key] : match;
+  });
+}
+
+/**
  * Tüm config'leri tek seferde getirir (cache ile)
  */
 export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrchestratorConfig> {
@@ -320,6 +547,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     timeouts,
     systemSettings,
     fixedAssets,
+    promptStudio,
     categories,
   ] = await Promise.all([
     getScenarios(),
@@ -333,6 +561,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     getTimeouts(),
     getSystemSettings(),
     getFixedAssets(),
+    getPromptStudioConfig(),
     getCategoriesFromService(),
   ]);
 
@@ -349,6 +578,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     timeouts,
     systemSettings,
     fixedAssets,
+    promptStudio,
     categories,
     loadedAt: now,
     version: "1.0.0",
@@ -371,7 +601,9 @@ export function clearConfigCache(): void {
   cacheTimestamp = 0;
   systemSettingsCache = null;
   systemSettingsCacheTimestamp = 0;
-  console.log("[ConfigService] Cache cleared (including system settings)");
+  promptStudioCache = null;
+  promptStudioCacheTimestamp = 0;
+  console.log("[ConfigService] Cache cleared (including system settings + prompt studio)");
 }
 
 // ==========================================
@@ -429,6 +661,7 @@ export async function seedFirestoreConfig(): Promise<void> {
   batch.set(configRef.doc("timeouts"), seedData.timeoutsConfig);
   batch.set(configRef.doc("system-settings"), seedData.systemSettingsConfig);
   batch.set(configRef.doc("fixed-assets"), seedData.fixedAssetsConfig);
+  batch.set(configRef.doc("prompt-studio"), seedData.promptStudioConfig);
 
   await batch.commit();
 

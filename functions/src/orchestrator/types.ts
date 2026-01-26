@@ -1055,6 +1055,7 @@ export interface GlobalOrchestratorConfig {
   timeouts: FirestoreTimeoutsConfig;
   systemSettings: FirestoreSystemSettingsConfig;
   fixedAssets: FirestoreFixedAssetsConfig;
+  promptStudio: FirestorePromptStudioConfig;  // Config-driven system prompts
   categories: FirestoreCategoriesConfig;  // Dinamik kategoriler
 
   // Cache bilgisi
@@ -1375,6 +1376,66 @@ export interface AIRule {
   // Meta
   createdAt: number;
   updatedAt: number;
+}
+
+// ==========================================
+// PROMPT STUDIO (Config-Driven Prompts)
+// ==========================================
+
+/**
+ * Prompt Studio - Pipeline stage ID'leri
+ * Her stage'in system prompt'u Firestore'da saklanır ve runtime'da düzenlenebilir
+ */
+export type PromptStageId =
+  | "asset-selection"
+  | "scenario-selection"
+  | "prompt-optimization"
+  | "quality-control"
+  | "content-generation";
+
+/**
+ * Prompt versiyon kaydı
+ * Her güncelleme otomatik olarak history'ye eklenir
+ */
+export interface PromptVersion {
+  version: number;
+  systemPrompt: string;
+  updatedAt: number;
+  updatedBy?: string;
+  changeNote?: string;
+}
+
+/**
+ * Prompt şablonu
+ * Bir pipeline stage'inin system prompt'u ve metadata'sı
+ *
+ * Template değişkenler: {{variable}} formatında
+ * Runtime'da interpolatePrompt() ile çözümlenir
+ */
+export interface PromptTemplate {
+  id: PromptStageId;
+  name: string;                    // "Asset Seçimi"
+  description: string;             // "Ürün, tabak, masa vb. asset kombinasyonunu seçer"
+  stage: string;                   // Pipeline stage adı
+  systemPrompt: string;            // Template değişkenli system prompt
+  variables: string[];             // Kullanılabilir template değişkenler (bilgi amaçlı)
+  version: number;                 // Otomatik artan versiyon numarası
+  history: PromptVersion[];        // Son 10 versiyon (revert için)
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Firestore'da saklanan Prompt Studio konfigürasyonu
+ * Document: global/config/settings/prompt-studio
+ *
+ * 5 system prompt'u tek bir dokümanda saklar.
+ * Fallback: Firestore okunamazsa hardcoded default'lar kullanılır.
+ */
+export interface FirestorePromptStudioConfig {
+  prompts: Record<PromptStageId, PromptTemplate>;
+  updatedAt: number;
+  updatedBy?: string;
 }
 
 // ==========================================

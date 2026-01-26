@@ -20,8 +20,14 @@ import {
   updateSystemSettings,
   getFixedAssets,
   updateFixedAssets,
+  getPromptStudioConfig as fetchPromptStudioConfig,
+  getPromptTemplate as fetchPromptTemplate,
+  updatePromptTemplate as updatePromptTemplateService,
+  revertPromptTemplate as revertPromptTemplateService,
+  clearPromptStudioCache,
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
+import { PromptStageId } from "../../orchestrator/types";
 import { getGeminiTerminologySeedData } from "../../orchestrator/seed/geminiTerminologyData";
 import { FirestoreDiversityRules } from "../../orchestrator/types";
 
@@ -862,6 +868,242 @@ export const updateFixedAssetsConfig = functions
         });
       } catch (error) {
         errorResponse(response, error, "updateFixedAssetsConfig");
+      }
+    });
+  });
+
+// ==========================================
+// PROMPT STUDIO ENDPOINTS
+// ==========================================
+
+// Geçerli stage ID'leri
+const VALID_STAGE_IDS: PromptStageId[] = [
+  "asset-selection",
+  "scenario-selection",
+  "prompt-optimization",
+  "quality-control",
+  "content-generation",
+];
+
+/**
+ * Tüm prompt template'leri getir
+ * GET /getPromptStudioConfig
+ *
+ * Döndürülen veri:
+ * - prompts: 5 prompt template (id, name, systemPrompt, version, history, variables)
+ * - updatedAt: Son güncelleme zamanı
+ */
+export const getPromptStudioConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const config = await fetchPromptStudioConfig();
+
+        response.json({
+          success: true,
+          data: config,
+        });
+      } catch (error) {
+        errorResponse(response, error, "getPromptStudioConfig");
+      }
+    });
+  });
+
+/**
+ * Tek bir prompt template'i getir
+ * GET /getPromptTemplateById?stageId=asset-selection
+ */
+export const getPromptTemplateById = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const stageId = request.query.stageId as string;
+
+        if (!stageId || !VALID_STAGE_IDS.includes(stageId as PromptStageId)) {
+          response.status(400).json({
+            success: false,
+            error: `Invalid stageId. Valid values: ${VALID_STAGE_IDS.join(", ")}`,
+          });
+          return;
+        }
+
+        const template = await fetchPromptTemplate(stageId as PromptStageId);
+
+        response.json({
+          success: true,
+          data: template,
+        });
+      } catch (error) {
+        errorResponse(response, error, "getPromptTemplateById");
+      }
+    });
+  });
+
+/**
+ * Prompt template'i güncelle
+ * PUT/POST /updatePromptTemplate
+ *
+ * Body: {
+ *   stageId: PromptStageId,            // Zorunlu
+ *   systemPrompt: string,              // Zorunlu - yeni system prompt
+ *   updatedBy?: string,                // Opsiyonel - güncelleyen kişi
+ *   changeNote?: string,               // Opsiyonel - değişiklik notu
+ * }
+ *
+ * Otomatik olarak:
+ * - version++ artırır
+ * - Eski prompt'u history'ye ekler (son 10)
+ * - Cache'i temizler
+ */
+export const updatePromptTemplateEndpoint = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const { stageId, systemPrompt, updatedBy, changeNote } = request.body;
+
+        // Validasyon: stageId
+        if (!stageId || !VALID_STAGE_IDS.includes(stageId as PromptStageId)) {
+          response.status(400).json({
+            success: false,
+            error: `Invalid stageId. Valid values: ${VALID_STAGE_IDS.join(", ")}`,
+          });
+          return;
+        }
+
+        // Validasyon: systemPrompt
+        if (!systemPrompt || typeof systemPrompt !== "string") {
+          response.status(400).json({
+            success: false,
+            error: "systemPrompt is required and must be a string",
+          });
+          return;
+        }
+
+        // Minimum uzunluk kontrolü (çok kısa prompt geçersiz)
+        if (systemPrompt.trim().length < 50) {
+          response.status(400).json({
+            success: false,
+            error: "systemPrompt must be at least 50 characters",
+          });
+          return;
+        }
+
+        // Güncelle
+        const updatedTemplate = await updatePromptTemplateService(
+          stageId as PromptStageId,
+          systemPrompt,
+          updatedBy,
+          changeNote
+        );
+
+        response.json({
+          success: true,
+          message: `Prompt template "${stageId}" updated to v${updatedTemplate.version}`,
+          data: updatedTemplate,
+        });
+      } catch (error) {
+        errorResponse(response, error, "updatePromptTemplate");
+      }
+    });
+  });
+
+/**
+ * Prompt template'i eski versiyona geri döndür
+ * POST /revertPromptTemplate
+ *
+ * Body: {
+ *   stageId: PromptStageId,     // Zorunlu
+ *   targetVersion: number,       // Zorunlu - geri dönülecek versiyon
+ *   updatedBy?: string,          // Opsiyonel
+ * }
+ */
+export const revertPromptTemplateEndpoint = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const { stageId, targetVersion, updatedBy } = request.body;
+
+        // Validasyon: stageId
+        if (!stageId || !VALID_STAGE_IDS.includes(stageId as PromptStageId)) {
+          response.status(400).json({
+            success: false,
+            error: `Invalid stageId. Valid values: ${VALID_STAGE_IDS.join(", ")}`,
+          });
+          return;
+        }
+
+        // Validasyon: targetVersion
+        if (targetVersion === undefined || typeof targetVersion !== "number" || targetVersion < 1) {
+          response.status(400).json({
+            success: false,
+            error: "targetVersion is required and must be a positive number",
+          });
+          return;
+        }
+
+        // Geri döndür
+        const revertedTemplate = await revertPromptTemplateService(
+          stageId as PromptStageId,
+          targetVersion,
+          updatedBy
+        );
+
+        response.json({
+          success: true,
+          message: `Prompt template "${stageId}" reverted to v${targetVersion} (now v${revertedTemplate.version})`,
+          data: revertedTemplate,
+        });
+      } catch (error) {
+        errorResponse(response, error, "revertPromptTemplate");
+      }
+    });
+  });
+
+/**
+ * Prompt Studio cache'ini temizle
+ * POST /clearPromptStudioCache
+ *
+ * Admin panelden "Cache Temizle" butonu için.
+ * Prompt güncellemesi sonrası 5dk beklemeden anlık etki.
+ */
+export const clearPromptStudioCacheEndpoint = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        clearPromptStudioCache();
+        clearConfigCache();
+
+        response.json({
+          success: true,
+          message: "Prompt studio cache cleared",
+        });
+      } catch (error) {
+        errorResponse(response, error, "clearPromptStudioCache");
       }
     });
   });

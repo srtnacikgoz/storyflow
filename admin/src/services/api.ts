@@ -40,6 +40,10 @@ import type {
   CategoriesConfig,
   DynamicCategory,
   DynamicCategoryType,
+  // Prompt Studio types
+  PromptStudioConfig,
+  PromptTemplate,
+  PromptStageId,
 } from "../types";
 
 // Firebase Functions base URL
@@ -1641,6 +1645,74 @@ class ApiService {
     await this.fetch<{ success: boolean }>("deleteMainCategory", {
       method: "POST",
       body: JSON.stringify({ type }),
+    });
+  }
+
+  // ==========================================
+  // Prompt Studio
+  // ==========================================
+
+  /**
+   * Tüm prompt template'lerini getir
+   */
+  async getPromptStudioConfig(): Promise<PromptStudioConfig> {
+    const result = await this.fetch<{ success: boolean; data: PromptStudioConfig }>(
+      "getPromptStudioConfig"
+    );
+    return result.data;
+  }
+
+  /**
+   * Tekil prompt template getir
+   */
+  async getPromptTemplate(stageId: PromptStageId): Promise<PromptTemplate> {
+    const result = await this.fetch<{ success: boolean; data: PromptTemplate }>(
+      `getPromptTemplateById?stageId=${stageId}`
+    );
+    return result.data;
+  }
+
+  /**
+   * Prompt template güncelle
+   */
+  async updatePromptTemplate(
+    stageId: PromptStageId,
+    systemPrompt: string,
+    changeNote?: string
+  ): Promise<PromptTemplate> {
+    const result = await this.fetch<{ success: boolean; data: PromptTemplate }>(
+      "updatePromptTemplateEndpoint",
+      {
+        method: "PUT",
+        body: JSON.stringify({ stageId, systemPrompt, changeNote }),
+      }
+    );
+    return result.data;
+  }
+
+  /**
+   * Prompt template'i önceki versiyona geri al
+   */
+  async revertPromptTemplate(
+    stageId: PromptStageId,
+    targetVersion: number
+  ): Promise<PromptTemplate> {
+    const result = await this.fetch<{ success: boolean; data: PromptTemplate }>(
+      "revertPromptTemplateEndpoint",
+      {
+        method: "POST",
+        body: JSON.stringify({ stageId, targetVersion }),
+      }
+    );
+    return result.data;
+  }
+
+  /**
+   * Prompt Studio cache'ini temizle
+   */
+  async clearPromptStudioCache(): Promise<void> {
+    await this.fetch<{ success: boolean }>("clearPromptStudioCacheEndpoint", {
+      method: "POST",
     });
   }
 }

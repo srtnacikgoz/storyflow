@@ -18,6 +18,7 @@ const AIMonitor = lazy(() => import("./pages/AIMonitor"));
 const AIRules = lazy(() => import("./pages/AIRules"));
 const Scenarios = lazy(() => import("./pages/Scenarios"));
 const Categories = lazy(() => import("./pages/Categories"));
+const PromptStudio = lazy(() => import("./pages/PromptStudio"));
 
 // Loading fallback component
 function PageLoader() {
@@ -48,6 +49,7 @@ function App() {
             <Route path="ai-rules" element={<Suspense fallback={<PageLoader />}><AIRules /></Suspense>} />
             <Route path="scenarios" element={<Suspense fallback={<PageLoader />}><Scenarios /></Suspense>} />
             <Route path="categories" element={<Suspense fallback={<PageLoader />}><Categories /></Suspense>} />
+            <Route path="prompt-studio" element={<Suspense fallback={<PageLoader />}><PromptStudio /></Suspense>} />
           </Route>
         </Routes>
         {/* Global loading indicator */}
