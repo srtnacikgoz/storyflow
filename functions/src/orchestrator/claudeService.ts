@@ -374,7 +374,7 @@ ${availableAssets.cutlery.length > 0 ? JSON.stringify(availableAssets.cutlery.ma
       tags: a.tags
     })), null, 2) : "YOK (çatal-bıçak asset'i eklenmemiş)"}
 
-🏷️ ETİKET (TAGS) KULLANIMI: Asset'lerdeki "tags" bilgisi o asset'in kullanım bağlamını ve amacını belirtir. Etiketleri mood ve ürün tipi ile eşleştirerek seç. Örn: çay temalı üretim → "çay içmek için" etiketli bardak; lüks sunum → "gold-rim" etiketli tabak; cheesecake sunumu → "cheesecake tabağı" etiketli tabak tercih et.
+🏷️ ETİKET (TAGS) KULLANIMI: Asset'lerdeki "tags" kısa keyword'lerdir ve o asset'in kullanım amacını belirtir. Etiketleri mood ve ürün tipi ile eşleştir. Örn: çay temalı üretim → "tea" etiketli bardak; cheesecake sunumu → "cheesecake" etiketli tabak; hediye konsepti → "gift" etiketli kutu tercih et.
 
 ⚠️ ÖNEMLİ: productId ZORUNLUDUR - yukarıdaki ÜRÜNLER listesinden bir ID seçmelisin!
 

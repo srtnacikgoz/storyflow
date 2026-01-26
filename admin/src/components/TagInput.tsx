@@ -7,6 +7,7 @@ interface TagInputProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  error?: boolean;
 }
 
 // Autocomplete önerili etiket giriş component'i
@@ -18,6 +19,7 @@ export default function TagInput({
   placeholder = "Etiket yazın...",
   disabled = false,
   className = "",
+  error = false,
 }: TagInputProps) {
   const [inputValue, setInputValue] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -134,7 +136,9 @@ export default function TagInput({
         className={`flex flex-wrap items-center gap-1.5 px-3 py-2 border rounded-lg bg-white min-h-[42px] cursor-text transition-colors ${
           disabled
             ? "bg-gray-100 border-gray-200 cursor-not-allowed"
-            : "border-gray-300 hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
+            : error
+              ? "border-red-500 ring-1 ring-red-500"
+              : "border-gray-300 hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
         }`}
         onClick={() => !disabled && inputRef.current?.focus()}
       >
@@ -206,7 +210,7 @@ export default function TagInput({
       {/* Yardımcı metin */}
       {!disabled && value.length === 0 && !inputValue && (
         <p className="mt-1 text-xs text-gray-400">
-          Enter veya virgül ile etiket ekleyin
+          Kısa keyword yazıp Enter veya virgül ile ekleyin
         </p>
       )}
     </div>

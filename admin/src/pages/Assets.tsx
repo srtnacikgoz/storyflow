@@ -137,13 +137,13 @@ interface CategoryFieldConfig {
 }
 
 const FIELDS_BY_CATEGORY: Record<AssetCategory, CategoryFieldConfig> = {
-  products: { tags: "optional", dominantColors: "required", style: "required", material: "hidden" },
-  props: { tags: "optional", dominantColors: "required", style: "required", material: "required" },
-  furniture: { tags: "optional", dominantColors: "hidden", style: "required", material: "required" },
-  environments: { tags: "optional", dominantColors: "hidden", style: "required", material: "hidden" },
+  products: { tags: "required", dominantColors: "required", style: "required", material: "hidden" },
+  props: { tags: "required", dominantColors: "required", style: "required", material: "required" },
+  furniture: { tags: "required", dominantColors: "hidden", style: "required", material: "required" },
+  environments: { tags: "required", dominantColors: "hidden", style: "required", material: "hidden" },
   pets: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
-  interior: { tags: "optional", dominantColors: "hidden", style: "hidden", material: "hidden" },
-  accessories: { tags: "optional", dominantColors: "optional", style: "optional", material: "optional" },
+  interior: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
+  accessories: { tags: "required", dominantColors: "optional", style: "optional", material: "optional" },
 };
 
 export default function Assets() {
@@ -716,6 +716,7 @@ function AssetModal({
 
 
   const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Edit modunda görsel değiştirme kontrolü
@@ -774,11 +775,18 @@ function AssetModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    setSubmitted(true);
+
     // Create modda görsel zorunlu
     if (!isEditMode && (!filename || !storageUrl)) {
       alert("Lütfen önce dosya yükleyin");
       return;
     }
+
+    // Zorunlu alan validasyonu - inline hatalar gösterilir
+    const hasTagError = fieldConfig.tags === "required" && tags.length === 0;
+    const hasColorError = fieldConfig.dominantColors === "required" && !dominantColors.trim();
+    if (hasTagError || hasColorError) return;
 
     setSaving(true);
     try {
@@ -957,15 +965,27 @@ function AssetModal({
           {/* Tags - kategori bazlı göster/gizle */}
           {fieldConfig.tags !== "hidden" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {getFieldLabel("Kullanım Amacı / Etiketler", fieldConfig.tags)}
+              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
+                {getFieldLabel("Etiketler — bu asset ne için kullanılacak?", fieldConfig.tags)}
+                {fieldConfig.tags === "required" && (
+                  <span className="text-red-500">*</span>
+                )}
               </label>
+              <p className="text-xs text-gray-500 mb-1.5">
+                Kısa keyword'ler girin. AI, etiketlere göre doğru asset'i seçer ve içeriği ona göre üretir.
+              </p>
               <TagInput
                 value={tags}
                 onChange={setTags}
                 suggestions={tagSuggestions}
-                placeholder="Örn: çay içmek için, cheesecake tabağı, gold-rim"
+                placeholder="Örn: cheesecake, espresso, tea, gift..."
+                error={submitted && fieldConfig.tags === "required" && tags.length === 0}
               />
+              {submitted && fieldConfig.tags === "required" && tags.length === 0 && (
+                <p className="text-xs text-red-500 mt-1">
+                  En az 1 etiket gerekli (Örn: cheesecake, espresso, tea)
+                </p>
+              )}
             </div>
           )}
 
@@ -987,11 +1007,17 @@ function AssetModal({
                 value={dominantColors}
                 onChange={(e) => setDominantColors(e.target.value)}
                 placeholder="#D4A574, #FFFFFF"
-                className="input w-full"
+                className={`input w-full ${submitted && fieldConfig.dominantColors === "required" && !dominantColors.trim() ? "ring-1 ring-red-500" : ""}`}
               />
-              <p className="text-xs text-gray-400 mt-1">
-                AI görsel üretiminde renk tutarlılığı için kritik
-              </p>
+              {submitted && fieldConfig.dominantColors === "required" && !dominantColors.trim() ? (
+                <p className="text-xs text-red-500 mt-1">
+                  Dominant renkler zorunludur
+                </p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">
+                  AI görsel üretiminde renk tutarlılığı için kritik
+                </p>
+              )}
             </div>
           )}
 
