@@ -1597,6 +1597,52 @@ class ApiService {
     }>(`getCategoryDisplayName?type=${type}&slug=${slug}`);
     return response.data.displayName;
   }
+
+  // ==========================================
+  // Main Category Management (SaaS)
+  // ==========================================
+
+  /**
+   * Yeni ana kategori ekle
+   */
+  async addMainCategory(category: {
+    type: string;
+    displayName: string;
+    icon: string;
+    description?: string;
+  }): Promise<void> {
+    await this.fetch<{ success: boolean }>("addMainCategory", {
+      method: "POST",
+      body: JSON.stringify(category),
+    });
+  }
+
+  /**
+   * Ana kategori güncelle
+   */
+  async updateMainCategory(
+    type: DynamicCategoryType,
+    updates: {
+      displayName?: string;
+      icon?: string;
+      description?: string;
+    }
+  ): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateMainCategory", {
+      method: "POST",
+      body: JSON.stringify({ type, ...updates }),
+    });
+  }
+
+  /**
+   * Ana kategori sil (soft delete)
+   */
+  async deleteMainCategory(type: DynamicCategoryType): Promise<void> {
+    await this.fetch<{ success: boolean }>("deleteMainCategory", {
+      method: "POST",
+      body: JSON.stringify({ type }),
+    });
+  }
 }
 
 // Singleton instance

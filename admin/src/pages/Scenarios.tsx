@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { api } from "../services/api";
+import { useLoading } from "../contexts/LoadingContext";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -335,6 +336,7 @@ const emptyForm = {
 };
 
 export default function Scenarios() {
+  const { startLoading, stopLoading } = useLoading();
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -401,6 +403,7 @@ export default function Scenarios() {
   const loadScenarios = async () => {
     setLoading(true);
     setError(null);
+    startLoading("scenarios", "Senaryolar yükleniyor...");
     try {
       const response = await api.get<{
         success: boolean;
@@ -417,6 +420,7 @@ export default function Scenarios() {
       console.error(err);
     } finally {
       setLoading(false);
+      stopLoading("scenarios");
     }
   };
 

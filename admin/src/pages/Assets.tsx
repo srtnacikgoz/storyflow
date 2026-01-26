@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
 import type { OrchestratorAsset, AssetCategory, EatingMethod, DynamicCategory } from "../types";
-import { useLoadingOperation } from "../contexts/LoadingContext";
+import { useLoading, useLoadingOperation } from "../contexts/LoadingContext";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -157,6 +157,7 @@ export default function Assets() {
   const [editingAsset, setEditingAsset] = useState<OrchestratorAsset | null>(null);
 
   // Global loading hook
+  const { startLoading, stopLoading } = useLoading();
   const { execute: executeDelete } = useLoadingOperation("asset-delete");
 
   // Dinamik CATEGORY_LABELS oluştur
@@ -224,6 +225,7 @@ export default function Assets() {
   const loadAssets = async () => {
     setLoading(true);
     setError(null);
+    startLoading("assets", "Görseller yükleniyor...");
     try {
       const filters = {
         ...(selectedCategory !== "all" ? { category: selectedCategory } : {}),
@@ -235,6 +237,7 @@ export default function Assets() {
       setError(err instanceof Error ? err.message : "Veri yuklenemedi");
     } finally {
       setLoading(false);
+      stopLoading("assets");
     }
   };
 

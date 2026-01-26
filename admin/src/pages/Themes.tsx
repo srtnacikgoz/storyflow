@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
+import { useLoading } from "../contexts/LoadingContext";
 import type { Theme } from "../types";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
@@ -128,6 +129,7 @@ const emptyTheme = {
 };
 
 export default function Themes() {
+  const { startLoading, stopLoading } = useLoading();
   const [themes, setThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -181,6 +183,7 @@ export default function Themes() {
   const loadThemes = async () => {
     setLoading(true);
     setError(null);
+    startLoading("themes", "Temalar yükleniyor...");
     try {
       const data = await api.listThemes();
       setThemes(data);
@@ -188,6 +191,7 @@ export default function Themes() {
       setError(err instanceof Error ? err.message : "Temalar yüklenemedi");
     } finally {
       setLoading(false);
+      stopLoading("themes");
     }
   };
 

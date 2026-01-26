@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
+import { useLoading } from "../contexts/LoadingContext";
 import type { QueueStats, HealthCheckResponse, UsageStats, UsageRecord, SetupStatusResponse } from "../types";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { startLoading, stopLoading } = useLoading();
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
@@ -20,6 +22,7 @@ export default function Dashboard() {
   const loadData = async () => {
     setLoading(true);
     setError(null);
+    startLoading("dashboard", "Dashboard verileri yükleniyor...");
     try {
       const [statsData, healthData, usageData, setupData] = await Promise.all([
         api.getQueueStats(),
@@ -36,6 +39,7 @@ export default function Dashboard() {
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
       setLoading(false);
+      stopLoading("dashboard");
     }
   };
 

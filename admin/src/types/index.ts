@@ -825,7 +825,8 @@ export type DynamicCategoryType =
  * Alt kategori tanımı
  */
 export interface CategorySubType {
-  slug: string;              // "croissants" - immutable
+  id: string;                // Otomatik oluşturulan unique ID (format: categoryType_slug)
+  slug: string;              // "croissants" - immutable, human-readable
   displayName: string;       // "Kruvasanlar"
   icon?: string;             // "🥐"
   description?: string;

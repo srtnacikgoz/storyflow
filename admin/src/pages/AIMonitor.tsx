@@ -1,7 +1,56 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
+import { useLoading } from "../contexts/LoadingContext";
 import type { AILog, AIStats, AIProvider, AILogStage, AILogStatus } from "../types";
+
+// Kopyala butonu - metin alanlarının yanında kullanılır
+function CopyButton({ text, className = "" }: { text: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback: eski yöntem
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [text]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-all ${
+        copied
+          ? "bg-green-100 text-green-700"
+          : "bg-white/80 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+      } ${className}`}
+      title={copied ? "Kopyalandı!" : "Kopyala"}
+    >
+      {copied ? (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      )}
+      {copied ? "Kopyalandı" : ""}
+    </button>
+  );
+}
 
 // Stage renkleri
 const STAGE_COLORS: Record<AILogStage, string> = {
@@ -76,6 +125,7 @@ interface PipelineGroup {
 }
 
 export default function AIMonitor() {
+  const { startLoading, stopLoading } = useLoading();
   // State
   const [logs, setLogs] = useState<AILog[]>([]);
   const [stats, setStats] = useState<AIStats | null>(null);
@@ -165,6 +215,7 @@ export default function AIMonitor() {
     try {
       setLoading(true);
       setError(null);
+      startLoading("aimonitor", "AI logları yükleniyor...");
 
       // Log'ları ve istatistikleri paralel yükle
       const [logsData, statsData] = await Promise.all([
@@ -185,6 +236,7 @@ export default function AIMonitor() {
       setError(err instanceof Error ? err.message : "Veriler yüklenemedi");
     } finally {
       setLoading(false);
+      stopLoading("aimonitor");
     }
   };
 
@@ -789,13 +841,19 @@ export default function AIMonitor() {
                 <div className="grid grid-cols-2 gap-4">
                   {selectedLog.pipelineId && (
                     <div>
-                      <p className="text-xs text-gray-500 uppercase">Pipeline ID</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs text-gray-500 uppercase">Pipeline ID</p>
+                        <CopyButton text={selectedLog.pipelineId} />
+                      </div>
                       <p className="font-mono text-sm bg-gray-50 px-2 py-1 rounded">{selectedLog.pipelineId}</p>
                     </div>
                   )}
                   {selectedLog.slotId && (
                     <div>
-                      <p className="text-xs text-gray-500 uppercase">Slot ID</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs text-gray-500 uppercase">Slot ID</p>
+                        <CopyButton text={selectedLog.slotId} />
+                      </div>
                       <p className="font-mono text-sm bg-gray-50 px-2 py-1 rounded">{selectedLog.slotId}</p>
                     </div>
                   )}
@@ -805,7 +863,10 @@ export default function AIMonitor() {
               {/* Hata Mesajı */}
               {selectedLog.error && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase mb-2">Hata Mesajı</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500 uppercase">Hata Mesajı</p>
+                    <CopyButton text={selectedLog.error} />
+                  </div>
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <p className="text-red-800 font-mono text-sm">{selectedLog.error}</p>
                   </div>
@@ -815,7 +876,10 @@ export default function AIMonitor() {
               {/* System Prompt */}
               {selectedLog.systemPrompt && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase mb-2">System Prompt</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500 uppercase">System Prompt</p>
+                    <CopyButton text={selectedLog.systemPrompt} />
+                  </div>
                   <div
                     className="bg-gray-50 rounded-lg p-4 overflow-y-auto resize-y min-h-[100px]"
                     style={{ height: "150px" }}
@@ -830,7 +894,10 @@ export default function AIMonitor() {
               {/* User Prompt */}
               {selectedLog.userPrompt && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase mb-2">User Prompt</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500 uppercase">User Prompt</p>
+                    <CopyButton text={selectedLog.userPrompt} />
+                  </div>
                   <div
                     className="bg-blue-50 rounded-lg p-4 overflow-y-auto resize-y min-h-[100px]"
                     style={{ height: "200px" }}
@@ -845,7 +912,10 @@ export default function AIMonitor() {
               {/* Negative Prompt */}
               {selectedLog.negativePrompt && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase mb-2">Negative Prompt</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500 uppercase">Negative Prompt</p>
+                    <CopyButton text={selectedLog.negativePrompt} />
+                  </div>
                   <div
                     className="bg-orange-50 rounded-lg p-4 overflow-y-auto resize-y min-h-[60px]"
                     style={{ height: "100px" }}
@@ -860,7 +930,10 @@ export default function AIMonitor() {
               {/* Response */}
               {selectedLog.response && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase mb-2">AI Yanıtı</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500 uppercase">AI Yanıtı</p>
+                    <CopyButton text={selectedLog.response} />
+                  </div>
                   <div
                     className="bg-green-50 rounded-lg p-4 overflow-y-auto resize-y min-h-[100px]"
                     style={{ height: "200px" }}
@@ -875,7 +948,10 @@ export default function AIMonitor() {
               {/* Parsed Response Data */}
               {selectedLog.responseData && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase mb-2">Parse Edilmiş Yanıt</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500 uppercase">Parse Edilmiş Yanıt</p>
+                    <CopyButton text={JSON.stringify(selectedLog.responseData, null, 2)} />
+                  </div>
                   <div
                     className="bg-purple-50 rounded-lg p-4 overflow-y-auto resize-y min-h-[100px]"
                     style={{ height: "200px" }}

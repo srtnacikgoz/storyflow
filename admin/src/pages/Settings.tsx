@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../services/api";
+import { useLoading } from "../contexts/LoadingContext";
 import { hasSeenTour, resetTour } from "../components/PageTour";
 
 // Tanıtım turları listesi
@@ -11,6 +12,7 @@ const TOURS = [
 ];
 
 export default function Settings() {
+  const { startLoading, stopLoading } = useLoading();
   const [tokenStatus, setTokenStatus] = useState<{
     valid: boolean;
     accountName?: string;
@@ -46,6 +48,7 @@ export default function Settings() {
 
   const checkToken = async () => {
     setLoading(true);
+    startLoading("settings", "Ayarlar yükleniyor...");
     try {
       const result = await api.validateInstagramToken();
       setTokenStatus({
@@ -59,6 +62,7 @@ export default function Settings() {
       });
     } finally {
       setLoading(false);
+      stopLoading("settings");
     }
   };
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { api } from "../services/api";
+import { useLoading } from "../contexts/LoadingContext";
 import type { TimeSlotRule, Theme, CategorySubType } from "../types";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
@@ -103,6 +104,7 @@ interface ScheduledSlot {
 }
 
 export default function TimeSlots() {
+  const { startLoading, stopLoading } = useLoading();
   const [rules, setRules] = useState<TimeSlotRule[]>([]);
   const [slots, setSlots] = useState<ScheduledSlot[]>([]);
   const [themes, setThemes] = useState<Theme[]>([]);
@@ -148,6 +150,7 @@ export default function TimeSlots() {
   const loadData = async () => {
     setLoading(true);
     setError(null);
+    startLoading("timeslots", "Zaman dilimleri yükleniyor...");
     try {
       const [rulesData, slotsData, themesData, categoriesData] = await Promise.all([
         api.listTimeSlotRules(),
@@ -166,6 +169,7 @@ export default function TimeSlots() {
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
       setLoading(false);
+      stopLoading("timeslots");
     }
   };
 

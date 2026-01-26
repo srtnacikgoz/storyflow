@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
-import type { CategoriesConfig, CategorySubType, DynamicCategoryType, EatingMethod } from "../types";
+import { useLoading } from "../contexts/LoadingContext";
+import type { CategoriesConfig, CategorySubType, DynamicCategory, DynamicCategoryType, EatingMethod } from "../types";
 
 // Yeme şekli seçenekleri
 const EATING_METHOD_OPTIONS: { value: EatingMethod; label: string }[] = [
@@ -12,6 +13,7 @@ const EATING_METHOD_OPTIONS: { value: EatingMethod; label: string }[] = [
 ];
 
 export default function Categories() {
+  const { startLoading, stopLoading } = useLoading();
   // State
   const [config, setConfig] = useState<CategoriesConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,11 +22,15 @@ export default function Categories() {
   // Seçili kategori
   const [selectedCategory, setSelectedCategory] = useState<DynamicCategoryType | null>(null);
 
-  // Modal state
+  // Alt kategori modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubType, setEditingSubType] = useState<CategorySubType | null>(null);
 
-  // Form state
+  // Ana kategori modal state
+  const [isMainCategoryModalOpen, setIsMainCategoryModalOpen] = useState(false);
+  const [editingMainCategory, setEditingMainCategory] = useState<DynamicCategory | null>(null);
+
+  // Alt kategori form state
   const [formData, setFormData] = useState({
     slug: "",
     displayName: "",
@@ -35,10 +41,19 @@ export default function Categories() {
     canBeHeldDefault: true,
   });
 
+  // Ana kategori form state
+  const [mainCategoryForm, setMainCategoryForm] = useState({
+    type: "",
+    displayName: "",
+    icon: "",
+    description: "",
+  });
+
   // Kategorileri yükle
   const loadCategories = async () => {
     try {
       setLoading(true);
+      startLoading("categories", "Kategoriler yükleniyor...");
       const data = await api.getCategories();
       setConfig(data);
       setError(null);
@@ -51,6 +66,7 @@ export default function Categories() {
       setError(err instanceof Error ? err.message : "Kategoriler yüklenemedi");
     } finally {
       setLoading(false);
+      stopLoading("categories");
     }
   };
 
@@ -176,6 +192,115 @@ export default function Categories() {
     }
   };
 
+  // Ana kategori modal aç (yeni/düzenle)
+  const openMainCategoryModal = (category?: DynamicCategory) => {
+    if (category) {
+      setEditingMainCategory(category);
+      setMainCategoryForm({
+        type: category.type,
+        displayName: category.displayName,
+        icon: category.icon,
+        description: category.description || "",
+      });
+    } else {
+      setEditingMainCategory(null);
+      setMainCategoryForm({
+        type: "",
+        displayName: "",
+        icon: "",
+        description: "",
+      });
+    }
+    setIsMainCategoryModalOpen(true);
+  };
+
+  // Ana kategori modal kapat
+  const closeMainCategoryModal = () => {
+    setIsMainCategoryModalOpen(false);
+    setEditingMainCategory(null);
+  };
+
+  // Ana kategori kaydet
+  const handleSaveMainCategory = async () => {
+    if (!mainCategoryForm.displayName.trim()) {
+      alert("Görünen ad zorunludur");
+      return;
+    }
+
+    if (!mainCategoryForm.icon.trim()) {
+      alert("Icon zorunludur");
+      return;
+    }
+
+    try {
+      if (editingMainCategory) {
+        // Güncelle
+        await api.updateMainCategory(editingMainCategory.type as DynamicCategoryType, {
+          displayName: mainCategoryForm.displayName,
+          icon: mainCategoryForm.icon,
+          description: mainCategoryForm.description || undefined,
+        });
+      } else {
+        // Yeni oluştur
+        if (!mainCategoryForm.type.trim()) {
+          alert("Type ID zorunludur");
+          return;
+        }
+
+        // Type format kontrolü (kebab-case)
+        const typeRegex = /^[a-z][a-z0-9-]*$/;
+        if (!typeRegex.test(mainCategoryForm.type)) {
+          alert("Type ID sadece küçük harf, rakam ve tire içerebilir ve harfle başlamalıdır");
+          return;
+        }
+
+        await api.addMainCategory({
+          type: mainCategoryForm.type.toLowerCase().trim(),
+          displayName: mainCategoryForm.displayName,
+          icon: mainCategoryForm.icon,
+          description: mainCategoryForm.description || undefined,
+        });
+      }
+      closeMainCategoryModal();
+      loadCategories();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Kayıt başarısız");
+    }
+  };
+
+  // Ana kategori sil
+  const handleDeleteMainCategory = async (type: DynamicCategoryType) => {
+    const category = config?.categories.find((c) => c.type === type);
+    if (!category) return;
+
+    // Sistem kategorisi silinemez
+    if (category.isSystem) {
+      alert("Sistem kategorileri silinemez");
+      return;
+    }
+
+    // Alt kategorisi varsa uyar
+    if (category.subTypes.length > 0) {
+      if (!confirm(`Bu kategorinin ${category.subTypes.length} alt kategorisi var. Silmek istediğinize emin misiniz?`)) {
+        return;
+      }
+    } else {
+      if (!confirm(`"${category.displayName}" kategorisini silmek istediğinize emin misiniz?`)) {
+        return;
+      }
+    }
+
+    try {
+      await api.deleteMainCategory(type);
+      if (selectedCategory === type) {
+        setSelectedCategory(null);
+      }
+      loadCategories();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Silme başarısız");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -218,32 +343,78 @@ export default function Categories() {
       <div className="grid grid-cols-12 gap-6">
         {/* Sol panel - Kategori listesi */}
         <div className="col-span-4 bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-4 border-b border-gray-200">
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="font-medium text-gray-900">Ana Kategoriler</h2>
+            <button
+              onClick={() => openMainCategoryModal()}
+              className="p-1.5 text-amber-600 hover:bg-amber-50 rounded"
+              title="Yeni Ana Kategori"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
           </div>
           <div className="divide-y divide-gray-100">
             {config?.categories.map((category) => (
-              <button
+              <div
                 key={category.type}
-                onClick={() => setSelectedCategory(category.type)}
-                className={`w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors ${
+                className={`group px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors ${
                   selectedCategory === category.type ? "bg-amber-50 border-r-2 border-amber-600" : ""
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSelectedCategory(category.type)}
+                  className="flex items-center gap-3 flex-1 text-left"
+                >
                   <span className="text-2xl">{category.icon}</span>
                   <div>
                     <div className="font-medium text-gray-900">{category.displayName}</div>
-                    <div className="text-xs text-gray-500">{category.type}</div>
+                    <div className="text-xs text-gray-500">
+                      {category.type}
+                      {category.isSystem && (
+                        <span className="ml-1 text-amber-600">(sistem)</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">
-                    {category.subTypes.filter((st) => st.isActive).length}
+                </button>
+                <div className="flex items-center gap-2">
+                  <div className="text-right mr-2">
+                    <div className="text-sm font-medium text-gray-900">
+                      {category.subTypes.filter((st) => st.isActive).length}
+                    </div>
+                    <div className="text-xs text-gray-500">aktif</div>
                   </div>
-                  <div className="text-xs text-gray-500">aktif</div>
+                  {/* Düzenle butonu */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openMainCategoryModal(category);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Düzenle"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                  {/* Sil butonu (sadece sistem olmayan kategoriler için) */}
+                  {!category.isSystem && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteMainCategory(category.type);
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Sil"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </div>
@@ -481,6 +652,109 @@ export default function Categories() {
               </button>
               <button
                 onClick={handleSave}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+              >
+                Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ana Kategori Modal */}
+      {isMainCategoryModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">
+                {editingMainCategory ? "Ana Kategori Düzenle" : "Yeni Ana Kategori"}
+              </h3>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Type ID (sadece yeni eklerken) */}
+              {!editingMainCategory && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Type ID <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={mainCategoryForm.type}
+                    onChange={(e) => setMainCategoryForm({ ...mainCategoryForm, type: e.target.value.toLowerCase() })}
+                    placeholder="custom-products"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Küçük harf, rakam ve tire kullanın. Değiştirilemez.
+                  </p>
+                </div>
+              )}
+
+              {/* DisplayName */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Görünen Ad <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={mainCategoryForm.displayName}
+                  onChange={(e) => setMainCategoryForm({ ...mainCategoryForm, displayName: e.target.value })}
+                  placeholder="Özel Ürünler"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
+                />
+              </div>
+
+              {/* Icon */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Icon (emoji) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={mainCategoryForm.icon}
+                  onChange={(e) => setMainCategoryForm({ ...mainCategoryForm, icon: e.target.value })}
+                  placeholder="🎁"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Tek bir emoji girin (örn: 🎁, 🍰, ☕)
+                </p>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Açıklama
+                </label>
+                <textarea
+                  value={mainCategoryForm.description}
+                  onChange={(e) => setMainCategoryForm({ ...mainCategoryForm, description: e.target.value })}
+                  placeholder="Kategori açıklaması..."
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
+                />
+              </div>
+
+              {/* Sistem kategorisi uyarısı */}
+              {editingMainCategory?.isSystem && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm text-amber-700">
+                    ⚠️ Bu bir sistem kategorisidir. Sadece görünen ad, icon ve açıklama değiştirilebilir.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={closeMainCategoryModal}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSaveMainCategory}
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
               >
                 Kaydet

@@ -13,6 +13,15 @@ Sıfırdan başlayarak Instagram paylaşım otomasyonunu hayata geçiriyoruz. Fi
 - [x] **Phase 4.5: Admin Panel** - React admin panel, drag-drop upload, AI kullanım takibi ✅
 - [x] **Phase 5: Gemini Image Integration** - Gemini img2img, 4 stil varyasyonu, faithfulness kontrolü ✅
 - [x] **Phase 6: Human-in-the-Loop (Telegram)** - Paylaşım öncesi Telegram onay sistemi ✅
+- [x] **Phase 12: AI Orchestrator** - Uçtan uca görsel üretim pipeline (asset→senaryo→prompt→üretim→QC) ✅
+- [x] **Phase 13: Dynamic Categories** - ID-based dinamik kategori sistemi, SaaS hazırlığı ✅
+- [ ] **Phase 14: Hava Durumu** - Günlük hava → içerik önerisi entegrasyonu
+- [ ] **Phase 15: Yerel Takvim** - Türkiye özel günleri için otomatik tema
+- [ ] **Phase 16: Operasyonel Veri** - Stok durumu ↔ içerik motoru bağlantısı
+- [ ] **Phase 17: QR Menü Köprüsü** - QR menü analytics → içerik önceliği
+- [ ] **Phase 18: Multi-AI Provider** - DALL-E, Midjourney seçimi
+- [ ] **Phase 19: Video İçerik** - Veo3/Sora ile Reels üretimi
+- [ ] **Phase 20: Multi-Tenant SaaS** - Çoklu müşteri altyapısı
 
 ## Phase Details
 
@@ -127,6 +136,16 @@ Telegram'a önizleme + butonlar gönderilir
 | 9. Analytics Dashboard | 5/5 | ✅ Completed | 2026-01-16 |
 | 10. Content Calendar | 6/6 | ✅ Completed | 2026-01-16 |
 | 11. Photo Prompt Studio | 5/5 | ✅ Completed | 2026-01-16 |
+| 12. AI Orchestrator | 9/9 | ✅ Completed | 2026-01-22 |
+| 13. Dynamic Categories | 10/10 | ✅ Completed | 2026-01-26 |
+| **Dijital Asistan Milestone** | | | |
+| 14. Hava Durumu | 0/4 | 📋 Planlandı | - |
+| 15. Yerel Takvim | 0/5 | 📋 Planlandı | - |
+| 16. Operasyonel Veri | 0/5 | 📋 Planlandı | - |
+| 17. QR Menü Köprüsü | 0/4 | 📋 Planlandı | - |
+| 18. Multi-AI Provider | 0/5 | 📋 Planlandı | - |
+| 19. Video İçerik | 0/5 | 📋 Planlandı | - |
+| 20. Multi-Tenant SaaS | 0/6 | 📋 Planlandı | - |
 
 ## Notes
 
@@ -139,6 +158,11 @@ Telegram'a önizleme + butonlar gönderilir
 - **Milestone v5.5 (Analytics Dashboard):** ✅ TAMAMLANDI (2026-01-16)
 - **Milestone v6.0 (Content Calendar):** ✅ TAMAMLANDI (2026-01-16)
 - **Milestone v6.5 (Photo Prompt Studio):** ✅ TAMAMLANDI (2026-01-16)
+- **Milestone v7.0 (AI Orchestrator):** ✅ TAMAMLANDI (2026-01-22)
+- **Milestone v8.0 (Dynamic Categories):** ✅ TAMAMLANDI (2026-01-26)
+- **Milestone v9.0 (Dijital Asistan):** 📋 PLANLANDI - Phase 14-17
+- **Milestone v10.0 (Multi-Provider & Video):** 📋 PLANLANDI - Phase 18-19
+- **Milestone v11.0 (SaaS):** 📋 PLANLANDI - Phase 20
 - **Region:** europe-west1 (Belçika)
 - **AI Enhancement:** Gemini 2.0 Flash Experimental (img2img)
 - **Cost Estimate:** ~$0/ay (Gemini şimdilik ücretsiz)
@@ -260,7 +284,139 @@ Tamamlananlar:
 **API Endpoint:** POST /receivePromptFromStudio
 **Auth:** x-api-key header
 
-## What's Next (v7.0 Candidates)
+### Phase 12: AI Orchestrator System
+**Goal:** Uçtan uca otomatik görsel üretim pipeline'ı - asset seçimi, senaryo, prompt, üretim, kalite kontrol
+**Depends on:** Phase 11
+**Status:** ✅ Tamamlandı (2026-01-22)
+
+Tamamlananlar:
+- [x] Asset CRUD (ürün, prop, mobilya, ortam, evcil hayvan, aksesuar, interior) ✅
+- [x] TimeSlot Rules (zaman dilimi bazlı ürün kuralları) ✅
+- [x] Theme & Scenario sistemi (7 senaryo, temalar, el stilleri, kompozisyonlar) ✅
+- [x] Pipeline engine (asset seçimi → senaryo → prompt → üretim → QC → Telegram) ✅
+- [x] Dashboard istatistikleri ✅
+- [x] Çeşitlilik kuralları (gap sistemi, pet frequency, benzersizlik) ✅
+- [x] AI Monitor (Claude & Gemini log takibi) ✅
+- [x] AI Feedback System (sorun bildirme, kategori bazlı geri bildirim) ✅
+- [x] AI Rules System (öğrenme kuralları - do/dont) ✅
+
+### Phase 13: Dynamic Category System
+**Goal:** Hardcoded enum yerine dinamik, ID-based kategori sistemi - SaaS hazırlığı
+**Depends on:** Phase 12
+**Status:** ✅ Tamamlandı (2026-01-26)
+
+Tamamlananlar:
+- [x] Dinamik kategori servisi (Firestore tabanlı, cache'li) ✅
+- [x] CategorySubType'a `id` field ekleme (format: categoryType_slug) ✅
+- [x] ID generation helpers (deterministic + unique) ✅
+- [x] ID-based lookup fonksiyonları (getSubTypeById, validateSubTypeId, vb.) ✅
+- [x] Migration endpoint'leri (kategoriler, asset'ler, timeslot kuralları) ✅
+- [x] loadAvailableAssets() dinamik kategori desteği ✅
+- [x] Graceful skip pattern (bilinmeyen kategori = warning, crash değil) ✅
+- [x] Ana kategori CRUD API (addMainCategory, updateMainCategory, deleteMainCategory) ✅
+- [x] Admin panel: ana kategori ekleme/düzenleme/silme UI ✅
+- [x] Migration çalıştırıldı: 35 subtype, 109 asset, 5 timeslot rule ✅
+
+---
+
+## Milestone: Dijital Asistan (SaaS Hazırlık)
+
+> **Vizyon:** "Mağazasını tanıyan dijital asistan" - Sadece içerik üreten değil,
+> işletmeyi tanıyan, bağlam anlayan, proaktif öneri sunan bir sistem.
+
+### Phase 14: Hava Durumu Entegrasyonu
+**Goal:** Günlük hava durumuna göre içerik önerisi (sıcak→soğuk içecek, soğuk→sıcak çikolata)
+**Depends on:** Phase 13
+**Status:** Planlandı
+**Zorluk:** Kolay
+
+Planlar:
+- [ ] Hava durumu API entegrasyonu (OpenWeatherMap veya WeatherAPI)
+- [ ] Hava → İçerik teması eşleştirme kuralları
+- [ ] Orchestrator pipeline'a hava durumu context ekleme
+- [ ] Admin panel: hava durumu kuralları yönetimi
+
+### Phase 15: Yerel Takvim Entegrasyonu
+**Goal:** Türkiye'ye özel günler (Ramazan, Kandil, Bayram, Anneler Günü) için otomatik içerik teması
+**Depends on:** Phase 14
+**Status:** Planlandı
+**Zorluk:** Orta
+
+Planlar:
+- [ ] Türkiye özel günler veritabanı (dini, milli, ticari)
+- [ ] Takvim → Tema eşleştirme sistemi
+- [ ] Otomatik tema önerisi (Telegram'a "Yarın Kandil, lokma teması öneriyorum" mesajı)
+- [ ] Admin panel: özel gün takvimi yönetimi
+- [ ] Mevsimsel ürün rotasyonu (yaz = soğuk tatlılar, kış = sıcak içecekler)
+
+### Phase 16: Operasyonel Veri Entegrasyonu
+**Goal:** Stok durumu ile içerik motoru bağlantısı - olmayan ürünü paylaşma
+**Depends on:** Phase 15
+**Status:** Planlandı
+**Zorluk:** Orta-Zor
+
+Planlar:
+- [ ] Ürün stok durumu modeli (Firestore: stokta/bitti/az kaldı)
+- [ ] Admin panel: günlük stok güncelleme UI (basit toggle)
+- [ ] Orchestrator: stok kontrol adımı (bitmiş ürünü seçme)
+- [ ] "Az kaldı" ürünleri öne çıkarma stratejisi
+- [ ] Telegram bildirim: "Çilekli pasta bitti, alternatif öneriyorum"
+
+### Phase 17: QR Menü Köprüsü
+**Goal:** QR menü verileri ile sosyal medya içeriğini birleştirme
+**Depends on:** Phase 16
+**Status:** Planlandı
+**Zorluk:** Zor
+
+Planlar:
+- [ ] QR menü tıklama analytics (popüler ürünler)
+- [ ] Popüler ürün → İçerik önceliği algoritması
+- [ ] Instagram paylaşım → QR menü yönlendirme (bio link, caption CTA)
+- [ ] Cross-platform dönüşüm takibi
+
+### Phase 18: Multi-AI Provider
+**Goal:** DALL-E, Midjourney ve diğer AI sağlayıcılarını seçilebilir hale getirme
+**Depends on:** Phase 13
+**Status:** Planlandı
+**Zorluk:** Orta
+
+Planlar:
+- [ ] AI Provider abstraction layer (interface: generate, cost, capabilities)
+- [ ] DALL-E 3 entegrasyonu (OpenAI API)
+- [ ] Provider seçimi UI (maliyet/kalite karşılaştırma)
+- [ ] A/B testing: aynı prompt ile farklı provider karşılaştırma
+- [ ] Maliyet takibi provider bazlı
+
+### Phase 19: Video İçerik Üretimi
+**Goal:** Veo3 veya diğer video AI'ları ile kısa video/Reel üretimi
+**Depends on:** Phase 18
+**Status:** Planlandı (Uzun Vadeli)
+**Zorluk:** Zor
+
+Planlar:
+- [ ] Video generation API araştırması (Veo3, Sora, Runway)
+- [ ] Video pipeline tasarımı (script → görsel → video → müzik)
+- [ ] Instagram Reels API entegrasyonu
+- [ ] Video kalite kontrol sistemi
+- [ ] Maliyet optimizasyonu (video çok daha pahalı)
+
+### Phase 20: Multi-Tenant SaaS Altyapısı
+**Goal:** Çoklu müşteri desteği, tenant izolasyonu, onboarding
+**Depends on:** Phase 17
+**Status:** Planlandı (Uzun Vadeli)
+**Zorluk:** Çok Zor
+
+Planlar:
+- [ ] Tenant modeli (tenantId, subscription, limits)
+- [ ] Firestore Security Rules (tenant izolasyonu)
+- [ ] Onboarding akışı (ürün yükleme, marka ayarları)
+- [ ] Fiyatlandırma & abonelik sistemi (Stripe/iyzico)
+- [ ] Müşteri dashboard'u (self-service admin panel)
+- [ ] Blueprint/Template kategoriler (yeni tenant için varsayılanlar)
+
+---
+
+## What's Next (Altyapı İyileştirmeleri)
 
 ### 🔒 Güvenlik (Öncelikli)
 - [ ] **Firebase Auth + Custom Claims** - Admin panel ve API güvenliği
@@ -273,5 +429,6 @@ Tamamlananlar:
 ### 📋 Diğer İyileştirmeler
 - [ ] Smart Retry Logic (3 deneme)
 - [ ] Docker Support
-- [ ] Multi-Account Support
+- [ ] Fractional Indexing (drag-drop sıralama optimizasyonu)
+- [ ] Denormalizasyon stratejisi (kategori adını asset'lere gömme)
 - [ ] A/B Testing for Captions

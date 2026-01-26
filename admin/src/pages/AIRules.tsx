@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
+import { useLoading } from "../contexts/LoadingContext";
 import type { AIRule, AIRuleCategoryId } from "../types";
 import { AI_RULE_CATEGORIES } from "../types";
 
@@ -15,6 +16,7 @@ const CATEGORY_OPTIONS: { value: AIRuleCategoryId; label: string; icon: string }
 ];
 
 export default function AIRules() {
+  const { startLoading, stopLoading } = useLoading();
   // State
   const [rules, setRules] = useState<AIRule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +44,7 @@ export default function AIRules() {
   const loadRules = async () => {
     try {
       setLoading(true);
+      startLoading("airules", "AI Kuralları yükleniyor...");
       const data = await api.listAIRules();
       setRules(data);
       setError(null);
@@ -49,6 +52,7 @@ export default function AIRules() {
       setError(err instanceof Error ? err.message : "Kurallar yüklenemedi");
     } finally {
       setLoading(false);
+      stopLoading("airules");
     }
   };
 
