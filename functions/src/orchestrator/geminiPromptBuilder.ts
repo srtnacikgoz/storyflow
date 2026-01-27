@@ -7,6 +7,7 @@
  */
 
 import { getFirestore } from "firebase-admin/firestore";
+import { MoodService } from "../services/moodService";
 
 // Gemini Terminology Types
 export interface GeminiMoodDefinition {
@@ -375,6 +376,46 @@ export async function buildNegativePrompt(categories?: string[]): Promise<string
  * Zamana göre en uygun mood'u öner
  */
 export async function suggestMoodForTime(timeOfDay: string): Promise<GeminiMoodDefinition | null> {
+  // 1. Dinamik Mood Servisi'nden mood ara
+  try {
+    const moodService = new MoodService();
+
+    // Mevsimi belirle
+    const month = new Date().getMonth(); // 0-11
+    let season: "winter" | "spring" | "summer" | "autumn" = "winter";
+    if (month >= 2 && month <= 4) season = "spring";
+    else if (month >= 5 && month <= 7) season = "summer";
+    else if (month >= 8 && month <= 10) season = "autumn";
+
+    const hour = new Date().getHours();
+
+    // Servisten eşleşen moodları al
+    const matchingMoods = await moodService.getMatchingMoods(hour, season);
+
+    if (matchingMoods.length > 0) {
+      // Rastgele bir mood seç
+      const randomMood = matchingMoods[Math.floor(Math.random() * matchingMoods.length)];
+
+      console.log(`[GeminiPromptBuilder] Selected dynamic mood: ${randomMood.name} (${randomMood.id})`);
+
+      // GeminiMoodDefinition formatına dönüştür
+      return {
+        id: randomMood.id,
+        name: randomMood.name,
+        nameEn: randomMood.name,
+        geminiAtmosphere: randomMood.description,
+        lighting: randomMood.lightingPrompt,
+        temperature: "warm/neutral/cool", // Mood içinde opsiyonel olabilir, şimdilik generic
+        colorPalette: [randomMood.colorGradePrompt],
+        timeOfDay: [randomMood.timeOfDay],
+        bestFor: []
+      };
+    }
+  } catch (error) {
+    console.warn("[GeminiPromptBuilder] Failed to fetch dynamic moods:", error);
+  }
+
+  // 2. Fallback: Legacy presets
   const presets = await loadGeminiPresets();
   if (!presets) return null;
 
@@ -466,6 +507,12 @@ export async function buildGeminiPrompt(params: {
     promptParts.push(`LIGHTING:`);
     promptParts.push(`- ${lighting.geminiPrompt}`);
     promptParts.push(`- Color temperature: ${lighting.temperature}`);
+    promptParts.push(`- Shallow depth of field (f/2.0)`);
+    promptParts.push("");
+  } else if (mood && mood.lighting) {
+    // Lighting preset yoksa MOOD lighting kullan
+    promptParts.push(`LIGHTING:`);
+    promptParts.push(`- ${mood.lighting}`);
     promptParts.push(`- Shallow depth of field (f/2.0)`);
     promptParts.push("");
   }

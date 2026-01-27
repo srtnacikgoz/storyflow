@@ -192,7 +192,7 @@ export class OrchestratorScheduler {
     const triggerEndTotalMinutes = bestHour * 60;
 
     const isActive = currentTotalMinutes >= triggerStartTotalMinutes &&
-      currentTotalMinutes < triggerEndTotalMinutes;
+      currentTotalMinutes <= triggerEndTotalMinutes;
 
     if (isActive) {
       console.log(`[Scheduler] Trigger window active: ${triggerStartHour}:${triggerStartMinute} - ${bestHour}:00, current: ${currentHour}:${currentMinute}`);

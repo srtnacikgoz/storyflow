@@ -128,6 +128,34 @@ export type MusicMood =
   | "golden-hour";    // Altın saat
 
 // ==========================================
+// MOOD TYPES
+// ==========================================
+
+/**
+ * Dinamik Mood Tanımı
+ * Gemini'ye gönderilecek görsel atmosfer detayları
+ */
+export interface Mood {
+  id: string;
+  name: string;            // "Kış Sabahı", "Yağmurlu Cafe"
+  description: string;     // UI açıklaması
+
+  // Koşullar
+  timeOfDay: "morning" | "afternoon" | "evening" | "night" | "any";
+  season: "winter" | "spring" | "summer" | "autumn" | "any";
+  weather: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
+
+  // Prompt Enjeksiyonları
+  lightingPrompt: string;  // "soft window light, overcast shadows"
+  colorGradePrompt: string; // "cool blue tones, desaturated, high contrast"
+
+  // Durum
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ==========================================
 // OBJECT IDENTITY ENUMS
 // ==========================================
 // Gemini'nin nesneleri doğru yorumlaması için standart enum değerleri.

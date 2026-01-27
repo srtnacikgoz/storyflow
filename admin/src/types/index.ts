@@ -588,6 +588,21 @@ export type PipelineStage =
   | "telegram_approval"
   | "publishing";
 
+// Mood Tanımı (Orchestrator için)
+export interface Mood {
+  id: string;
+  name: string;
+  description: string;
+  timeOfDay: "morning" | "afternoon" | "evening" | "night" | "any";
+  season: "winter" | "spring" | "summer" | "autumn" | "any";
+  weather: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
+  lightingPrompt: string;
+  colorGradePrompt: string;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // Pipeline durumu
 export interface PipelineStatus {
   currentStage: PipelineStage;

@@ -25,6 +25,7 @@ import type {
   PipelineResult,
   OrchestratorDashboardStats,
   Theme,
+  Mood,
   // AI Monitor types
   AILog,
   AIStats,
@@ -55,9 +56,47 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ||
  */
 class ApiService {
   private baseUrl: string;
+  private cache: Map<string, { data: any; expiresAt: number }> = new Map();
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
+  }
+
+  /**
+   * Cache'den veri getir
+   */
+  private getFromCache<T>(key: string): T | null {
+    const cached = this.cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data as T;
+    }
+    if (cached) {
+      this.cache.delete(key);
+    }
+    return null;
+  }
+
+  /**
+   * Cache'e veri kaydet
+   */
+  private setCache<T>(key: string, data: T, ttlSeconds: number): void {
+    const expiresAt = Date.now() + ttlSeconds * 1000;
+    this.cache.set(key, { data, expiresAt });
+  }
+
+  /**
+   * Cache temizle (belirli bir prefix ile veya tamamen)
+   */
+  clearCache(prefix?: string): void {
+    if (prefix) {
+      for (const key of this.cache.keys()) {
+        if (key.startsWith(prefix)) {
+          this.cache.delete(key);
+        }
+      }
+    } else {
+      this.cache.clear();
+    }
   }
 
   /**
@@ -588,6 +627,11 @@ class ApiService {
     subType?: string;
     isActive?: boolean;
   }): Promise<OrchestratorAsset[]> {
+    // Cache key oluştur
+    const cacheKey = `assets_${JSON.stringify(filters || {})}`;
+    const cached = this.getFromCache<OrchestratorAsset[]>(cacheKey);
+    if (cached) return cached;
+
     const params = new URLSearchParams();
     if (filters?.category) params.append("category", filters.category);
     if (filters?.subType) params.append("subType", filters.subType);
@@ -601,6 +645,9 @@ class ApiService {
       data: OrchestratorAsset[];
       count: number;
     }>(endpoint);
+
+    // 30 saniye cache
+    this.setCache(cacheKey, response.data, 30);
     return response.data;
   }
 
@@ -635,6 +682,80 @@ class ApiService {
     await this.fetch(`deleteAsset?id=${id}`, {
       method: "POST",
     });
+  }
+
+  // ==========================================
+  // Orchestrator - Mood Management
+  // ==========================================
+
+  /**
+   * Mood listesini getir
+   */
+  async getMoods(activeOnly: boolean = false): Promise<Mood[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      moods: Mood[];
+    }>(`getMoods?activeOnly=${activeOnly}`);
+    return response.moods;
+  }
+
+  /**
+   * Mood detayı getir
+   */
+  async getMood(id: string): Promise<Mood> {
+    const response = await this.fetch<{
+      success: boolean;
+      mood: Mood;
+    }>(`getMood?id=${id}`);
+    return response.mood;
+  }
+
+  /**
+   * Yeni mood ekle
+   */
+  async createMood(mood: Omit<Mood, "id" | "createdAt" | "updatedAt">): Promise<Mood> {
+    const response = await this.fetch<{
+      success: boolean;
+      mood: Mood;
+    }>("createMood", {
+      method: "POST",
+      body: JSON.stringify(mood),
+    });
+    return response.mood;
+  }
+
+  /**
+   * Mood güncelle
+   */
+  async updateMood(id: string, updates: Partial<Mood>): Promise<void> {
+    await this.fetch(`updateMood?id=${id}`, {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  /**
+   * Mood sil
+   */
+  async deleteMood(id: string): Promise<void> {
+    await this.fetch(`deleteMood?id=${id}`, {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  /**
+   * Varsayılan modları yükle
+   */
+  async seedMoods(): Promise<{ added: number; skipped: number }> {
+    const response = await this.fetch<{
+      success: boolean;
+      added: number;
+      skipped: number;
+    }>("seedMoods", {
+      method: "POST"
+    });
+    return { added: response.added, skipped: response.skipped };
   }
 
   // ==========================================
@@ -1432,10 +1553,17 @@ class ApiService {
    * Tüm kategorileri getir
    */
   async getCategories(): Promise<CategoriesConfig> {
+    const cacheKey = "categories";
+    const cached = this.getFromCache<CategoriesConfig>(cacheKey);
+    if (cached) return cached;
+
     const response = await this.fetch<{
       success: boolean;
       data: CategoriesConfig;
     }>("getCategories");
+
+    // 5 dakika cache
+    this.setCache(cacheKey, response.data, 300);
     return response.data;
   }
 
@@ -1514,6 +1642,9 @@ class ApiService {
       method: "POST",
       body: JSON.stringify({ type, ...subType }),
     });
+
+    // Cache'i temizle
+    this.clearCache("categories");
   }
 
   /**
@@ -1536,6 +1667,9 @@ class ApiService {
       method: "POST",
       body: JSON.stringify({ type, slug, ...updates }),
     });
+
+    // Cache'i temizle
+    this.clearCache("categories");
   }
 
   /**
@@ -1546,6 +1680,9 @@ class ApiService {
       method: "POST",
       body: JSON.stringify({ type, slug }),
     });
+
+    // Cache'i temizle
+    this.clearCache("categories");
   }
 
   /**
@@ -1556,6 +1693,9 @@ class ApiService {
       method: "POST",
       body: JSON.stringify({ type, slug }),
     });
+
+    // Cache'i temizle
+    this.clearCache("categories");
   }
 
   /**
@@ -1566,6 +1706,9 @@ class ApiService {
       method: "POST",
       body: JSON.stringify({ type, slugOrder }),
     });
+
+    // Cache'i temizle
+    this.clearCache("categories");
   }
 
   /**

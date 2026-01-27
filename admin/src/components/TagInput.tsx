@@ -30,10 +30,10 @@ export default function TagInput({
   // Input'a yazıldığında filtrelenmiş öneriler
   const filteredSuggestions = inputValue.trim()
     ? suggestions.filter(
-        (s) =>
-          s.toLowerCase().includes(inputValue.toLowerCase()) &&
-          !value.includes(s)
-      )
+      (s) =>
+        s.toLowerCase().includes(inputValue.toLowerCase()) &&
+        !value.includes(s)
+    )
     : [];
 
   // Yeni tag ekle
@@ -133,13 +133,12 @@ export default function TagInput({
     <div ref={containerRef} className={`relative ${className}`}>
       {/* Tag'ler ve input alanı */}
       <div
-        className={`flex flex-wrap items-center gap-1.5 px-3 py-2 border rounded-lg bg-white min-h-[42px] cursor-text transition-colors ${
-          disabled
+        className={`flex flex-wrap items-center gap-1.5 px-3 py-2 border rounded-lg bg-white min-h-[42px] cursor-text transition-colors ${disabled
             ? "bg-gray-100 border-gray-200 cursor-not-allowed"
             : error
               ? "border-red-500 ring-1 ring-red-500"
               : "border-gray-300 hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
-        }`}
+          }`}
         onClick={() => !disabled && inputRef.current?.focus()}
       >
         {/* Mevcut tag'ler - chip/badge olarak */}
@@ -189,11 +188,10 @@ export default function TagInput({
             <button
               key={suggestion}
               type="button"
-              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                index === highlightedIndex
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${index === highlightedIndex
                   ? "bg-blue-50 text-blue-700"
                   : "text-gray-700 hover:bg-gray-50"
-              }`}
+                }`}
               onMouseDown={(e) => {
                 // mouseDown kullan, blur'dan önce çalışsın
                 e.preventDefault();
@@ -210,7 +208,7 @@ export default function TagInput({
       {/* Yardımcı metin */}
       {!disabled && value.length === 0 && !inputValue && (
         <p className="mt-1 text-xs text-gray-400">
-          Kısa keyword yazıp Enter veya virgül ile ekleyin
+          Örn: filtre kahve (Virgül veya Enter ile ayırın)
         </p>
       )}
     </div>

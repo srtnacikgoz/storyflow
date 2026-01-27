@@ -137,8 +137,8 @@ interface CategoryFieldConfig {
 }
 
 const FIELDS_BY_CATEGORY: Record<AssetCategory, CategoryFieldConfig> = {
-  products: { tags: "required", dominantColors: "required", style: "required", material: "hidden" },
-  props: { tags: "required", dominantColors: "required", style: "required", material: "required" },
+  products: { tags: "required", dominantColors: "optional", style: "required", material: "hidden" },
+  props: { tags: "required", dominantColors: "optional", style: "required", material: "required" },
   furniture: { tags: "required", dominantColors: "hidden", style: "required", material: "required" },
   environments: { tags: "required", dominantColors: "hidden", style: "required", material: "hidden" },
   pets: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
@@ -235,10 +235,10 @@ export default function Assets() {
     }
   };
 
-  const loadAssets = async () => {
-    setLoading(true);
+  const loadAssets = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
-    startLoading("assets", "Görseller yükleniyor...");
+    if (!silent) startLoading("assets", "Görseller yükleniyor...");
     try {
       const filters = {
         ...(selectedCategory !== "all" ? { category: selectedCategory } : {}),
@@ -249,8 +249,8 @@ export default function Assets() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Veri yuklenemedi");
     } finally {
-      setLoading(false);
-      stopLoading("assets");
+      if (!silent) setLoading(false);
+      if (!silent) stopLoading("assets");
     }
   };
 
@@ -272,7 +272,7 @@ export default function Assets() {
 
   const handleModalSuccess = () => {
     closeModal();
-    loadAssets();
+    loadAssets(true); // Silent reload - scroll pozisyonunu korur
   };
 
   // Silme onay modalını aç
@@ -387,7 +387,7 @@ export default function Assets() {
       {error && (
         <div className="card bg-red-50 border-red-200">
           <p className="text-red-600">{error}</p>
-          <button onClick={loadAssets} className="btn-secondary mt-4">
+          <button onClick={() => loadAssets()} className="btn-secondary mt-4">
             Tekrar Dene
           </button>
         </div>
@@ -489,6 +489,15 @@ export default function Assets() {
                           <div className="text-xs text-gray-500">
                             {dynamicCategoryLabels[asset.category as AssetCategory]} • {dynamicSubtypeLabels[asset.subType] || asset.subType}
                           </div>
+                          {asset.tags && asset.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {asset.tags.map((tag) => (
+                                <span key={tag} className="px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded border border-amber-100 font-medium">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1">
@@ -613,6 +622,9 @@ function AssetCard({
             <p className="font-medium text-gray-900 truncate">{asset.filename}</p>
             <p className="text-sm text-gray-500">
               {categoryLabels[asset.category as AssetCategory]} / {subtypeLabels[asset.subType] || asset.subType}
+              {asset.tags && asset.tags.length > 0 && (
+                <span className="ml-1 text-gray-400">• {asset.tags.length} etiket</span>
+              )}
             </p>
           </div>
           <span className={`px-2 py-0.5 rounded-full text-xs ${asset.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
@@ -621,17 +633,14 @@ function AssetCard({
           </span>
         </div>
 
-        {/* Tags */}
+        {/* Tags - Tümü gösteriliyor */}
         {asset.tags && asset.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {asset.tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
+            {asset.tags.map((tag) => (
+              <span key={tag} className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded-full border border-amber-100 font-medium">
                 {tag}
               </span>
             ))}
-            {asset.tags.length > 3 && (
-              <span className="px-2 py-0.5 text-gray-400 text-xs">+{asset.tags.length - 3}</span>
-            )}
           </div>
         )}
 
@@ -842,310 +851,362 @@ function AssetModal({
   };
 
   // Label helper - opsiyonel/zorunlu etiketi
-  const getFieldLabel = (baseLabel: string, visibility: FieldVisibility) => {
-    if (visibility === "optional") {
-      return `${baseLabel} (opsiyonel)`;
-    }
-    return baseLabel;
-  };
+
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">
-          {isEditMode ? "Görsel Düzenle" : "Yeni Görsel Ekle"}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Kategori */}
-          <div>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
-              Kategori
-              <Tooltip
-                content="Görselin kullanım alanı. Ürünler AI ile işlenir, Interior doğrudan paylaşılır."
-                position="right"
-              />
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as AssetCategory)}
-              className="input w-full"
-              disabled={isEditMode} // Edit modda kategori değiştirilemez
-            >
-              {(Object.keys(categoryLabels) as AssetCategory[]).map((cat) => (
-                <option key={cat} value={cat}>{categoryLabels[cat]}</option>
-              ))}
-            </select>
-            {isEditMode && (
-              <p className="text-xs text-gray-400 mt-1">Kategori düzenlenemez</p>
-            )}
-          </div>
-
-          {/* Alt Tip */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Alt Tip
-            </label>
-            <select
-              value={subType}
-              onChange={(e) => setSubType(e.target.value)}
-              className="input w-full"
-            >
-              {subtypesByCategory[category]?.map((st) => (
-                <option key={st} value={st}>{subtypeLabels[st] || st}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Dosya Yükleme */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Görsel
-            </label>
-
-            {/* Edit modda mevcut görsel önizleme */}
-            {isEditMode && storageUrl && !wantsToChangeImage && (
-              <div className="mb-2">
-                <div className="relative inline-block">
-                  <img
-                    src={storageUrl}
-                    alt={filename}
-                    className="h-24 w-24 rounded-lg object-cover border border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setWantsToChangeImage(true)}
-                    className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full p-1 text-xs hover:bg-blue-600"
-                    title="Görseli değiştir"
-                  >
-                    ✎
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">{filename}</p>
-              </div>
-            )}
-
-            {/* Yükleme alanı - create modda veya değiştirmek istiyorsa göster */}
-            {(!isEditMode || wantsToChangeImage) && (
-              <>
-                <AssetUpload
-                  type="image"
-                  folder={`orchestrator-assets/${category}`}
-                  onUploadComplete={handleUploadComplete}
-                  onError={handleUploadError}
-                />
-                {uploadError && (
-                  <p className="text-sm text-red-500 mt-1">{uploadError}</p>
-                )}
-                {filename && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Dosya: {filename}
-                  </p>
-                )}
-                {isEditMode && wantsToChangeImage && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWantsToChangeImage(false);
-                      // Orijinal değerleri geri yükle
-                      if (asset) {
-                        setFilename(asset.filename);
-                        setStorageUrl(asset.storageUrl);
-                      }
-                    }}
-                    className="text-xs text-gray-500 hover:text-gray-700 mt-1"
-                  >
-                    ← Değiştirmekten vazgeç
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Tags - kategori bazlı göster/gizle */}
-          {fieldConfig.tags !== "hidden" && (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-300">
+        {/* Gradient Header */}
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 px-8 py-6">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
-                {getFieldLabel("Etiketler — bu asset ne için kullanılacak?", fieldConfig.tags)}
-                {fieldConfig.tags === "required" && (
-                  <span className="text-red-500">*</span>
-                )}
-              </label>
-              <p className="text-xs text-gray-500 mb-1.5">
-                Kısa keyword'ler girin. AI, etiketlere göre doğru asset'i seçer ve içeriği ona göre üretir.
-              </p>
-              <TagInput
-                value={tags}
-                onChange={setTags}
-                suggestions={tagSuggestions}
-                placeholder="Örn: cheesecake, espresso, tea, gift..."
-                error={submitted && fieldConfig.tags === "required" && tags.length === 0}
-              />
-              {submitted && fieldConfig.tags === "required" && tags.length === 0 && (
-                <p className="text-xs text-red-500 mt-1">
-                  En az 1 etiket gerekli (Örn: cheesecake, espresso, tea)
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Dominant Renkler - kategori bazlı göster/gizle */}
-          {fieldConfig.dominantColors !== "hidden" && (
-            <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
-                {getFieldLabel("Dominant Renkler (virgülle ayır)", fieldConfig.dominantColors)}
-                {fieldConfig.dominantColors === "required" && (
-                  <span className="text-red-500 ml-1">*</span>
-                )}
-                <Tooltip
-                  content="AI renk uyumlu görseller üretir. Hex kodları (#D4A574) veya isimler (gold, cream) kullanın."
-                  position="right"
-                />
-              </label>
-              <input
-                type="text"
-                value={dominantColors}
-                onChange={(e) => setDominantColors(e.target.value)}
-                placeholder="#D4A574, #FFFFFF"
-                className={`input w-full ${submitted && fieldConfig.dominantColors === "required" && !dominantColors.trim() ? "ring-1 ring-red-500" : ""}`}
-              />
-              {submitted && fieldConfig.dominantColors === "required" && !dominantColors.trim() ? (
-                <p className="text-xs text-red-500 mt-1">
-                  Dominant renkler zorunludur
-                </p>
-              ) : (
-                <p className="text-xs text-gray-400 mt-1">
-                  AI görsel üretiminde renk tutarlılığı için kritik
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Stil - kategori bazlı göster/gizle */}
-          {fieldConfig.style !== "hidden" && (
-            <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
-                {getFieldLabel("Stil", fieldConfig.style)}
-                <Tooltip
-                  content="AI aynı stildeki öğeleri eşleştirir. Modern masa + Rustic tabak kombinasyonundan kaçınır."
-                  position="right"
-                />
-              </label>
-              <select
-                value={style}
-                onChange={(e) => setStyle(e.target.value)}
-                className="input w-full"
-              >
-                <option value="modern">Modern</option>
-                <option value="rustic">Rustic</option>
-                <option value="minimal">Minimal</option>
-                <option value="elegant">Elegant</option>
-              </select>
-            </div>
-          )}
-
-          {/* Material - kategori bazlı göster/gizle */}
-          {fieldConfig.material !== "hidden" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {getFieldLabel("Malzeme", fieldConfig.material)}
-              </label>
-              <select
-                value={material}
-                onChange={(e) => setMaterial(e.target.value)}
-                className="input w-full"
-              >
-                <option value="">Seçiniz...</option>
-                <option value="ceramic">Seramik</option>
-                <option value="porcelain">Porselen</option>
-                <option value="glass">Cam</option>
-                <option value="wood">Ahşap</option>
-                <option value="metal">Metal</option>
-                <option value="marble">Mermer</option>
-              </select>
-            </div>
-          )}
-
-          {/* Object Identity Alanları - kategori+subType bazlı koşullu */}
-
-          {/* Yeme Şekli ve Elle Tutulabilirlik - sadece products kategorisinde */}
-          {category === "products" && (
-            <>
-              <div>
-                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
-                  Yeme Şekli
-                  <Tooltip
-                    content="AI uygun servisi seçer: çatalla yenen ürüne çatal, elle yenene el pozu ekler."
-                    position="right"
-                  />
-                </label>
-                <select
-                  value={eatingMethod}
-                  onChange={(e) => setEatingMethod(e.target.value as EatingMethod)}
-                  className="input w-full"
-                >
-                  <option value="hand">Elle Yenir (kurabiye, sandviç)</option>
-                  <option value="fork">Çatalla Yenir (tiramisu, pasta dilimi)</option>
-                  <option value="fork-knife">Çatal-Bıçakla Yenir (domatesli kruvasan, börek)</option>
-                  <option value="spoon">Kaşıkla Yenir (puding, sufle)</option>
-                  <option value="none">Yenmez/Servis (bütün kek, tart, dekor)</option>
-                </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  Ürün nasıl tüketilir?
-                </p>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                <input
-                  type="checkbox"
-                  id="canBeHeldByHand"
-                  checked={canBeHeldByHand}
-                  onChange={(e) => setCanBeHeldByHand(e.target.checked)}
-                  className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <div>
-                  <label htmlFor="canBeHeldByHand" className="block text-sm font-medium text-gray-700 cursor-pointer">
-                    Elle Tutulabilir
-                  </label>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Bu ürün görsellerde el ile tutularak gösterilebilir mi?
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Örn: Bardakta puding kaşıkla yenir ama elle tutulabilir
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Interior için bilgi mesajı */}
-          {category === "interior" && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <p className="text-sm text-green-800">
-                📍 <strong>Mekan Atmosferi</strong> kategorisindeki görseller AI tarafından işlenmez, doğrudan paylaşılır.
+              <h2 className="text-2xl font-bold text-white">
+                {isEditMode ? "✨ Görsel Düzenle" : "📸 Yeni Görsel Ekle"}
+              </h2>
+              <p className="text-white/80 text-sm mt-1">
+                {isEditMode ? "Asset bilgilerini güncelleyin" : "AI içerik üretimi için görsel yükleyin"}
               </p>
             </div>
-          )}
-
-          {/* Butonlar */}
-          <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="btn-secondary flex-1"
+              className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
             >
-              İptal
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
-            <button
-              type="submit"
-              disabled={saving || (!isEditMode && !storageUrl)}
-              className="btn-primary flex-1 disabled:opacity-50"
-            >
-              {saving ? "Kaydediliyor..." : (isEditMode ? "Güncelle" : "Kaydet")}
-            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-gray-100">
+            {/* Sol Panel - Görsel Önizleme */}
+            <div className="lg:col-span-2 p-6 bg-gradient-to-br from-gray-50 to-gray-100/50">
+              <div className="sticky top-0">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  📷 Görsel Yükleme
+                </label>
+
+                {/* Büyük Görsel Önizleme Alanı */}
+                <div className="aspect-square rounded-2xl bg-white border-2 border-dashed border-gray-200 overflow-hidden shadow-inner">
+                  {/* Yüklü görsel varsa göster */}
+                  {storageUrl && !wantsToChangeImage ? (
+                    <div className="relative w-full h-full group">
+                      <img
+                        src={storageUrl}
+                        alt={filename}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setWantsToChangeImage(true)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity bg-white text-gray-800 px-4 py-2 rounded-full font-medium shadow-lg hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          Değiştir
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-6">
+                      <AssetUpload
+                        type="image"
+                        folder={`orchestrator-assets/${category}`}
+                        onUploadComplete={handleUploadComplete}
+                        onError={handleUploadError}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Dosya bilgisi */}
+                {filename && (
+                  <div className="mt-3 p-3 bg-white rounded-xl border border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center">
+                        <span className="text-lg">🖼️</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{filename}</p>
+                        <p className="text-xs text-gray-500">Yükleme tamamlandı</p>
+                      </div>
+                      {isEditMode && wantsToChangeImage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWantsToChangeImage(false);
+                            if (asset) {
+                              setFilename(asset.filename);
+                              setStorageUrl(asset.storageUrl);
+                            }
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-700 underline"
+                        >
+                          Geri al
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {uploadError && (
+                  <div className="mt-3 p-3 bg-red-50 rounded-xl border border-red-200">
+                    <p className="text-sm text-red-600 flex items-center gap-2">
+                      <span>⚠️</span> {uploadError}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div >
+
+            {/* Sağ Panel - Form Alanları */}
+            < div className="lg:col-span-3 p-6 overflow-y-auto max-h-[60vh]" >
+              <div className="space-y-5">
+                {/* Kategori & Alt Tip - Yan yana */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+                      📁 Kategori
+                      <Tooltip
+                        content="Görselin kullanım alanı. Ürünler AI ile işlenir, Interior doğrudan paylaşılır."
+                        position="right"
+                      />
+                    </label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value as AssetCategory)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={isEditMode}
+                    >
+                      {(Object.keys(categoryLabels) as AssetCategory[]).map((cat) => (
+                        <option key={cat} value={cat}>{categoryLabels[cat]}</option>
+                      ))}
+                    </select>
+                    {isEditMode && (
+                      <p className="text-xs text-gray-400 mt-1">🔒 Kategori kilitli</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      🏷️ Alt Tip
+                    </label>
+                    <select
+                      value={subType}
+                      onChange={(e) => setSubType(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                    >
+                      {subtypesByCategory[category]?.map((st) => (
+                        <option key={st} value={st}>{subtypeLabels[st] || st}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Etiketler */}
+                {fieldConfig.tags !== "hidden" && (
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+                      🏷️ Etiketler
+                      {fieldConfig.tags === "required" && (
+                        <span className="text-red-500">*</span>
+                      )}
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                      AI bu etiketlere göre uygun asset'i seçer. Kısa keyword'ler kullanın.
+                    </p>
+                    <TagInput
+                      value={tags}
+                      onChange={setTags}
+                      suggestions={tagSuggestions}
+                      placeholder="Örn: cheesecake, espresso, tea, gift..."
+                      error={submitted && fieldConfig.tags === "required" && tags.length === 0}
+                    />
+                    {submitted && fieldConfig.tags === "required" && tags.length === 0 && (
+                      <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+                        <span>⚠️</span> En az 1 etiket gerekli
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Stil & Malzeme - Yan yana */}
+                {(fieldConfig.style !== "hidden" || fieldConfig.material !== "hidden") && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {fieldConfig.style !== "hidden" && (
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+                          ✨ Stil
+                          <Tooltip
+                            content="AI aynı stildeki öğeleri eşleştirir."
+                            position="right"
+                          />
+                        </label>
+                        <select
+                          value={style}
+                          onChange={(e) => setStyle(e.target.value)}
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                        >
+                          <option value="modern">🏢 Modern</option>
+                          <option value="rustic">🪵 Rustic</option>
+                          <option value="minimal">⬜ Minimal</option>
+                          <option value="elegant">💎 Elegant</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {fieldConfig.material !== "hidden" && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          🧱 Malzeme
+                        </label>
+                        <select
+                          value={material}
+                          onChange={(e) => setMaterial(e.target.value)}
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                        >
+                          <option value="">Seçiniz...</option>
+                          <option value="ceramic">Seramik</option>
+                          <option value="porcelain">Porselen</option>
+                          <option value="glass">Cam</option>
+                          <option value="wood">Ahşap</option>
+                          <option value="metal">Metal</option>
+                          <option value="marble">Mermer</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Dominant Renkler */}
+                {fieldConfig.dominantColors !== "hidden" && (
+                  <div>
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+                      🎨 Dominant Renkler
+                      {fieldConfig.dominantColors === "required" && (
+                        <span className="text-red-500">*</span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      value={dominantColors}
+                      onChange={(e) => setDominantColors(e.target.value)}
+                      placeholder="cream, golden-brown, chocolate / #D4A574, #8B4513"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-gray-400"
+                    />
+                    <p className="text-xs text-gray-400 mt-2">
+                      💡 <span className="text-gray-500">Renk girerseniz AI daha uyumlu görseller üretir.</span>
+                      <br />
+                      <span className="text-gray-400">Örnekler: cream, ivory, golden-brown, chocolate, caramel</span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Ürün Özellikleri - Products kategorisi için */}
+                {category === "products" && (
+                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-4 border border-orange-100 space-y-4">
+                    <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                      🍰 Ürün Özellikleri
+                    </h3>
+
+                    <div>
+                      <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
+                        🍴 Yeme Şekli
+                        <Tooltip
+                          content="AI uygun servisi seçer: çatalla yenen ürüne çatal, elle yenene el pozu ekler."
+                          position="right"
+                        />
+                      </label>
+                      <select
+                        value={eatingMethod}
+                        onChange={(e) => setEatingMethod(e.target.value as EatingMethod)}
+                        className="w-full px-4 py-3 bg-white border border-orange-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                      >
+                        <option value="hand">🖐️ Elle Yenir (kurabiye, sandviç)</option>
+                        <option value="fork">🍴 Çatalla Yenir (tiramisu, pasta dilimi)</option>
+                        <option value="fork-knife">🍽️ Çatal-Bıçakla Yenir (börek)</option>
+                        <option value="spoon">🥄 Kaşıkla Yenir (puding, sufle)</option>
+                        <option value="none">🎂 Yenmez/Servis (bütün kek, tart)</option>
+                      </select>
+                    </div>
+
+                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-orange-200 cursor-pointer hover:bg-orange-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        id="canBeHeldByHand"
+                        checked={canBeHeldByHand}
+                        onChange={(e) => setCanBeHeldByHand(e.target.checked)}
+                        className="mt-0.5 h-5 w-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                      />
+                      <div>
+                        <span className="block text-sm font-medium text-gray-800">
+                          ✋ Elle Tutulabilir
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          Bu ürün görsellerde el ile tutularak gösterilebilir mi?
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                {/* Interior için bilgi mesajı */}
+                {category === "interior" && (
+                  <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-2xl p-4 border border-emerald-200">
+                    <p className="text-sm text-emerald-800 flex items-center gap-2">
+                      <span className="text-lg">📍</span>
+                      <span>
+                        <strong>Mekan Atmosferi</strong> kategorisindeki görseller AI tarafından işlenmez, doğrudan paylaşılır.
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer - Butonlar */}
+          <div className="px-8 py-5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              {!isEditMode && !storageUrl && "⚡ Kaydetmek için görsel yükleyin"}
+              {!isEditMode && storageUrl && "✅ Görsel hazır, kaydedebilirsiniz"}
+              {isEditMode && "📝 Değişikliklerinizi kaydedin"}
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-2.5 text-gray-700 bg-white border border-gray-200 rounded-xl font-medium hover:bg-gray-50 hover:border-gray-300 transition-all"
+              >
+                İptal
+              </button>
+              <button
+                type="submit"
+                disabled={saving || (!isEditMode && !storageUrl)}
+                className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-medium hover:from-amber-600 hover:to-orange-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/25 hover:shadow-xl hover:shadow-amber-500/30"
+              >
+                {saving ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Kaydediliyor...
+                  </span>
+                ) : (
+                  isEditMode ? "💾 Güncelle" : "✨ Kaydet"
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
     </div>
   );
 }
+
