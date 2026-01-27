@@ -100,9 +100,6 @@ export class AILogService {
     });
   }
 
-  /**
-   * Gemini log helper
-   */
   static async logGemini(data: {
     model: string;
     userPrompt: string;
@@ -132,6 +129,204 @@ export class AILogService {
       pipelineId: data.pipelineId,
       slotId: data.slotId,
       productType: data.productType,
+    });
+  }
+
+  /**
+   * YENİ: Config Snapshot logu
+   * Pipeline başındaki konfigürasyon durumunu kaydeder
+   */
+  static async logConfigSnapshot(data: {
+    pipelineId: string;
+    slotId?: string;
+    productType?: string;
+    configSnapshot: {
+      themeId?: string;
+      themeName?: string;
+      themeColors?: string[];
+      moodId?: string;
+      moodName?: string;
+      moodKeywords?: string[];
+      styleId?: string;
+      styleName?: string;
+      styleDefinition?: string;
+      timeOfDay?: string;
+      aspectRatio?: string;
+      scheduledHour?: number;
+    };
+  }): Promise<string> {
+    return this.createLog({
+      provider: "gemini",
+      stage: "config-snapshot",
+      model: "system",
+      userPrompt: `Config Snapshot: Theme=${data.configSnapshot.themeName || "default"}, Mood=${data.configSnapshot.moodName || "default"}, Style=${data.configSnapshot.styleName || "default"}`,
+      status: "success",
+      durationMs: 0,
+      pipelineId: data.pipelineId,
+      slotId: data.slotId,
+      productType: data.productType,
+      configSnapshot: data.configSnapshot,
+    });
+  }
+
+  /**
+   * YENİ: Rules Applied logu
+   * Uygulanan kuralları ve bloklanmış asset'leri kaydeder
+   */
+  static async logRulesApplied(data: {
+    pipelineId: string;
+    slotId?: string;
+    productType?: string;
+    appliedRules: {
+      userRules?: Array<{
+        id: string;
+        category: string;
+        content: string;
+        ruleType: "do" | "dont";
+        applied: boolean;
+      }>;
+      blockedAssets?: Array<{
+        id: string;
+        name: string;
+        type: string;
+        reason: string;
+      }>;
+      feedbackRules?: Array<{
+        type: string;
+        count: number;
+        note?: string;
+      }>;
+    };
+  }): Promise<string> {
+    const ruleCount = data.appliedRules.userRules?.length || 0;
+    const blockedCount = data.appliedRules.blockedAssets?.length || 0;
+    const feedbackCount = data.appliedRules.feedbackRules?.length || 0;
+
+    return this.createLog({
+      provider: "gemini",
+      stage: "rules-applied",
+      model: "system",
+      userPrompt: `Rules Applied: ${ruleCount} user rules, ${blockedCount} blocked assets, ${feedbackCount} feedback rules`,
+      status: "success",
+      durationMs: 0,
+      pipelineId: data.pipelineId,
+      slotId: data.slotId,
+      productType: data.productType,
+      appliedRules: data.appliedRules,
+    });
+  }
+
+  /**
+   * YENİ: Decision logu (Asset/Scenario/Prompt seçimleri)
+   * Gemini'nin karar detaylarını kaydeder
+   */
+  static async logDecision(data: {
+    stage: "asset-selection" | "scenario-selection" | "prompt-building";
+    pipelineId: string;
+    slotId?: string;
+    productType?: string;
+    model: string;
+    userPrompt: string;
+    response?: string;
+    status: AILogStatus;
+    error?: string;
+    durationMs: number;
+    decisionDetails: {
+      selectedAssets?: Record<string, {
+        id: string;
+        name: string;
+        filename: string;
+        type: string;
+        reason?: string;
+      }>;
+      selectedScenario?: {
+        id: string;
+        name: string;
+        description?: string;
+        includesHands: boolean;
+        handStyle?: string;
+        compositionId?: string;
+        compositionNotes?: string;
+        reason?: string;
+      };
+      promptDetails?: {
+        mainPrompt: string;
+        negativePrompt?: string;
+        customizations?: string[];
+        referenceImages?: Array<{
+          type: string;
+          filename: string;
+        }>;
+      };
+    };
+  }): Promise<string> {
+    return this.createLog({
+      provider: "gemini",
+      stage: data.stage,
+      model: data.model,
+      userPrompt: data.userPrompt,
+      response: data.response,
+      status: data.status,
+      error: data.error,
+      durationMs: data.durationMs,
+      pipelineId: data.pipelineId,
+      slotId: data.slotId,
+      productType: data.productType,
+      decisionDetails: data.decisionDetails,
+    });
+  }
+
+  /**
+   * YENİ: Detaylı Gemini Image Generation logu
+   * Retry bilgisi ve referans görselleri dahil
+   */
+  static async logGeminiDetailed(data: {
+    model: string;
+    userPrompt: string;
+    negativePrompt?: string;
+    status: AILogStatus;
+    error?: string;
+    cost?: number;
+    durationMs: number;
+    inputImageCount?: number;
+    outputImageGenerated?: boolean;
+    pipelineId?: string;
+    slotId?: string;
+    productType?: string;
+    retryInfo?: {
+      attemptNumber: number;
+      maxAttempts: number;
+      previousErrors?: string[];
+    };
+    decisionDetails?: {
+      promptDetails?: {
+        mainPrompt: string;
+        negativePrompt?: string;
+        customizations?: string[];
+        referenceImages?: Array<{
+          type: string;
+          filename: string;
+        }>;
+      };
+    };
+  }): Promise<string> {
+    return this.createLog({
+      provider: "gemini",
+      stage: "image-generation",
+      model: data.model,
+      userPrompt: data.userPrompt,
+      negativePrompt: data.negativePrompt,
+      status: data.status,
+      error: data.error,
+      cost: data.cost,
+      durationMs: data.durationMs,
+      inputImageCount: data.inputImageCount,
+      outputImageGenerated: data.outputImageGenerated,
+      pipelineId: data.pipelineId,
+      slotId: data.slotId,
+      productType: data.productType,
+      retryInfo: data.retryInfo,
+      decisionDetails: data.decisionDetails,
     });
   }
 
@@ -284,6 +479,87 @@ export class AILogService {
     } catch (error) {
       console.error("[AILogService] Error cleaning up logs:", error);
       return 0;
+    }
+  }
+
+  /**
+   * Visual Critic v2 için Pipeline Context al
+   * Tüm pipeline loglarını çeker ve yapılandırılmış context döner
+   */
+  static async getPipelineContext(pipelineId: string): Promise<{
+    configSnapshot?: AILog["configSnapshot"];
+    appliedRules?: AILog["appliedRules"];
+    assetSelection?: AILog["decisionDetails"];
+    scenarioSelection?: AILog["decisionDetails"];
+    promptDetails?: AILog["decisionDetails"];
+    imageGeneration?: {
+      retryInfo?: AILog["retryInfo"];
+      referenceImages?: Array<{ type: string; filename: string }>;
+    };
+    allLogs: AILog[];
+  } | null> {
+    try {
+      const db = getDb();
+      const snapshot = await db
+        .collection(this.COLLECTION)
+        .where("pipelineId", "==", pipelineId)
+        .orderBy("createdAt", "asc")
+        .limit(50)
+        .get();
+
+      if (snapshot.empty) {
+        console.log(`[AILogService] No logs found for pipeline: ${pipelineId}`);
+        return null;
+      }
+
+      const logs = snapshot.docs.map((doc) => doc.data() as AILog);
+
+      // Context'i yapılandır
+      const context: {
+        configSnapshot?: AILog["configSnapshot"];
+        appliedRules?: AILog["appliedRules"];
+        assetSelection?: AILog["decisionDetails"];
+        scenarioSelection?: AILog["decisionDetails"];
+        promptDetails?: AILog["decisionDetails"];
+        imageGeneration?: {
+          retryInfo?: AILog["retryInfo"];
+          referenceImages?: Array<{ type: string; filename: string }>;
+        };
+        allLogs: AILog[];
+      } = {
+        allLogs: logs,
+      };
+
+      // Her log'dan ilgili bilgileri çek
+      for (const log of logs) {
+        if (log.stage === "config-snapshot" && log.configSnapshot) {
+          context.configSnapshot = log.configSnapshot;
+        }
+        if (log.stage === "rules-applied" && log.appliedRules) {
+          context.appliedRules = log.appliedRules;
+        }
+        if (log.stage === "asset-selection" && log.decisionDetails) {
+          context.assetSelection = log.decisionDetails;
+        }
+        if (log.stage === "scenario-selection" && log.decisionDetails) {
+          context.scenarioSelection = log.decisionDetails;
+        }
+        if (log.stage === "prompt-building" && log.decisionDetails) {
+          context.promptDetails = log.decisionDetails;
+        }
+        if (log.stage === "image-generation") {
+          context.imageGeneration = {
+            retryInfo: log.retryInfo,
+            referenceImages: log.decisionDetails?.promptDetails?.referenceImages,
+          };
+        }
+      }
+
+      console.log(`[AILogService] Pipeline context retrieved: ${logs.length} logs`);
+      return context;
+    } catch (error) {
+      console.error("[AILogService] Error getting pipeline context:", error);
+      return null;
     }
   }
 }

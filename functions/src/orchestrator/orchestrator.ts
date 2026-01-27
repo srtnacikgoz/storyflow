@@ -10,6 +10,7 @@ import { TelegramService } from "../services/telegram";
 import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import { AIRulesService } from "../services/aiRulesService";
+import { AILogService } from "../services/aiLogService";
 import { getFixedAssets } from "../services/configService";
 import * as categoryService from "../services/categoryService";
 import {
@@ -188,6 +189,152 @@ export class Orchestrator {
           console.error(`[Orchestrator] Failed to load theme: ${themeError}`);
         }
       }
+
+      // ==========================================
+      // PRE-STAGE 3: CONFIG SNAPSHOT LOGGING (YENİ!)
+      // ==========================================
+      const timeOfDayForConfig = this.getTimeOfDay();
+      const moodForConfig = themeData?.mood || this.getMoodFromTime();
+
+      // Mood detaylarını al (eğer moodId varsa)
+      let moodDetails: { name?: string; keywords?: string[] } = {};
+      if (themeData?.moodId) {
+        try {
+          const moodDoc = await this.db.collection("moods").doc(themeData.moodId).get();
+          if (moodDoc.exists) {
+            const moodData = moodDoc.data();
+            moodDetails = {
+              name: moodData?.name,
+              keywords: moodData?.keywords || [],
+            };
+          }
+        } catch (e) {
+          console.warn(`[Orchestrator] Could not load mood details: ${e}`);
+        }
+      }
+
+      // Style detaylarını al (eğer styleId varsa)
+      let styleDetails: { name?: string; definition?: string } = {};
+      if (themeData?.styleId) {
+        try {
+          const styleDoc = await this.db.collection("styles").doc(themeData.styleId).get();
+          if (styleDoc.exists) {
+            const styleData = styleDoc.data();
+            styleDetails = {
+              name: styleData?.name,
+              definition: styleData?.definition,
+            };
+          }
+        } catch (e) {
+          console.warn(`[Orchestrator] Could not load style details: ${e}`);
+        }
+      }
+
+      // Config snapshot logla
+      await AILogService.logConfigSnapshot({
+        pipelineId,
+        slotId,
+        productType,
+        configSnapshot: {
+          themeId: effectiveThemeId,
+          themeName: themeData?.name,
+          themeColors: themeData?.colors || [],
+          moodId: themeData?.moodId,
+          moodName: moodDetails.name || moodForConfig,
+          moodKeywords: moodDetails.keywords,
+          styleId: themeData?.styleId,
+          styleName: styleDetails.name,
+          styleDefinition: styleDetails.definition,
+          timeOfDay: timeOfDayForConfig,
+          aspectRatio: overrideAspectRatio || "9:16",
+          scheduledHour,
+        },
+      });
+      console.log(`[Orchestrator] 📋 Config snapshot logged`);
+
+      // ==========================================
+      // PRE-STAGE 4: RULES APPLIED LOGGING (YENİ!)
+      // ==========================================
+
+      // User rules'ları topla
+      const userRulesForLog: Array<{
+        id: string;
+        category: string;
+        content: string;
+        ruleType: "do" | "dont";
+        applied: boolean;
+      }> = [];
+
+      // Aktif user rules varsa ekle
+      try {
+        const userRulesSnapshot = await this.db.collection("user-rules")
+          .where("isActive", "==", true)
+          .limit(50)
+          .get();
+
+        userRulesSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          userRulesForLog.push({
+            id: doc.id,
+            category: data.category || "general",
+            content: data.content || "",
+            ruleType: data.ruleType || "do",
+            applied: true,
+          });
+        });
+      } catch (e) {
+        console.warn(`[Orchestrator] Could not load user rules for logging: ${e}`);
+      }
+
+      // Bloklanmış asset'leri topla
+      const blockedAssetsForLog: Array<{
+        id: string;
+        name: string;
+        type: string;
+        reason: string;
+      }> = [];
+
+      // Bloklu senaryoları ekle
+      effectiveRules.blockedScenarios.forEach(scenarioId => {
+        blockedAssetsForLog.push({
+          id: scenarioId,
+          name: scenarioId,
+          type: "scenario",
+          reason: "Çeşitlilik kuralı - son kullanımdan bu yana bekleme süresi dolmadı",
+        });
+      });
+
+      // Bloklu masaları ekle
+      effectiveRules.blockedTables.forEach(tableId => {
+        blockedAssetsForLog.push({
+          id: tableId,
+          name: tableId,
+          type: "table",
+          reason: "Çeşitlilik kuralı - son kullanımdan bu yana bekleme süresi dolmadı",
+        });
+      });
+
+      // Feedback kurallarını topla
+      const feedbackRulesForLog: Array<{
+        type: string;
+        count: number;
+        note?: string;
+      }> = [
+          { type: "shouldIncludePet", count: effectiveRules.shouldIncludePet ? 1 : 0 },
+        ];
+
+      // Rules applied logla
+      await AILogService.logRulesApplied({
+        pipelineId,
+        slotId,
+        productType,
+        appliedRules: {
+          userRules: userRulesForLog,
+          blockedAssets: blockedAssetsForLog,
+          feedbackRules: feedbackRulesForLog,
+        },
+      });
+      console.log(`[Orchestrator] 📋 Rules applied logged: ${userRulesForLog.length} user rules, ${blockedAssetsForLog.length} blocked assets`);
 
       // ══════════════════════════════════════════════════════════════════════
       // INTERIOR-ONLY TEMA AKIŞI - Asset Selection ATLANIR
@@ -393,6 +540,71 @@ export class Orchestrator {
 
       console.log(`[Orchestrator] Asset selection complete - Pet: ${result.assetSelection!.includesPet}, Accessory: ${result.assetSelection!.includesAccessory || false}`);
 
+      // YENİ: Asset selection decision log
+      await AILogService.logDecision({
+        stage: "asset-selection",
+        pipelineId,
+        slotId,
+        productType,
+        model: "gemini-2.0-flash-001",
+        userPrompt: `Ürün: ${productType}, Zaman: ${timeOfDay}, Mood: ${mood}`,
+        response: assetResponse.data?.selectionReasoning || "",
+        status: "success",
+        durationMs: 0, // Gemini service içinde hesaplanıyor
+        decisionDetails: {
+          selectedAssets: {
+            product: {
+              id: result.assetSelection!.product?.id || "",
+              name: result.assetSelection!.product?.filename || "",
+              filename: result.assetSelection!.product?.filename || "",
+              type: "product",
+              reason: assetResponse.data?.selectionReasoning,
+            },
+            ...(result.assetSelection!.plate && {
+              plate: {
+                id: result.assetSelection!.plate.id,
+                name: result.assetSelection!.plate.filename,
+                filename: result.assetSelection!.plate.filename,
+                type: "plate",
+              },
+            }),
+            ...(result.assetSelection!.cup && {
+              cup: {
+                id: result.assetSelection!.cup.id,
+                name: result.assetSelection!.cup.filename,
+                filename: result.assetSelection!.cup.filename,
+                type: "cup",
+              },
+            }),
+            ...(result.assetSelection!.table && {
+              table: {
+                id: result.assetSelection!.table.id,
+                name: result.assetSelection!.table.filename,
+                filename: result.assetSelection!.table.filename,
+                type: "table",
+              },
+            }),
+            ...(result.assetSelection!.napkin && {
+              napkin: {
+                id: result.assetSelection!.napkin.id,
+                name: result.assetSelection!.napkin.filename,
+                filename: result.assetSelection!.napkin.filename,
+                type: "napkin",
+              },
+            }),
+            ...(result.assetSelection!.cutlery && {
+              cutlery: {
+                id: result.assetSelection!.cutlery.id,
+                name: result.assetSelection!.cutlery.filename,
+                filename: result.assetSelection!.cutlery.filename,
+                type: "cutlery",
+              },
+            }),
+          },
+        },
+      });
+      console.log(`[Orchestrator] 📋 Asset selection decision logged`);
+
       // ==========================================
       // STAGE 2: SCENARIO SELECTION
       // ==========================================
@@ -477,6 +689,32 @@ export class Orchestrator {
       status.completedStages.push("scenario_selection");
 
       console.log(`[Orchestrator] Scenario selected: ${result.scenarioSelection!.scenarioName}, isInterior: ${isInteriorScenario}`);
+
+      // YENİ: Scenario selection decision log
+      await AILogService.logDecision({
+        stage: "scenario-selection",
+        pipelineId,
+        slotId,
+        productType,
+        model: "gemini-2.0-flash-001",
+        userPrompt: `Ürün: ${productType}, Zaman: ${timeOfDay}, Asset: ${result.assetSelection!.product?.filename || "bilinmiyor"}`,
+        response: scenarioResponse.data?.reasoning || "",
+        status: "success",
+        durationMs: 0,
+        decisionDetails: {
+          selectedScenario: {
+            id: result.scenarioSelection!.scenarioId,
+            name: result.scenarioSelection!.scenarioName,
+            description: result.scenarioSelection!.scenarioDescription,
+            includesHands: result.scenarioSelection!.includesHands || false,
+            handStyle: result.scenarioSelection!.handStyle,
+            compositionId: result.scenarioSelection!.compositionId,
+            compositionNotes: result.scenarioSelection!.composition,
+            reason: scenarioResponse.data?.reasoning,
+          },
+        },
+      });
+      console.log(`[Orchestrator] 📋 Scenario selection decision logged`);
 
       // ══════════════════════════════════════════════════════════════════════
       // INTERIOR SENARYO AKIŞI - AI görsel üretimi ATLANIR
@@ -607,6 +845,27 @@ export class Orchestrator {
           faithfulness: 0.8,
         };
         status.completedStages.push("prompt_optimization");
+
+        // YENİ: Prompt building decision log
+        await AILogService.logDecision({
+          stage: "prompt-building",
+          pipelineId,
+          slotId,
+          productType,
+          model: "gemini-2.0-flash-001",
+          userPrompt: `Base Prompt: ${basePromptResult.mainPrompt.substring(0, 200)}...`,
+          response: JSON.stringify({ customizations: promptResponse.data.customizations }),
+          status: "success",
+          durationMs: 0,
+          decisionDetails: {
+            promptDetails: {
+              mainPrompt: result.optimizedPrompt.mainPrompt,
+              negativePrompt: result.optimizedPrompt.negativePrompt,
+              customizations: result.optimizedPrompt.customizations,
+            },
+          },
+        });
+        console.log(`[Orchestrator] 📋 Prompt building decision logged`);
 
         // ==========================================
         // STAGE 4: IMAGE GENERATION (with retry)
@@ -779,6 +1038,54 @@ export class Orchestrator {
         // Görseli Storage'a kaydet
         const storageUrl = await this.saveImageToStorage(generatedImage.imageBase64, generatedImage.mimeType);
         result.generatedImage.storageUrl = storageUrl;
+
+        // YENİ: Image generation detaylı log
+        const referenceImagesList: Array<{ type: string; filename: string }> = [];
+        if (result.assetSelection!.product) {
+          referenceImagesList.push({ type: "product", filename: result.assetSelection!.product.filename });
+        }
+        if (result.assetSelection!.plate) {
+          referenceImagesList.push({ type: "plate", filename: result.assetSelection!.plate.filename });
+        }
+        if (result.assetSelection!.table) {
+          referenceImagesList.push({ type: "table", filename: result.assetSelection!.table.filename });
+        }
+        if (result.assetSelection!.cup) {
+          referenceImagesList.push({ type: "cup", filename: result.assetSelection!.cup.filename });
+        }
+        if (result.assetSelection!.napkin) {
+          referenceImagesList.push({ type: "napkin", filename: result.assetSelection!.napkin.filename });
+        }
+        if (result.assetSelection!.cutlery) {
+          referenceImagesList.push({ type: "cutlery", filename: result.assetSelection!.cutlery.filename });
+        }
+
+        await AILogService.logGeminiDetailed({
+          model: generatedImage.model,
+          userPrompt: result.optimizedPrompt!.mainPrompt,
+          negativePrompt: result.optimizedPrompt!.negativePrompt,
+          status: "success",
+          cost: generatedImage.cost,
+          durationMs: 0,
+          inputImageCount: referenceImagesList.length,
+          outputImageGenerated: true,
+          pipelineId,
+          slotId,
+          productType,
+          retryInfo: {
+            attemptNumber: generatedImage.attemptNumber,
+            maxAttempts: this.config.maxRetries,
+          },
+          decisionDetails: {
+            promptDetails: {
+              mainPrompt: result.optimizedPrompt!.mainPrompt,
+              negativePrompt: result.optimizedPrompt!.negativePrompt,
+              customizations: result.optimizedPrompt!.customizations,
+              referenceImages: referenceImagesList,
+            },
+          },
+        });
+        console.log(`[Orchestrator] 📋 Image generation logged with ${referenceImagesList.length} reference images`);
       } // else bloğu sonu (normal akış - AI görsel üretimi)
 
       // ==========================================

@@ -46,6 +46,8 @@ import type {
   PromptStudioConfig,
   PromptTemplate,
   PromptStageId,
+  VisualCriticRequest,
+  VisualCriticResponse,
 } from "../types";
 
 // Firebase Functions base URL
@@ -1945,6 +1947,20 @@ class ApiService {
     await this.fetch<{ success: boolean }>(`deleteStyle?id=${id}`, {
       method: "DELETE",
     });
+  }
+
+  /**
+   * Görsel Analizi (Visual Interpreter)
+   */
+  async analyzeImage(data: VisualCriticRequest): Promise<VisualCriticResponse> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: VisualCriticResponse;
+    }>("analyzeImage", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return response.data;
   }
 }
 

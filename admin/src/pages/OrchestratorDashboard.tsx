@@ -10,6 +10,7 @@ import type {
   IssueCategoryId,
 } from "../types";
 import { ISSUE_CATEGORIES } from "../types";
+import VisualCriticModal from "../components/VisualCriticModal";
 
 // Ürün tipi etiketleri
 const PRODUCT_LABELS: Record<OrchestratorProductType, string> = {
@@ -123,6 +124,16 @@ export default function OrchestratorDashboard() {
   const [reportCategory, setReportCategory] = useState<IssueCategoryId>("holding-mismatch");
   const [reportNote, setReportNote] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+
+  // Visual Critic (Analiz)
+  const [showCriticModal, setShowCriticModal] = useState(false);
+  const [criticContext, setCriticContext] = useState<{
+    imagePath: string;
+    prompt: string;
+    mood?: string;
+    product?: string;
+    pipelineId?: string
+  } | null>(null);
 
   // İşlem durumları
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -742,6 +753,27 @@ export default function OrchestratorDashboard() {
                     </button>
                   )}
 
+
+
+                  {/* Analiz Et (Visual Critic) */}
+                  {selectedSlot.pipelineResult?.generatedImage && (
+                    <button
+                      onClick={() => {
+                        setCriticContext({
+                          imagePath: selectedSlot.pipelineResult?.generatedImage?.storageUrl || "",
+                          prompt: selectedSlot.pipelineResult?.optimizedPrompt?.mainPrompt || "",
+                          mood: selectedSlot.pipelineResult?.scenarioSelection?.themeName,
+                          product: selectedSlot.pipelineResult?.assetSelection?.product?.subType,
+                          pipelineId: selectedSlot.pipelineResult?.id
+                        });
+                        setShowCriticModal(true);
+                      }}
+                      className="w-full btn-secondary text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                    >
+                      👁️ Analiz Et (Visual Critic)
+                    </button>
+                  )}
+
                   {/* Sorun Bildir butonu - sadece görsel üretilmişse göster */}
                   {selectedSlot.pipelineResult?.generatedImage && (
                     <button
@@ -828,6 +860,15 @@ export default function OrchestratorDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Visual Critic Modal */}
+      {showCriticModal && criticContext && (
+        <VisualCriticModal
+          isOpen={showCriticModal}
+          onClose={() => setShowCriticModal(false)}
+          {...criticContext}
+        />
       )}
 
       {/* Header */}

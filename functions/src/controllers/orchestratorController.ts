@@ -18,6 +18,9 @@
  */
 
 export {
+  // Visual Critic
+
+
   // Asset Controller
   listAssets,
   createAsset,
@@ -127,8 +130,9 @@ export {
   getSubTypeIdBySlug,
   validateSubTypeId,
   // Migration endpoints
-  migrateCategoriesToIdBased,
-  migrateAssetsToIdBased,
   migrateTimeSlotRulesToIdBased,
   runFullMigration,
 } from "./orchestrator";
+
+// Direct export for Visual Critic (to avoid export issues)
+export { analyzeImage } from "../orchestrator/visualCriticController";

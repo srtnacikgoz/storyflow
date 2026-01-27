@@ -5,4 +5,5 @@
 
 export { Orchestrator } from "./orchestrator";
 export { ClaudeService } from "./claudeService";
+export * from "./visualCriticController";
 export * from "./types";

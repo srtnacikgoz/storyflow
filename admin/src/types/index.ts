@@ -723,15 +723,94 @@ export type AIProvider = "claude" | "gemini";
 
 // AI Log aşaması (orchestrator pipeline aşamaları)
 export type AILogStage =
-  | "asset-selection"      // Claude: Asset seçimi
-  | "scenario-selection"   // Claude: Senaryo seçimi
-  | "prompt-optimization"  // Claude: Prompt optimizasyonu
-  | "image-generation"     // Gemini: Görsel üretimi
-  | "quality-control"      // Claude: Kalite kontrolü
-  | "content-generation";  // Claude: Caption üretimi
+  | "config-snapshot"        // Pipeline konfigürasyon snapshot'ı
+  | "rules-applied"          // Uygulanan kurallar
+  | "asset-selection"        // Asset seçimi
+  | "scenario-selection"     // Senaryo seçimi
+  | "prompt-building"        // Prompt hazırlama
+  | "prompt-optimization"    // Prompt optimizasyonu (eski)
+  | "image-generation"       // Görsel üretimi
+  | "quality-control"        // Kalite kontrolü
+  | "content-generation"     // Caption üretimi
+  | "visual-critic";         // Visual Critic analizi
 
 // AI Log durumu
 export type AILogStatus = "success" | "error" | "blocked";
+
+// Config Snapshot tipi
+export interface ConfigSnapshot {
+  themeId?: string;
+  themeName?: string;
+  themeColors?: string[];
+  moodId?: string;
+  moodName?: string;
+  moodKeywords?: string[];
+  styleId?: string;
+  styleName?: string;
+  styleDefinition?: string;
+  timeOfDay?: string;
+  aspectRatio?: string;
+  scheduledHour?: number;
+}
+
+// Applied Rules tipi
+export interface AppliedRules {
+  userRules?: Array<{
+    id: string;
+    category: string;
+    content: string;
+    ruleType: "do" | "dont";
+    applied: boolean;
+  }>;
+  blockedAssets?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    reason: string;
+  }>;
+  feedbackRules?: Array<{
+    type: string;
+    count: number;
+    note?: string;
+  }>;
+}
+
+// Decision Details tipi
+export interface DecisionDetails {
+  selectedAssets?: Record<string, {
+    id: string;
+    name: string;
+    filename: string;
+    type: string;
+    reason?: string;
+  }>;
+  selectedScenario?: {
+    id: string;
+    name: string;
+    description?: string;
+    includesHands: boolean;
+    handStyle?: string;
+    compositionId?: string;
+    compositionNotes?: string;
+    reason?: string;
+  };
+  promptDetails?: {
+    mainPrompt: string;
+    negativePrompt?: string;
+    customizations?: string[];
+    referenceImages?: Array<{
+      type: string;
+      filename: string;
+    }>;
+  };
+}
+
+// Retry Info tipi
+export interface RetryInfo {
+  attemptNumber: number;
+  maxAttempts: number;
+  previousErrors?: string[];
+}
 
 // AI Log kaydı
 export interface AILog {
@@ -768,6 +847,12 @@ export interface AILog {
   // Görsel bilgileri (Gemini için)
   inputImageCount?: number;   // Input görsel sayısı
   outputImageGenerated?: boolean;
+
+  // YENİ: Pipeline Şeffaflık alanları
+  configSnapshot?: ConfigSnapshot;
+  appliedRules?: AppliedRules;
+  decisionDetails?: DecisionDetails;
+  retryInfo?: RetryInfo;
 
   // Meta
   createdAt: number;        // Timestamp
@@ -1087,4 +1172,24 @@ export interface Style {
   order: number;       // Sıralama
   createdAt: number;
   updatedAt: number;
+}
+
+// ==========================================
+// Visual Interpreter (Visual Critic)
+// ==========================================
+
+export interface VisualCriticRequest {
+  imagePath: string; // storageUrl
+  prompt: string;
+  mood?: string;
+  product?: string;
+  pipelineId?: string;
+}
+
+export interface VisualCriticResponse {
+  score: number;
+  critique: string;
+  issues: string[];
+  suggestions: string[];
+  refined_prompt?: string;
 }

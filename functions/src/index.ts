@@ -12,6 +12,7 @@ export * from "./controllers/healthController";
 export * from "./controllers/captionTemplateController";
 export * from "./controllers/orchestratorController";
 export * from "./controllers/aiLogController";
+export * from "./orchestrator/visualCriticController"; // Visual Critic
 export * from "./controllers/moodController";
 export * from "./controllers/styleController";
 

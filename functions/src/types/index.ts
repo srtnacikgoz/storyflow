@@ -16,17 +16,104 @@ export type AIProvider = "claude" | "gemini";
  * AI Log Stage - Orchestrator pipeline aşamaları
  */
 export type AILogStage =
-  | "asset-selection"    // Claude: Asset seçimi
-  | "scenario-selection" // Claude: Senaryo seçimi
-  | "prompt-optimization"// Claude: Prompt optimizasyonu
-  | "image-generation"   // Gemini: Görsel üretimi
-  | "quality-control"    // Claude: Kalite kontrolü
-  | "content-generation";// Claude: Caption üretimi
+  | "config-snapshot"     // YENİ: Pipeline başındaki config durumu
+  | "rules-applied"       // YENİ: Uygulanan kurallar ve bloklamalar
+  | "asset-selection"     // Asset seçimi (Claude/Gemini)
+  | "scenario-selection"  // Senaryo seçimi (Claude/Gemini)
+  | "prompt-optimization" // Prompt optimizasyonu (Claude/Gemini)
+  | "prompt-building"     // YENİ: Prompt oluşturma (Gemini)
+  | "image-generation"    // Görsel üretimi (Gemini)
+  | "quality-control"     // Kalite kontrolü (Claude)
+  | "visual-critic"       // YENİ: Visual Critic analizi
+  | "content-generation"; // Caption üretimi (Claude)
 
 /**
  * AI Log Status
  */
 export type AILogStatus = "success" | "error" | "blocked";
+
+/**
+ * Config Snapshot (config-snapshot stage için)
+ */
+export interface ConfigSnapshot {
+  themeId?: string;
+  themeName?: string;
+  themeColors?: string[];
+  moodId?: string;
+  moodName?: string;
+  moodKeywords?: string[];
+  styleId?: string;
+  styleName?: string;
+  styleDefinition?: string;
+  timeOfDay?: string;
+  aspectRatio?: string;
+  scheduledHour?: number;
+}
+
+/**
+ * Applied Rules (rules-applied stage için)
+ */
+export interface AppliedRules {
+  userRules?: Array<{
+    id: string;
+    category: string;
+    content: string;
+    ruleType: "do" | "dont";
+    applied: boolean;
+  }>;
+  blockedAssets?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    reason: string;
+  }>;
+  feedbackRules?: Array<{
+    type: string;
+    count: number;
+    note?: string;
+  }>;
+}
+
+/**
+ * Decision Details (asset/scenario/prompt stages için)
+ */
+export interface DecisionDetails {
+  selectedAssets?: Record<string, {
+    id: string;
+    name: string;
+    filename: string;
+    type: string;
+    reason?: string;
+  }>;
+  selectedScenario?: {
+    id: string;
+    name: string;
+    description?: string;
+    includesHands: boolean;
+    handStyle?: string;
+    compositionId?: string;
+    compositionNotes?: string;
+    reason?: string;
+  };
+  promptDetails?: {
+    mainPrompt: string;
+    negativePrompt?: string;
+    customizations?: string[];
+    referenceImages?: Array<{
+      type: string;
+      filename: string;
+    }>;
+  };
+}
+
+/**
+ * Retry Info (image-generation için)
+ */
+export interface RetryInfo {
+  attemptNumber: number;
+  maxAttempts: number;
+  previousErrors?: string[];
+}
 
 /**
  * AI Log Entry - Her AI çağrısının kaydı
@@ -65,6 +152,18 @@ export interface AILog {
   // Görsel bilgileri (Gemini için)
   inputImageCount?: number;   // Input görsel sayısı
   outputImageGenerated?: boolean;
+
+  // YENİ: Config Context
+  configSnapshot?: ConfigSnapshot;
+
+  // YENİ: Applied Rules
+  appliedRules?: AppliedRules;
+
+  // YENİ: Decision Details
+  decisionDetails?: DecisionDetails;
+
+  // YENİ: Retry bilgisi
+  retryInfo?: RetryInfo;
 
   // Meta
   createdAt: number;        // Timestamp

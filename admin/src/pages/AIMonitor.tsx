@@ -31,11 +31,10 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
   return (
     <button
       onClick={handleCopy}
-      className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-all ${
-        copied
-          ? "bg-green-100 text-green-700"
-          : "bg-white/80 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-      } ${className}`}
+      className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-all ${copied
+        ? "bg-green-100 text-green-700"
+        : "bg-white/80 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+        } ${className}`}
       title={copied ? "Kopyalandı!" : "Kopyala"}
     >
       {copied ? (
@@ -54,32 +53,44 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
 
 // Stage renkleri
 const STAGE_COLORS: Record<AILogStage, string> = {
+  "config-snapshot": "bg-slate-100 text-slate-800",
+  "rules-applied": "bg-orange-100 text-orange-800",
   "asset-selection": "bg-blue-100 text-blue-800",
   "scenario-selection": "bg-purple-100 text-purple-800",
+  "prompt-building": "bg-cyan-100 text-cyan-800",
   "prompt-optimization": "bg-indigo-100 text-indigo-800",
   "image-generation": "bg-green-100 text-green-800",
   "quality-control": "bg-yellow-100 text-yellow-800",
   "content-generation": "bg-pink-100 text-pink-800",
+  "visual-critic": "bg-rose-100 text-rose-800",
 };
 
 // Stage Türkçe isimleri
 const STAGE_LABELS: Record<AILogStage, string> = {
-  "asset-selection": "Asset Seçimi",
-  "scenario-selection": "Senaryo Seçimi",
-  "prompt-optimization": "Prompt Optimizasyonu",
-  "image-generation": "Görsel Üretimi",
-  "quality-control": "Kalite Kontrolü",
-  "content-generation": "İçerik Üretimi",
+  "config-snapshot": "📋 Config Snapshot",
+  "rules-applied": "📜 Kurallar",
+  "asset-selection": "🖼️ Asset Seçimi",
+  "scenario-selection": "🎬 Senaryo Seçimi",
+  "prompt-building": "✍️ Prompt Hazırlama",
+  "prompt-optimization": "⚡ Prompt Optimizasyonu",
+  "image-generation": "🎨 Görsel Üretimi",
+  "quality-control": "✅ Kalite Kontrolü",
+  "content-generation": "📝 İçerik Üretimi",
+  "visual-critic": "🔍 Visual Critic",
 };
 
 // Stage sırası (pipeline akışına göre)
 const STAGE_ORDER: AILogStage[] = [
+  "config-snapshot",
+  "rules-applied",
   "asset-selection",
   "scenario-selection",
+  "prompt-building",
   "prompt-optimization",
   "image-generation",
   "quality-control",
   "content-generation",
+  "visual-critic",
 ];
 
 // Status renkleri
@@ -389,13 +400,12 @@ export default function AIMonitor() {
                           <div key={log.id} className="relative flex items-start gap-4 pl-8">
                             {/* Timeline nokta */}
                             <div
-                              className={`absolute left-1.5 w-3 h-3 rounded-full border-2 border-white ${
-                                log.status === "success"
-                                  ? "bg-green-500"
-                                  : log.status === "error"
+                              className={`absolute left-1.5 w-3 h-3 rounded-full border-2 border-white ${log.status === "success"
+                                ? "bg-green-500"
+                                : log.status === "error"
                                   ? "bg-red-500"
                                   : "bg-orange-500"
-                              }`}
+                                }`}
                               style={{ top: "4px" }}
                             />
 
@@ -412,11 +422,10 @@ export default function AIMonitor() {
 
                                 {/* Provider */}
                                 <span
-                                  className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
-                                    log.provider === "claude"
-                                      ? "bg-purple-100 text-purple-800"
-                                      : "bg-green-100 text-green-800"
-                                  }`}
+                                  className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${log.provider === "claude"
+                                    ? "bg-purple-100 text-purple-800"
+                                    : "bg-green-100 text-green-800"
+                                    }`}
                                 >
                                   {log.provider === "claude" ? "Claude" : "Gemini"}
                                 </span>
@@ -525,35 +534,32 @@ export default function AIMonitor() {
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        log.provider === "claude"
-                          ? "bg-purple-100 text-purple-800"
-                          : "bg-green-100 text-green-800"
-                      }`}
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${log.provider === "claude"
+                        ? "bg-purple-100 text-purple-800"
+                        : "bg-green-100 text-green-800"
+                        }`}
                     >
                       {log.provider === "claude" ? "Claude" : "Gemini"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        STAGE_COLORS[log.stage]
-                      }`}
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${STAGE_COLORS[log.stage]
+                        }`}
                     >
                       {STAGE_LABELS[log.stage]}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        STATUS_COLORS[log.status]
-                      }`}
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${STATUS_COLORS[log.status]
+                        }`}
                     >
                       {log.status === "success"
                         ? "Başarılı"
                         : log.status === "error"
-                        ? "Hata"
-                        : "Engellendi"}
+                          ? "Hata"
+                          : "Engellendi"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
@@ -662,21 +668,19 @@ export default function AIMonitor() {
             <div className="flex rounded-lg border border-gray-200 overflow-hidden">
               <button
                 onClick={() => setViewMode("grouped")}
-                className={`px-3 py-2 text-sm font-medium transition-colors ${
-                  viewMode === "grouped"
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
-                }`}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${viewMode === "grouped"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
               >
                 Gruplu
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`px-3 py-2 text-sm font-medium transition-colors ${
-                  viewMode === "list"
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
-                }`}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${viewMode === "list"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
               >
                 Liste
               </button>
@@ -857,6 +861,207 @@ export default function AIMonitor() {
                       <p className="font-mono text-sm bg-gray-50 px-2 py-1 rounded">{selectedLog.slotId}</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* YENİ: Config Snapshot Kartı */}
+              {selectedLog.configSnapshot && (
+                <div className="bg-gradient-to-r from-slate-50 to-gray-50 rounded-xl p-4 border border-slate-200">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                    📋 Pipeline Konfigürasyonu
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {selectedLog.configSnapshot.themeName && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <p className="text-xs text-gray-500">Tema</p>
+                        <p className="font-medium text-gray-800">{selectedLog.configSnapshot.themeName}</p>
+                        {selectedLog.configSnapshot.themeColors && selectedLog.configSnapshot.themeColors.length > 0 && (
+                          <div className="flex gap-1 mt-1">
+                            {selectedLog.configSnapshot.themeColors.slice(0, 4).map((color, idx) => (
+                              <div key={idx} className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: color }} title={color} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {selectedLog.configSnapshot.moodName && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <p className="text-xs text-gray-500">Mood</p>
+                        <p className="font-medium text-gray-800">{selectedLog.configSnapshot.moodName}</p>
+                        {selectedLog.configSnapshot.moodKeywords && selectedLog.configSnapshot.moodKeywords.length > 0 && (
+                          <p className="text-xs text-gray-500 mt-1">{selectedLog.configSnapshot.moodKeywords.slice(0, 3).join(", ")}</p>
+                        )}
+                      </div>
+                    )}
+                    {selectedLog.configSnapshot.styleName && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <p className="text-xs text-gray-500">Stil</p>
+                        <p className="font-medium text-gray-800">{selectedLog.configSnapshot.styleName}</p>
+                      </div>
+                    )}
+                    {selectedLog.configSnapshot.timeOfDay && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <p className="text-xs text-gray-500">Zaman</p>
+                        <p className="font-medium text-gray-800">{selectedLog.configSnapshot.timeOfDay}</p>
+                      </div>
+                    )}
+                    {selectedLog.configSnapshot.aspectRatio && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <p className="text-xs text-gray-500">Oran</p>
+                        <p className="font-medium text-gray-800">{selectedLog.configSnapshot.aspectRatio}</p>
+                      </div>
+                    )}
+                    {selectedLog.configSnapshot.scheduledHour !== undefined && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <p className="text-xs text-gray-500">Planlanan Saat</p>
+                        <p className="font-medium text-gray-800">{selectedLog.configSnapshot.scheduledHour}:00</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* YENİ: Applied Rules Kartı */}
+              {selectedLog.appliedRules && (
+                <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
+                  <h3 className="text-sm font-semibold text-orange-700 mb-3 flex items-center gap-2">
+                    📜 Uygulanan Kurallar
+                  </h3>
+                  <div className="space-y-3">
+                    {/* User Rules */}
+                    {selectedLog.appliedRules.userRules && selectedLog.appliedRules.userRules.length > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">Kullanıcı Kuralları ({selectedLog.appliedRules.userRules.length})</p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedLog.appliedRules.userRules.slice(0, 5).map((rule, idx) => (
+                            <span key={idx} className={`px-2 py-1 text-xs rounded-full ${rule.ruleType === "do" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                              {rule.ruleType === "do" ? "✓" : "✗"} {rule.content.substring(0, 30)}...
+                            </span>
+                          ))}
+                          {selectedLog.appliedRules.userRules.length > 5 && (
+                            <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                              +{selectedLog.appliedRules.userRules.length - 5} daha
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Blocked Assets */}
+                    {selectedLog.appliedRules.blockedAssets && selectedLog.appliedRules.blockedAssets.length > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">Bloklanmış ({selectedLog.appliedRules.blockedAssets.length})</p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedLog.appliedRules.blockedAssets.map((asset, idx) => (
+                            <span key={idx} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded-full border border-red-200" title={asset.reason}>
+                              🚫 {asset.name} ({asset.type})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* YENİ: Decision Details Kartı */}
+              {selectedLog.decisionDetails && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                  <h3 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
+                    🎯 AI Kararları
+                  </h3>
+
+                  {/* Selected Assets */}
+                  {selectedLog.decisionDetails.selectedAssets && Object.keys(selectedLog.decisionDetails.selectedAssets).length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs text-gray-500 mb-2">Seçilen Asset'ler</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {Object.entries(selectedLog.decisionDetails.selectedAssets).map(([key, asset]) => (
+                          <div key={key} className="bg-white rounded-lg p-2 shadow-sm border border-gray-100">
+                            <p className="text-xs text-gray-400 capitalize">{asset.type}</p>
+                            <p className="text-sm font-medium text-gray-800 truncate">{asset.filename}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selected Scenario */}
+                  {selectedLog.decisionDetails.selectedScenario && (
+                    <div className="mb-4">
+                      <p className="text-xs text-gray-500 mb-2">Seçilen Senaryo</p>
+                      <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                        <p className="font-medium text-gray-800">{selectedLog.decisionDetails.selectedScenario.name}</p>
+                        {selectedLog.decisionDetails.selectedScenario.description && (
+                          <p className="text-xs text-gray-500 mt-1">{selectedLog.decisionDetails.selectedScenario.description}</p>
+                        )}
+                        <div className="flex gap-3 mt-2">
+                          <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">
+                            El: {selectedLog.decisionDetails.selectedScenario.includesHands ? `Var (${selectedLog.decisionDetails.selectedScenario.handStyle || "default"})` : "Yok"}
+                          </span>
+                          {selectedLog.decisionDetails.selectedScenario.compositionId && (
+                            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">
+                              Kompozisyon: {selectedLog.decisionDetails.selectedScenario.compositionId}
+                            </span>
+                          )}
+                        </div>
+                        {selectedLog.decisionDetails.selectedScenario.reason && (
+                          <p className="text-xs text-blue-600 mt-2 italic">"{selectedLog.decisionDetails.selectedScenario.reason}"</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prompt Details */}
+                  {selectedLog.decisionDetails.promptDetails && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-2">Prompt Detayları</p>
+                      {selectedLog.decisionDetails.promptDetails.referenceImages && selectedLog.decisionDetails.promptDetails.referenceImages.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {selectedLog.decisionDetails.promptDetails.referenceImages.map((img, idx) => (
+                            <span key={idx} className="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">
+                              📷 {img.type}: {img.filename}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {selectedLog.decisionDetails.promptDetails.customizations && selectedLog.decisionDetails.promptDetails.customizations.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {selectedLog.decisionDetails.promptDetails.customizations.map((cust, idx) => (
+                            <span key={idx} className="px-2 py-0.5 text-xs bg-cyan-100 text-cyan-700 rounded-full">
+                              ⚙️ {cust}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* YENİ: Retry Info Kartı */}
+              {selectedLog.retryInfo && (
+                <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl p-4 border border-amber-200">
+                  <h3 className="text-sm font-semibold text-amber-700 mb-2 flex items-center gap-2">
+                    🔄 Retry Bilgisi
+                  </h3>
+                  <div className="flex items-center gap-4">
+                    <div className="bg-white rounded-lg px-4 py-2 shadow-sm">
+                      <p className="text-xs text-gray-500">Deneme</p>
+                      <p className="text-lg font-bold text-amber-600">
+                        {selectedLog.retryInfo.attemptNumber} / {selectedLog.retryInfo.maxAttempts}
+                      </p>
+                    </div>
+                    {selectedLog.retryInfo.previousErrors && selectedLog.retryInfo.previousErrors.length > 0 && (
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-1">Önceki Hatalar</p>
+                        <div className="space-y-1">
+                          {selectedLog.retryInfo.previousErrors.map((err, idx) => (
+                            <p key={idx} className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">{err}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
