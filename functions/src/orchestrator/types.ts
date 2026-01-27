@@ -1640,3 +1640,21 @@ export interface FirestoreFixedAssetsConfig {
   updatedAt: number;
   updatedBy?: string;
 }
+
+// ==========================================
+// STYLE TYPES
+// ==========================================
+
+/**
+ * Asset Stili
+ * Dinamik stil tanımları (Modern, Rustic, Minimal vb.)
+ */
+export interface Style {
+  id: string;          // slug (örn: "modern", "rustic")
+  displayName: string; // Görünen ad (örn: "Modern", "Rustik")
+  description?: string;// Açıklama
+  isActive: boolean;
+  order: number;       // Sıralama
+  createdAt: number;
+  updatedAt: number;
+}

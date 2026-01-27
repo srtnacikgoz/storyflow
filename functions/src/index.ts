@@ -13,6 +13,7 @@ export * from "./controllers/captionTemplateController";
 export * from "./controllers/orchestratorController";
 export * from "./controllers/aiLogController";
 export * from "./controllers/moodController";
+export * from "./controllers/styleController";
 
 // Export Schedulers
 export * from "./schedulers/scheduledPostProcessor"; // Mevcut scheduler (Paylaşım)

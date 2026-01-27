@@ -9,18 +9,18 @@
  * 4. Update queue status
  */
 
-import {Photo} from "../types";
-import {QueueService, InstagramService, UsageService} from "../services";
+import { Photo } from "../types";
+import { QueueService, InstagramService, UsageService } from "../services";
 // GeminiService: Dynamic import - startup timeout önlemi
 // import {GeminiService} from "../services/gemini"; -- KULLANILMIYOR
-import {getConfig} from "../config/environment";
-import {buildPrompt} from "../prompts";
-import {getStorage} from "firebase-admin/storage";
+import { getConfig } from "../config/environment";
+import { buildPrompt } from "../prompts";
+import { getStorage } from "firebase-admin/storage";
 // Node 20+ built-in fetch kullanılıyor - node-fetch'e gerek yok
 
 // Gemini lazy loader - sadece kullanıldığında yüklenir
 async function getGeminiService() {
-  const {GeminiService} = await import("../services/gemini");
+  const { GeminiService } = await import("../services/gemini");
   return GeminiService;
 }
 
@@ -116,18 +116,18 @@ export async function processNextItem(
         console.log("[Orchestrator] Style:", item.styleVariant);
         console.log("[Orchestrator] Faithfulness:", item.faithfulness);
 
-        // Model seçimi: gemini-flash → gemini-2.5-flash-image, gemini-pro → gemini-3-pro-image-preview
-        const modelMap: Record<string, "gemini-2.5-flash-image" | "gemini-3-pro-image-preview"> = {
-          "gemini-flash": "gemini-2.5-flash-image",
+        // Model seçimi: Gemini 3.0 serisine göre
+        const modelMap: Record<string, "gemini-3-flash-preview" | "gemini-3-pro-image-preview"> = {
+          "gemini-flash": "gemini-3-flash-preview",
           "gemini-pro": "gemini-3-pro-image-preview",
         };
-        const selectedModel = modelMap[item.aiModel] || "gemini-2.5-flash-image";
+        const selectedModel = modelMap[item.aiModel] || "gemini-3-pro-image-preview";
 
         // GeminiService'i dynamic import ile yükle (startup timeout önlemi)
         const GeminiServiceClass = await getGeminiService();
         const gemini = new GeminiServiceClass({
           apiKey: config.gemini.apiKey,
-          model: selectedModel,
+          imageModel: selectedModel,
         });
 
         const usage = new UsageService();
@@ -423,16 +423,17 @@ export async function processWithApproval(
       try {
         console.log("[Orchestrator] Starting Gemini enhancement...");
 
-        const modelMap: Record<string, "gemini-2.5-flash-image" | "gemini-3-pro-image-preview"> = {
-          "gemini-flash": "gemini-2.5-flash-image",
+        // Model seçimi: Gemini 3.0 serisine göre
+        const modelMap: Record<string, "gemini-3-flash-preview" | "gemini-3-pro-image-preview"> = {
+          "gemini-flash": "gemini-3-flash-preview",
           "gemini-pro": "gemini-3-pro-image-preview",
         };
-        const selectedModel = modelMap[item.aiModel] || "gemini-2.5-flash-image";
+        const selectedModel = modelMap[item.aiModel] || "gemini-3-pro-image-preview";
 
         const GeminiServiceClass = await getGeminiService();
         const gemini = new GeminiServiceClass({
           apiKey: config.gemini.apiKey,
-          model: selectedModel,
+          imageModel: selectedModel,
         });
 
         const usage = new UsageService();
@@ -510,7 +511,7 @@ export async function processWithApproval(
         const file = bucket.file(enhancedPath);
 
         await file.save(Buffer.from(result.imageBase64, "base64"), {
-          metadata: {contentType: result.mimeType},
+          metadata: { contentType: result.mimeType },
         });
 
         await file.makePublic();
@@ -538,8 +539,8 @@ export async function processWithApproval(
     console.log("[Orchestrator] Sending to Telegram for approval...");
 
     // Lazy import TelegramService
-    const {TelegramService} = await import("../services/telegram");
-    const {getTelegramConfig} = await import("../config/environment");
+    const { TelegramService } = await import("../services/telegram");
+    const { getTelegramConfig } = await import("../config/environment");
 
     const telegramConfig = getTelegramConfig();
     const telegram = new TelegramService(telegramConfig);

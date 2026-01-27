@@ -1,7 +1,9 @@
+
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { useLoading } from "../contexts/LoadingContext";
-import type { CategoriesConfig, CategorySubType, DynamicCategory, DynamicCategoryType, EatingMethod } from "../types";
+import type { CategorySubType, DynamicCategory, DynamicCategoryType, EatingMethod } from "../types";
+import { PageGuide } from "../components/PageGuide"; // New Import
 
 // Yeme şekli seçenekleri
 const EATING_METHOD_OPTIONS: { value: EatingMethod; label: string }[] = [
@@ -15,7 +17,7 @@ const EATING_METHOD_OPTIONS: { value: EatingMethod; label: string }[] = [
 export default function Categories() {
   const { startLoading, stopLoading } = useLoading();
   // State
-  const [config, setConfig] = useState<CategoriesConfig | null>(null);
+  const [config, setConfig] = useState<{ categories: DynamicCategory[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -281,11 +283,11 @@ export default function Categories() {
 
     // Alt kategorisi varsa uyar
     if (category.subTypes.length > 0) {
-      if (!confirm(`Bu kategorinin ${category.subTypes.length} alt kategorisi var. Silmek istediğinize emin misiniz?`)) {
+      if (!confirm(`Bu kategorinin ${category.subTypes.length} alt kategorisi var.Silmek istediğinize emin misiniz?`)) {
         return;
       }
     } else {
-      if (!confirm(`"${category.displayName}" kategorisini silmek istediğinize emin misiniz?`)) {
+      if (!confirm(`"${category.displayName}" kategorisini silmek istediğinize emin misiniz ? `)) {
         return;
       }
     }
@@ -359,9 +361,8 @@ export default function Categories() {
             {config?.categories.map((category) => (
               <div
                 key={category.type}
-                className={`group px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors ${
-                  selectedCategory === category.type ? "bg-amber-50 border-r-2 border-amber-600" : ""
-                }`}
+                className={`group px - 4 py - 3 flex items - center justify - between hover: bg - gray - 50 transition - colors ${selectedCategory === category.type ? "bg-amber-50 border-r-2 border-amber-600" : ""
+                  } `}
               >
                 <button
                   onClick={() => setSelectedCategory(category.type)}
@@ -446,9 +447,8 @@ export default function Categories() {
                   .map((subType) => (
                     <div
                       key={subType.slug}
-                      className={`p-4 flex items-center justify-between hover:bg-gray-50 ${
-                        !subType.isActive ? "opacity-50" : ""
-                      }`}
+                      className={`p - 4 flex items - center justify - between hover: bg - gray - 50 ${!subType.isActive ? "opacity-50" : ""
+                        } `}
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-xl">{subType.icon || "📦"}</span>
@@ -478,11 +478,10 @@ export default function Categories() {
                         {/* Aktif/Pasif toggle */}
                         <button
                           onClick={() => handleToggleActive(subType)}
-                          className={`px-3 py-1 text-xs rounded-full ${
-                            subType.isActive
-                              ? "bg-green-100 text-green-700"
-                              : "bg-gray-100 text-gray-500"
-                          }`}
+                          className={`px - 3 py - 1 text - xs rounded - full ${subType.isActive
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-500"
+                            } `}
                         >
                           {subType.isActive ? "Aktif" : "Pasif"}
                         </button>
@@ -660,6 +659,78 @@ export default function Categories() {
           </div>
         </div>
       )}
+
+      <PageGuide
+        title="Yapay Zeka Şefinin Kileri (Categories)"
+        storyContent={
+          <div className="space-y-4">
+            <p>
+              <strong>Burası Şefin Kileri!</strong> Yapay zekayı mutfakta çalışan bir şef gibi düşünün.
+              Eğer şefe "Çilekli Pasta" yap derseniz, çileğin hangi rafta, tabağın hangi dolapta olduğunu bilmesi gerekir.
+            </p>
+            <p>
+              Kategoriler, yüklediğiniz görselleri (Ürünler, Tabaklar, Arka Planlar) doğru raflara dizmenizi sağlar.
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>Products (Ürünler):</strong> Satışını yaptığınız asıl yıldızlar (Kruvasan, Pasta). Şef bunları pişirir.</li>
+              <li><strong>Accessories (Aksesuarlar):</strong> Sunum elemanları (Tabak, Çatal, Vazo). Şef bunları sunumda kullanır.</li>
+              <li><strong>Backgrounds (Arka Planlar):</strong> Zemin ve duvarlar.</li>
+            </ul>
+          </div>
+        }
+        aiContent={
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-bold mb-1">🤖 Kategori Tipi (Type)</h4>
+              <p className="text-sm">
+                <strong>Hayati önem taşır!</strong> Bir tabağı yanlışlıkla "Product" yaparsanız şef onu da pişirmeye çalışır.
+                "Background" yaparsanız duvara asar.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-bold mb-1">🤖 Slug (Kategori Kodu)</h4>
+              <p className="text-sm">
+                Benim haritamdır. Bir görselin `product` mı yoksa `prop` (dekor) mu olduğunu bu koda bakarak anlarım.
+                `product` ise onu başrol yaparım, `prop` ise onu bulanıklaştırıp arkaya atarım.
+              </p>
+            </div>
+          </div>
+        }
+        proTipsContent={
+          <div className="space-y-4">
+            <h4 className="font-bold text-sm">💡 3 Altın İpucu</h4>
+            <ul className="list-disc pl-5 space-y-2 text-sm">
+              <li>
+                <strong>Etiket vs Raf:</strong> Kategoriyi "süpermarket rafı" (Yiyecek Reyonu), Ürün Açıklamasını ise "etiket" (Organik Çilek Reçeli) gibi düşünün. Rafı doğru seçin ama detayı açıklamaya yazın.
+              </li>
+              <li>
+                <strong>Materyal Bilgisi:</strong> Tabak/Aksesuar eklerken materyalini (Porselen, Ahşap, Cam) mutlaka açıklamada belirtin. Yapay zeka buna göre ışık yansıması yapar.
+              </li>
+              <li>
+                <strong>Kontrol Listesi:</strong> Emin değilseniz aşağıdaki listeye bakın.
+              </li>
+            </ul>
+
+            <div className="mt-4 pt-4 border-t border-stone-100">
+              <p className="font-medium text-xs mb-2">Kategori Kontrol Listesi ✅</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" readOnly checked className="accent-emerald-600" />
+                  <span>Bu görsel satışını yaptığım ana ürün mü? &rarr; <strong>Type: Products</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" readOnly checked className="accent-emerald-600" />
+                  <span>Tabak, bardak, çatal gibi yardımcı mı? &rarr; <strong>Type: Accessories</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" readOnly checked className="accent-emerald-600" />
+                  <span><strong>İpucu:</strong> AI görseli tanırken Kategorisine değil, Ürünün Kendi Açıklamasına daha çok bakar.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      />
 
       {/* Ana Kategori Modal */}
       {isMainCategoryModalOpen && (

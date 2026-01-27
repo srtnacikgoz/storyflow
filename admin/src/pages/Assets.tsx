@@ -7,6 +7,7 @@ import type {
   AssetCategory,
   EatingMethod,
   DynamicCategory,
+  Style,
 } from "../types";
 import { useLoading, useLoadingOperation } from "../contexts/LoadingContext";
 import { Tooltip } from "../components/Tooltip";
@@ -157,6 +158,8 @@ export default function Assets() {
 
   // Dinamik kategoriler
   const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
+  // Dinamik stiller
+  const [styles, setStyles] = useState<Style[]>([]);
 
   // Modal state - hem create hem edit için
   const [showModal, setShowModal] = useState(false);
@@ -228,10 +231,16 @@ export default function Assets() {
       // Kategorileri yükle
       const categoriesData = await api.getCategories().catch(() => null);
       if (categoriesData) {
-        setDynamicCategories(categoriesData.categories.filter((c) => !c.isDeleted));
+        setDynamicCategories(categoriesData.categories.filter((c: DynamicCategory) => !c.isDeleted));
+      }
+
+      // Stilleri yükle
+      const stylesData = await api.getStyles(true).catch(() => []); // Sadece aktifleri getir
+      if (stylesData) {
+        setStyles(stylesData);
       }
     } catch (err) {
-      console.error("[Assets] Kategoriler yüklenemedi:", err);
+      console.error("[Assets] Veriler yüklenemedi:", err);
     }
   };
 
@@ -560,6 +569,7 @@ export default function Assets() {
           subtypeLabels={dynamicSubtypeLabels}
           subtypesByCategory={dynamicSubtypesByCategory}
           tagSuggestions={allUniqueTags}
+          styleOptions={styles}
           onClose={closeModal}
           onSuccess={handleModalSuccess}
         />
@@ -691,6 +701,7 @@ function AssetModal({
   subtypeLabels,
   subtypesByCategory,
   tagSuggestions,
+  styleOptions,
   onClose,
   onSuccess,
 }: {
@@ -699,6 +710,7 @@ function AssetModal({
   subtypeLabels: Record<string, string>;
   subtypesByCategory: Record<AssetCategory, string[]>;
   tagSuggestions: string[];
+  styleOptions: Style[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -764,6 +776,13 @@ function AssetModal({
       );
     }
   }, [asset]);
+
+  // Yeme şekli değişince elle tutulabilirliği otomatik ayarla
+  useEffect(() => {
+    if (eatingMethod === "hand") {
+      setCanBeHeldByHand(true);
+    }
+  }, [eatingMethod]);
 
   // useCallback ile stabil referans - upload sırasında parent re-render olsa bile callback çalışır
   const handleUploadComplete = useCallback((url: string, uploadedFilename: string) => {
@@ -1052,10 +1071,19 @@ function AssetModal({
                           onChange={(e) => setStyle(e.target.value)}
                           className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
                         >
-                          <option value="modern">🏢 Modern</option>
-                          <option value="rustic">🪵 Rustic</option>
-                          <option value="minimal">⬜ Minimal</option>
-                          <option value="elegant">💎 Elegant</option>
+                          {styleOptions.length > 0 ? (
+                            styleOptions.map((opt) => (
+                              <option key={opt.id} value={opt.id}>{opt.displayName}</option>
+                            ))
+                          ) : (
+                            // Fallback
+                            <>
+                              <option value="modern">🏢 Modern</option>
+                              <option value="rustic">🪵 Rustic</option>
+                              <option value="minimal">⬜ Minimal</option>
+                              <option value="elegant">💎 Elegant</option>
+                            </>
+                          )}
                         </select>
                       </div>
                     )}
@@ -1141,11 +1169,12 @@ function AssetModal({
                         id="canBeHeldByHand"
                         checked={canBeHeldByHand}
                         onChange={(e) => setCanBeHeldByHand(e.target.checked)}
-                        className="mt-0.5 h-5 w-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                        disabled={eatingMethod === "hand"}
+                        className={`mt-0.5 h-5 w-5 border-gray-300 rounded focus:ring-orange-500 ${eatingMethod === "hand" ? "text-gray-400 cursor-not-allowed bg-gray-100" : "text-orange-600"}`}
                       />
                       <div>
                         <span className="block text-sm font-medium text-gray-800">
-                          ✋ Elle Tutulabilir
+                          ✋ Elle Tutulabilir {eatingMethod === "hand" && <span className="text-xs text-orange-600 font-normal ml-1">(Otomatik)</span>}
                         </span>
                         <span className="text-xs text-gray-500">
                           Bu ürün görsellerde el ile tutularak gösterilebilir mi?

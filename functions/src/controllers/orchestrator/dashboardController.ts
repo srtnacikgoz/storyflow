@@ -6,6 +6,7 @@
 import { functions, db, getCors, REGION, errorResponse } from "./shared";
 import { onRequest } from "firebase-functions/v2/https";
 import cors from "cors";
+import { AILogService } from "../../services/aiLogService";
 
 // Setup durumu tipi
 interface SetupItem {
@@ -114,12 +115,16 @@ export const loadDashboardData = onRequest(
           slotsSnap,
           resultsSnap,
           themesSnap,
+          aiStatsToday,
+          aiStatsMonthly,
         ] = await Promise.all([
           db.collection("assets").where("isActive", "==", true).get(),
           db.collection("time-slot-rules").where("isActive", "==", true).get(),
           db.collection("scheduled-slots").orderBy("createdAt", "desc").limit(slotsLimit).get(),
-          db.collection("pipeline-results").orderBy("startedAt", "desc").limit(50).get(),
+          db.collection("pipeline-results").orderBy("startedAt", "desc").limit(500).get(), // limit artırıldı
           db.collection("themes").orderBy("name").get(),
+          AILogService.getStats(24),   // Son 24 saat
+          AILogService.getStats(720),  // Son 30 gün (720 saat)
         ]);
 
         // Stats hesapla
@@ -178,7 +183,16 @@ export const loadDashboardData = onRequest(
             pipeline: {
               totalRuns: resultsSnap.size,
               totalCost: totalCost.toFixed(4),
+              totalCostFromLogs: aiStatsMonthly.totalCost, // AI logs'tan gerçek maliyet
             },
+          },
+          // AI Harcama İstatistikleri (YENİ)
+          aiStats: aiStatsToday,
+          aiStatsMonthly: {
+            totalCost: aiStatsMonthly.totalCost,
+            totalCalls: aiStatsMonthly.totalCalls,
+            geminiCalls: aiStatsMonthly.geminiCalls,
+            claudeCalls: aiStatsMonthly.claudeCalls,
           },
           slots,
           themes,

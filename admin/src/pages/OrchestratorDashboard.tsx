@@ -136,12 +136,17 @@ export default function OrchestratorDashboard() {
     try {
       // Tek API çağrısı ile tüm verileri yükle (3 ayrı çağrı yerine)
       // Bu, cold start süresini %60-70 azaltır
-      const { stats: statsData, slots: slotsData, themes: themesData, loadTimeMs } =
+      const { stats: statsData, slots: slotsData, themes: themesData, aiStats, aiStatsMonthly, loadTimeMs } =
         await api.loadDashboardData(50);
 
       console.log(`[Dashboard] Veriler ${loadTimeMs}ms'de yüklendi`);
 
-      setStats(statsData);
+      // AI stats'ları stats objesine ekle
+      setStats({
+        ...statsData,
+        aiStats,
+        aiStatsMonthly,
+      });
       setSlots(slotsData);
       setThemes(themesData);
     } catch (err) {
@@ -903,11 +908,10 @@ export default function OrchestratorDashboard() {
               {/* Tema Yok Seçeneği */}
               <button
                 onClick={() => setSelectedThemeId("")}
-                className={`p-3 rounded-xl border-2 text-left transition-all ${
-                  selectedThemeId === ""
-                    ? "border-gray-400 bg-gray-50"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${selectedThemeId === ""
+                  ? "border-gray-400 bg-gray-50"
+                  : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🎲</span>
@@ -923,11 +927,10 @@ export default function OrchestratorDashboard() {
                 <button
                   key={theme.id}
                   onClick={() => setSelectedThemeId(theme.id)}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    selectedThemeId === theme.id
-                      ? "border-purple-500 bg-purple-50 shadow-md"
-                      : "border-gray-200 hover:border-purple-300 bg-white"
-                  }`}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${selectedThemeId === theme.id
+                    ? "border-purple-500 bg-purple-50 shadow-md"
+                    : "border-gray-200 hover:border-purple-300 bg-white"
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-800">{theme.name}</span>
@@ -967,6 +970,57 @@ export default function OrchestratorDashboard() {
         <StatCard label="Pipeline Çalışmaları" value={stats?.pipeline.totalRuns || 0} icon="⚙️" color="bg-amber-50" />
         <StatCard label="Toplam Maliyet" value={`$${stats?.pipeline.totalCost || "0.00"}`} icon="💰" color="bg-orange-50" isText />
       </div>
+
+      {/* AI Maliyet Paneli */}
+      {(stats?.aiStats || stats?.aiStatsMonthly) && (
+        <div className="card bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200">
+          <h3 className="text-lg font-semibold text-emerald-800 mb-4">💰 AI Harcamaları</h3>
+
+          {/* Aylık Toplam */}
+          {stats?.aiStatsMonthly && (
+            <div className="mb-4 p-4 bg-white/60 rounded-xl">
+              <p className="text-sm text-gray-600">Son 30 Gün Toplam</p>
+              <p className="text-3xl font-bold text-emerald-700">
+                ${stats.aiStatsMonthly.totalCost?.toFixed(2) || "0.00"}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {stats.aiStatsMonthly.geminiCalls || 0} Gemini çağrısı
+              </p>
+            </div>
+          )}
+
+          {/* Son 24 Saat Detay */}
+          {stats?.aiStats && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-white/40 rounded-lg">
+                <p className="text-xl font-bold text-blue-600">${stats.aiStats.totalCost?.toFixed(4) || "0"}</p>
+                <p className="text-xs text-gray-500">Bugün (24s)</p>
+              </div>
+              <div className="p-3 bg-white/40 rounded-lg">
+                <p className="text-xl font-bold text-green-600">{stats.aiStats.successRate?.toFixed(0) || 0}%</p>
+                <p className="text-xs text-gray-500">Başarı</p>
+              </div>
+              <div className="p-3 bg-white/40 rounded-lg">
+                <p className="text-xl font-bold text-purple-600">{stats.aiStats.geminiCalls || 0}</p>
+                <p className="text-xs text-gray-500">Çağrı</p>
+              </div>
+              <div className="p-3 bg-white/40 rounded-lg">
+                <p className="text-xl font-bold text-amber-600">{((stats.aiStats.avgDurationMs || 0) / 1000).toFixed(1)}s</p>
+                <p className="text-xs text-gray-500">Ort. Süre</p>
+              </div>
+            </div>
+          )}
+
+          {/* Tutarsızlık Uyarısı */}
+          {stats?.pipeline?.totalCostFromLogs !== undefined &&
+            Math.abs(parseFloat(stats.pipeline.totalCost || "0") - stats.pipeline.totalCostFromLogs) > 0.1 && (
+              <div className="mt-3 p-2 bg-amber-100 border border-amber-300 rounded-lg text-xs text-amber-800">
+                ⚠️ Pipeline kayıtları (${stats.pipeline.totalCost}) ile AI logları
+                (${stats.pipeline.totalCostFromLogs?.toFixed(2)}) arasında fark var.
+              </div>
+            )}
+        </div>
+      )}
 
       {/* Slot Durumları (Quick Stats) */}
       {stats?.slots.byStatus && Object.keys(stats.slots.byStatus).length > 0 && (

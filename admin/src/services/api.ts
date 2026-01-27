@@ -37,10 +37,11 @@ import type {
   AIRulesStats,
   // Setup Status types
   SetupStatusResponse,
-  // Category types
-  CategoriesConfig,
+  // Dynamic Category types
   DynamicCategory,
   DynamicCategoryType,
+  // Style types
+  Style,
   // Prompt Studio types
   PromptStudioConfig,
   PromptTemplate,
@@ -745,6 +746,20 @@ class ApiService {
   }
 
   /**
+   * Varsayılan stilleri yükle
+   */
+  async seedStyles(): Promise<{ added: number; skipped: number }> {
+    const response = await this.fetch<{
+      success: boolean;
+      added: number;
+      skipped: number;
+    }>("seedStyles", {
+      method: "POST"
+    });
+    return { added: response.added, skipped: response.skipped };
+  }
+
+  /**
    * Varsayılan modları yükle
    */
   async seedMoods(): Promise<{ added: number; skipped: number }> {
@@ -982,6 +997,13 @@ class ApiService {
     stats: OrchestratorDashboardStats;
     slots: ScheduledSlot[];
     themes: Theme[];
+    aiStats?: AIStats;
+    aiStatsMonthly?: {
+      totalCost: number;
+      totalCalls: number;
+      geminiCalls: number;
+      claudeCalls: number;
+    };
     loadTimeMs: number;
   }> {
     const response = await this.fetch<{
@@ -989,12 +1011,21 @@ class ApiService {
       stats: OrchestratorDashboardStats;
       slots: ScheduledSlot[];
       themes: Theme[];
+      aiStats?: AIStats;
+      aiStatsMonthly?: {
+        totalCost: number;
+        totalCalls: number;
+        geminiCalls: number;
+        claudeCalls: number;
+      };
       loadTimeMs: number;
     }>(`loadDashboardData?slotsLimit=${slotsLimit}`);
     return {
       stats: response.stats,
       slots: response.slots,
       themes: response.themes,
+      aiStats: response.aiStats,
+      aiStatsMonthly: response.aiStatsMonthly,
       loadTimeMs: response.loadTimeMs,
     };
   }
@@ -1552,14 +1583,14 @@ class ApiService {
   /**
    * Tüm kategorileri getir
    */
-  async getCategories(): Promise<CategoriesConfig> {
+  async getCategories(): Promise<{ categories: DynamicCategory[] }> {
     const cacheKey = "categories";
-    const cached = this.getFromCache<CategoriesConfig>(cacheKey);
+    const cached = this.getFromCache<{ categories: DynamicCategory[] }>(cacheKey);
     if (cached) return cached;
 
     const response = await this.fetch<{
       success: boolean;
-      data: CategoriesConfig;
+      data: { categories: DynamicCategory[] };
     }>("getCategories");
 
     // 5 dakika cache
@@ -1714,10 +1745,10 @@ class ApiService {
   /**
    * Varsayılan kategorileri seed et
    */
-  async seedCategories(): Promise<CategoriesConfig> {
+  async seedCategories(): Promise<{ categories: DynamicCategory[] }> {
     const response = await this.fetch<{
       success: boolean;
-      data: CategoriesConfig;
+      data: { categories: DynamicCategory[] };
       message: string;
     }>("seedCategories", {
       method: "POST",
@@ -1858,7 +1889,65 @@ class ApiService {
       method: "POST",
     });
   }
+
+  // ==========================================
+  // Style Operations
+  // ==========================================
+
+  /**
+   * Stilleri getir
+   */
+  async getStyles(activeOnly: boolean = false): Promise<Style[]> {
+    const response = await this.fetch<{ success: boolean; styles: Style[] }>(
+      `getStyles?activeOnly=${activeOnly}`
+    );
+    return response.styles;
+  }
+
+  /**
+   * Stil detayı getir
+   */
+  async getStyle(id: string): Promise<Style> {
+    const response = await this.fetch<{ success: boolean; style: Style }>(
+      `getStyle?id=${id}`
+    );
+    return response.style;
+  }
+
+  /**
+   * Yeni stil oluştur
+   */
+  async createStyle(data: Partial<Style>): Promise<Style> {
+    const response = await this.fetch<{ success: boolean; style: Style }>(
+      "createStyle",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+    return response.style;
+  }
+
+  /**
+   * Stil güncelle
+   */
+  async updateStyle(id: string, data: Partial<Style>): Promise<void> {
+    await this.fetch<{ success: boolean }>(`updateStyle?id=${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Stil sil
+   */
+  async deleteStyle(id: string): Promise<void> {
+    await this.fetch<{ success: boolean }>(`deleteStyle?id=${id}`, {
+      method: "DELETE",
+    });
+  }
 }
+
 
 // Singleton instance
 export const api = new ApiService();

@@ -4,6 +4,7 @@ import { api } from "../services/api";
 import type { Mood } from "../types";
 import { useLoadingOperation } from "../contexts/LoadingContext";
 import { Tooltip } from "../components/Tooltip";
+import { PageGuide } from "../components/PageGuide"; // New Import
 
 // ---------------------------------------------------------------------------
 // PRESETS (Sabit Değerler)
@@ -204,6 +205,80 @@ export default function Moods() {
                     <span className="text-xs text-red-500 mt-1 block">Deploy edilmemiş fonksiyonlar veya CORS hatası olabilir. 'firebase deploy' komutunu çalıştırın.</span>
                 </div>
             )}
+
+            <PageGuide
+                title="Yönetmen Koltuğu: Işık ve Atmosfer (Moods)"
+                storyContent={
+                    <div className="space-y-4">
+                        <p>
+                            <strong>Işık, Kamera, Motor!</strong> Bir film setinde olduğunuzu hayal edin.
+                            'Mood', o sahnenin ışık şefi ve yönetmenidir. Fotoğrafın çekildiği anı ve duyguyu buradan belirlersiniz.
+                        </p>
+                        <p>Müşterinize ne hissettirmek istiyorsunuz?</p>
+                        <ul className="list-disc pl-5 space-y-1">
+                            <li><strong>Sabah Neşesi:</strong> Pırıl pırıl güneş ışığı, taze ve canlı renkler. (Kahvaltı ürünleri için)</li>
+                            <li><strong>Akşam Keyfi:</strong> Loş ışıklar, mumlar, sıcak ve samimi bir ortam. (Tatlı kaçamakları veya kahve için)</li>
+                        </ul>
+                        <p className="italic">Sadece 'Güneşli' seçip geçmeyin, hikayenize uygun duyguyu film çeker gibi düşünün.</p>
+                    </div>
+                }
+                aiContent={
+                    <div className="space-y-4">
+                        <div>
+                            <h4 className="font-bold mb-1">🤖 Işık ve Renk Promptları</h4>
+                            <p className="text-sm">
+                                Kameramanın (Gemini) kulağına fısıldadığım teknik talimatlar. "Mavileri kıs, gölgeleri uzat, sıcaklığı artır" gibi emirleri buradan alırım.
+                            </p>
+                        </div>
+                        <div>
+                            <h4 className="font-bold mb-1">🤖 Hava Durumu (Weather)</h4>
+                            <p className="text-sm">
+                                <strong>Benim sigortamdır.</strong> Eğer "Yağmurlu" seçtiyseniz, lighting prompt ne derse desin güneş açtırmam. Mantıksız sahneleri engellerim.
+                            </p>
+                        </div>
+                    </div>
+                }
+                proTipsContent={
+                    <div className="space-y-4">
+                        <h4 className="font-bold text-sm">💡 3 Altın İpucu</h4>
+                        <ul className="list-disc pl-5 space-y-2 text-sm">
+                            <li>
+                                <strong>Basitlik İyidir:</strong> Çok karmaşık, renkli ışıklar bazen ürünü gölgede bırakır. "Soft Natural Lighting" (Yumuşak Doğal Işık) her zaman en güvenli ve şık limandır.
+                            </li>
+                            <li>
+                                <strong>Marka Renkleri:</strong> Color prompt içine markanızın kurumsal renklerini (Örn: "Pastel Pink tones", "Emerald Green accents") eklerseniz, yapay zeka görseli o renklere göre tonlar.
+                            </li>
+                            <li>
+                                <strong>Sinematik Terimler:</strong> Aşağıdaki terimleri kullanarak görsellerinizi amatörlükten profesyonel stüdyo seviyesine taşıyın.
+                            </li>
+                        </ul>
+
+                        <div className="mt-4 pt-4 border-t border-stone-100">
+                            <p className="font-medium text-xs mb-2">Sinematik Sözlük (Tıkla & Kopyala):</p>
+                            <div className="flex flex-wrap gap-2">
+                                {[
+                                    { label: "Golden Hour (Altın Saat)", text: "Golden hour lighting, warm sun, long shadows" },
+                                    { label: "Rembrandt Lighting", text: "Rembrandt lighting, dramatic shadows, artistic portrait style" },
+                                    { label: "Cinematic Teal/Orange", text: "Cinematic color grading, teal shadows, orange highlights" },
+                                    { label: "Soft Focus (Rüya Gibi)", text: "Soft focus, dreamy atmosphere, glowing highlights" },
+                                    { label: "Moody Dark (Karanlık)", text: "Low key lighting, deep blacks, mystery atmosphere" }
+                                ].map((term) => (
+                                    <button
+                                        key={term.label}
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(term.text);
+                                            alert(`"${term.text}" kopyalandı!`);
+                                        }}
+                                        className="bg-white border border-emerald-200 text-emerald-700 px-3 py-1.5 rounded-full hover:bg-emerald-50 text-xs shadow-sm transition-all"
+                                    >
+                                        {term.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                }
+            />
 
             {loading ? (
                 <div className="flex justify-center p-12">

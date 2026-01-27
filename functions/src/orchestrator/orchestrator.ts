@@ -1,11 +1,10 @@
 /**
  * Full Orchestrator
- * Claude + Gemini entegrasyonu ile tam otomatik içerik üretimi
+ * Gemini AI entegrasyonu ile tam otomatik içerik üretimi
  */
 
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { ClaudeService } from "./claudeService";
 import { GeminiService } from "../services/gemini";
 import { TelegramService } from "../services/telegram";
 import { RulesService } from "./rulesService";
@@ -63,7 +62,6 @@ function removeUndefined<T>(obj: T): T {
 export class Orchestrator {
   private db: FirebaseFirestore.Firestore;
   private storage: ReturnType<typeof getStorage>;
-  private claude: ClaudeService;
   private gemini: GeminiService;
   private telegram: TelegramService;
   private rulesService: RulesService;
@@ -73,10 +71,11 @@ export class Orchestrator {
     this.config = config;
     this.db = getFirestore();
     this.storage = getStorage();
-    this.claude = new ClaudeService(config.claudeApiKey, config.claudeModel);
+    // Gemini 3.0 entegrasyonu
     this.gemini = new GeminiService({
       apiKey: config.geminiApiKey,
-      model: config.geminiModel as "gemini-2.0-flash-exp" | "gemini-1.5-pro" | "gemini-3-pro-image-preview",
+      imageModel: "gemini-3-pro-image-preview",
+      textModel: "gemini-3-pro-preview",
     });
     this.telegram = new TelegramService({
       botToken: config.telegramBotToken,
@@ -116,13 +115,7 @@ export class Orchestrator {
 
     console.log(`[Orchestrator] Starting pipeline: ${pipelineId}`);
 
-    // Claude ve Gemini'ye pipeline context'i set et (loglama için)
-    this.claude.setPipelineContext({
-      pipelineId,
-      slotId,
-      productType,
-    });
-
+    // Gemini'ye pipeline context'i set et (loglama için)
     this.gemini.setPipelineContext({
       pipelineId,
       slotId,
@@ -379,7 +372,7 @@ export class Orchestrator {
         console.log(`[Orchestrator] Accessory not allowed for theme "${themeData?.name || "default"}"`);
       }
 
-      const assetResponse = await this.claude.selectAssets(
+      const assetResponse = await this.gemini.selectAssets(
         productType,
         assetsForSelection,
         timeOfDay,
@@ -388,15 +381,17 @@ export class Orchestrator {
         fixedAssets      // Sabit asset konfigürasyonu (mermer masa sabit vb.)
       );
 
+      // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı, maliyet oluştu)
+      totalCost += assetResponse.cost || 0;
+
       if (!assetResponse.success || !assetResponse.data) {
         throw new Error(`Görsel seçimi başarısız: ${assetResponse.error || "Bilinmeyen hata"}`);
       }
 
       result.assetSelection = assetResponse.data;
-      totalCost += assetResponse.cost;
       status.completedStages.push("asset_selection");
 
-      console.log(`[Orchestrator] Asset selection complete - Pet: ${result.assetSelection.includesPet}, Accessory: ${result.assetSelection.includesAccessory || false}`);
+      console.log(`[Orchestrator] Asset selection complete - Pet: ${result.assetSelection!.includesPet}, Accessory: ${result.assetSelection!.includesAccessory || false}`);
 
       // ==========================================
       // STAGE 2: SCENARIO SELECTION
@@ -449,14 +444,17 @@ export class Orchestrator {
       // Feedback ve kuralları birleştir
       const combinedHints = [feedbackHints, aiRulesHints].filter(Boolean).join("\n");
 
-      const scenarioResponse = await this.claude.selectScenario(
+      const scenarioResponse = await this.gemini.selectScenario(
         productType,
         timeOfDay,
-        result.assetSelection,
+        result.assetSelection!,
         scenariosForClaude,
         effectiveRules,  // Çeşitlilik kurallarını da gönder
         combinedHints    // Kullanıcı geri bildirimleri + AI kuralları
       );
+
+      // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı)
+      totalCost += scenarioResponse.cost || 0;
 
       if (!scenarioResponse.success || !scenarioResponse.data) {
         throw new Error(`Senaryo seçimi başarısız: ${scenarioResponse.error || "Bilinmeyen hata"}`);
@@ -476,10 +474,9 @@ export class Orchestrator {
         themeId: effectiveThemeId,
         themeName: themeData?.name,
       };
-      totalCost += scenarioResponse.cost;
       status.completedStages.push("scenario_selection");
 
-      console.log(`[Orchestrator] Scenario selected: ${result.scenarioSelection.scenarioName}, isInterior: ${isInteriorScenario}`);
+      console.log(`[Orchestrator] Scenario selected: ${result.scenarioSelection!.scenarioName}, isInterior: ${isInteriorScenario}`);
 
       // ══════════════════════════════════════════════════════════════════════
       // INTERIOR SENARYO AKIŞI - AI görsel üretimi ATLANIR
@@ -500,10 +497,10 @@ export class Orchestrator {
 
         // Asset selection'a interior bilgisini ekle
         result.assetSelection = {
-          ...result.assetSelection,
+          ...result.assetSelection!,
           interior: selectedInterior,
           isInteriorScenario: true,
-        };
+        } as AssetSelection;
 
         // Stage 3, 4, 5 atlanıyor - prompt ve görsel üretimi yok
         status.completedStages.push("prompt_optimization");
@@ -569,25 +566,28 @@ export class Orchestrator {
         // Gemini-native prompt oluştur
         // KRİTİK: scenarioDescription'ı Gemini'ye aktarıyoruz (ortam/mekan bilgisi)
         const basePromptResult = await this.getScenarioPrompt(
-          result.scenarioSelection.scenarioId,
-          result.scenarioSelection.compositionId,
-          result.scenarioSelection.handStyle,
-          result.assetSelection.cup,
+          result.scenarioSelection!.scenarioId,
+          result.scenarioSelection!.compositionId,
+          result.scenarioSelection!.handStyle,
+          result.assetSelection!, // selectedCup yerine tüm selection
           mood, // Tema'dan gelen mood bilgisi
           productType,
           timeOfDay,
           scenarioGeminiData,
-          result.scenarioSelection.scenarioDescription  // KRİTİK: Ortam bilgisi
+          result.scenarioSelection!.scenarioDescription  // KRİTİK: Ortam bilgisi
         );
 
         console.log(`[Orchestrator] Base prompt built with Gemini terminology`);
 
-        const promptResponse = await this.claude.optimizePrompt(
+        const promptResponse = await this.gemini.optimizePrompt(
           basePromptResult.mainPrompt,
-          result.scenarioSelection,
-          result.assetSelection,
+          result.scenarioSelection!,
+          result.assetSelection!,
           combinedHints // Kullanıcı tanımlı kurallar + feedback'ler
         );
+
+        // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı)
+        totalCost += promptResponse.cost || 0;
 
         if (!promptResponse.success || !promptResponse.data) {
           throw new Error(`Prompt oluşturma başarısız: ${promptResponse.error || "Bilinmeyen hata"}`);
@@ -606,7 +606,6 @@ export class Orchestrator {
           aspectRatio: overrideAspectRatio || "9:16",
           faithfulness: 0.8,
         };
-        totalCost += promptResponse.cost;
         status.completedStages.push("prompt_optimization");
 
         // ==========================================
@@ -624,148 +623,148 @@ export class Orchestrator {
           generationAttempt++;
           console.log(`[Orchestrator] Generation attempt ${generationAttempt}/${this.config.maxRetries}`);
 
-        try {
-          // Ürün görselini yükle
-          const productUrl = result.assetSelection.product.storageUrl;
-          console.log(`[Orchestrator] ASSET DEBUG: Selected product: ${result.assetSelection.product.filename}`);
-          console.log(`[Orchestrator] ASSET DEBUG: Product URL: ${productUrl}`);
-          console.log(`[Orchestrator] ASSET DEBUG: Product ID: ${result.assetSelection.product.id}`);
+          try {
+            // Ürün görselini yükle
+            const productUrl = result.assetSelection!.product.storageUrl;
+            console.log(`[Orchestrator] ASSET DEBUG: Selected product: ${result.assetSelection!.product.filename}`);
+            console.log(`[Orchestrator] ASSET DEBUG: Product URL: ${productUrl}`);
+            console.log(`[Orchestrator] ASSET DEBUG: Product ID: ${result.assetSelection!.product.id}`);
 
-          const productImageBase64 = await this.loadImageAsBase64(productUrl);
-          console.log(`[Orchestrator] ASSET DEBUG: Loaded image size: ${productImageBase64.length} chars (base64)`);
+            const productImageBase64 = await this.loadImageAsBase64(productUrl);
+            console.log(`[Orchestrator] ASSET DEBUG: Loaded image size: ${productImageBase64.length} chars (base64)`);
 
-          // Load reference images (plate, table, cup) if selected
-          const referenceImages: Array<{ base64: string; mimeType: string; label: string; description?: string }> = [];
+            // Load reference images (plate, table, cup) if selected
+            const referenceImages: Array<{ base64: string; mimeType: string; label: string; description?: string }> = [];
 
-          if (result.assetSelection.plate?.storageUrl) {
-            console.log(`[Orchestrator] Loading plate: ${result.assetSelection.plate.filename}`);
-            const plateBase64 = await this.loadImageAsBase64(result.assetSelection.plate.storageUrl);
-            referenceImages.push({ base64: plateBase64, mimeType: "image/png", label: "plate" });
-          }
-
-          if (result.assetSelection.table?.storageUrl) {
-            console.log(`[Orchestrator] Loading table: ${result.assetSelection.table.filename}`);
-            const tableBase64 = await this.loadImageAsBase64(result.assetSelection.table.storageUrl);
-            referenceImages.push({ base64: tableBase64, mimeType: "image/png", label: "table" });
-          }
-
-          if (result.assetSelection.cup?.storageUrl) {
-            console.log(`[Orchestrator] Loading cup: ${result.assetSelection.cup.filename}`);
-            const cupBase64 = await this.loadImageAsBase64(result.assetSelection.cup.storageUrl);
-
-            // Cup için kısa açıklama (RADİKAL SADELEŞTİRME v2.0)
-            const cupColors = result.assetSelection.cup.visualProperties?.dominantColors?.join(", ") || "";
-            const cupMaterial = result.assetSelection.cup.visualProperties?.material || "ceramic";
-            const cupDescription = `${cupColors} ${cupMaterial}`.trim();
-
-            referenceImages.push({
-              base64: cupBase64,
-              mimeType: "image/png",
-              label: "cup",
-              description: cupDescription || undefined
-            });
-          }
-
-          // Napkin (peçete) referans görseli
-          if (result.assetSelection.napkin?.storageUrl) {
-            console.log(`[Orchestrator] Loading napkin: ${result.assetSelection.napkin.filename}`);
-            const napkinBase64 = await this.loadImageAsBase64(result.assetSelection.napkin.storageUrl);
-
-            const napkinColors = result.assetSelection.napkin.visualProperties?.dominantColors?.join(", ") || "";
-            const napkinMaterial = result.assetSelection.napkin.visualProperties?.material || "fabric";
-            const napkinDescription = `${napkinColors} ${napkinMaterial}`.trim();
-
-            referenceImages.push({
-              base64: napkinBase64,
-              mimeType: "image/png",
-              label: "napkin",
-              description: napkinDescription || undefined
-            });
-          }
-
-          // Cutlery (çatal-bıçak) referans görseli
-          if (result.assetSelection.cutlery?.storageUrl) {
-            console.log(`[Orchestrator] Loading cutlery: ${result.assetSelection.cutlery.filename}`);
-            const cutleryBase64 = await this.loadImageAsBase64(result.assetSelection.cutlery.storageUrl);
-
-            const cutleryMaterial = result.assetSelection.cutlery.visualProperties?.material || "metal";
-            const cutleryStyle = result.assetSelection.cutlery.visualProperties?.style || "";
-            const cutleryDescription = `${cutleryMaterial} ${cutleryStyle}`.trim();
-
-            referenceImages.push({
-              base64: cutleryBase64,
-              mimeType: "image/png",
-              label: "cutlery",
-              description: cutleryDescription
-            });
-          }
-
-          console.log(`[Orchestrator] Sending ${referenceImages.length} reference images to Gemini`);
-
-          // Gemini ile görsel üret
-          const geminiResult = await this.gemini.transformImage(
-            productImageBase64,
-            "image/png",
-            {
-              prompt: result.optimizedPrompt.mainPrompt,
-              negativePrompt: result.optimizedPrompt.negativePrompt,
-              faithfulness: result.optimizedPrompt.faithfulness,
-              aspectRatio: result.optimizedPrompt.aspectRatio,
-              referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+            if (result.assetSelection!.plate?.storageUrl) {
+              console.log(`[Orchestrator] Loading plate: ${result.assetSelection!.plate.filename}`);
+              const plateBase64 = await this.loadImageAsBase64(result.assetSelection!.plate.storageUrl);
+              referenceImages.push({ base64: plateBase64, mimeType: "image/png", label: "plate" });
             }
+
+            if (result.assetSelection!.table?.storageUrl) {
+              console.log(`[Orchestrator] Loading table: ${result.assetSelection!.table.filename}`);
+              const tableBase64 = await this.loadImageAsBase64(result.assetSelection!.table.storageUrl);
+              referenceImages.push({ base64: tableBase64, mimeType: "image/png", label: "table" });
+            }
+
+            if (result.assetSelection!.cup?.storageUrl) {
+              console.log(`[Orchestrator] Loading cup: ${result.assetSelection!.cup.filename}`);
+              const cupBase64 = await this.loadImageAsBase64(result.assetSelection!.cup.storageUrl);
+
+              // Cup için kısa açıklama (RADİKAL SADELEŞTİRME v2.0)
+              const cupColors = result.assetSelection!.cup.visualProperties?.dominantColors?.join(", ") || "";
+              const cupMaterial = result.assetSelection!.cup.visualProperties?.material || "ceramic";
+              const cupDescription = `${cupColors} ${cupMaterial}`.trim();
+
+              referenceImages.push({
+                base64: cupBase64,
+                mimeType: "image/png",
+                label: "cup",
+                description: cupDescription || undefined
+              });
+            }
+
+            // Napkin (peçete) referans görseli
+            if (result.assetSelection!.napkin?.storageUrl) {
+              console.log(`[Orchestrator] Loading napkin: ${result.assetSelection!.napkin.filename}`);
+              const napkinBase64 = await this.loadImageAsBase64(result.assetSelection!.napkin.storageUrl);
+
+              const napkinColors = result.assetSelection!.napkin.visualProperties?.dominantColors?.join(", ") || "";
+              const napkinMaterial = result.assetSelection!.napkin.visualProperties?.material || "fabric";
+              const napkinDescription = `${napkinColors} ${napkinMaterial}`.trim();
+
+              referenceImages.push({
+                base64: napkinBase64,
+                mimeType: "image/png",
+                label: "napkin",
+                description: napkinDescription || undefined
+              });
+            }
+
+            // Cutlery (çatal-bıçak) referans görseli
+            if (result.assetSelection!.cutlery?.storageUrl) {
+              console.log(`[Orchestrator] Loading cutlery: ${result.assetSelection!.cutlery.filename}`);
+              const cutleryBase64 = await this.loadImageAsBase64(result.assetSelection!.cutlery.storageUrl);
+
+              const cutleryMaterial = result.assetSelection!.cutlery.visualProperties?.material || "metal";
+              const cutleryStyle = result.assetSelection!.cutlery.visualProperties?.style || "";
+              const cutleryDescription = `${cutleryMaterial} ${cutleryStyle}`.trim();
+
+              referenceImages.push({
+                base64: cutleryBase64,
+                mimeType: "image/png",
+                label: "cutlery",
+                description: cutleryDescription
+              });
+            }
+
+            console.log(`[Orchestrator] Sending ${referenceImages.length} reference images to Gemini`);
+
+            // Gemini ile görsel üret
+            const geminiResult = await this.gemini.transformImage(
+              productImageBase64,
+              "image/png",
+              {
+                prompt: result.optimizedPrompt.mainPrompt,
+                negativePrompt: result.optimizedPrompt.negativePrompt,
+                faithfulness: result.optimizedPrompt.faithfulness,
+                aspectRatio: result.optimizedPrompt.aspectRatio,
+                referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+              }
+            );
+
+            generatedImage = {
+              imageBase64: geminiResult.imageBase64,
+              mimeType: geminiResult.mimeType,
+              model: geminiResult.model,
+              cost: geminiResult.cost,
+              generatedAt: Date.now(),
+              attemptNumber: generationAttempt,
+            };
+
+            totalCost += geminiResult.cost;
+          } catch (genError) {
+            console.error(`[Orchestrator] Generation attempt ${generationAttempt} failed:`, genError);
+            // Hata oluştu, bir sonraki denemeye geç
+            continue;
+          }
+
+          // ==========================================
+          // STAGE 5: QUALITY CONTROL
+          // ==========================================
+          console.log("[Orchestrator] Stage 5: Quality Control");
+          status.currentStage = "quality_control";
+          if (onProgress) await onProgress("quality_control", 5, TOTAL_STAGES);
+
+          const qcResponse = await this.gemini.evaluateImage(
+            generatedImage.imageBase64,
+            generatedImage.mimeType,
+            result.scenarioSelection!,
+            result.assetSelection!.product
           );
 
-          generatedImage = {
-            imageBase64: geminiResult.imageBase64,
-            mimeType: geminiResult.mimeType,
-            model: geminiResult.model,
-            cost: geminiResult.cost,
-            generatedAt: Date.now(),
-            attemptNumber: generationAttempt,
-          };
+          totalCost += qcResponse.cost;
 
-          totalCost += geminiResult.cost;
-        } catch (genError) {
-          console.error(`[Orchestrator] Generation attempt ${generationAttempt} failed:`, genError);
-          // Hata oluştu, bir sonraki denemeye geç
-          continue;
-        }
+          if (!qcResponse.success || !qcResponse.data) {
+            console.warn(`[Orchestrator] QC failed: ${qcResponse.error}`);
+            continue;
+          }
 
-        // ==========================================
-        // STAGE 5: QUALITY CONTROL
-        // ==========================================
-        console.log("[Orchestrator] Stage 5: Quality Control");
-        status.currentStage = "quality_control";
-        if (onProgress) await onProgress("quality_control", 5, TOTAL_STAGES);
+          qualityResult = qcResponse.data;
 
-        const qcResponse = await this.claude.evaluateImage(
-          generatedImage.imageBase64,
-          generatedImage.mimeType,
-          result.scenarioSelection,
-          result.assetSelection.product
-        );
+          // Kalite kontrolü geçti mi?
+          if (qualityResult!.passed) {
+            console.log(`[Orchestrator] QC passed with score: ${qualityResult!.score}/10`);
+            break;
+          }
 
-        totalCost += qcResponse.cost;
-
-        if (!qcResponse.success || !qcResponse.data) {
-          console.warn(`[Orchestrator] QC failed: ${qcResponse.error}`);
-          continue;
-        }
-
-        qualityResult = qcResponse.data;
-
-        // Kalite kontrolü geçti mi?
-        if (qualityResult.passed) {
-          console.log(`[Orchestrator] QC passed with score: ${qualityResult.score}/10`);
-          break;
-        }
-
-        // Yeniden üretim gerekli
-        if (qualityResult.shouldRegenerate && qualityResult.regenerationHints) {
-          console.log(`[Orchestrator] QC failed (${qualityResult.score}/10), regenerating...`);
-          // Prompt'u güncelle
-          result.optimizedPrompt.mainPrompt += `\n\nIMPROVEMENT: ${qualityResult.regenerationHints}`;
-        }
+          // Yeniden üretim gerekli
+          if (qualityResult!.shouldRegenerate && qualityResult!.regenerationHints) {
+            console.log(`[Orchestrator] QC failed (${qualityResult!.score}/10), regenerating...`);
+            // Prompt'u güncelle
+            result.optimizedPrompt!.mainPrompt += `\n\nIMPROVEMENT: ${qualityResult!.regenerationHints}`;
+          }
         }
 
         if (!generatedImage || !qualityResult) {
@@ -1095,12 +1094,13 @@ export class Orchestrator {
    *
    * Yeni: Gemini terminolojisi ile zenginleştirilmiş prompt
    * KRİTİK: scenarioDescription parametresi ortam bilgisi için zorunlu
+   * GÜNCELLEME: selectedCup yerine selectedAssets tüm assetler için
    */
   private async getScenarioPrompt(
     scenarioId: string,
     compositionId?: string,
     handStyle?: string,
-    selectedCup?: Asset,
+    selectedAssets?: AssetSelection,
     mood?: string,
     productType?: string,
     timeOfDay?: string,
@@ -1125,7 +1125,7 @@ export class Orchestrator {
 
       prompt += this.getCompositionDetails(scenarioId, compositionId);
       prompt += this.getHandStyleDetails(handStyle);
-      prompt += this.getCupReferenceDetails(selectedCup);
+      prompt += this.getCupReferenceDetails(selectedAssets?.cup);
 
       // Negative prompt'u da oluştur
       const negativePrompt = await buildNegativePrompt(handStyle ? ["always", "hands"] : ["always"]);
@@ -1138,7 +1138,7 @@ export class Orchestrator {
       scenarioId,
       compositionId,
       handStyle,
-      selectedCup,
+      selectedAssets,
       mood,
       productType,
       timeOfDay,
@@ -1327,7 +1327,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
     scenarioId: string,
     compositionId?: string,
     handStyle?: string,
-    selectedCup?: Asset,
+    selectedAssets?: AssetSelection,
     mood?: string,
     productType?: string,
     timeOfDay?: string,
@@ -1341,12 +1341,12 @@ Cup: ${colors} ${material} (from reference)`.trim();
     // Senaryo verilerinden Gemini parametrelerini çıkar
     const scenarioParams = scenarioData
       ? extractGeminiParamsFromScenario({
-          mood,
-          lightingPreset: scenarioData.lightingPreset,
-          handPose: scenarioData.handPose,
-          compositionEntry: scenarioData.compositionEntry,
-          includesHands: !!handStyle,
-        })
+        mood,
+        lightingPreset: scenarioData.lightingPreset,
+        handPose: scenarioData.handPose,
+        compositionEntry: scenarioData.compositionEntry,
+        includesHands: !!handStyle,
+      })
       : { moodId: mood };
 
     try {
@@ -1362,6 +1362,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
       });
 
       let prompt = geminiResult.mainPrompt;
+      let negativePrompt = geminiResult.negativePrompt;
 
       // KRİTİK: Senaryo açıklamasını prompt'a ekle (ortam/mekan bilgisi)
       if (scenarioDescription) {
@@ -1369,22 +1370,57 @@ Cup: ${colors} ${material} (from reference)`.trim();
         console.log(`[Orchestrator] Added scenario description to prompt: ${scenarioDescription.substring(0, 50)}...`);
       }
 
+      // -----------------------------------------------------------------------
+      // LOGIC OVERRIDES: KULLANICI GERİ BİLDİRİMİ İLE DÜZELTMELER
+      // -----------------------------------------------------------------------
+
+      // 1. Weather/Mood Enforcement
+      // Eğer mood yağmurlu veya kapalı ise, güneş ışığını kesin olarak engelle.
+      const moodLower = (mood || "").toLowerCase();
+      // Mood ID veya scenarioDescription içinde hava durumu ipuçları aranır
+      const descLower = (scenarioDescription || "").toLowerCase();
+
+      const isRainy =
+        moodLower.includes("rain") || moodLower.includes("overcast") || moodLower.includes("gloomy") || moodLower.includes("storm") ||
+        descLower.includes("rain") || descLower.includes("overcast");
+
+      if (isRainy) {
+        console.log("[Orchestrator] 🌧️ RAINY/OVERCAST weather detected - applying overrides");
+        // Main prompt'a atmosferik detay zorla
+        prompt += "\n\nWEATHER OVERRIDE: The scene MUST be overcast or rainy. Soft, diffused, flat lighting. Rain drops visible on glass surfaces/windows. Gloomy, moody atmosphere. NO DIRECT SUNLIGHT.";
+        // Negative prompt'a güneş kelimelerini ekle
+        negativePrompt += ", sun, sunlight, sunny, hard shadows, warm golden light, sunrise, sunset, bright rays, volumetric light";
+      }
+
+      // 2. Asset Fidelity (Napkin & Accessory Protection)
+      // Eğer peçete (napkin) asset olarak seçildiyse, jenerik 'linen' stilini engelle.
+      if (selectedAssets?.napkin) {
+        console.log(`[Orchestrator] 🧶 NAPKIN ASSET detected: ${selectedAssets.napkin.filename} - enforcing fidelity`);
+        const napkinDesc = selectedAssets.napkin.visualProperties?.dominantColors?.join(", ") || "specific";
+        prompt += `\n\nASSET RULE: Use the provided NAPKIN reference image exactly. Do not apply generic 'linen' or 'rustic' texture if it contradicts the reference. Keep the ${napkinDesc} color/style of the reference napkin.`;
+      }
+
+      // Aksesuar koruması
+      if (selectedAssets?.accessory) {
+        prompt += `\n\nASSET RULE: Use the provided ACCESSORY reference image exactly.`;
+      }
+
       // Ek detaylar ekle (eski sistem ile uyumluluk)
       prompt += this.getCompositionDetails(scenarioId, compositionId);
       prompt += this.getHandStyleDetails(handStyle);
-      prompt += this.getCupReferenceDetails(selectedCup);
+      prompt += this.getCupReferenceDetails(selectedAssets?.cup);
 
       console.log(`[Orchestrator] Built Gemini prompt with mood: ${geminiResult.metadata.mood?.id}, lighting: ${geminiResult.metadata.lighting?.id}`);
 
       return {
         mainPrompt: prompt,
-        negativePrompt: geminiResult.negativePrompt,
+        negativePrompt: negativePrompt,
       };
     } catch (error) {
       console.warn("[Orchestrator] Gemini prompt builder failed, using fallback:", error);
       // Fallback to legacy prompt
       return {
-        mainPrompt: this.buildDynamicPromptLegacy(scenarioId, compositionId, handStyle, selectedCup, mood, scenarioDescription),
+        mainPrompt: this.buildDynamicPromptLegacy(scenarioId, compositionId, handStyle, selectedAssets?.cup, mood, scenarioDescription),
         negativePrompt: await buildNegativePrompt(handStyle ? ["always", "hands"] : ["always"]),
       };
     }

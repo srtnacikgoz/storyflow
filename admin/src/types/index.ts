@@ -702,6 +702,15 @@ export interface OrchestratorDashboardStats {
   pipeline: {
     totalRuns: number;
     totalCost: string;
+    totalCostFromLogs?: number; // ai-logs'tan gelen gerçek maliyet
+  };
+  // AI Harcama İstatistikleri (YENİ)
+  aiStats?: AIStats;           // Son 24 saat
+  aiStatsMonthly?: {           // Son 30 gün
+    totalCost: number;
+    totalCalls: number;
+    geminiCalls: number;
+    claudeCalls: number;
   };
 }
 
@@ -1064,4 +1073,18 @@ export interface SetupStatusResponse {
   items: SetupItem[];
   summary: SetupStatusSummary;
   details: SetupStatusDetails;
+}
+
+// ==========================================
+// STYLE TYPES
+// ==========================================
+
+export interface Style {
+  id: string;          // slug (örn: "modern", "rustic")
+  displayName: string; // Görünen ad (örn: "Modern", "Rustik")
+  description?: string;// Açıklama
+  isActive: boolean;
+  order: number;       // Sıralama
+  createdAt: number;
+  updatedAt: number;
 }

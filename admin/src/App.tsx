@@ -19,6 +19,7 @@ const AIRules = lazy(() => import("./pages/AIRules"));
 const Scenarios = lazy(() => import("./pages/Scenarios"));
 const Moods = lazy(() => import("./pages/Moods"));
 const Categories = lazy(() => import("./pages/Categories"));
+const Styles = lazy(() => import("./pages/Styles"));
 const PromptStudio = lazy(() => import("./pages/PromptStudio"));
 
 // Loading fallback component
@@ -51,6 +52,7 @@ function App() {
             <Route path="scenarios" element={<Suspense fallback={<PageLoader />}><Scenarios /></Suspense>} />
             <Route path="moods" element={<Suspense fallback={<PageLoader />}><Moods /></Suspense>} />
             <Route path="categories" element={<Suspense fallback={<PageLoader />}><Categories /></Suspense>} />
+            <Route path="styles" element={<Suspense fallback={<PageLoader />}><Styles /></Suspense>} />
             <Route path="prompt-studio" element={<Suspense fallback={<PageLoader />}><PromptStudio /></Suspense>} />
           </Route>
         </Routes>

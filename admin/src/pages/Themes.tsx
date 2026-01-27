@@ -4,6 +4,7 @@ import { useLoading } from "../contexts/LoadingContext";
 import type { Theme, Mood } from "../types";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
+import { PageGuide } from "../components/PageGuide"; // New Import
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageTour } from "../components/PageTour";
 import type { TourStep } from "../components/PageTour";
@@ -332,6 +333,65 @@ export default function Themes() {
             Yeni Tema
           </button>
         </div>
+
+        <PageGuide
+          title="Haftalık Yayın Paketiniz (Themes)"
+          storyContent={
+            <div className="space-y-4">
+              <p>
+                <strong>"Bu hafta ne paylaşsam?" derdini bitirin.</strong> Temalar, bir restoranın "Yaz Menüsü" veya "Kış Özel Menüsü" hazırlaması gibidir.
+              </p>
+              <p>
+                Bir tema paketinin içine şunları koyarsınız:
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><strong>Mood (Atmosfer):</strong> O haftanın duygusu (Örn: Neşeli Yaz Sabahı).</li>
+                <li><strong>Senaryolar (Pozlar):</strong> O hafta kullanılacak çekim teknikleri (Örn: Sadece sahil ve piknik pozları).</li>
+              </ul>
+              <p>
+                Bu paketi takvime bir kere atarsınız ve o hafta üretilen tüm görseller otomatik olarak bu menüye uyar.
+              </p>
+            </div>
+          }
+          aiContent={
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-bold mb-1">🤖 Senaryo Listesi</h4>
+                <p className="text-sm">
+                  Benim <strong>çeşitlilik havuzumdur</strong>. O gün için görsel üreteceksem, bu listeden her gün farklı bir tane seçmeye çalışırım.
+                  Listede ne kadar çok senaryo varsa, sizi o kadar az tekrar ederim.
+                </p>
+              </div>
+              <div>
+                <h4 className="font-bold mb-1">🤖 İzinler (Köpek/Aksesuar)</h4>
+                <p className="text-sm">
+                  <strong>Kırmızı çizgilerim.</strong> Köpek izni kapalıysa, dünyanın en güzel senaryosu bile olsa görselin içine köpek koymam. Yasak yasaktır.
+                </p>
+              </div>
+            </div>
+          }
+          proTipsContent={
+            <div className="space-y-4">
+              <h4 className="font-bold text-sm">💡 3 Altın İpucu</h4>
+              <ul className="list-disc pl-5 space-y-2 text-sm">
+                <li>
+                  <strong>Zıtlık Uyarısı:</strong> Birbirine <strong>ZIT</strong> senaryoları (Örn: Hem "Gece" hem "Sabah") aynı pakete koymayın. Tema bütünlüğü bozulur.
+                </li>
+                <li>
+                  <strong>Kurtarıcı Senaryo:</strong> Her temanın içine mutlaka 1 tane çok basit, risksiz "Ürün Odaklı (Product Focus)" senaryo koyun. Eğer o gün karmaşık lifestyle senaryolar kötü çıkarsa, bu basit senaryo günü kurtarır.
+                </li>
+                <li>
+                  <strong>İsimlendirme:</strong> Temalara zaman/kampanya odaklı isimler verin. Örn: "Yaz 2025 Menüsü", "Ramazan Özel", "Yılbaşı Kampanyası".
+                </li>
+              </ul>
+              <div className="mt-4 pt-4 border-t border-stone-100">
+                <p className="text-xs italic bg-emerald-50 p-2 rounded text-emerald-800">
+                  <strong>Mantık Testi:</strong> Temayı kaydetmeden önce kendinize sorun: "Bu paketteki her şey (Mood + Senaryolar) aynı filmin sahnesi gibi mi duruyor?" Cevap evetse, doğru yoldasınız.
+                </p>
+              </div>
+            </div>
+          }
+        />
 
         {/* Empty State - Hiç tema yoksa */}
         {themes.length === 0 ? (
