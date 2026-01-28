@@ -525,6 +525,19 @@ export async function buildGeminiPrompt(params: {
         ? { geminiPrompt: lighting.geminiPrompt, temperature: lighting.temperature, direction: lighting.direction }
         : { availablePresetIds: presets?.lighting.map(l => l.id) || [], reason: `lightingPresetId "${params.lightingPresetId}" bulunamadı` },
     });
+  } else if (mood && mood.lighting) {
+    // === FIX START ===
+    // ÖNCELİK DÜZELTMESİ: Eğer Mood'un kendi ışığı varsa, Ürün Default ışığını ezmeliyiz.
+    // lighting değişkenini null bırakıyoruz ki aşağıda (Satır 633) mood.lighting kullanılsın.
+    lighting = null;
+    decisions.push({
+      step: "lighting-selection",
+      input: mood.id,
+      matched: true,
+      result: `Mood lighting önceliklendirildi: ${mood.lighting}`,
+      fallback: false,
+      details: { reason: "Mood lighting takes precedence over Product Default", moodId: mood.id }
+    });
   } else if (params.productType) {
     lighting = await suggestLightingForProduct(params.productType);
     decisions.push({

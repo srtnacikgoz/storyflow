@@ -86,6 +86,13 @@ export class OrchestratorScheduler {
     };
 
     try {
+      // Global scheduler kontrolü - kapalıysa hiçbir şey yapma
+      const systemSettings = await getSystemSettings();
+      if (systemSettings.schedulerEnabled === false) {
+        console.log("[Scheduler] ⏸️ Scheduler disabled via system settings. Skipping all rules.");
+        return result;
+      }
+
       // Aktif zaman kurallarını al
       const rulesSnapshot = await this.db
         .collection("time-slot-rules")

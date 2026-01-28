@@ -469,6 +469,17 @@ export const updateSystemSettingsConfig = functions
 
         const updates = request.body;
 
+        // Validasyon: schedulerEnabled (boolean)
+        if (updates.schedulerEnabled !== undefined) {
+          if (typeof updates.schedulerEnabled !== "boolean") {
+            response.status(400).json({
+              success: false,
+              error: "schedulerEnabled must be a boolean",
+            });
+            return;
+          }
+        }
+
         // Validasyon: claudeInputCostPer1K (0.001 - 0.1)
         if (updates.claudeInputCostPer1K !== undefined) {
           const value = Number(updates.claudeInputCostPer1K);

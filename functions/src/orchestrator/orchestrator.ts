@@ -198,11 +198,10 @@ export class Orchestrator {
 
       // Mood detaylarını al
       // Admin panel mood field'ına Mood document ID kaydediyor
-      // moodId ayrı bir field olarak da desteklenir (geriye uyumluluk)
-      const effectiveMoodId = themeData?.moodId || themeData?.mood;
+      const effectiveMoodId = themeData?.mood;
       let moodDetails: {
         name?: string;
-        keywords?: string[];
+        description?: string;
         weather?: string;
         lightingPrompt?: string;
         colorGradePrompt?: string;
@@ -216,7 +215,7 @@ export class Orchestrator {
             const moodData = moodDoc.data();
             moodDetails = {
               name: moodData?.name,
-              keywords: moodData?.keywords || [],
+              description: moodData?.description,
               weather: moodData?.weather,
               lightingPrompt: moodData?.lightingPrompt,
               colorGradePrompt: moodData?.colorGradePrompt,
@@ -258,7 +257,6 @@ export class Orchestrator {
           themeColors: themeData?.colors || [],
           moodId: effectiveMoodId,
           moodName: moodDetails.name || moodForConfig,
-          moodKeywords: moodDetails.keywords,
           moodWeather: moodDetails.weather,
           moodLightingPrompt: moodDetails.lightingPrompt,
           moodColorGradePrompt: moodDetails.colorGradePrompt,
@@ -287,7 +285,7 @@ export class Orchestrator {
 
       // Aktif user rules varsa ekle
       try {
-        const userRulesSnapshot = await this.db.collection("user-rules")
+        const userRulesSnapshot = await this.db.collection("ai-rules")
           .where("isActive", "==", true)
           .limit(50)
           .get();
@@ -837,7 +835,11 @@ export class Orchestrator {
             weather: moodDetails.weather,
             lightingPrompt: moodDetails.lightingPrompt,
             colorGradePrompt: moodDetails.colorGradePrompt,
-          }
+            description: moodDetails.description,
+            timeOfDay: moodDetails.timeOfDay,
+            season: moodDetails.season,
+          },
+          themeData?.description
         );
 
         console.log(`[Orchestrator] Base prompt built with Gemini terminology`);
@@ -1453,7 +1455,11 @@ export class Orchestrator {
       weather?: string;
       lightingPrompt?: string;
       colorGradePrompt?: string;
-    }
+      description?: string;
+      timeOfDay?: string;
+      season?: string;
+    },
+    themeDescription?: string
   ): Promise<{ mainPrompt: string; negativePrompt?: string; promptBuildingSteps?: Array<{step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown>}> }> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
@@ -1488,7 +1494,8 @@ export class Orchestrator {
       timeOfDay,
       scenarioData,
       scenarioDescription,  // KRİTİK: Senaryo açıklamasını aktar
-      moodDetails
+      moodDetails,
+      themeDescription
     );
   }
 
@@ -1686,7 +1693,11 @@ Cup: ${colors} ${material} (from reference)`.trim();
       weather?: string;
       lightingPrompt?: string;
       colorGradePrompt?: string;
-    }
+      description?: string;
+      timeOfDay?: string;
+      season?: string;
+    },
+    themeDescription?: string
   ): Promise<{ mainPrompt: string; negativePrompt: string; promptBuildingSteps?: Array<{step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown>}> }> {
     // Senaryo verilerinden Gemini parametrelerini çıkar
     const scenarioParams = scenarioData
@@ -1776,15 +1787,68 @@ Cup: ${colors} ${material} (from reference)`.trim();
             addedToNegative: "sun, sunlight, sunny, hard shadows, warm golden light, sunrise, sunset, bright rays, volumetric light",
           },
         });
+      } else if (moodWeather === "sunny") {
+        // Güneşli hava için pozitif override
+        console.log(`[Orchestrator] ☀️ Sunny weather detected - applying warm light override`);
+        prompt += "\n\nWEATHER OVERRIDE: The scene MUST have warm, natural sunlight. Bright, inviting atmosphere with soft golden tones. Clear day feeling.";
+        negativePrompt += ", rain, overcast, gloomy, dark clouds, grey sky, fog";
+
+        allDecisions.push({
+          step: "weather-override",
+          input: moodWeather,
+          matched: true,
+          result: "sunny override uygulandı",
+          fallback: false,
+          details: {
+            weatherType: "sunny",
+            source: "moodDetails.weather",
+            addedToNegative: "rain, overcast, gloomy, dark clouds, grey sky, fog",
+          },
+        });
       } else {
         allDecisions.push({
           step: "weather-override",
           input: moodWeather || null,
           matched: false,
-          result: "Weather override uygulanmadı (güneşli/normal hava)",
+          result: "Weather override uygulanmadı (any/belirtilmemiş)",
           fallback: false,
           details: { moodWeather: moodWeather || "yok", keywordsChecked: true, keywordsMatched: false },
         });
+      }
+
+      // Tema ve mood açıklamalarını enjekte et
+      if (themeDescription) {
+        prompt += `\n\nTHEME CONTEXT: ${themeDescription}`;
+        console.log(`[Orchestrator] 📝 Theme description injected: ${themeDescription.substring(0, 60)}...`);
+      }
+      if (moodDetails?.description) {
+        prompt += `\n\nMOOD CONTEXT: ${moodDetails.description}`;
+        console.log(`[Orchestrator] 📝 Mood description injected: ${moodDetails.description.substring(0, 60)}...`);
+      }
+
+      // Mood'un timeOfDay ve season enjeksiyonu
+      if (moodDetails?.timeOfDay && moodDetails.timeOfDay !== "any") {
+        const timeOfDayMap: Record<string, string> = {
+          morning: "Morning atmosphere - fresh, bright, early day light",
+          afternoon: "Afternoon atmosphere - warm, full daylight, lively",
+          evening: "Evening atmosphere - warm golden hour, cozy, dimming light",
+          night: "Night atmosphere - dark, intimate, artificial warm lighting",
+        };
+        const timeDesc = timeOfDayMap[moodDetails.timeOfDay] || moodDetails.timeOfDay;
+        prompt += `\n\nTIME OF DAY: ${timeDesc}`;
+        console.log(`[Orchestrator] 🕒 Time of day injected: ${moodDetails.timeOfDay}`);
+      }
+
+      if (moodDetails?.season && moodDetails.season !== "any") {
+        const seasonMap: Record<string, string> = {
+          winter: "Winter season - cool tones, cozy indoor feeling, possible frost/snow elements visible through windows",
+          spring: "Spring season - fresh green tones, bright natural light, flowers and renewal feeling",
+          summer: "Summer season - warm vibrant colors, strong natural light, energetic atmosphere",
+          autumn: "Autumn season - warm orange/brown tones, soft golden light, falling leaves feeling",
+        };
+        const seasonDesc = seasonMap[moodDetails.season] || moodDetails.season;
+        prompt += `\n\nSEASON: ${seasonDesc}`;
+        console.log(`[Orchestrator] 🍂 Season injected: ${moodDetails.season}`);
       }
 
       // Mood'un lightingPrompt ve colorGradePrompt enjeksiyonu

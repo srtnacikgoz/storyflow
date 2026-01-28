@@ -1,6 +1,7 @@
 import { functions, getCors, REGION, errorResponse } from "./orchestrator/shared";
 import { MoodService } from "../services/moodService";
 import { Mood } from "../orchestrator/types";
+import { GeminiService } from "../services/gemini";
 
 const moodService = new MoodService();
 
@@ -158,6 +159,55 @@ export const seedMoods = functions
                 response.json({ success: true, ...result });
             } catch (error) {
                 errorResponse(response, error, "seedMoods");
+            }
+        });
+    });
+
+/**
+ * AI ile Mood Açıklaması Üret
+ */
+export const generateMoodDescription = functions
+    .region(REGION)
+    .runWith({
+        timeoutSeconds: 30,
+        memory: "512MB"
+    })
+    .https.onRequest(async (request, response) => {
+        const corsHandler = await getCors();
+        corsHandler(request, response, async () => {
+            try {
+                if (request.method !== "POST") {
+                    response.status(405).json({ success: false, error: "Use POST" });
+                    return;
+                }
+
+                const { moodName, keywords, weather, timeOfDay, season } = request.body;
+
+                if (!moodName) {
+                    response.status(400).json({ success: false, error: "moodName is required" });
+                    return;
+                }
+
+                // Gemini Service'i başlat (themeController pattern)
+                const { getConfig: getEnvConfig } = await import("../config/environment");
+                const config = getEnvConfig();
+
+                if (!config.gemini.apiKey) {
+                    response.status(500).json({ success: false, error: "Gemini API key not configured" });
+                    return;
+                }
+
+                const gemini = new GeminiService({
+                    apiKey: config.gemini.apiKey,
+                    // Modeller varsayılan olarak serviste tanımlı
+                });
+
+                console.log(`[generateMoodDescription] Generating for: ${moodName}`);
+                const result = await gemini.generateMoodDescription(moodName, weather, timeOfDay, season, keywords);
+
+                response.json({ success: true, description: result.text, cost: result.cost });
+            } catch (error) {
+                errorResponse(response, error, "generateMoodDescription");
             }
         });
     });

@@ -505,17 +505,19 @@ SCENE:
 
     const systemPrompt = `Sen profesyonel bir food styling uzmanısın. Pastane ürünleri için en uygun asset kombinasyonunu seç.
 MOOD: ${mood.toUpperCase()} - ${moodRule}
-${effectiveRules?.shouldIncludePet ? "⭐ Bu sefer KÖPEK DAHİL ET" : "Köpek dahil etme"}`;
+${effectiveRules?.shouldIncludePet ? "⭐ Bu sefer KÖPEK DAHİL ET" : "Köpek dahil etme"}
+
+ÖNEMLİ: usageCount düşük olan asset'lere öncelik ver (çeşitlilik için). tags bilgisini mood ve ürün uyumu için kullan.`;
 
     const userPrompt = `
 Ürün tipi: ${productType}
 Zaman: ${timeOfDay}
 Mood: ${mood}
 
-ÜRÜNLER: ${JSON.stringify(availableAssets.products?.map((a: any) => ({ id: a.id, filename: a.filename })) || [], null, 2)}
-TABAKLAR: ${JSON.stringify(availableAssets.plates?.map((a: any) => ({ id: a.id, filename: a.filename })) || [], null, 2)}
-MASALAR: ${JSON.stringify(availableAssets.tables?.map((a: any) => ({ id: a.id, filename: a.filename })) || [], null, 2)}
-FİNCANLAR: ${JSON.stringify(availableAssets.cups?.map((a: any) => ({ id: a.id, filename: a.filename })) || [], null, 2)}
+ÜRÜNLER: ${JSON.stringify(availableAssets.products?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
+TABAKLAR: ${JSON.stringify(availableAssets.plates?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
+MASALAR: ${JSON.stringify(availableAssets.tables?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
+FİNCANLAR: ${JSON.stringify(availableAssets.cups?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
 
 Yanıt formatı (sadece JSON):
 {
@@ -734,6 +736,82 @@ Yanıt formatı (sadece JSON):
     } catch (e) {
       console.error("[GeminiService] Evaluation error:", e);
       return { success: false, error: String(e), cost: 0 };
+    }
+  }
+
+  /**
+   * Tema Açıklaması Üret (AI Theme Writer)
+   * Gemini 3 Pro kullanarak, orkestratöre uygun İngilizce açıklama üretir.
+   */
+  async generateThemeDescription(themeName: string, keywords?: string): Promise<{ text: string; cost: number }> {
+    const systemPrompt = `You are an expert AI Prompt Engineer for a high-end food photography automation system.
+Your goal is to write a "Theme Description" that acts as a "Director's Note" for the AI image generator.
+
+RULES:
+1. LANGUAGE: English ONLY. High-quality, descriptive English.
+2. LENGTH: Concise (40-60 words).
+3. STRUCTURE: Start with Mood/Atmosphere, then Lighting, then Vibes.
+4. FOCUS: "Visual Anchor" technique - Keep the product (pastry/coffee) as the hero.
+5. TONE: Professional, evocative, sensory.
+
+INPUT:
+Theme Name: ${themeName}
+Keywords: ${keywords || "None"}
+
+OUTPUT FORMAT:
+Return ONLY the description text. No quotes, no "Here is the description:".`;
+
+    const userPrompt = `Write the theme description for: "${themeName}".`;
+
+    try {
+      const { text, cost } = await this.generateText(userPrompt, systemPrompt, false, "theme-description-generation" as AILogStage);
+      return { text: text.trim(), cost };
+    } catch (error) {
+      console.error("[GeminiService] Theme description generation failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mood Açıklaması Üret (AI Mood Writer)
+   * Gemini 3 Pro kullanarak, sinemasal atmosfer açıklaması üretir.
+   */
+  async generateMoodDescription(
+    moodName: string,
+    weather?: string,
+    timeOfDay?: string,
+    season?: string,
+    keywords?: string
+  ): Promise<{ text: string; cost: number }> {
+    const systemPrompt = `You are an expert Art Director and Cinematographer for a high-end food photography system.
+Your task is to write a concise, atmospheric, and technically precise visual description for an AI image generator.
+
+RULES:
+1. LANGUAGE: English ONLY.
+2. LENGTH: Concise (30-50 words).
+3. FOCUS: Lighting quality, Color Grading, Shadows, and Emotional Vibe.
+4. IMPORTANT: You MUST align your description with the provided Weather, Time of Day, and Season constraints.
+   - If Weather is 'rainy': mention soft diffused light, overcast sky, no direct sunlight.
+   - If Weather is 'sunny': mention warm golden light, sharp shadows.
+   - If Weather is 'cloudy': mention flat, even lighting, muted tones.
+   - If Weather is 'snowy': mention cool blue-white tones, soft cold light.
+5. Do NOT mention specific objects, products, or people. Focus only on the 'Atmosphere'.
+6. OUTPUT: Return ONLY the description text. No quotes, no prefixes.`;
+
+    const userPrompt = `Mood Name: ${moodName}
+Weather: ${weather !== "any" ? weather : "Flexible"}
+Time of Day: ${timeOfDay !== "any" ? timeOfDay : "Flexible"}
+Season: ${season !== "any" ? season : "Flexible"}
+${keywords ? `Additional Keywords: ${keywords}` : ""}
+
+Write the atmospheric description:`;
+
+    try {
+      const { text, cost } = await this.generateText(userPrompt, systemPrompt, false, "prompt-optimization");
+      return { text: text.trim(), cost };
+    } catch (error) {
+      console.error("[GeminiService] Mood description generation failed:", error);
+      throw error;
     }
   }
 

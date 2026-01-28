@@ -744,7 +744,6 @@ export interface ConfigSnapshot {
   themeColors?: string[];
   moodId?: string;
   moodName?: string;
-  moodKeywords?: string[];
   styleId?: string;
   styleName?: string;
   styleDefinition?: string;

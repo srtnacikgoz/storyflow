@@ -484,6 +484,10 @@ export const DEFAULT_TIMEOUTS_CONFIG: Omit<FirestoreTimeoutsConfig, "updatedAt">
 // ==========================================
 
 export const DEFAULT_SYSTEM_SETTINGS_CONFIG: Omit<FirestoreSystemSettingsConfig, "updatedAt"> = {
+  // Otomatik Paylaşım
+  // true = scheduler her 15 dk çalışır, false = tüm otomatik üretimler durur
+  schedulerEnabled: true,
+
   // AI Maliyetleri (USD per 1K token)
   // Claude Sonnet 4 fiyatlandırması (yaklaşık)
   claudeInputCostPer1K: 0.003,

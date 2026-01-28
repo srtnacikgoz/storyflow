@@ -138,13 +138,13 @@ interface CategoryFieldConfig {
 }
 
 const FIELDS_BY_CATEGORY: Record<AssetCategory, CategoryFieldConfig> = {
-  products: { tags: "required", dominantColors: "optional", style: "required", material: "hidden" },
-  props: { tags: "required", dominantColors: "optional", style: "required", material: "required" },
-  furniture: { tags: "required", dominantColors: "hidden", style: "required", material: "required" },
-  environments: { tags: "required", dominantColors: "hidden", style: "required", material: "hidden" },
+  products: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
+  props: { tags: "required", dominantColors: "hidden", style: "hidden", material: "required" },
+  furniture: { tags: "required", dominantColors: "hidden", style: "hidden", material: "required" },
+  environments: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
   pets: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
   interior: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
-  accessories: { tags: "required", dominantColors: "optional", style: "optional", material: "optional" },
+  accessories: { tags: "required", dominantColors: "hidden", style: "hidden", material: "optional" },
 };
 
 export default function Assets() {

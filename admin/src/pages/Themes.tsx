@@ -67,7 +67,7 @@ const emptyTheme = {
   id: "",
   name: "",
   description: "",
-  scenarios: [] as string[],
+  scenario: "", // Tekil senaryo seçimi
   mood: "",
   petAllowed: false,
   accessoryAllowed: false,
@@ -95,6 +95,9 @@ export default function Themes() {
   // Delete confirmation
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // AI Description Loading State
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
 
   // Çeşitlilik kuralları state
   const [variationRules, setVariationRules] = useState<VariationRules>(DEFAULT_VARIATION_RULES);
@@ -190,7 +193,7 @@ export default function Themes() {
         id: theme.id,
         name: theme.name,
         description: theme.description || "",
-        scenarios: theme.scenarios,
+        scenario: theme.scenarios?.[0] || "", // İlk senaryoyu al (tekil seçim)
         mood: theme.mood,
         petAllowed: theme.petAllowed,
         accessoryAllowed: theme.accessoryAllowed ?? false,
@@ -215,12 +218,15 @@ export default function Themes() {
     setSaving(true);
 
     try {
+      // Backend hâlâ scenarios array bekliyor - tekil seçimi array'e çeviriyoruz
+      const scenariosArray = form.scenario ? [form.scenario] : [];
+
       if (editingId) {
         // Güncelleme - id hariç diğer alanları gönder
         await api.updateTheme(editingId, {
           name: form.name,
           description: form.description,
-          scenarios: form.scenarios,
+          scenarios: scenariosArray,
           mood: form.mood,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
@@ -231,7 +237,7 @@ export default function Themes() {
           id: form.id,
           name: form.name,
           description: form.description,
-          scenarios: form.scenarios,
+          scenarios: scenariosArray,
           mood: form.mood,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
@@ -260,16 +266,6 @@ export default function Themes() {
     } finally {
       setDeleting(false);
     }
-  };
-
-  // Senaryo toggle
-  const toggleScenario = (scenarioId: string) => {
-    setForm((prev) => ({
-      ...prev,
-      scenarios: prev.scenarios.includes(scenarioId)
-        ? prev.scenarios.filter((s) => s !== scenarioId)
-        : [...prev.scenarios, scenarioId],
-    }));
   };
 
   // ID oluştur (name'den)
@@ -451,7 +447,7 @@ export default function Themes() {
 
                   {/* Mood - Dinamik */}
                   {(() => {
-                    const moodInfo = moods.find((m) => m.id === theme.mood);
+                    const moodInfo = (moods || []).find((m) => m.id === theme.mood);
                     return (
                       <div className="mb-3">
                         <div className="flex items-center gap-2 text-sm text-stone-600 mb-2">
@@ -489,28 +485,27 @@ export default function Themes() {
                     );
                   })()}
 
-                  {/* Senaryolar */}
+                  {/* Senaryo */}
                   <div className="mb-4">
-                    <p className="text-xs text-stone-500 mb-2">Senaryolar:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {theme.scenarios.map((scenarioId) => {
-                        const scenario = allScenarios.find((s) => s.id === scenarioId);
-                        return (
-                          <span
-                            key={scenarioId}
-                            className={`text-xs px-2 py-1 rounded ${scenario?.isInterior
-                              ? "bg-green-100 text-green-700"
-                              : scenario?.includesHands
-                                ? "bg-purple-100 text-purple-700"
-                                : "bg-blue-100 text-blue-700"
-                              }`}
-                          >
-                            {scenario?.name || scenarioId}
-                            {scenario?.isInterior && " 📍"}
-                          </span>
-                        );
-                      })}
-                    </div>
+                    <p className="text-xs text-stone-500 mb-2">Senaryo:</p>
+                    {(() => {
+                      const scenarioId = theme.scenarios?.[0];
+                      if (!scenarioId) return <span className="text-xs text-stone-400 italic">Seçilmemiş</span>;
+                      const scenario = allScenarios.find((s) => s.id === scenarioId);
+                      return (
+                        <span
+                          className={`text-xs px-2 py-1 rounded ${scenario?.isInterior
+                            ? "bg-green-100 text-green-700"
+                            : scenario?.includesHands
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-blue-100 text-blue-700"
+                            }`}
+                        >
+                          {scenario?.name || scenarioId}
+                          {scenario?.isInterior && " 📍"}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {/* Actions */}
@@ -742,16 +737,57 @@ export default function Themes() {
 
                   {/* Description */}
                   <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-2">
-                      Açıklama
-                    </label>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-medium text-stone-700">
+                        Açıklama
+                      </label>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!form.name) {
+                            alert("Önce bir tema adı giriniz.");
+                            return;
+                          }
+                          setIsGeneratingDescription(true);
+                          try {
+                            const result = await api.generateThemeDescription(form.name);
+                            setForm(prev => ({ ...prev, description: result.description }));
+                          } catch (error) {
+                            console.error("AI Description Error:", error);
+                            alert("AI açıklama üretirken bir hata oluştu.");
+                          } finally {
+                            setIsGeneratingDescription(false);
+                          }
+                        }}
+                        disabled={isGeneratingDescription || !form.name}
+                        className="text-xs flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-purple-100 to-amber-100 text-purple-700 rounded-md hover:from-purple-200 hover:to-amber-200 transition-colors disabled:opacity-50"
+                      >
+                        {isGeneratingDescription ? (
+                          <>
+                            <svg className="animate-spin h-3 w-3 text-purple-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Yazılıyor...
+                          </>
+                        ) : (
+                          <>
+                            <span>✨</span> AI ile Yaz
+                          </>
+                        )}
+                      </button>
+                    </div>
                     <textarea
                       value={form.description}
                       onChange={(e) => setForm({ ...form, description: e.target.value })}
                       placeholder="Bu temanın kullanım amacı..."
-                      className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                      rows={2}
+                      className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:bg-stone-50 disabled:text-stone-400"
+                      rows={3}
+                      disabled={isGeneratingDescription}
                     />
+                    <p className="text-[10px] text-stone-400 mt-1 text-right">
+                      *AI açıklamayı İngilizce ve yönetmen notu formatında yazar.
+                    </p>
                   </div>
 
                   {/* Mood - Gemini Terminolojisi ile */}
@@ -844,10 +880,14 @@ export default function Themes() {
                     </p>
                   </div>
 
-                  {/* Scenarios */}
+                  {/* Senaryo */}
                   <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-3">
-                      Senaryolar
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-2">
+                      Senaryo
+                      <Tooltip
+                        content="Bu tema aktif olduğunda kullanılacak senaryo. Her üretimde bu senaryo uygulanır."
+                        position="right"
+                      />
                     </label>
                     {scenariosLoading ? (
                       <div className="text-center py-4 text-stone-500">
@@ -861,39 +901,50 @@ export default function Themes() {
                         </a>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2">
-                        {allScenarios.map((scenario) => (
-                          <label
-                            key={scenario.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${form.scenarios.includes(scenario.id)
-                              ? "bg-amber-50 border-amber-300"
-                              : "bg-stone-50 border-stone-200 hover:bg-stone-100"
-                              }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={form.scenarios.includes(scenario.id)}
-                              onChange={() => toggleScenario(scenario.id)}
-                              className="w-4 h-4 text-amber-600 border-stone-300 rounded focus:ring-amber-500"
-                            />
-                            <div>
-                              <span className="text-sm font-medium text-stone-800">
-                                {scenario.name}
-                              </span>
-                              {scenario.isInterior && (
-                                <span className="ml-2 text-xs text-green-600">📍 Interior</span>
-                              )}
-                              {scenario.includesHands && (
-                                <span className="ml-2 text-xs text-purple-600">El var</span>
+                      <>
+                        <select
+                          value={form.scenario}
+                          onChange={(e) => setForm({ ...form, scenario: e.target.value })}
+                          className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                          required
+                        >
+                          <option value="">Senaryo seçin...</option>
+                          {allScenarios.map((scenario) => (
+                            <option key={scenario.id} value={scenario.id}>
+                              {scenario.name}
+                              {scenario.isInterior ? " (Interior)" : ""}
+                              {scenario.includesHands ? " (El var)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        {/* Seçili senaryo bilgisi */}
+                        {form.scenario && (() => {
+                          const selected = allScenarios.find(s => s.id === form.scenario);
+                          if (!selected) return null;
+                          return (
+                            <div className="mt-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="font-medium text-amber-800">{selected.name}</span>
+                                {selected.isInterior && (
+                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Interior</span>
+                                )}
+                                {selected.includesHands && (
+                                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">El var</span>
+                                )}
+                              </div>
+                              {selected.isInterior && (
+                                <p className="text-xs text-amber-700 mt-1">
+                                  Interior senaryo - mevcut mağaza fotoğrafları kullanılır, AI görsel üretimi atlanır
+                                </p>
                               )}
                             </div>
-                          </label>
-                        ))}
-                      </div>
+                          );
+                        })()}
+                      </>
                     )}
-                    {form.scenarios.length === 0 && !scenariosLoading && allScenarios.length > 0 && (
+                    {!form.scenario && !scenariosLoading && allScenarios.length > 0 && (
                       <p className="text-sm text-red-500 mt-2">
-                        En az bir senaryo seçmelisiniz
+                        Bir senaryo seçmelisiniz
                       </p>
                     )}
                   </div>
@@ -909,7 +960,7 @@ export default function Themes() {
                   </button>
                   <button
                     type="submit"
-                    disabled={saving || form.scenarios.length === 0}
+                    disabled={saving || !form.scenario}
                     className="px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
                   >
                     {saving ? "Kaydediliyor..." : editingId ? "Güncelle" : "Oluştur"}

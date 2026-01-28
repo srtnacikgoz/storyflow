@@ -3,6 +3,41 @@ import { api } from "../services/api";
 import { useLoading } from "../contexts/LoadingContext";
 import { hasSeenTour, resetTour } from "../components/PageTour";
 
+// Toggle Switch bileşeni
+function ToggleSwitch({
+  enabled,
+  onChange,
+  disabled = false,
+}: {
+  enabled: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      disabled={disabled}
+      onClick={() => onChange(!enabled)}
+      className={`
+        relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent
+        transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2
+        ${enabled ? "bg-green-500" : "bg-gray-300"}
+        ${disabled ? "opacity-50 cursor-not-allowed" : ""}
+      `}
+    >
+      <span
+        className={`
+          pointer-events-none inline-block h-6 w-6 rounded-full bg-white shadow-lg ring-0
+          transition duration-200 ease-in-out
+          ${enabled ? "translate-x-5" : "translate-x-0"}
+        `}
+      />
+    </button>
+  );
+}
+
 // Tanıtım turları listesi
 const TOURS = [
   { id: "assets-page", name: "Görseller Sayfası", description: "Ürün görselleri yönetimi" },
@@ -19,6 +54,10 @@ export default function Settings() {
     error?: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Scheduler toggle
+  const [schedulerEnabled, setSchedulerEnabled] = useState<boolean | null>(null);
+  const [schedulerToggling, setSchedulerToggling] = useState(false);
 
   // Tour durumları
   const [tourStatuses, setTourStatuses] = useState<Record<string, boolean>>({});
@@ -46,6 +85,31 @@ export default function Settings() {
     checkTourStatuses();
   };
 
+  // Scheduler durumunu yükle
+  const loadSchedulerStatus = useCallback(async () => {
+    try {
+      const settings = await api.getSystemSettings();
+      setSchedulerEnabled(settings.schedulerEnabled);
+    } catch (err) {
+      console.error("[Settings] Scheduler durumu yüklenemedi:", err);
+    }
+  }, []);
+
+  // Scheduler toggle
+  const handleSchedulerToggle = async (enabled: boolean) => {
+    setSchedulerToggling(true);
+    try {
+      await api.updateSystemSettings({ schedulerEnabled: enabled });
+      setSchedulerEnabled(enabled);
+    } catch (err) {
+      console.error("[Settings] Scheduler toggle hatası:", err);
+      // Hata durumunda eski değere geri dön
+      setSchedulerEnabled(!enabled);
+    } finally {
+      setSchedulerToggling(false);
+    }
+  };
+
   const checkToken = async () => {
     setLoading(true);
     startLoading("settings", "Ayarlar yükleniyor...");
@@ -69,7 +133,8 @@ export default function Settings() {
   useEffect(() => {
     checkToken();
     checkTourStatuses();
-  }, [checkTourStatuses]);
+    loadSchedulerStatus();
+  }, [checkTourStatuses, loadSchedulerStatus]);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -121,6 +186,38 @@ export default function Settings() {
         <h2 className="text-lg font-semibold mb-4">Zamanlanmış Paylaşım</h2>
 
         <div className="space-y-3">
+          {/* Otomatik Paylaşım Toggle */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div>
+              <p className="font-medium text-gray-900">Otomatik Paylaşım</p>
+              <p className="text-sm text-gray-500">
+                {schedulerEnabled === null
+                  ? "Yükleniyor..."
+                  : schedulerEnabled
+                    ? "Scheduler aktif - içerikler otomatik üretiliyor"
+                    : "Scheduler duraklatıldı - otomatik üretim yapılmıyor"}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {schedulerEnabled !== null && (
+                <span
+                  className={`text-xs px-2 py-0.5 rounded font-medium ${
+                    schedulerEnabled
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {schedulerEnabled ? "Aktif" : "Duraklatıldı"}
+                </span>
+              )}
+              <ToggleSwitch
+                enabled={schedulerEnabled ?? false}
+                onChange={handleSchedulerToggle}
+                disabled={schedulerEnabled === null || schedulerToggling}
+              />
+            </div>
+          </div>
+
           <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
             <span className="text-gray-600">Kontrol Sıklığı</span>
             <span className="font-medium">Her 15 dakika</span>

@@ -128,7 +128,7 @@ export const updateTheme = functions
           return;
         }
 
-        const { id, name, description, scenarios, mood, petAllowed } = request.body;
+        const { id, name, description, scenarios, mood, petAllowed, accessoryAllowed } = request.body;
 
         if (!id) {
           response.status(400).json({ success: false, error: "id is required" });
@@ -152,6 +152,7 @@ export const updateTheme = functions
         if (scenarios !== undefined) updateData.scenarios = scenarios;
         if (mood !== undefined) updateData.mood = mood;
         if (petAllowed !== undefined) updateData.petAllowed = petAllowed;
+        if (accessoryAllowed !== undefined) updateData.accessoryAllowed = accessoryAllowed;
 
         await docRef.update(updateData);
 
@@ -237,6 +238,54 @@ export const deleteTheme = functions
         response.json({ success: true, message: "Theme deleted" });
       } catch (error) {
         errorResponse(response, error, "deleteTheme");
+      }
+    });
+  });
+
+/**
+ * AI Tema Açıklaması Üret
+ * Gemini kullanarak profesyonel tema açıklaması oluşturur.
+ */
+export const generateThemeDescription = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const { themeName, keywords } = request.body;
+
+        if (!themeName) {
+          response.status(400).json({ success: false, error: "themeName is required" });
+          return;
+        }
+
+        // Gemini Service'i başlat
+        const { GeminiService } = await import("../../services/gemini");
+        const { getConfig } = await import("../../config/environment");
+
+        // API Key'i config'den al
+        const config = getConfig();
+        if (!config.gemini.apiKey) {
+          response.status(500).json({ success: false, error: "Gemini API key not configured" });
+          return;
+        }
+
+        const gemini = new GeminiService({
+          apiKey: config.gemini.apiKey,
+          // Modeller varsayılan olarak serviste tanımlı
+        });
+
+        console.log(`[generateThemeDescription] Generating for: ${themeName}`);
+        const result = await gemini.generateThemeDescription(themeName, keywords);
+
+        response.json({ success: true, data: { description: result.text, cost: result.cost } });
+      } catch (error) {
+        errorResponse(response, error, "generateThemeDescription");
       }
     });
   });

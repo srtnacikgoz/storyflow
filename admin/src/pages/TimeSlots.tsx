@@ -378,7 +378,7 @@ export default function TimeSlots() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zaman Dilimi</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saat Aralığı</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Günler</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün Tipleri</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün Tipi</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
                     </tr>
@@ -402,11 +402,9 @@ export default function TimeSlots() {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex gap-1">
-                            {rule.productTypes.map(pt => (
-                              <span key={pt} className="text-xl" title={PRODUCT_CONFIG[pt]?.label || pt}>{PRODUCT_CONFIG[pt]?.emoji || "📦"}</span>
-                            ))}
-                          </div>
+                          <span className="text-xl" title={PRODUCT_CONFIG[rule.productTypes[0]]?.label || rule.productTypes[0]}>
+                            {PRODUCT_CONFIG[rule.productTypes[0]]?.emoji || "📦"} {PRODUCT_CONFIG[rule.productTypes[0]]?.label || rule.productTypes[0]}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${rule.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -608,19 +606,12 @@ function RuleCard({
           </div>
         </div>
 
-        {/* Ürün Tipleri */}
+        {/* Ürün Tipi */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 mr-1">Ürünler:</span>
-          <div className="flex flex-wrap gap-1">
-            {rule.productTypes.map((pt) => (
-              <span
-                key={pt}
-                className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium"
-              >
-                {productConfig[pt]?.emoji || "📦"} {productConfig[pt]?.label || pt}
-              </span>
-            ))}
-          </div>
+          <span className="text-xs text-gray-500 mr-1">Ürün:</span>
+          <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium">
+            {productConfig[rule.productTypes[0]]?.emoji || "📦"} {productConfig[rule.productTypes[0]]?.label || rule.productTypes[0]}
+          </span>
         </div>
       </div>
 
@@ -678,8 +669,8 @@ function RuleModal({
   const [startHour, setStartHour] = useState(rule?.startHour || 7);
   const [endHour, setEndHour] = useState(rule?.endHour || 11);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(rule?.daysOfWeek || [1, 2, 3, 4, 5]);
-  const [productTypes, setProductTypes] = useState<string[]>(
-    rule?.productTypes || ["croissants"]
+  const [productType, setProductType] = useState<string>(
+    rule?.productTypes?.[0] || "croissants"
   );
   // Tema kullanım state'leri
   const [useTheme, setUseTheme] = useState<boolean>(!!rule?.themeId);
@@ -694,11 +685,7 @@ function RuleModal({
     );
   };
 
-  const toggleProductType = (pt: string) => {
-    setProductTypes((prev) =>
-      prev.includes(pt) ? prev.filter((p) => p !== pt) : [...prev, pt]
-    );
-  };
+  // productType tekil seçim - toggle artık gerekmez
 
   // Görüntülenecek ürün kategorileri: dinamik kategoriler veya fallback
   const availableProducts = useMemo(() => {
@@ -720,8 +707,8 @@ function RuleModal({
   // Tema seçilmediğinde uyarı gösterip kullanıcıya karar aldıran fonksiyon
   const handleSubmit = async (e: React.FormEvent, skipThemeWarning = false) => {
     e.preventDefault();
-    if (productTypes.length === 0) {
-      alert("En az bir ürün tipi seçmelisiniz");
+    if (!productType) {
+      alert("Bir ürün tipi seçmelisiniz");
       return;
     }
     if (daysOfWeek.length === 0) {
@@ -751,8 +738,7 @@ function RuleModal({
         startHour,
         endHour,
         daysOfWeek,
-        productTypes,
-        priority: 10,
+        productTypes: [productType], // Backend hâlâ array bekliyor
       };
 
       // Tema kullan seçildiyse ve tema seçildiyse ekle
@@ -885,31 +871,27 @@ function RuleModal({
             </div>
           </div>
 
-          {/* Ürün Tipleri */}
+          {/* Ürün Tipi */}
           <div>
             <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
-              📦 Hangi Ürünler İçin?
+              📦 Hangi Ürün İçin?
               <Tooltip
-                content="Bu zaman diliminde hangi ürün kategorilerinden seçim yapılsın? Birden fazla seçerseniz sistem rastgele birini seçer."
+                content="Bu zaman diliminde hangi ürün kategorisinden seçim yapılsın?"
                 position="right"
               />
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <select
+              value={productType}
+              onChange={(e) => setProductType(e.target.value)}
+              className="input w-full"
+            >
+              <option value="">Ürün tipi seçin...</option>
               {availableProducts.map((product) => (
-                <button
-                  key={product.slug}
-                  type="button"
-                  onClick={() => toggleProductType(product.slug)}
-                  className={`p-3 rounded-xl text-sm transition-all flex items-center gap-2 ${productTypes.includes(product.slug)
-                    ? "bg-amber-100 text-amber-800 ring-2 ring-amber-300"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                >
-                  <span className="text-xl">{product.emoji}</span>
-                  <span className="font-medium">{product.label}</span>
-                </button>
+                <option key={product.slug} value={product.slug}>
+                  {product.emoji} {product.label}
+                </option>
               ))}
-            </div>
+            </select>
             {availableProducts.length === 0 && (
               <p className="text-sm text-gray-500 mt-2">
                 Ürün kategorileri yükleniyor...

@@ -25,6 +25,7 @@ export {
   createTheme,
   updateTheme,
   deleteTheme,
+  generateThemeDescription, // AI Writer
 } from "./themeController";
 
 // Scenario Controller

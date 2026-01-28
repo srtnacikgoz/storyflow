@@ -38,6 +38,7 @@ export {
   createTheme,
   updateTheme,
   deleteTheme,
+  generateThemeDescription,
 
   // Scenario Controller
   listScenarios,

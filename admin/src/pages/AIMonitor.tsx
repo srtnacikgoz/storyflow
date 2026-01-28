@@ -995,9 +995,7 @@ export default function AIMonitor() {
                       <div className="bg-white rounded-lg p-3 shadow-sm">
                         <p className="text-xs text-gray-500">Mood</p>
                         <p className="font-medium text-gray-800">{selectedLog.configSnapshot.moodName}</p>
-                        {selectedLog.configSnapshot.moodKeywords && selectedLog.configSnapshot.moodKeywords.length > 0 && (
-                          <p className="text-xs text-gray-500 mt-1">{selectedLog.configSnapshot.moodKeywords.slice(0, 3).join(", ")}</p>
-                        )}
+                        {/* moodKeywords kaldırıldı - description artık Gemini'ye gönderiliyor */}
                       </div>
                     )}
                     {selectedLog.configSnapshot.styleName && (

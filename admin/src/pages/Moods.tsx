@@ -41,6 +41,7 @@ export default function Moods() {
     const [showModal, setShowModal] = useState(false);
     const [editingMood, setEditingMood] = useState<Mood | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     // Form State (Varsayılan değerlerle)
     const [formData, setFormData] = useState<Partial<Mood>>({
@@ -396,14 +397,67 @@ export default function Moods() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Açıklama</label>
-                                <textarea
-                                    required
-                                    value={formData.description}
-                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                    className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 outline-none h-20"
-                                    placeholder="Bu mood ne zaman kullanılmalı?"
-                                />
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700">Açıklama (Atmosfer)</label>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (!formData.name) {
+                                                alert("Önce bir Mood Adı girin.");
+                                                return;
+                                            }
+                                            setIsGenerating(true);
+                                            try {
+                                                const desc = await api.generateMoodDescription(
+                                                    formData.name!,
+                                                    undefined, // keywords
+                                                    formData.weather as string,
+                                                    formData.timeOfDay as string,
+                                                    formData.season as string
+                                                );
+                                                setFormData(prev => ({ ...prev, description: desc }));
+                                            } catch (err) {
+                                                alert("AI üretimi başarısız oldu.");
+                                                console.error(err);
+                                            } finally {
+                                                setIsGenerating(false);
+                                            }
+                                        }}
+                                        disabled={isGenerating || !formData.name}
+                                        className="text-xs bg-gradient-to-r from-amber-500 to-orange-600 text-white px-3 py-1.5 rounded-full hover:shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5"
+                                    >
+                                        {isGenerating ? (
+                                            <>
+                                                <span className="animate-spin text-[10px]">✨</span>
+                                                Yazılıyor...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span>✨</span> AI ile Yaz
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <textarea
+                                        required
+                                        value={formData.description}
+                                        onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                        className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 outline-none h-24 text-sm"
+                                        placeholder="Atmospheric description (AI generated usually)..."
+                                        disabled={isGenerating}
+                                    />
+                                    {isGenerating && (
+                                        <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] rounded-xl flex items-center justify-center">
+                                            <div className="text-amber-600 text-sm font-medium animate-pulse">
+                                                Yönetmen düşünüyor... 🎬
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-1">
+                                    *Seçili Zaman, Mevsim ve Hava Durumu bilgileri AI'ya iletilir.
+                                </p>
                             </div>
 
                             {/* Koşullar */}

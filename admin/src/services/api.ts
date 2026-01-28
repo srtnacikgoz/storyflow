@@ -1892,6 +1892,20 @@ class ApiService {
     });
   }
 
+  /**
+   * AI ile Mood açıklaması üret
+   */
+  async generateMoodDescription(moodName: string, keywords?: string, weather?: string, timeOfDay?: string, season?: string): Promise<string> {
+    const response = await this.fetch<{
+      success: boolean;
+      description: string;
+    }>("generateMoodDescription", {
+      method: "POST",
+      body: JSON.stringify({ moodName, keywords, weather, timeOfDay, season }),
+    });
+    return response.description;
+  }
+
   // ==========================================
   // Style Operations
   // ==========================================
@@ -1947,6 +1961,76 @@ class ApiService {
     await this.fetch<{ success: boolean }>(`deleteStyle?id=${id}`, {
       method: "DELETE",
     });
+  }
+
+  // ==========================================
+  // System Settings (Scheduler Toggle vb.)
+  // ==========================================
+
+  /**
+   * Sistem ayarlarını getir (schedulerEnabled, AI maliyetleri vb.)
+   */
+  async getSystemSettings(): Promise<{
+    schedulerEnabled: boolean;
+    claudeInputCostPer1K: number;
+    claudeOutputCostPer1K: number;
+    geminiDefaultFaithfulness: number;
+    maxFeedbackForPrompt: number;
+    stuckWarningMinutes: number;
+    maxLogsPerQuery: number;
+    cacheTTLMinutes: number;
+    updatedAt: number;
+    updatedBy?: string;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        schedulerEnabled: boolean;
+        claudeInputCostPer1K: number;
+        claudeOutputCostPer1K: number;
+        geminiDefaultFaithfulness: number;
+        maxFeedbackForPrompt: number;
+        stuckWarningMinutes: number;
+        maxLogsPerQuery: number;
+        cacheTTLMinutes: number;
+        updatedAt: number;
+        updatedBy?: string;
+      };
+    }>("getSystemSettingsConfig");
+    return response.data;
+  }
+
+  /**
+   * Sistem ayarlarını güncelle
+   */
+  async updateSystemSettings(updates: {
+    schedulerEnabled?: boolean;
+    claudeInputCostPer1K?: number;
+    claudeOutputCostPer1K?: number;
+    geminiDefaultFaithfulness?: number;
+    maxFeedbackForPrompt?: number;
+    stuckWarningMinutes?: number;
+    maxLogsPerQuery?: number;
+    cacheTTLMinutes?: number;
+  }): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateSystemSettingsConfig", {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  /**
+   * AI Tema Açıklaması Üret
+   */
+  async generateThemeDescription(themeName: string, keywords?: string): Promise<{ description: string; cost: number }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: { description: string; cost: number };
+    }>("generateThemeDescription", {
+      method: "POST",
+      body: JSON.stringify({ themeName, keywords }),
+    });
+    return response.data;
   }
 
   /**

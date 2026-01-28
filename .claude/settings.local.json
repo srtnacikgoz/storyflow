@@ -79,7 +79,8 @@
       "Bash(/tmp/google-cloud-sdk/bin/gcloud auth list)",
       "Bash(/tmp/google-cloud-sdk/bin/gcloud auth application-default print-access-token)",
       "Bash(/tmp/google-cloud-sdk/bin/gcloud auth login:*)",
-      "WebFetch(domain:ai.google.dev)"
+      "WebFetch(domain:ai.google.dev)",
+      "Skill(superpowers:brainstorming)"
     ]
   },
   "hooks": {

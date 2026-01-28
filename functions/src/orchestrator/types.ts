@@ -848,8 +848,7 @@ export interface Theme {
   name: string;            // "Sabah Enerjisi"
   description?: string;    // "Enerjik sabah paylaşımları için"
   scenarios: string[];     // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
-  mood: string;            // @deprecated - eski string mood ("energetic"). moodId kullanılmalı.
-  moodId?: string;         // Firestore Mood document ID referansı (moods collection)
+  mood: string;            // Firestore Mood document ID referansı (moods collection)
   petAllowed: boolean;     // Köpek dahil edilebilir mi?
   accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
 
@@ -1591,6 +1590,9 @@ export interface FirestorePromptStudioConfig {
  * Hardcoded değerlerin config'e taşınmış hali
  */
 export interface FirestoreSystemSettingsConfig {
+  // Otomatik Paylaşım (Scheduler)
+  schedulerEnabled: boolean;          // Default: true - Tüm otomatik üretimleri açar/kapar
+
   // AI Maliyetleri (USD per 1K token)
   claudeInputCostPer1K: number;       // Default: 0.003
   claudeOutputCostPer1K: number;      // Default: 0.015
