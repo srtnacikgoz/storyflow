@@ -4,6 +4,7 @@
  */
 
 import { AILogService } from "./aiLogService";
+import { AILogStage } from "../types";
 
 // Lazy load imports - Cloud Functions startup timeout'unu önler
 // @google/generative-ai ve sharp modülleri ilk kullanımda yüklenir
@@ -337,7 +338,7 @@ SCENE:
       console.log("[GeminiService] Image generated successfully");
 
       // AI Log kaydet
-      await AILogService.logGemini({
+      await AILogService.logGemini("image-generation", {
         model: this.imageModel,
         userPrompt: fullPrompt,
         negativePrompt: options.negativePrompt,
@@ -365,7 +366,7 @@ SCENE:
       const errorMessage = error instanceof Error ? error.message : "Unknown Gemini API error";
       const errorType = error instanceof GeminiBlockedError ? "blocked" : "error";
 
-      await AILogService.logGemini({
+      await AILogService.logGemini("image-generation", {
         model: this.imageModel,
         userPrompt: fullPrompt,
         negativePrompt: options.negativePrompt,
@@ -403,7 +404,8 @@ SCENE:
   async generateText(
     prompt: string,
     systemInstruction?: string,
-    jsonMode: boolean = false
+    jsonMode: boolean = false,
+    stage: AILogStage = "image-generation"
   ): Promise<{ text: string; data?: any; cost: number }> {
     const client = await this.getClient();
     const safetySettings = await getSafetySettings();
@@ -448,7 +450,7 @@ SCENE:
       }
 
       // AI Log kaydet
-      await AILogService.logGemini({
+      await AILogService.logGemini(stage, {
         model: this.textModel,
         userPrompt: prompt.substring(0, 500) + "...",
         status: "success",
@@ -465,7 +467,7 @@ SCENE:
       const durationMs = Date.now() - startTime;
       console.error(`[GeminiService] Text generation error (${this.textModel}):`, error);
 
-      await AILogService.logGemini({
+      await AILogService.logGemini(stage, {
         model: this.textModel,
         userPrompt: prompt.substring(0, 500),
         status: "error",
@@ -525,7 +527,7 @@ Yanıt formatı (sadece JSON):
 }`;
 
     try {
-      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true);
+      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true, "asset-selection");
 
       if (!data || !data.productId) {
         return { success: false, error: "Geçersiz Gemini yanıtı - productId bulunamadı", cost, tokensUsed: 0 };
@@ -591,7 +593,7 @@ Yanıt formatı (sadece JSON):
 }`;
 
     try {
-      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true);
+      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true, "scenario-selection");
 
       if (!data || !data.scenarioId) {
         return { success: false, error: "Geçersiz senaryo yanıtı", cost, tokensUsed: 0 };
@@ -624,14 +626,29 @@ Yanıt formatı (sadece JSON):
     basePrompt: string,
     scenario: any,
     assets: any,
-    hints?: string
+    hints?: string,
+    eatingMethod?: string
   ): Promise<{ success: boolean; data?: { optimizedPrompt: string; negativePrompt: string; customizations: string[] }; error?: string; cost: number }> {
     const systemPrompt = "Sen bir prompt mühendisisin. Verilen girdilere göre Gemini Görsel Üretim modeli için en estetik ve teknik promptu hazırla.";
+
+    // eatingMethod'a göre fiziksel kısıtlama oluştur
+    let physicalConstraint = "";
+    if (eatingMethod === "hand") {
+      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün ELLE yenir. Prompt'ta kesinlikle çatal, bıçak veya kaşık OLMAMALI. Negative prompt'a fork, knife, spoon, cutlery, utensil ekle.";
+    } else if (eatingMethod === "fork" || eatingMethod === "fork-knife") {
+      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün çatalla yenir. Sahnede ürünün yanında çatal (ve/veya bıçak) görünebilir.";
+    } else if (eatingMethod === "spoon") {
+      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün kaşıkla yenir. Sahnede kaşık görünebilir.";
+    } else if (eatingMethod === "none") {
+      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün yiyecek değil (içecek vb.). Yeme aletleri gerekmez.";
+    }
+
     const userPrompt = `
 Ana Prompt: ${basePrompt}
 Senaryo: ${scenario?.scenarioName || "bilinmiyor"}
 Ürün: ${assets?.product?.filename || "bilinmiyor"}
-İpuçları: ${hints || "yok"}
+Yeme Şekli: ${eatingMethod || "bilinmiyor"}
+İpuçları: ${hints || "yok"}${physicalConstraint}
 
 Yanıt formatı (sadece JSON):
 {
@@ -641,7 +658,7 @@ Yanıt formatı (sadece JSON):
 }`;
 
     try {
-      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true);
+      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true, "prompt-optimization");
 
       return {
         success: true,

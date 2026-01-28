@@ -441,8 +441,22 @@ export async function suggestLightingForProduct(productType: string): Promise<Ge
 }
 
 /**
+ * Prompt building karar adımı
+ */
+interface PromptBuildingStep {
+  step: string;
+  input: string | null;
+  matched: boolean;
+  result: string | null;
+  fallback: boolean;
+  details?: Record<string, unknown>;
+}
+
+/**
  * Senaryo için tam Gemini prompt oluştur
  * Bu fonksiyon orchestrator.ts'deki buildDynamicPrompt'un yerini alabilir
+ *
+ * decisions dizisi: Her karar noktasını kaydeder (eşleşme, fallback, sonuç)
  */
 export async function buildGeminiPrompt(params: {
   moodId?: string;
@@ -462,31 +476,136 @@ export async function buildGeminiPrompt(params: {
     composition?: GeminiCompositionTemplate;
     textureProfile?: GeminiProductTextureProfile;
   };
+  decisions: PromptBuildingStep[];
 }> {
+  const decisions: PromptBuildingStep[] = [];
   const presets = await loadGeminiPresets();
 
-  // Metadata topla
-  const mood = params.moodId
-    ? presets?.moods.find(m => m.id === params.moodId)
-    : await suggestMoodForTime(params.timeOfDay);
+  // === KARAR 1: Mood / Atmosfer Seçimi ===
+  let mood: GeminiMoodDefinition | null | undefined;
+  if (params.moodId) {
+    // moodId verilmiş → preset'te ara
+    mood = presets?.moods.find(m => m.id === params.moodId);
+    decisions.push({
+      step: "mood-selection",
+      input: params.moodId,
+      matched: !!mood,
+      result: mood ? `${mood.name} (${mood.id})` : null,
+      fallback: false,
+      details: mood
+        ? { atmosphere: mood.geminiAtmosphere, lighting: mood.lighting, temperature: mood.temperature, colorPalette: mood.colorPalette }
+        : { availablePresetIds: presets?.moods.map(m => m.id) || [], reason: `moodId "${params.moodId}" preset listesinde bulunamadı` },
+    });
+  } else {
+    // moodId yok → zamana göre öner
+    mood = await suggestMoodForTime(params.timeOfDay);
+    decisions.push({
+      step: "mood-selection",
+      input: null,
+      matched: !!mood,
+      result: mood ? `${mood.name} (${mood.id})` : null,
+      fallback: true,
+      details: mood
+        ? { atmosphere: mood.geminiAtmosphere, source: "suggestMoodForTime", timeOfDay: params.timeOfDay }
+        : { reason: "suggestMoodForTime sonuç döndürmedi", timeOfDay: params.timeOfDay },
+    });
+  }
 
-  const lighting = params.lightingPresetId
-    ? presets?.lighting.find(l => l.id === params.lightingPresetId)
-    : params.productType ? await suggestLightingForProduct(params.productType) : null;
+  // === KARAR 2: Işık Seçimi ===
+  let lighting: GeminiLightingPreset | null | undefined;
+  if (params.lightingPresetId) {
+    lighting = presets?.lighting.find(l => l.id === params.lightingPresetId);
+    decisions.push({
+      step: "lighting-selection",
+      input: params.lightingPresetId,
+      matched: !!lighting,
+      result: lighting ? `${lighting.name} (${lighting.id})` : null,
+      fallback: false,
+      details: lighting
+        ? { geminiPrompt: lighting.geminiPrompt, temperature: lighting.temperature, direction: lighting.direction }
+        : { availablePresetIds: presets?.lighting.map(l => l.id) || [], reason: `lightingPresetId "${params.lightingPresetId}" bulunamadı` },
+    });
+  } else if (params.productType) {
+    lighting = await suggestLightingForProduct(params.productType);
+    decisions.push({
+      step: "lighting-selection",
+      input: null,
+      matched: !!lighting,
+      result: lighting ? `${lighting.name} (${lighting.id})` : null,
+      fallback: true,
+      details: lighting
+        ? { geminiPrompt: lighting.geminiPrompt, source: "suggestLightingForProduct", productType: params.productType }
+        : { reason: "suggestLightingForProduct sonuç döndürmedi", productType: params.productType },
+    });
+  } else {
+    // Ne lightingPresetId ne productType var → ışık yok
+    lighting = null;
+    const useMoodLighting = !!(mood && mood.lighting);
+    decisions.push({
+      step: "lighting-selection",
+      input: null,
+      matched: false,
+      result: useMoodLighting ? `Mood lighting kullanılacak: ${mood!.lighting}` : null,
+      fallback: useMoodLighting,
+      details: { reason: "lightingPresetId ve productType verilmedi", useMoodLightingFallback: useMoodLighting },
+    });
+  }
 
+  // === KARAR 3: El Pozu ===
   const handPose = params.includesHands && params.handPoseId
     ? presets?.handPoses.find(h => h.id === params.handPoseId)
     : null;
 
+  if (params.includesHands) {
+    decisions.push({
+      step: "hand-pose-selection",
+      input: params.handPoseId || null,
+      matched: !!handPose,
+      result: handPose ? `${handPose.name} (${handPose.id})` : null,
+      fallback: false,
+      details: handPose
+        ? { geminiPrompt: handPose.geminiPrompt, skinTone: handPose.skinTone }
+        : params.handPoseId
+          ? { reason: `handPoseId "${params.handPoseId}" bulunamadı` }
+          : { reason: "handPoseId verilmedi" },
+    });
+  }
+
+  // === KARAR 4: Kompozisyon ===
   const composition = params.compositionId
     ? presets?.compositions.find(c => c.id === params.compositionId)
     : null;
 
+  if (params.compositionId) {
+    decisions.push({
+      step: "composition-selection",
+      input: params.compositionId,
+      matched: !!composition,
+      result: composition ? `${composition.name} (${composition.id})` : null,
+      fallback: false,
+      details: composition
+        ? { geminiPrompt: composition.geminiPrompt, cameraAngle: composition.cameraAngle }
+        : { reason: `compositionId "${params.compositionId}" bulunamadı` },
+    });
+  }
+
+  // === KARAR 5: Ürün Dokusu ===
   const textureProfile = params.productType
     ? await getTextureProfile(params.productType)
     : null;
 
-  // Prompt parçalarını oluştur
+  decisions.push({
+    step: "texture-profile",
+    input: params.productType || null,
+    matched: !!textureProfile,
+    result: textureProfile ? `${textureProfile.productType} profili` : null,
+    fallback: false,
+    details: textureProfile
+      ? { geminiPrompt: textureProfile.geminiPrompt, focusAreas: textureProfile.focusAreas }
+      : { reason: params.productType ? `"${params.productType}" için profil bulunamadı` : "productType verilmedi" },
+  });
+
+  // === PROMPT OLUŞTURMA ===
   const promptParts: string[] = [];
 
   // 1. Format ve context
@@ -503,19 +622,36 @@ export async function buildGeminiPrompt(params: {
   }
 
   // 3. Işık
+  let lightingSource = "none";
   if (lighting) {
     promptParts.push(`LIGHTING:`);
     promptParts.push(`- ${lighting.geminiPrompt}`);
     promptParts.push(`- Color temperature: ${lighting.temperature}`);
     promptParts.push(`- Shallow depth of field (f/2.0)`);
     promptParts.push("");
+    lightingSource = "preset";
   } else if (mood && mood.lighting) {
     // Lighting preset yoksa MOOD lighting kullan
     promptParts.push(`LIGHTING:`);
     promptParts.push(`- ${mood.lighting}`);
     promptParts.push(`- Shallow depth of field (f/2.0)`);
     promptParts.push("");
+    lightingSource = "mood-fallback";
   }
+
+  // Işık kaynağını kaydet
+  decisions.push({
+    step: "lighting-applied",
+    input: lightingSource,
+    matched: lightingSource !== "none",
+    result: lightingSource === "preset"
+      ? `Preset: ${lighting!.geminiPrompt}`
+      : lightingSource === "mood-fallback"
+        ? `Mood fallback: ${mood!.lighting}`
+        : "Işık bilgisi prompt'a eklenmedi",
+    fallback: lightingSource === "mood-fallback",
+    details: { source: lightingSource },
+  });
 
   // 4. El (varsa)
   if (params.includesHands && handPose) {
@@ -551,6 +687,8 @@ export async function buildGeminiPrompt(params: {
   const negativeCategories = params.includesHands ? ["always", "hands"] : ["always"];
   const negativePrompt = await buildNegativePrompt(negativeCategories);
 
+  console.log(`[GeminiPromptBuilder] Prompt built: mood=${mood?.id || "NONE"}, lighting=${lighting?.id || lightingSource}, hands=${handPose?.id || "NONE"}, texture=${textureProfile?.productType || "NONE"}, decisions=${decisions.length} steps`);
+
   return {
     mainPrompt: promptParts.join("\n"),
     negativePrompt,
@@ -561,6 +699,7 @@ export async function buildGeminiPrompt(params: {
       composition: composition || undefined,
       textureProfile: textureProfile || undefined,
     },
+    decisions,
   };
 }
 

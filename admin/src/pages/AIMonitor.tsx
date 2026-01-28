@@ -141,6 +141,7 @@ export default function AIMonitor() {
   const [logs, setLogs] = useState<AILog[]>([]);
   const [stats, setStats] = useState<AIStats | null>(null);
   const [selectedLog, setSelectedLog] = useState<AILog | null>(null);
+  const [copiedPipelineId, setCopiedPipelineId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -293,6 +294,78 @@ export default function AIMonitor() {
   // Modal kapat
   const closeModal = () => setSelectedLog(null);
 
+  // Pipeline loglarını JSON formatında kopyalanabilir metin oluştur
+  const formatPipelineLogsForCopy = (group: PipelineGroup): string => {
+    const data = {
+      pipeline: {
+        pipelineId: group.pipelineId,
+        startTime: formatDate(group.startTime),
+        endTime: formatDate(group.endTime),
+        productType: group.productType || null,
+        slotId: group.slotId || null,
+        summary: {
+          totalSteps: group.logs.length,
+          totalDurationMs: group.totalDuration,
+          totalTokens: group.totalTokens,
+          totalCost: group.totalCost,
+          hasError: group.hasError,
+        },
+      },
+      logs: group.logs.map((log, idx) => {
+        const entry: Record<string, unknown> = {
+          step: idx + 1,
+          stage: log.stage,
+          provider: log.provider,
+          model: log.model,
+          status: log.status,
+          durationMs: log.durationMs,
+          tokensUsed: log.tokensUsed,
+          cost: log.cost,
+        };
+
+        if (log.configSnapshot) entry.configSnapshot = log.configSnapshot;
+        if (log.appliedRules) entry.appliedRules = log.appliedRules;
+        if (log.decisionDetails) entry.decisionDetails = log.decisionDetails;
+        if (log.retryInfo) entry.retryInfo = log.retryInfo;
+        if (log.systemPrompt) entry.systemPrompt = log.systemPrompt;
+        if (log.userPrompt) entry.userPrompt = log.userPrompt;
+        if (log.negativePrompt) entry.negativePrompt = log.negativePrompt;
+        if (log.response) entry.response = log.response;
+        if (log.responseData) entry.responseData = log.responseData;
+        if (log.error) entry.error = log.error;
+        if (log.inputImageCount) entry.inputImageCount = log.inputImageCount;
+        if (log.outputImageGenerated !== undefined) entry.outputImageGenerated = log.outputImageGenerated;
+
+        return entry;
+      }),
+    };
+
+    return JSON.stringify(data, null, 2);
+  };
+
+  // Pipeline loglarını panoya kopyala
+  const handleCopyPipelineLogs = async (group: PipelineGroup) => {
+    try {
+      const text = formatPipelineLogsForCopy(group);
+      await navigator.clipboard.writeText(text);
+      setCopiedPipelineId(group.pipelineId);
+      setTimeout(() => setCopiedPipelineId(null), 2000);
+    } catch {
+      // Fallback: eski yöntem
+      const text = formatPipelineLogsForCopy(group);
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopiedPipelineId(group.pipelineId);
+      setTimeout(() => setCopiedPipelineId(null), 2000);
+    }
+  };
+
   // Gruplandırılmış görünüm render
   const renderGroupedView = () => (
     <div className="space-y-4">
@@ -388,6 +461,40 @@ export default function AIMonitor() {
               {/* Pipeline İçeriği (Expanded) */}
               {isExpanded && (
                 <div className="border-t border-gray-100">
+                  {/* Pipeline Toolbar */}
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <span className="text-xs text-gray-500">
+                      {group.logs.length} adım &bull; {formatDuration(group.totalDuration)} &bull; {formatCost(group.totalCost)}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyPipelineLogs(group);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                        copiedPipelineId === group.pipelineId
+                          ? "bg-green-100 text-green-700"
+                          : "bg-white text-gray-600 hover:bg-gray-200 hover:text-gray-800 border border-gray-200"
+                      }`}
+                    >
+                      {copiedPipelineId === group.pipelineId ? (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Kopyalandı!
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Tüm Logları Kopyala (JSON)
+                        </>
+                      )}
+                    </button>
+                  </div>
+
                   {/* Adımlar - Timeline görünümü */}
                   <div className="p-4">
                     <div className="relative">

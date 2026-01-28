@@ -55,65 +55,9 @@ interface Scenario {
   updatedAt?: number;
 }
 
-// Mood seçenekleri - Gemini terminolojisiyle zenginleştirildi
-const MOOD_OPTIONS = [
-  {
-    id: "morning-ritual",
-    name: "Sabah Ritüeli",
-    hint: "Enerjik, taze başlangıç",
-    geminiAtmosphere: "Bright and airy, fresh morning energy, clean minimal aesthetic",
-    lighting: "Natural morning light, soft shadows",
-    temperature: "5500K",
-    colorPalette: ["white", "cream", "light wood", "pastel"],
-  },
-  {
-    id: "cozy-intimate",
-    name: "Samimi/Sıcak",
-    hint: "Ev sıcaklığı, rahat ortam",
-    geminiAtmosphere: "Warm and inviting, intimate gathering, comfortable homey feeling",
-    lighting: "Warm tungsten accent, soft diffused",
-    temperature: "3000K",
-    colorPalette: ["warm brown", "cream", "burnt orange", "gold"],
-  },
-  {
-    id: "rustic-heritage",
-    name: "Rustik/Geleneksel",
-    hint: "Zanaatkar, otantik, doğal",
-    geminiAtmosphere: "Rustic artisanal charm, traditional craftsmanship, authentic heritage",
-    lighting: "Golden hour warmth, directional sunlight",
-    temperature: "3200K",
-    colorPalette: ["wood", "linen", "terracotta", "olive"],
-  },
-  {
-    id: "gourmet-midnight",
-    name: "Gece Gurme",
-    hint: "Dramatik, lüks, sofistike",
-    geminiAtmosphere: "Sophisticated midnight indulgence, moody dramatic luxury",
-    lighting: "Dramatic side-lighting, deep shadows",
-    temperature: "3500K",
-    colorPalette: ["dark wood", "burgundy", "gold", "black"],
-  },
-  {
-    id: "bright-airy",
-    name: "Aydınlık/Ferah",
-    hint: "Modern, temiz, minimal",
-    geminiAtmosphere: "Clean contemporary aesthetic, bright editorial style, minimalist elegance",
-    lighting: "Soft diffused daylight, minimal shadows",
-    temperature: "5000K",
-    colorPalette: ["white", "marble", "light grey", "sage"],
-  },
-  {
-    id: "festive-celebration",
-    name: "Kutlama/Şenlik",
-    hint: "Özel gün, kutlama anları",
-    geminiAtmosphere: "Joyful celebration, special occasion warmth, festive abundance",
-    lighting: "Warm ambient with highlights",
-    temperature: "3200K",
-    colorPalette: ["gold", "cream", "burgundy", "forest green"],
-  },
-];
-
 // Işık preset'leri - Gemini native terminoloji
+// NOT: Atmosfer/Mood artık Tema'daki Mood ayarından devralınır.
+// Senaryo seviyesinde ışık preset'i isteğe bağlı override olarak kalır.
 const LIGHTING_PRESETS = [
   {
     id: "soft-diffused",
@@ -330,7 +274,6 @@ const emptyForm = {
   isInterior: false,
   interiorType: "",
   suggestedProducts: [] as string[],
-  mood: "",
   lightingPreset: "",
   handPose: "",
   compositionEntry: "",
@@ -453,7 +396,6 @@ export default function Scenarios() {
       isInterior: scenario.isInterior || false,
       interiorType: scenario.interiorType || "",
       suggestedProducts: scenario.suggestedProducts || [],
-      mood: scenario.mood || "",
       lightingPreset: scenario.lightingPreset || "",
       handPose: scenario.handPose || "",
       compositionEntry: scenario.compositionEntry || "",
@@ -488,7 +430,6 @@ export default function Scenarios() {
         isInterior: form.isInterior,
         interiorType: form.isInterior ? form.interiorType : undefined,
         suggestedProducts: form.suggestedProducts,
-        mood: form.mood || undefined,
         lightingPreset: form.lightingPreset || undefined,
         handPose: form.includesHands ? form.handPose || undefined : undefined,
         compositionEntry: form.includesHands ? form.compositionEntry || undefined : undefined,
@@ -746,16 +687,8 @@ export default function Scenarios() {
                       </div>
 
                       {/* Ek bilgiler - Gemini terminolojisi */}
-                      {(scenario.mood || scenario.lightingPreset || scenario.handPose) && (
+                      {(scenario.lightingPreset || scenario.handPose) && (
                         <div className="flex flex-wrap gap-3 mt-2 text-xs">
-                          {scenario.mood && (() => {
-                            const m = MOOD_OPTIONS.find(x => x.id === scenario.mood);
-                            return m && (
-                              <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded">
-                                {m.name} ({m.temperature})
-                              </span>
-                            );
-                          })()}
                           {scenario.lightingPreset && (() => {
                             const l = LIGHTING_PRESETS.find(x => x.id === scenario.lightingPreset);
                             return l && (
@@ -868,28 +801,12 @@ export default function Scenarios() {
                         />
                         <p className="text-xs text-gray-500 mt-1">Kısa ve akılda kalıcı bir isim verin</p>
                       </div>
-                      <div>
-                        <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
-                          Atmosfer / Ruh Hali
-                          <Tooltip
-                            content="Fotoğrafın genel havası. AI bu atmosfere uygun renk paleti, ışık sıcaklığı ve kompozisyon uygular."
-                            position="right"
-                          />
-                        </label>
-                        <select
-                          value={form.mood}
-                          onChange={(e) => setForm({ ...form, mood: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                        >
-                          <option value="">-- Atmosfer seçin --</option>
-                          {MOOD_OPTIONS.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} - {m.hint}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-gray-500 mt-1">Fotoğrafın genel havası nasıl olsun?</p>
-                      </div>
+                    </div>
+                    {/* Atmosfer/Mood artık Tema'daki Mood ayarından devralınır */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-xs text-blue-700">
+                        <span className="font-medium">Atmosfer / Ruh Hali:</span> Tema&apos;daki Mood ayarından otomatik devralınır (hava durumu, ışık karakteri, renk paleti).
+                      </p>
                     </div>
 
                     <div>
@@ -992,6 +909,9 @@ export default function Scenarios() {
                           <span className="text-gray-600">{LIGHTING_PRESETS.find(l => l.id === form.lightingPreset)?.geminiPrompt}</span>
                         </div>
                       )}
+                      <p className="text-xs text-blue-600 mt-1">
+                        Tema&apos;daki Mood&apos;da ışık tanımlıysa o önceliklidir. Bu alan isteğe bağlı override&apos;dır.
+                      </p>
                     </div>
                   </div>
                 </fieldset>
@@ -1158,30 +1078,15 @@ export default function Scenarios() {
                   <legend className="text-sm font-semibold text-purple-700 px-2">🎨 AI&apos;ya Gönderilecek Prompt Önizlemesi</legend>
 
                   {/* Hiçbir şey seçilmemişse */}
-                  {!form.mood && !form.lightingPreset && !form.handPose && !form.compositions.length && (
+                  {!form.lightingPreset && !form.handPose && !form.compositions.length && (
                     <p className="text-sm text-gray-500 italic">
                       Yukarıdan seçimler yaptıkça burada AI&apos;ya gönderilecek prompt önizlemesi görünecek.
                     </p>
                   )}
 
                   {/* Seçimler varsa detaylı göster */}
-                  {(form.mood || form.lightingPreset || form.handPose || form.compositions.length > 0) && (
+                  {(form.lightingPreset || form.handPose || form.compositions.length > 0) && (
                     <div className="space-y-3">
-                      {/* Mood/Atmosfer */}
-                      {form.mood && (() => {
-                        const selectedMood = MOOD_OPTIONS.find(m => m.id === form.mood);
-                        return (
-                          <div className="flex items-start gap-2">
-                            <span className="text-purple-600 font-medium shrink-0">🌈 Atmosfer:</span>
-                            {selectedMood ? (
-                              <span className="text-gray-700">{selectedMood.geminiAtmosphere}</span>
-                            ) : (
-                              <span className="text-orange-600 text-sm">Seçim: {form.mood} (tanımlı değil)</span>
-                            )}
-                          </div>
-                        );
-                      })()}
-
                       {/* Işık */}
                       {form.lightingPreset && (() => {
                         const selectedLight = LIGHTING_PRESETS.find(l => l.id === form.lightingPreset);
@@ -1234,10 +1139,7 @@ export default function Scenarios() {
                         <p className="text-xs text-gray-500 mb-1">Birleştirilmiş prompt örneği:</p>
                         <p className="text-xs font-mono text-gray-600 leading-relaxed bg-white p-2 rounded border">
                           <span className="text-purple-600 font-semibold">[Seçilen Ürün Adı]</span>
-                          {form.mood && (() => {
-                            const m = MOOD_OPTIONS.find(x => x.id === form.mood);
-                            return m ? <span className="text-purple-700">, {m.geminiAtmosphere}</span> : null;
-                          })()}
+                          <span className="text-purple-700">, [Tema Mood Atmosferi]</span>
                           {form.lightingPreset && (() => {
                             const l = LIGHTING_PRESETS.find(x => x.id === form.lightingPreset);
                             return l ? <span className="text-amber-700">, {l.geminiPrompt}</span> : null;
@@ -1246,7 +1148,7 @@ export default function Scenarios() {
                             const h = HAND_POSE_OPTIONS.find(x => x.id === form.handPose);
                             return h ? <span className="text-blue-700">, {h.geminiPrompt}</span> : null;
                           })()}
-                          {(!form.mood && !form.lightingPreset && !form.handPose) && (
+                          {(!form.lightingPreset && !form.handPose) && (
                             <span className="text-gray-400"> - henüz detay seçilmedi</span>
                           )}
                         </p>
@@ -1340,19 +1242,9 @@ export default function Scenarios() {
                 </div>
 
                 {/* Gemini Ayarları */}
-                {(detailScenario.mood || detailScenario.lightingPreset || detailScenario.handPose) && (
+                {(detailScenario.lightingPreset || detailScenario.handPose) && (
                   <div className="border-t pt-3 space-y-2">
                     <span className="font-medium text-purple-700">Gemini Ayarları:</span>
-
-                    {detailScenario.mood && (() => {
-                      const m = MOOD_OPTIONS.find(x => x.id === detailScenario.mood);
-                      return m && (
-                        <div className="bg-purple-50 p-2 rounded text-xs">
-                          <span className="font-medium">Mood:</span> {m.name} ({m.temperature})
-                          <p className="text-gray-600 mt-1">{m.geminiAtmosphere}</p>
-                        </div>
-                      );
-                    })()}
 
                     {detailScenario.lightingPreset && (() => {
                       const l = LIGHTING_PRESETS.find(x => x.id === detailScenario.lightingPreset);

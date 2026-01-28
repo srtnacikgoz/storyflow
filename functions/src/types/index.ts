@@ -42,6 +42,9 @@ export interface ConfigSnapshot {
   moodId?: string;
   moodName?: string;
   moodKeywords?: string[];
+  moodWeather?: string;
+  moodLightingPrompt?: string;
+  moodColorGradePrompt?: string;
   styleId?: string;
   styleName?: string;
   styleDefinition?: string;
@@ -75,6 +78,19 @@ export interface AppliedRules {
 }
 
 /**
+ * Prompt Building adımlarının karar kaydı
+ * Her adımda ne geldi, eşleşti mi, sonuç ne oldu
+ */
+export interface PromptBuildingStep {
+  step: string;           // "mood-selection", "lighting-selection", "weather-override", vb.
+  input: string | null;   // Gelen girdi (ID, parametre)
+  matched: boolean;       // Preset/veri eşleşti mi?
+  result: string | null;  // Seçilen/uygulanan sonuç
+  fallback: boolean;      // Fallback mekanizma kullanıldı mı?
+  details?: Record<string, unknown>; // Ek bilgi (atmosphere, prompt, temperature vb.)
+}
+
+/**
  * Decision Details (asset/scenario/prompt stages için)
  */
 export interface DecisionDetails {
@@ -104,6 +120,8 @@ export interface DecisionDetails {
       filename: string;
     }>;
   };
+  // Prompt building karar zinciri (tüm adımlar)
+  promptBuildingSteps?: PromptBuildingStep[];
 }
 
 /**

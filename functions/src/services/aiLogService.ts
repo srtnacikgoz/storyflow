@@ -100,7 +100,7 @@ export class AILogService {
     });
   }
 
-  static async logGemini(data: {
+  static async logGemini(stage: AILogStage, data: {
     model: string;
     userPrompt: string;
     negativePrompt?: string;
@@ -116,7 +116,7 @@ export class AILogService {
   }): Promise<string> {
     return this.createLog({
       provider: "gemini",
-      stage: "image-generation",
+      stage,
       model: data.model,
       userPrompt: data.userPrompt,
       negativePrompt: data.negativePrompt,
@@ -147,6 +147,9 @@ export class AILogService {
       moodId?: string;
       moodName?: string;
       moodKeywords?: string[];
+      moodWeather?: string;
+      moodLightingPrompt?: string;
+      moodColorGradePrompt?: string;
       styleId?: string;
       styleName?: string;
       styleDefinition?: string;
@@ -258,6 +261,15 @@ export class AILogService {
           filename: string;
         }>;
       };
+      // Prompt building karar zinciri (her adımın kararı)
+      promptBuildingSteps?: Array<{
+        step: string;
+        input: string | null;
+        matched: boolean;
+        result: string | null;
+        fallback: boolean;
+        details?: Record<string, unknown>;
+      }>;
     };
   }): Promise<string> {
     return this.createLog({
@@ -280,7 +292,7 @@ export class AILogService {
    * YENİ: Detaylı Gemini Image Generation logu
    * Retry bilgisi ve referans görselleri dahil
    */
-  static async logGeminiDetailed(data: {
+  static async logGeminiDetailed(stage: AILogStage, data: {
     model: string;
     userPrompt: string;
     negativePrompt?: string;
@@ -312,7 +324,7 @@ export class AILogService {
   }): Promise<string> {
     return this.createLog({
       provider: "gemini",
-      stage: "image-generation",
+      stage,
       model: data.model,
       userPrompt: data.userPrompt,
       negativePrompt: data.negativePrompt,

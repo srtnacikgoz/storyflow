@@ -848,7 +848,8 @@ export interface Theme {
   name: string;            // "Sabah Enerjisi"
   description?: string;    // "Enerjik sabah paylaşımları için"
   scenarios: string[];     // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
-  mood: string;            // "energetic"
+  mood: string;            // @deprecated - eski string mood ("energetic"). moodId kullanılmalı.
+  moodId?: string;         // Firestore Mood document ID referansı (moods collection)
   petAllowed: boolean;     // Köpek dahil edilebilir mi?
   accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
 

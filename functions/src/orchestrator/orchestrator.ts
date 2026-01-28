@@ -196,17 +196,34 @@ export class Orchestrator {
       const timeOfDayForConfig = this.getTimeOfDay();
       const moodForConfig = themeData?.mood || this.getMoodFromTime();
 
-      // Mood detaylarını al (eğer moodId varsa)
-      let moodDetails: { name?: string; keywords?: string[] } = {};
-      if (themeData?.moodId) {
+      // Mood detaylarını al
+      // Admin panel mood field'ına Mood document ID kaydediyor
+      // moodId ayrı bir field olarak da desteklenir (geriye uyumluluk)
+      const effectiveMoodId = themeData?.moodId || themeData?.mood;
+      let moodDetails: {
+        name?: string;
+        keywords?: string[];
+        weather?: string;
+        lightingPrompt?: string;
+        colorGradePrompt?: string;
+        timeOfDay?: string;
+        season?: string;
+      } = {};
+      if (effectiveMoodId) {
         try {
-          const moodDoc = await this.db.collection("moods").doc(themeData.moodId).get();
+          const moodDoc = await this.db.collection("moods").doc(effectiveMoodId).get();
           if (moodDoc.exists) {
             const moodData = moodDoc.data();
             moodDetails = {
               name: moodData?.name,
               keywords: moodData?.keywords || [],
+              weather: moodData?.weather,
+              lightingPrompt: moodData?.lightingPrompt,
+              colorGradePrompt: moodData?.colorGradePrompt,
+              timeOfDay: moodData?.timeOfDay,
+              season: moodData?.season,
             };
+            console.log(`[Orchestrator] 🌤️ Mood loaded: "${moodData?.name}" | weather: ${moodData?.weather} | lighting: ${moodData?.lightingPrompt?.substring(0, 50)}...`);
           }
         } catch (e) {
           console.warn(`[Orchestrator] Could not load mood details: ${e}`);
@@ -239,9 +256,12 @@ export class Orchestrator {
           themeId: effectiveThemeId,
           themeName: themeData?.name,
           themeColors: themeData?.colors || [],
-          moodId: themeData?.moodId,
+          moodId: effectiveMoodId,
           moodName: moodDetails.name || moodForConfig,
           moodKeywords: moodDetails.keywords,
+          moodWeather: moodDetails.weather,
+          moodLightingPrompt: moodDetails.lightingPrompt,
+          moodColorGradePrompt: moodDetails.colorGradePrompt,
           styleId: themeData?.styleId,
           styleName: styleDetails.name,
           styleDefinition: styleDetails.definition,
@@ -812,16 +832,27 @@ export class Orchestrator {
           productType,
           timeOfDay,
           scenarioGeminiData,
-          result.scenarioSelection!.scenarioDescription  // KRİTİK: Ortam bilgisi
+          result.scenarioSelection!.scenarioDescription,  // KRİTİK: Ortam bilgisi
+          {
+            weather: moodDetails.weather,
+            lightingPrompt: moodDetails.lightingPrompt,
+            colorGradePrompt: moodDetails.colorGradePrompt,
+          }
         );
 
         console.log(`[Orchestrator] Base prompt built with Gemini terminology`);
+
+        // Ürünün yeme şeklini al (eatingMethod)
+        const productEatingMethod = result.assetSelection!.product?.eatingMethod
+          || result.assetSelection!.product?.holdingType
+          || undefined;
 
         const promptResponse = await this.gemini.optimizePrompt(
           basePromptResult.mainPrompt,
           result.scenarioSelection!,
           result.assetSelection!,
-          combinedHints // Kullanıcı tanımlı kurallar + feedback'ler
+          combinedHints, // Kullanıcı tanımlı kurallar + feedback'ler
+          productEatingMethod
         );
 
         // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı)
@@ -846,14 +877,14 @@ export class Orchestrator {
         };
         status.completedStages.push("prompt_optimization");
 
-        // YENİ: Prompt building decision log
+        // Prompt building decision log — tüm karar zinciri
         await AILogService.logDecision({
           stage: "prompt-building",
           pipelineId,
           slotId,
           productType,
           model: "gemini-2.0-flash-001",
-          userPrompt: `Base Prompt: ${basePromptResult.mainPrompt.substring(0, 200)}...`,
+          userPrompt: `Base Prompt (${basePromptResult.promptBuildingSteps?.length || 0} karar adımı): ${basePromptResult.mainPrompt.substring(0, 200)}...`,
           response: JSON.stringify({ customizations: promptResponse.data.customizations }),
           status: "success",
           durationMs: 0,
@@ -863,9 +894,10 @@ export class Orchestrator {
               negativePrompt: result.optimizedPrompt.negativePrompt,
               customizations: result.optimizedPrompt.customizations,
             },
+            promptBuildingSteps: basePromptResult.promptBuildingSteps,
           },
         });
-        console.log(`[Orchestrator] 📋 Prompt building decision logged`);
+        console.log(`[Orchestrator] 📋 Prompt building decision logged (${basePromptResult.promptBuildingSteps?.length || 0} steps)`);
 
         // ==========================================
         // STAGE 4: IMAGE GENERATION (with retry)
@@ -1060,7 +1092,7 @@ export class Orchestrator {
           referenceImagesList.push({ type: "cutlery", filename: result.assetSelection!.cutlery.filename });
         }
 
-        await AILogService.logGeminiDetailed({
+        await AILogService.logGeminiDetailed("image-generation", {
           model: generatedImage.model,
           userPrompt: result.optimizedPrompt!.mainPrompt,
           negativePrompt: result.optimizedPrompt!.negativePrompt,
@@ -1416,8 +1448,13 @@ export class Orchestrator {
       handPose?: string;
       compositionEntry?: string;
     },
-    scenarioDescription?: string  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
-  ): Promise<{ mainPrompt: string; negativePrompt?: string }> {
+    scenarioDescription?: string,  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
+    moodDetails?: {
+      weather?: string;
+      lightingPrompt?: string;
+      colorGradePrompt?: string;
+    }
+  ): Promise<{ mainPrompt: string; negativePrompt?: string; promptBuildingSteps?: Array<{step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown>}> }> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
 
@@ -1450,7 +1487,8 @@ export class Orchestrator {
       productType,
       timeOfDay,
       scenarioData,
-      scenarioDescription  // KRİTİK: Senaryo açıklamasını aktar
+      scenarioDescription,  // KRİTİK: Senaryo açıklamasını aktar
+      moodDetails
     );
   }
 
@@ -1643,8 +1681,13 @@ Cup: ${colors} ${material} (from reference)`.trim();
       handPose?: string;
       compositionEntry?: string;
     },
-    scenarioDescription?: string  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
-  ): Promise<{ mainPrompt: string; negativePrompt: string }> {
+    scenarioDescription?: string,  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
+    moodDetails?: {
+      weather?: string;
+      lightingPrompt?: string;
+      colorGradePrompt?: string;
+    }
+  ): Promise<{ mainPrompt: string; negativePrompt: string; promptBuildingSteps?: Array<{step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown>}> }> {
     // Senaryo verilerinden Gemini parametrelerini çıkar
     const scenarioParams = scenarioData
       ? extractGeminiParamsFromScenario({
@@ -1668,6 +1711,9 @@ Cup: ${colors} ${material} (from reference)`.trim();
         timeOfDay: timeOfDay || this.getTimeOfDay(),
       });
 
+      // Prompt builder kararlarını al
+      const allDecisions = [...geminiResult.decisions];
+
       let prompt = geminiResult.mainPrompt;
       let negativePrompt = geminiResult.negativePrompt;
 
@@ -1677,27 +1723,93 @@ Cup: ${colors} ${material} (from reference)`.trim();
         console.log(`[Orchestrator] Added scenario description to prompt: ${scenarioDescription.substring(0, 50)}...`);
       }
 
+      allDecisions.push({
+        step: "scenario-description",
+        input: scenarioDescription || null,
+        matched: !!scenarioDescription,
+        result: scenarioDescription ? `Eklendi (${scenarioDescription.length} karakter)` : "Senaryo açıklaması yok",
+        fallback: false,
+      });
+
       // -----------------------------------------------------------------------
       // LOGIC OVERRIDES: KULLANICI GERİ BİLDİRİMİ İLE DÜZELTMELER
       // -----------------------------------------------------------------------
 
       // 1. Weather/Mood Enforcement
-      // Eğer mood yağmurlu veya kapalı ise, güneş ışığını kesin olarak engelle.
+      // Mood document'ından structured weather bilgisi kullan, yoksa keyword fallback
+      const moodWeather = moodDetails?.weather;
+      const isNonSunny = moodWeather === "cloudy" || moodWeather === "rainy" || moodWeather === "snowy";
+
+      // Fallback: Mood string veya senaryo açıklamasında keyword arama
       const moodLower = (mood || "").toLowerCase();
-      // Mood ID veya scenarioDescription içinde hava durumu ipuçları aranır
       const descLower = (scenarioDescription || "").toLowerCase();
-
-      const isRainy =
+      const isRainyByKeyword =
         moodLower.includes("rain") || moodLower.includes("overcast") || moodLower.includes("gloomy") || moodLower.includes("storm") ||
-        descLower.includes("rain") || descLower.includes("overcast");
+        moodLower.includes("kapalı") || moodLower.includes("yağmur") || moodLower.includes("bulut") ||
+        descLower.includes("rain") || descLower.includes("overcast") ||
+        descLower.includes("kapalı") || descLower.includes("yağmur");
 
-      if (isRainy) {
-        console.log("[Orchestrator] 🌧️ RAINY/OVERCAST weather detected - applying overrides");
-        // Main prompt'a atmosferik detay zorla
-        prompt += "\n\nWEATHER OVERRIDE: The scene MUST be overcast or rainy. Soft, diffused, flat lighting. Rain drops visible on glass surfaces/windows. Gloomy, moody atmosphere. NO DIRECT SUNLIGHT.";
-        // Negative prompt'a güneş kelimelerini ekle
+      if (isNonSunny || isRainyByKeyword) {
+        const weatherType = moodWeather || "cloudy";
+        console.log(`[Orchestrator] 🌧️ Non-sunny weather detected (${weatherType}) - applying overrides`);
+
+        if (weatherType === "rainy") {
+          prompt += "\n\nWEATHER OVERRIDE: The scene MUST be rainy. Soft, diffused, flat lighting. Rain drops visible on glass surfaces/windows. Gloomy, moody atmosphere. NO DIRECT SUNLIGHT.";
+        } else if (weatherType === "snowy") {
+          prompt += "\n\nWEATHER OVERRIDE: The scene MUST have snowy winter atmosphere. Cool blue-white tones, soft diffused cold light. Snow visible outside windows. NO WARM GOLDEN LIGHT.";
+        } else {
+          // cloudy veya fallback
+          prompt += "\n\nWEATHER OVERRIDE: The scene MUST be overcast/cloudy. Soft, diffused, flat lighting. No direct sunlight. Muted, moody atmosphere.";
+        }
         negativePrompt += ", sun, sunlight, sunny, hard shadows, warm golden light, sunrise, sunset, bright rays, volumetric light";
+
+        allDecisions.push({
+          step: "weather-override",
+          input: moodWeather || "keyword-fallback",
+          matched: true,
+          result: `${weatherType} override uygulandı`,
+          fallback: !isNonSunny && isRainyByKeyword,
+          details: {
+            weatherType,
+            source: isNonSunny ? "moodDetails.weather" : "keyword-fallback",
+            keywordsMatched: isRainyByKeyword,
+            addedToNegative: "sun, sunlight, sunny, hard shadows, warm golden light, sunrise, sunset, bright rays, volumetric light",
+          },
+        });
+      } else {
+        allDecisions.push({
+          step: "weather-override",
+          input: moodWeather || null,
+          matched: false,
+          result: "Weather override uygulanmadı (güneşli/normal hava)",
+          fallback: false,
+          details: { moodWeather: moodWeather || "yok", keywordsChecked: true, keywordsMatched: false },
+        });
       }
+
+      // Mood'un lightingPrompt ve colorGradePrompt enjeksiyonu
+      if (moodDetails?.lightingPrompt) {
+        prompt += `\n\nMOOD LIGHTING: ${moodDetails.lightingPrompt}`;
+        console.log(`[Orchestrator] 💡 Mood lighting injected: ${moodDetails.lightingPrompt.substring(0, 60)}...`);
+      }
+      if (moodDetails?.colorGradePrompt) {
+        prompt += `\n\nCOLOR GRADE: ${moodDetails.colorGradePrompt}`;
+        console.log(`[Orchestrator] 🎨 Mood color grade injected: ${moodDetails.colorGradePrompt.substring(0, 60)}...`);
+      }
+
+      allDecisions.push({
+        step: "mood-lighting-injection",
+        input: moodDetails?.lightingPrompt || null,
+        matched: !!(moodDetails?.lightingPrompt || moodDetails?.colorGradePrompt),
+        result: moodDetails?.lightingPrompt
+          ? `Lighting: ${moodDetails.lightingPrompt.substring(0, 80)}${moodDetails.colorGradePrompt ? " + ColorGrade" : ""}`
+          : "Mood lighting/colorGrade yok",
+        fallback: false,
+        details: {
+          lightingPrompt: moodDetails?.lightingPrompt || null,
+          colorGradePrompt: moodDetails?.colorGradePrompt || null,
+        },
+      });
 
       // 2. Asset Fidelity (Napkin & Accessory Protection)
       // Eğer peçete (napkin) asset olarak seçildiyse, jenerik 'linen' stilini engelle.
@@ -1712,16 +1824,49 @@ Cup: ${colors} ${material} (from reference)`.trim();
         prompt += `\n\nASSET RULE: Use the provided ACCESSORY reference image exactly.`;
       }
 
+      // 3. eatingMethod Constraint (Fiziksel Mantık)
+      // Ürünün yeme şekline göre çatal/bıçak/kaşık kontrolü
+      const eatingMethod = selectedAssets?.product?.eatingMethod || selectedAssets?.product?.holdingType;
+
+      if (eatingMethod === "hand") {
+        console.log(`[Orchestrator] 🍴 EATING METHOD: hand - blocking cutlery`);
+        prompt += "\n\nPHYSICAL LOGIC: This product is eaten BY HAND. STRICTLY NO cutlery (fork, knife, spoon) in the scene.";
+        negativePrompt += ", fork, knife, spoon, cutlery, utensil, silverware";
+      } else if (eatingMethod === "fork" || eatingMethod === "fork-knife") {
+        console.log(`[Orchestrator] 🍴 EATING METHOD: ${eatingMethod} - allowing fork`);
+        prompt += "\n\nPHYSICAL LOGIC: This product is eaten with a fork. A fork may be visible near the product.";
+      } else if (eatingMethod === "spoon") {
+        console.log(`[Orchestrator] 🍴 EATING METHOD: spoon - allowing spoon`);
+        prompt += "\n\nPHYSICAL LOGIC: This product is eaten with a spoon. A spoon may be visible near the product.";
+      } else if (eatingMethod === "none") {
+        console.log(`[Orchestrator] 🍴 EATING METHOD: none (beverage) - no cutlery needed`);
+      }
+
+      allDecisions.push({
+        step: "eating-method-constraint",
+        input: eatingMethod || null,
+        matched: !!eatingMethod,
+        result: eatingMethod
+          ? `${eatingMethod} → ${eatingMethod === "hand" ? "çatal/bıçak/kaşık ENGELLENDİ" : eatingMethod === "fork" || eatingMethod === "fork-knife" ? "çatal İZİN VERİLDİ" : eatingMethod === "spoon" ? "kaşık İZİN VERİLDİ" : "yeme aracı gereksiz"}`
+          : "eatingMethod tanımlı değil",
+        fallback: false,
+        details: {
+          source: selectedAssets?.product?.eatingMethod ? "product.eatingMethod" : selectedAssets?.product?.holdingType ? "product.holdingType (fallback)" : "yok",
+          addedToNegative: eatingMethod === "hand" ? "fork, knife, spoon, cutlery, utensil, silverware" : null,
+        },
+      });
+
       // Ek detaylar ekle (eski sistem ile uyumluluk)
       prompt += this.getCompositionDetails(scenarioId, compositionId);
       prompt += this.getHandStyleDetails(handStyle);
       prompt += this.getCupReferenceDetails(selectedAssets?.cup);
 
-      console.log(`[Orchestrator] Built Gemini prompt with mood: ${geminiResult.metadata.mood?.id}, lighting: ${geminiResult.metadata.lighting?.id}`);
+      console.log(`[Orchestrator] Built Gemini prompt with mood: ${geminiResult.metadata.mood?.id}, lighting: ${geminiResult.metadata.lighting?.id}, total decisions: ${allDecisions.length}`);
 
       return {
         mainPrompt: prompt,
         negativePrompt: negativePrompt,
+        promptBuildingSteps: allDecisions,
       };
     } catch (error) {
       console.warn("[Orchestrator] Gemini prompt builder failed, using fallback:", error);
@@ -1729,6 +1874,14 @@ Cup: ${colors} ${material} (from reference)`.trim();
       return {
         mainPrompt: this.buildDynamicPromptLegacy(scenarioId, compositionId, handStyle, selectedAssets?.cup, mood, scenarioDescription),
         negativePrompt: await buildNegativePrompt(handStyle ? ["always", "hands"] : ["always"]),
+        promptBuildingSteps: [{
+          step: "fallback-legacy",
+          input: String(error),
+          matched: false,
+          result: "Legacy prompt builder kullanıldı (Gemini builder hata verdi)",
+          fallback: true,
+          details: { error: String(error) },
+        }],
       };
     }
   }

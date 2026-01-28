@@ -887,3 +887,141 @@ Kullanıcı → Senaryo Oluştur → Şablon Seç → Özelleştir → Test Et �
                                                                     ↓
                                                         Üretimlerde Kullan
 ```
+
+---
+
+## [BUG-009] Peçete Referansı Prompt'ta Var Ama Asset Yok
+- **Kategori:** bug
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-28
+- **Açıklama:** Pipeline prompt'unda "the specific napkin from the reference image with its exact pattern and color" ifadesi var, ancak referans görseller arasında napkin (peçete) asset'i GÖNDERİLMİYOR.
+- **Kanıt (AI Monitor - 28.01.2026 08:44):**
+  - Prompt: `"the specific napkin from the reference image with its exact pattern and color"`
+  - Reference images: product, plate, table, cup → **napkin YOK**
+  - Sonuç: Gemini referansı olmayan bir peçeteyi kendi uydurdu → **yanlış peçete**
+- **İlişkili:** BUG-006 (Peçete/Çatal Asset Kategorisi Yüklenmiyor)
+- **Kök Neden:** `loadAvailableAssets()` fonksiyonunda napkin sorgusu yok + prompt builder koşulsuz olarak napkin'den bahsediyor
+- **Çözüm Planı:**
+  1. Prompt builder'da napkin referansını **koşullu** yap: napkin asset seçildiyse bahset, seçilmediyse bahsetme
+  2. `loadAvailableAssets()` fonksiyonuna napkin sorgusu ekle (BUG-006 kapsamı)
+  3. Napkin asset yoksa prompt'tan "napkin" kelimesini çıkar veya generic tut
+- **Dosyalar:**
+  - `functions/src/orchestrator/orchestrator.ts` (loadAvailableAssets)
+  - `functions/src/orchestrator/geminiPromptBuilder.ts` (napkin referansı koşullu)
+  - `functions/src/services/gemini.ts` (optimizePrompt - napkin bilgisi)
+
+---
+
+## [BUG-010] Pencere Perspektifi - Zemin Kat Yerine Üst Kat Görünümü
+- **Kategori:** bug
+- **Öncelik:** medium
+- **Durum:** open
+- **Tarih:** 2026-01-28
+- **Açıklama:** "A window side seat on a rainy day" prompt'u, Gemini'nin yüksek bir perspektiften (üst kat) bakış açısı üretmesine neden oluyor. Oysa pastane zemin katta.
+- **Kanıt (AI Monitor - 28.01.2026 08:44):**
+  - Prompt: `"Environment: A window side seat on a rainy day"`
+  - Sonuç: Dışarıya bakınca sanki üst kattaymış gibi görünüyor
+- **Kök Neden:** Prompt'ta kat bilgisi yok. "Window side seat" ifadesi Gemini'ye kat hakkında bilgi vermiyor, model kendi karar veriyor.
+- **Çözüm Planı:**
+  1. Senaryo veya global config'e mekan bilgisi ekle: `floorLevel: "ground"` veya `"upper"`
+  2. Prompt'a "ground floor street-level view" veya "eye-level view looking out at street" gibi perspektif ipucu ekle
+  3. Negative prompt'a "aerial view, bird's eye view, high angle, looking down from above" ekle
+- **Dosyalar:**
+  - `functions/src/orchestrator/geminiPromptBuilder.ts` (perspektif bilgisi ekleme)
+  - `functions/src/orchestrator/types.ts` (opsiyonel: floorLevel field)
+
+---
+
+## [TODO-014] promptBuildingSteps Logları İlk Pipeline Testi
+- **Kategori:** todo
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-28
+- **Açıklama:** Yeni deploy edilen `promptBuildingSteps` karar loglama sistemi henüz test edilmedi. İlk pipeline çalıştırıldığında AI Monitor'de `prompt-building` stage'inde `promptBuildingSteps` array'inin görünüp görünmediği doğrulanmalı.
+- **Beklenen Çıktı:**
+  - `decisionDetails.promptBuildingSteps` içinde 8-10 karar adımı:
+    - `mood-selection`: moodId eşleşmesi (büyük ihtimalle "not matched" çıkacak - preset ID uyuşmazlığı)
+    - `lighting-selection`: lighting preset eşleşmesi
+    - `hand-pose-selection`: el pozu seçimi
+    - `composition-selection`: kompozisyon seçimi
+    - `texture-profile`: doku profili
+    - `lighting-applied`: hangi ışık kaynağının kullanıldığı
+    - `scenario-description`: senaryo açıklaması enjeksiyonu
+    - `weather-override`: hava durumu override
+    - `mood-lighting-injection`: mood lighting enjeksiyonu
+    - `eating-method-constraint`: yeme yöntemi kısıtlaması
+- **moodId Uyuşmazlığı:** Büyük olasılıkla `mood-selection` adımında moodId (ör: "QRS2R1LPh5EcFUftPiA7") gemini-presets'teki ID'lerle eşleşmeyecek. Bu beklenen bir durum ve logda `matched: false` + `availablePresetIds` görünecek.
+- **Aksiyon:** İlk logu inceleyip moodId eşleştirme stratejisini belirle (Firestore Mood doc'tan preset mapping mi, yoksa Mood doc'un kendi atmosphere/lighting alanları mı kullanılsın)
+
+---
+
+## [IMP-007] İşletme Profili (Business Bio) - Mekan Bilgisi Prompt'a Aktarma
+- **Kategori:** improvement
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-28
+- **Açıklama:** Pipeline görselleri oluştururken işletmenin fiziksel özelliklerini (kat, mekan tipi, sokak seviyesi, teras vb.) bilmiyor. Bu yüzden "pencere kenarı" senaryosunda üst kattan bakış açısı üretilebiliyor, oysa pastane zemin katta.
+- **Motivasyon:**
+  - Mevcut sorun: BUG-010'daki perspektif hatası (zemin kat yerine üst kat)
+  - SaaS perspektifi: Her tenant kendi mekan özelliklerini tanımlayabilmeli. Bir rooftop bar sahibi tüm görselleri zemin katta görürse çıldırır — veya tam tersi
+  - Genel kalite: İşletme hakkında ne kadar çok bağlam varsa görseller o kadar gerçekçi olur
+- **Önerilen Çözüm:**
+  1. Admin panelde "Ayarlar" veya "Genel Bakış" sayfasına **İşletme Profili** bölümü ekle
+  2. Firestore'da `global/config/business-profile` dokümanı oluştur
+  3. Orchestrator prompt builder bu bilgileri okuyup prompt'a enjekte etsin
+- **Önerilen Alanlar:**
+  ```
+  İşletme Profili (Business Bio)
+  ├── İşletme Adı: "Sade Patisserie"
+  ├── İşletme Tipi: Pastane / Cafe / Restaurant / Bar / ...
+  ├── Mekan Bilgisi:
+  │   ├── Kat: Zemin / Üst kat / Teras / Bodrum
+  │   ├── Pencere Yönü: Sokağa bakıyor / Bahçeye bakıyor / İç mekan
+  │   ├── Dış Mekan: Var (teras/bahçe) / Yok
+  │   └── Serbest Açıklama: "Sokak seviyesinde, cam cepheli pastane..."
+  ├── Dekorasyon Stili: Modern / Rustik / Minimal / Klasik / Endüstriyel
+  ├── Baskın Renkler: ["Krem", "Ahşap", "Beyaz"]
+  └── Özel Notlar: "Vitrin sokağa bakıyor, iç mekan sıcak ahşap tonlarında"
+  ```
+- **Prompt'a Etkisi:**
+  - `floorLevel: "ground"` → prompt'a "ground floor, street-level window view" eklenir
+  - `floorLevel: "rooftop"` → prompt'a "rooftop terrace, elevated city view" eklenir
+  - `decorStyle: "rustic"` → prompt'a "rustic interior with wooden elements" eklenir
+  - `windowDirection: "street"` → prompt'a "looking out at street through window" eklenir
+- **SaaS Avantajı:**
+  - Her tenant kendi mekan bilgisini bir kez girer
+  - Tüm üretimler otomatik olarak mekan bağlamına uygun olur
+  - Yeni senaryo eklemeye gerek kalmadan mekan doğru yansır
+  - Onboarding sırasında doldurulabilir
+- **İlişkili:** BUG-010 (perspektif hatası), TODO-012 (SaaS Business Type Presets)
+- **Dosyalar:**
+  - `admin/src/pages/Settings.tsx` (yeni bölüm veya sayfa)
+  - `functions/src/orchestrator/orchestrator.ts` (business profile okuma)
+  - `functions/src/orchestrator/geminiPromptBuilder.ts` (prompt'a enjeksiyon)
+  - `functions/src/types/index.ts` (BusinessProfile interface)
+
+---
+
+## [BUG-011] Peçete Asset'leri Yüklenmiyor - Kategori/SubType Uyuşmazlığı
+- **Kategori:** bug
+- **Öncelik:** high
+- **Durum:** open
+- **Tarih:** 2026-01-28
+- **Açıklama:** Peçete asset'leri Firestore'da mevcut ancak pipeline'a yüklenmiyor. Etiket (tags) eksikliği değil — `loadAvailableAssets()` tags alanını sorgulamıyor.
+- **Kök Neden (Doğrulanmış):**
+  - `loadAvailableAssets()` peçeteleri şu sorguyla yüklüyor: `category == "props" AND subType == "napkins" AND isActive == true`
+  - Fallback: tüm props yüklenip `subType.includes("napkin")` ile filtreleniyor
+  - Peçete asset'lerinin Firestore'daki `category` ve/veya `subType` değerleri bu sorguyla eşleşmiyor olabilir
+  - Tags alanının boş olması bu sorunu ETKİLEMİYOR (sorgu tags kullanmıyor)
+- **Kontrol Edilecek:**
+  1. Firestore'da peçete asset'lerinin `category` değeri `"props"` mı?
+  2. `subType` değeri `"napkins"` mı? (Büyük/küçük harf, Türkçe karakter, farklı yazım olabilir)
+  3. `isActive` alanı `true` mu?
+- **Çözüm Planı:**
+  1. Firestore Console'dan veya admin panelden peçete asset'lerinin gerçek field değerlerini kontrol et
+  2. Yanlış category/subType varsa düzelt (migration script veya admin panelden)
+  3. BUG-009'daki prompt tutarsızlığını da düzelt (napkin yoksa prompt'tan bahsetme)
+- **İlişkili:** BUG-006, BUG-009
+- **Dosyalar:**
+  - `functions/src/orchestrator/orchestrator.ts` (loadAvailableAssets - satır 1279-1282)
