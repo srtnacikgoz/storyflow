@@ -111,6 +111,7 @@ const SUBTYPE_LABELS: Record<string, string> = {
 // Alt tipler kategori bazlı
 const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   products: ["croissants", "pastas", "chocolates", "coffees"],
+  // Legacy Props (Tabak/Çanak)
   props: [
     "plates", "cups", "cutlery", "fork", "knife", "spoon",
     "napkins", "cutlery-napkin-set",
@@ -121,7 +122,15 @@ const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   environments: ["indoor", "outdoor", "window", "cafe", "home"],
   pets: ["dogs", "cats"],
   interior: ["vitrin", "tezgah", "oturma-alani", "dekorasyon", "genel-mekan"],
-  accessories: ["phone", "bag", "keys", "book", "toy", "tablet", "glasses", "watch", "notebook", "wallet"],
+  // Yeni Set Designer Props (Aksesuarlar)
+  accessories: [
+    "textile",      // Peçete, örtü
+    "cutlery",      // Çatal, bıçak
+    "decoration",   // Vazo, çiçek
+    "ingredient",   // Malzeme
+    // Legacy
+    "phone", "bag", "keys", "book", "toy", "tablet", "glasses", "watch", "notebook", "wallet"
+  ],
 };
 
 // Kategori bazlı hangi alanların gösterileceği
@@ -144,7 +153,7 @@ const FIELDS_BY_CATEGORY: Record<AssetCategory, CategoryFieldConfig> = {
   environments: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
   pets: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
   interior: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
-  accessories: { tags: "required", dominantColors: "hidden", style: "hidden", material: "optional" },
+  accessories: { tags: "required", dominantColors: "hidden", style: "hidden", material: "required" }, // Materyal artık zorunlu (Kumaş, Metal vb.)
 };
 
 export default function Assets() {
@@ -314,6 +323,22 @@ export default function Assets() {
     return acc;
   }, {} as Record<string, OrchestratorAsset[]>);
 
+  // UI Grupları
+  const assetGroups = [
+    {
+      title: "Ana Öğeler (HERO)",
+      categories: ["products", "furniture", "pets"] as AssetCategory[]
+    },
+    {
+      title: "Servis (SUPPORT)",
+      categories: ["props"] as AssetCategory[] // Not: props teknik adı, ekranda Servis & Ambalaj
+    },
+    {
+      title: "Dekor (PROPS)",
+      categories: ["accessories", "interior", "environments"] as AssetCategory[]
+    }
+  ];
+
   return (
     <div className="space-y-6">
       {/* Setup Stepper */}
@@ -336,52 +361,69 @@ export default function Assets() {
       <PageTour tourId="assets-page" steps={ASSETS_TOUR_STEPS} />
 
       {/* View Toggle & Filters */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        {/* Filtreler */}
-        <div className="flex gap-2 flex-wrap" data-tour="assets-filters">
+      <div className="flex flex-col gap-4">
+        {/* Gruplanmış Filtreler */}
+        <div className="flex flex-wrap gap-6 items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100" data-tour="assets-filters">
           <button
             onClick={() => setSelectedCategory("all")}
-            className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === "all"
-              ? "bg-brand-blue text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${selectedCategory === "all"
+              ? "bg-gray-900 text-white shadow-md transform scale-105"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
           >
             Tümü ({assets.length})
           </button>
-          {(Object.keys(dynamicCategoryLabels) as AssetCategory[]).map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-2 rounded-xl transition-colors ${selectedCategory === cat
-                ? "bg-brand-blue text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-            >
-              {dynamicCategoryLabels[cat]} ({groupedAssets[cat]?.length || 0})
-            </button>
+
+          <div className="h-8 w-px bg-gray-200 mx-2"></div>
+
+          {assetGroups.map((group, groupIdx) => (
+            <div key={groupIdx} className="flex flex-col gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">
+                {group.title}
+              </span>
+              <div className="flex gap-2">
+                {group.categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedCategory === cat
+                      ? "bg-brand-blue text-white shadow-sm"
+                      : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100"
+                      }`}
+                  >
+                    {dynamicCategoryLabels[cat]}
+                    <span className="ml-1.5 opacity-60 text-xs">
+                      {groupedAssets[cat]?.length || 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 
         {/* View Mode Toggle */}
-        <div className="flex bg-gray-100 p-1 rounded-lg">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={`p-2 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
-            title="Grid Görünüm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={`p-2 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
-            title="Liste Görünüm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+        <div className="flex justify-end">
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`p-2 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
+              title="Grid Görünüm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-2 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
+              title="Liste Görünüm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -999,15 +1041,14 @@ function AssetModal({
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value as AssetCategory)}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                      disabled={isEditMode}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
                     >
                       {(Object.keys(categoryLabels) as AssetCategory[]).map((cat) => (
                         <option key={cat} value={cat}>{categoryLabels[cat]}</option>
                       ))}
                     </select>
                     {isEditMode && (
-                      <p className="text-xs text-gray-400 mt-1">🔒 Kategori kilitli</p>
+                      <p className="text-xs text-amber-600 mt-1">⚠️ Kategori değişimi sadece kullanım alanını günceller</p>
                     )}
                   </div>
 

@@ -347,6 +347,7 @@ export interface CalendarData {
 // ==========================================
 
 // Asset kategorileri
+// Asset kategorileri
 export type AssetCategory = "products" | "props" | "furniture" | "environments" | "pets" | "interior" | "accessories";
 
 // Interior tipleri (mekan atmosferi - AI üretimi yapılmaz)
@@ -354,19 +355,32 @@ export type InteriorType = "vitrin" | "tezgah" | "oturma-alani" | "dekorasyon" |
 
 // Aksesuar alt kategorileri (gerçekçi pastane deneyimi için masaya konulan objeler)
 export type AccessoryType =
-  | "phone"      // Akıllı telefon (jenerik, logosuz)
-  | "bag"        // El çantası, clutch
-  | "keys"       // Araba/ev anahtarı
-  | "book"       // Kitap, dergi
-  | "toy"        // Çocuk oyuncağı
-  | "tablet"     // Tablet (jenerik, logosuz)
-  | "glasses"    // Güneş gözlüğü
-  | "watch"      // Kol saati
-  | "notebook"   // Defter, ajanda
-  | "wallet";    // Cüzdan
+  // Props (Dekorlar - Set Designer Skill)
+  | "textile"      // Peçete, örtü, runner
+  | "cutlery"      // Çatal, bıçak, kaşık
+  | "decoration"   // Vazo, çiçek, dergi, gözlük
+  | "ingredient"   // Un, pudra şekeri, çikolata parçaları
+  // Legacy (Eski Tipler - Geriye uyumluluk için korunuyor)
+  | "phone"
+  | "bag"
+  | "keys"
+  | "book"
+  | "toy"
+  | "tablet"
+  | "glasses"
+  | "watch"
+  | "notebook"
+  | "wallet";
 
 // Aksesuar kategorileri için label ve icon
 export const ACCESSORY_TYPES: Record<AccessoryType, { label: string; icon: string; description: string }> = {
+  // Yeni Tipler
+  textile: { label: "Tekstil", icon: "🧣", description: "Peçete, örtü, runner vb." },
+  cutlery: { label: "Çatal-Bıçak", icon: "🍴", description: "Çatal, kaşık, bıçak, maşa" },
+  decoration: { label: "Dekorasyon", icon: "💐", description: "Vazo, çiçek, dergi, gözlük vb." },
+  ingredient: { label: "Malzeme", icon: "🧂", description: "Un, pudra şekeri, kakao, kahve çekirdeği" },
+
+  // Legacy Tipler
   phone: { label: "Telefon", icon: "📱", description: "Akıllı telefon (jenerik, logosuz)" },
   bag: { label: "Çanta", icon: "👜", description: "El çantası, clutch" },
   keys: { label: "Anahtar", icon: "🔑", description: "Araba veya ev anahtarı" },

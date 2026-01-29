@@ -231,9 +231,9 @@ export class GeminiService {
       }
     }
 
-    // Core constraint - tek seferde, net
+    // Core constraint - tek seferde, net, ZERO HALLUCINATION
     editPrefix += `
-Constraint: Maintain 100% material and color fidelity for all references. Use only provided assets.
+Constraint: Maintain 100% material/color fidelity for references. use ONLY provided assets. DO NOT add unreferenced objects (no extra napkins/cutlery/flowers).
 
 SCENE:
 `;
@@ -505,11 +505,17 @@ SCENE:
     };
     const moodRule = moodGuidelines[mood] || moodGuidelines.balanced;
 
+    // KULLANILABİLİR LİSTELER AŞAĞIDADIR. diye biten system prompt
     const systemPrompt = `Sen profesyonel bir food styling uzmanısın. Pastane ürünleri için en uygun asset kombinasyonunu seç.
 MOOD: ${mood.toUpperCase()} - ${moodRule}
-${effectiveRules?.shouldIncludePet ? "⭐ Bu sefer KÖPEK DAHİL ET" : "Köpek dahil etme"}
+${effectiveRules?.shouldIncludePet ? "⭐ KÖPEK DAHİL ET" : "Köpek dahil etme"}
 
-ÖNEMLİ: usageCount düşük olan asset'lere öncelik ver (çeşitlilik için). tags bilgisini mood ve ürün uyumu için kullan.`;
+ÖNEMLİ: 
+1. usageCount düşük olan asset'lere öncelik ver (çeşitlilik için). tags bilgisini mood ve ürün uyumu için kullan.
+2. AKSESUAR SEÇİMİ (Opsiyonel): Eğer sahneye uygunsa (ör: 'cozy' veya 'energetic' mood) listelenen dekorlardan/aksesuarlardan BİR tane seç. Eğer mood 'minimal' ise seçmeyebilirsin (null).
+3. Eşleşme Mantığı: Ürün bir "Pasta" ise 'cutlery' (çatal) veya 'textile' (peçete) seçebilirsin. İçecek ise 'spoon' veya 'flower' seçebilirsin.
+
+KULLANILABİLİR LİSTELER AŞAĞIDADIR.`;
 
     const userPrompt = `
 Ürün tipi: ${productType}
@@ -520,6 +526,17 @@ Mood: ${mood}
 TABAKLAR: ${JSON.stringify(availableAssets.plates?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
 MASALAR: ${JSON.stringify(availableAssets.tables?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
 FİNCANLAR: ${JSON.stringify(availableAssets.cups?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
+DEKORLAR/AKSESUARLAR: ${JSON.stringify([
+      ...(availableAssets.props || []),
+      ...(availableAssets.accessories || [])
+    ].map((a: any) => ({
+      id: a.id,
+      filename: a.filename,
+      subType: a.subType || "generic",
+      category: a.category,
+      tags: a.tags || [],
+      usageCount: a.usageCount || 0
+    })) || [], null, 2)}
 
 Yanıt formatı (sadece JSON):
 {
@@ -527,7 +544,8 @@ Yanıt formatı (sadece JSON):
   "plateId": "seçilen tabak id veya null",
   "cupId": "seçilen fincan id veya null",
   "tableId": "seçilen masa id veya null",
-  "reasoning": "seçim gerekçesi"
+  "accessoryId": "seçilen dekor/aksesuar id veya null (OPSİYONEL)",
+  "reasoning": "seçim gerekçesi (aksesuar seçildiyse nedenini belirt)"
 }`;
 
     try {
@@ -542,6 +560,13 @@ Yanıt formatı (sadece JSON):
       const cup = data.cupId ? availableAssets.cups?.find((a: any) => a.id === data.cupId) : undefined;
       const table = data.tableId ? availableAssets.tables?.find((a: any) => a.id === data.tableId) : undefined;
 
+      // Aksesuarı listelerde ara
+      let accessory = undefined;
+      if (data.accessoryId) {
+        const allProps = [...(availableAssets.props || []), ...(availableAssets.accessories || [])];
+        accessory = allProps.find((a: any) => a.id === data.accessoryId);
+      }
+
       if (!product) {
         return { success: false, error: "Ürün bulunamadı", cost, tokensUsed: 0 };
       }
@@ -553,6 +578,7 @@ Yanıt formatı (sadece JSON):
           plate,
           cup,
           table,
+          accessory,
           selectionReasoning: data.reasoning,
           includesPet: effectiveRules?.shouldIncludePet || false,
         },
@@ -639,24 +665,28 @@ Yanıt formatı (sadece JSON):
     let physicalConstraint = "";
     if (eatingMethod === "hand") {
       physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün ELLE yenir. Prompt'ta kesinlikle çatal, bıçak veya kaşık OLMAMALI. Negative prompt'a fork, knife, spoon, cutlery, utensil ekle.";
-    } else if (eatingMethod === "fork" || eatingMethod === "fork-knife") {
-      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün çatalla yenir. Sahnede ürünün yanında çatal (ve/veya bıçak) görünebilir.";
+    } else if (eatingMethod === "fork-knife") {
+      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün ÇATAL VE BIÇAKLA yenir. Sahneye ZORUNLU OLARAK hem çatal hem bıçak ekle. (Must include both fork and knife).";
+    } else if (eatingMethod === "fork") {
+      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün sadece çatalla yenir (bıçak gereksiz). Sahnede sadece çatal olsun.";
     } else if (eatingMethod === "spoon") {
       physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün kaşıkla yenir. Sahnede kaşık görünebilir.";
     } else if (eatingMethod === "none") {
       physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün yiyecek değil (içecek vb.). Yeme aletleri gerekmez.";
     }
 
-    // Seçilen tüm assetleri formatla
+    // Seçilen tüm assetleri formatla (TAGLARI İÇERECEK ŞEKİLDE)
     const assetDetails: string[] = [];
     if (assets?.product?.filename) {
-      assetDetails.push(`- Ana Ürün: ${assets.product.filename}`);
+      assetDetails.push(`- Ana Ürün: ${assets.product.filename}. Detaylar: ${assets.product.tags?.join(", ")}`);
     }
     if (assets?.plate?.filename) {
-      assetDetails.push(`- Tabak: ${assets.plate.filename} (Bu tabak KESİNLİKLE kullanılmalı)`);
+      assetDetails.push(`- Tabak: ${assets.plate.filename}. Detaylar: ${assets.plate.tags?.join(", ")}`);
     }
     if (assets?.cup?.filename) {
-      assetDetails.push(`- Fincan/Bardak: ${assets.cup.filename} (Bu fincan/bardak KESİNLİKLE kullanılmalı)`);
+      // Bardak içeriği için tagleri önemse
+      const cupTags = assets.cup.tags?.join(", ") || "";
+      assetDetails.push(`- Fincan/Bardak: ${assets.cup.filename} (Bu bardak KESİNLİKLE kullanılmalı). İÇERİK: "${cupTags}" olarak doldur (örn: orange juice ise portakal suyu, boş ise çay).`);
     }
     if (assets?.surface?.filename) {
       assetDetails.push(`- Yüzey/Masa: ${assets.surface.filename}`);
@@ -665,11 +695,11 @@ Yanıt formatı (sadece JSON):
       assetDetails.push(`- Kompozisyon: ${assets.composition.filename}`);
     }
     if (assets?.accessory?.filename) {
-      assetDetails.push(`- Aksesuar: ${assets.accessory.filename}`);
+      assetDetails.push(`- Aksesuar: ${assets.accessory.filename} (Tip: ${assets.accessory.subType || "billi değil"}).`);
     }
 
     const assetSection = assetDetails.length > 0
-      ? `\n\nSEÇİLEN ASSETLER (Prompt'ta mutlaka kullan):\n${assetDetails.join("\n")}`
+      ? `\n\nSEÇİLEN ASSETLER (Prompt'ta mutlaka kullan ve içeriklerini taglere göre tanımla):\n${assetDetails.join("\n")}`
       : "";
 
     const userPrompt = `
@@ -678,12 +708,16 @@ Senaryo: ${scenario?.scenarioName || "bilinmiyor"}
 Yeme Şekli: ${eatingMethod || "bilinmiyor"}
 İpuçları: ${hints || "yok"}${assetSection}${physicalConstraint}
 
-ÖNEMLİ: Optimize edilmiş prompt'ta yukarıdaki seçilen assetlerin HEPSİ açıkça belirtilmeli. Tabak seçildiyse "plate" yerine tam olarak o tabağın tanımını kullan. Fincan seçildiyse "cup" yerine o fincanın tanımını kullan.
+ÖNEMLİ (ZERO HALLUCINATION POLICY): 
+1. Optimize edilmiş prompt'ta yukarıdaki seçilen assetlerin HEPSİ açıkça belirtilmeli.
+2. EĞER aksesuar seçilmediyse, prompt'a ASLA 'napkin', 'flower', 'cutlery' gibi dekoratif objeler ekleme. Sahne temiz kalsın.
+3. Bardak içeriği için girilen tagleri (orange juice, latte vb.) mutlaka dikkate al.
+4. Çatal/Bıçak kısıtlamasına ("FİZİKSEL KISITLAMA") kesinlikle uy.
 
 Yanıt formatı (sadece JSON):
 {
-  "optimizedPrompt": "optimize edilmiş prompt (seçilen tüm assetleri içermeli)",
-  "negativePrompt": "kaçınılacak öğeler",
+  "optimizedPrompt": "optimize edilmiş prompt",
+  "negativePrompt": "kaçınılacak öğeler (hallucinated objects, wrong cutlery vb.)",
   "customizations": ["özel ayar 1", "özel ayar 2"]
 }`;
 
