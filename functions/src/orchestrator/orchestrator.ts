@@ -6,6 +6,7 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { GeminiService } from "../services/gemini";
+import { ReveService } from "../services/reve";
 import { TelegramService } from "../services/telegram";
 import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
@@ -65,23 +66,41 @@ export class Orchestrator {
   private db: FirebaseFirestore.Firestore;
   private storage: ReturnType<typeof getStorage>;
   private gemini: GeminiService;
+  private reve: ReveService | null = null;
   private telegram: TelegramService;
   private rulesService: RulesService;
   private config: OrchestratorConfig;
+  private imageProvider: "gemini" | "reve";
 
   constructor(config: OrchestratorConfig) {
     this.config = config;
     this.db = getFirestore();
     this.storage = getStorage();
-    // Gemini 3.0 entegrasyonu
-    // Text işlemleri için Flash model (maliyet optimizasyonu: $0.05 → $0.01)
-    // Image işlemleri için Pro Image model
+
+    // Image provider seçimi
+    this.imageProvider = config.imageProvider || "gemini";
+
+    // Gemini 3.0 entegrasyonu (text işlemleri için her zaman gerekli)
+    // Text işlemleri: asset selection, scenario selection, prompt optimization, QC
     this.gemini = new GeminiService({
       apiKey: config.geminiApiKey,
       imageModel: "gemini-3-pro-image-preview",
       textModel: "gemini-3-flash-preview",
     });
-    console.log(`[Orchestrator] v2.1.0 - Initialized with Text Model: gemini-3-flash-preview (Target: gemini-3-flash-preview)`);
+
+    // Reve entegrasyonu (görsel üretimi için - opsiyonel)
+    if (this.imageProvider === "reve" && config.reveApiKey) {
+      this.reve = new ReveService({
+        apiKey: config.reveApiKey,
+        version: config.reveVersion || "latest",
+      });
+      console.log(`[Orchestrator] v2.2.0 - Image Provider: REVE (${config.reveVersion || "latest"})`);
+    } else {
+      console.log(`[Orchestrator] v2.2.0 - Image Provider: GEMINI (gemini-3-pro-image-preview)`);
+    }
+
+    console.log(`[Orchestrator] Text Model: gemini-3-flash-preview`);
+
     this.telegram = new TelegramService({
       botToken: config.telegramBotToken,
       chatId: config.telegramChatId,
@@ -1005,31 +1024,70 @@ export class Orchestrator {
               });
             }
 
-            console.log(`[Orchestrator] Sending ${referenceImages.length} reference images to Gemini`);
+            console.log(`[Orchestrator] Sending ${referenceImages.length} reference images to ${this.imageProvider.toUpperCase()}`);
 
-            // Gemini ile görsel üret
-            const geminiResult = await this.gemini.transformImage(
-              productImageBase64,
-              "image/png",
-              {
-                prompt: result.optimizedPrompt.mainPrompt,
-                negativePrompt: result.optimizedPrompt.negativePrompt,
-                faithfulness: result.optimizedPrompt.faithfulness,
-                aspectRatio: result.optimizedPrompt.aspectRatio,
-                referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-              }
-            );
+            // Görsel üret (Reve veya Gemini)
+            let imageResult: { imageBase64: string; mimeType: string; model: string; cost: number };
+
+            if (this.imageProvider === "reve" && this.reve) {
+              // REVE ile görsel üret
+              // Reve edit endpoint sadece tek referans görsel alıyor
+              // Diğer referansları prompt'a açıklama olarak ekliyoruz
+              this.reve.setPipelineContext({
+                pipelineId: status.startedAt.toString(),
+                slotId: slotId,
+                productType: result.assetSelection?.product?.subType,
+              });
+
+              const reveResult = await this.reve.transformImage(
+                productImageBase64,
+                "image/png",
+                {
+                  prompt: result.optimizedPrompt.mainPrompt,
+                  negativePrompt: result.optimizedPrompt.negativePrompt,
+                  aspectRatio: result.optimizedPrompt.aspectRatio as "1:1" | "9:16" | "16:9" | "4:3" | "3:4" | "3:2" | "2:3" | undefined,
+                  referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+                }
+              );
+
+              imageResult = {
+                imageBase64: reveResult.imageBase64,
+                mimeType: reveResult.mimeType,
+                model: reveResult.model,
+                cost: reveResult.cost,
+              };
+            } else {
+              // GEMINI ile görsel üret (varsayılan)
+              const geminiResult = await this.gemini.transformImage(
+                productImageBase64,
+                "image/png",
+                {
+                  prompt: result.optimizedPrompt.mainPrompt,
+                  negativePrompt: result.optimizedPrompt.negativePrompt,
+                  faithfulness: result.optimizedPrompt.faithfulness,
+                  aspectRatio: result.optimizedPrompt.aspectRatio,
+                  referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+                }
+              );
+
+              imageResult = {
+                imageBase64: geminiResult.imageBase64,
+                mimeType: geminiResult.mimeType,
+                model: geminiResult.model,
+                cost: geminiResult.cost,
+              };
+            }
 
             generatedImage = {
-              imageBase64: geminiResult.imageBase64,
-              mimeType: geminiResult.mimeType,
-              model: geminiResult.model,
-              cost: geminiResult.cost,
+              imageBase64: imageResult.imageBase64,
+              mimeType: imageResult.mimeType,
+              model: imageResult.model,
+              cost: imageResult.cost,
               generatedAt: Date.now(),
               attemptNumber: generationAttempt,
             };
 
-            totalCost += geminiResult.cost;
+            totalCost += imageResult.cost;
           } catch (genError) {
             console.error(`[Orchestrator] Generation attempt ${generationAttempt} failed:`, genError);
             // Hata oluştu, bir sonraki denemeye geç

@@ -697,9 +697,16 @@ export interface OrchestratorConfig {
   claudeApiKey: string;
   claudeModel: string;            // "claude-sonnet-4-20250514"
 
-  // Gemini API
+  // Gemini API (text işlemleri için - asset selection, scenario selection, prompt optimization)
   geminiApiKey: string;
   geminiModel: string;            // "gemini-3-pro-image-preview"
+
+  // Reve API (görsel üretimi için - image-to-image transformation)
+  reveApiKey?: string;            // Opsiyonel: Reve kullanılacaksa gerekli
+  reveVersion?: "latest" | "latest-fast" | "reve-edit@20250915" | "reve-edit-fast@20251030";
+
+  // Görsel üretim provider'ı
+  imageProvider?: "gemini" | "reve";  // Default: "gemini"
 
   // Kalite kontrol
   qualityThreshold: number;       // Minimum skor (default: 7)

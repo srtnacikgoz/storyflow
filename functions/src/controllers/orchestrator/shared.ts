@@ -15,8 +15,9 @@ export const REGION = "europe-west1";
 // Firestore instance
 export const db = getFirestore();
 
-// Firebase Secret tanımı
+// Firebase Secret tanımları
 export const claudeApiKey = defineSecret("CLAUDE_API_KEY");
+export const reveApiKey = defineSecret("REVE_API_KEY");
 
 // CORS handler'ı export et
 export { getCors, getConfig };
@@ -30,11 +31,24 @@ export { functions };
 export async function getOrchestratorConfig(claudeKey?: string): Promise<OrchestratorConfig> {
   const config = await getConfig();
 
+  // Reve API key'i secret'tan al (yoksa boş string)
+  let reveKey = "";
+  try {
+    reveKey = reveApiKey.value() || "";
+  } catch {
+    // Secret tanımlı değilse sessizce devam et
+    console.log("[Config] REVE_API_KEY not configured, using Gemini for image generation");
+  }
+
   return {
     claudeApiKey: claudeKey || claudeApiKey.value() || "",
     claudeModel: "claude-sonnet-4-20250514",
     geminiApiKey: config.gemini.apiKey,
     geminiModel: "gemini-3-pro-image-preview",
+    // Reve entegrasyonu - API key varsa aktif
+    reveApiKey: reveKey || undefined,
+    reveVersion: "latest",
+    imageProvider: reveKey ? "reve" : "gemini",
     qualityThreshold: 7,
     maxRetries: 3,
     telegramBotToken: config.telegram?.botToken || "",
