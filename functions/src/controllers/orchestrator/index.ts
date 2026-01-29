@@ -36,6 +36,7 @@ export {
   updateScenarioEndpoint,
   deleteScenarioEndpoint,
   listHandStyles,
+  generateScenarioDescription, // AI Writer
 } from "./scenarioController";
 
 // Pipeline Controller

@@ -47,6 +47,7 @@ export {
   updateScenarioEndpoint,
   deleteScenarioEndpoint,
   listHandStyles,
+  generateScenarioDescription,
 
   // Pipeline Controller
   triggerOrchestratorScheduler,

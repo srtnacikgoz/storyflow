@@ -17,7 +17,6 @@ import {
   VariationRules,
   Scenario,
   HandStyle,
-  CompositionVariant,
   ProductionHistoryEntry,
   InteriorType,
   GlobalOrchestratorConfig,
@@ -560,20 +559,17 @@ export class RulesService {
   }
 
   /**
-   * Belirli bir senaryo için uygun kompozisyon seç
+   * Belirli bir senaryo için kompozisyon ID'sini döndür
+   * NOT: Kompozisyon artık senaryo tanımında sabit (tekli seçim)
+   * @deprecated Kompozisyon senaryo tanımından alınır, bu method geriye uyumluluk için
    */
-  selectComposition(scenario: Scenario, blockedCompositions: string[]): CompositionVariant {
-    const availableCompositions = scenario.compositions.filter(
-      c => !blockedCompositions.includes(c.id)
-    );
-
-    if (availableCompositions.length === 0) {
-      // Tümü bloklanmışsa rastgele seç
-      return scenario.compositions[Math.floor(Math.random() * scenario.compositions.length)];
-    }
-
-    // Rastgele seç
-    return availableCompositions[Math.floor(Math.random() * availableCompositions.length)];
+  selectComposition(scenario: Scenario, _blockedCompositions: string[]): { id: string; description: string } {
+    // Yeni format: compositionId kullan
+    const compositionId = scenario.compositionId || scenario.compositions?.[0]?.id || "default";
+    return {
+      id: compositionId,
+      description: scenario.compositions?.find(c => c.id === compositionId)?.description || compositionId,
+    };
   }
 
   /**

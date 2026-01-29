@@ -145,7 +145,9 @@ export class GeminiService {
   constructor(config: GeminiConfig) {
     this.apiKey = config.apiKey;
     this.imageModel = config.imageModel || "gemini-3-pro-image-preview";
-    this.textModel = config.textModel || "gemini-3-pro-preview";
+    // Text işlemleri için Flash model kullan (maliyet optimizasyonu: $0.05 → $0.01)
+    // Asset seçimi, senaryo seçimi, prompt optimizasyonu, QC gibi basit JSON görevler için yeterli
+    this.textModel = config.textModel || "gemini-3-flash-preview";
   }
 
   /**
@@ -645,16 +647,42 @@ Yanıt formatı (sadece JSON):
       physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün yiyecek değil (içecek vb.). Yeme aletleri gerekmez.";
     }
 
+    // Seçilen tüm assetleri formatla
+    const assetDetails: string[] = [];
+    if (assets?.product?.filename) {
+      assetDetails.push(`- Ana Ürün: ${assets.product.filename}`);
+    }
+    if (assets?.plate?.filename) {
+      assetDetails.push(`- Tabak: ${assets.plate.filename} (Bu tabak KESİNLİKLE kullanılmalı)`);
+    }
+    if (assets?.cup?.filename) {
+      assetDetails.push(`- Fincan/Bardak: ${assets.cup.filename} (Bu fincan/bardak KESİNLİKLE kullanılmalı)`);
+    }
+    if (assets?.surface?.filename) {
+      assetDetails.push(`- Yüzey/Masa: ${assets.surface.filename}`);
+    }
+    if (assets?.composition?.filename) {
+      assetDetails.push(`- Kompozisyon: ${assets.composition.filename}`);
+    }
+    if (assets?.accessory?.filename) {
+      assetDetails.push(`- Aksesuar: ${assets.accessory.filename}`);
+    }
+
+    const assetSection = assetDetails.length > 0
+      ? `\n\nSEÇİLEN ASSETLER (Prompt'ta mutlaka kullan):\n${assetDetails.join("\n")}`
+      : "";
+
     const userPrompt = `
 Ana Prompt: ${basePrompt}
 Senaryo: ${scenario?.scenarioName || "bilinmiyor"}
-Ürün: ${assets?.product?.filename || "bilinmiyor"}
 Yeme Şekli: ${eatingMethod || "bilinmiyor"}
-İpuçları: ${hints || "yok"}${physicalConstraint}
+İpuçları: ${hints || "yok"}${assetSection}${physicalConstraint}
+
+ÖNEMLİ: Optimize edilmiş prompt'ta yukarıdaki seçilen assetlerin HEPSİ açıkça belirtilmeli. Tabak seçildiyse "plate" yerine tam olarak o tabağın tanımını kullan. Fincan seçildiyse "cup" yerine o fincanın tanımını kullan.
 
 Yanıt formatı (sadece JSON):
 {
-  "optimizedPrompt": "optimize edilmiş prompt",
+  "optimizedPrompt": "optimize edilmiş prompt (seçilen tüm assetleri içermeli)",
   "negativePrompt": "kaçınılacak öğeler",
   "customizations": ["özel ayar 1", "özel ayar 2"]
 }`;
@@ -811,6 +839,71 @@ Write the atmospheric description:`;
       return { text: text.trim(), cost };
     } catch (error) {
       console.error("[GeminiService] Mood description generation failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Senaryo Açıklaması Üret (AI Scenario Writer)
+   * Gemini 3 Pro kullanarak, sahne/senaryo açıklaması üretir.
+   */
+  async generateScenarioDescription(params: {
+    scenarioName: string;
+    includesHands: boolean;
+    handPose?: string;
+    compositions: string[];
+    compositionEntry?: string;
+  }): Promise<{ text: string; cost: number }> {
+    const { scenarioName, includesHands, handPose, compositions, compositionEntry } = params;
+
+    // El pozu açıklamaları
+    const handPoseDescriptions: Record<string, string> = {
+      "cupping": "cupping pose (hands wrapped around the cup)",
+      "pinching": "pinching pose (holding delicately with fingertips)",
+      "lifting": "lifting pose (raising the item elegantly)",
+      "breaking": "breaking pose (breaking apart the product)",
+      "spreading": "spreading pose (applying spread/sauce)",
+      "dipping": "dipping pose (dipping into sauce/drink)",
+      "pouring": "pouring pose (pouring liquid gracefully)",
+      "holding-plate": "holding plate pose (presenting on a plate)",
+    };
+
+    const handInfo = includesHands
+      ? `\nHand Style: Yes, includes hands
+Hand Pose: ${handPose ? handPoseDescriptions[handPose] || handPose : "Not specified"}
+${compositionEntry ? `Entry Point: ${compositionEntry}` : ""}`
+      : "\nHand Style: No hands in scene";
+
+    const systemPrompt = `You are an expert Food Photography Director for a high-end pastry/cafe brand.
+Your task is to write a "Scene Description" that tells the AI image generator WHAT IS HAPPENING in the scene.
+
+RULES:
+1. LANGUAGE: English ONLY.
+2. LENGTH: Concise (40-60 words).
+3. FOCUS ONLY ON:
+   - The "moment" being captured (breaking, sipping, presenting, etc.)
+   - Hand positioning and gesture (if hands are included)
+   - Product placement and camera angle
+   - Emotional feeling (intimate, elegant, cozy, premium)
+4. DO NOT DESCRIBE:
+   - Lighting (that's the Mood's job)
+   - Color palette (that's the Mood's job)
+   - Weather/atmosphere (that's the Mood's job)
+5. HAND RULES (if hands included):
+   - Describe hands as: elegant, feminine, well-manicured nails, natural skin tone
+   - Focus on the ACTION the hands are performing
+6. OUTPUT: Return ONLY the description. No quotes, no prefixes like "Here is:".`;
+
+    const userPrompt = `Scenario Name: ${scenarioName}
+Compositions: ${compositions.join(", ")}${handInfo}
+
+Write the scene description:`;
+
+    try {
+      const { text, cost } = await this.generateText(userPrompt, systemPrompt, false, "prompt-optimization");
+      return { text: text.trim(), cost };
+    } catch (error) {
+      console.error("[GeminiService] Scenario description generation failed:", error);
       throw error;
     }
   }

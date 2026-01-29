@@ -862,6 +862,8 @@ export type EntryPoint =
   | "top-left"      // Sol üst köşe
   | "side-right"    // Sağ kenar
   | "side-left"     // Sol kenar
+  | "right-side"    // Sağ kenar (alias)
+  | "top-down"      // Yukarıdan aşağı
   | "center";       // Merkez (sadece sunum)
 
 /**

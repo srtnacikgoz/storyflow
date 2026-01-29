@@ -335,6 +335,16 @@ export async function getHandPose(poseId: string): Promise<GeminiHandPose | null
 }
 
 /**
+ * Composition ID'den Gemini kompozisyon şablonunu al
+ */
+export async function getCompositionTemplate(compositionId: string): Promise<GeminiCompositionTemplate | null> {
+  const presets = await loadGeminiPresets();
+  if (!presets) return null;
+
+  return presets.compositions.find(c => c.id === compositionId) || null;
+}
+
+/**
  * Ürün tipine göre texture profile al
  */
 export async function getTextureProfile(productType: string): Promise<GeminiProductTextureProfile | null> {
@@ -719,22 +729,23 @@ export async function buildGeminiPrompt(params: {
 /**
  * Senaryo verilerinden Gemini prompt parametrelerini çıkar
  * (Admin panelinde seçilen değerleri kullanır)
+ * NOT: lightingPreset artık Senaryo'dan değil, Mood'dan geliyor (v2.0)
  */
 export function extractGeminiParamsFromScenario(scenario: {
   mood?: string;
-  lightingPreset?: string;
+  // lightingPreset kaldırıldı - Işık artık sadece Mood'dan
   handPose?: string;
   compositionEntry?: string;
   includesHands?: boolean;
 }): {
   moodId?: string;
-  lightingPresetId?: string;
+  // lightingPresetId kaldırıldı - Mood fallback kullanılacak
   handPoseId?: string;
   compositionId?: string;
 } {
   return {
     moodId: scenario.mood || undefined,
-    lightingPresetId: scenario.lightingPreset || undefined,
+    // lightingPresetId: Artık Senaryo'dan değil, buildGeminiPrompt içinde Mood'dan alınacak
     handPoseId: scenario.includesHands ? scenario.handPose || undefined : undefined,
     compositionId: scenario.includesHands ? scenario.compositionEntry || undefined : undefined,
   };

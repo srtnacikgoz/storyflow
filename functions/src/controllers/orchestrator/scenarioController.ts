@@ -3,9 +3,10 @@
  * Senaryo CRUD işlemleri
  */
 
-import { functions, db, getCors, REGION, errorResponse } from "./shared";
+import { functions, db, getCors, REGION, errorResponse, getConfig } from "./shared";
 import { getScenarios, addScenario, updateScenario, getHandStyles } from "../../services/configService";
 import { FirestoreScenario } from "../../orchestrator/types";
+import { GeminiService } from "../../services/gemini";
 
 /**
  * Tüm senaryoları listele
@@ -124,7 +125,10 @@ export const createScenario = functions
           name,
           description,
           includesHands,
-          compositions,
+          compositionId,     // Yeni: Tekli kompozisyon seçimi (v2.0)
+          compositionEntry,
+          handPose,
+          compositions,      // Deprecated: Eski çoklu seçim (geriye uyumluluk)
           isInterior,
           interiorType,
           suggestedProducts,
@@ -141,10 +145,12 @@ export const createScenario = functions
           return;
         }
 
-        if (!compositions || !Array.isArray(compositions) || compositions.length === 0) {
+        // compositionId veya compositions'dan en az biri gerekli
+        const effectiveCompositionId = compositionId || compositions?.[0]?.id;
+        if (!effectiveCompositionId) {
           response.status(400).json({
             success: false,
-            error: "At least one composition is required",
+            error: "compositionId is required",
           });
           return;
         }
@@ -171,13 +177,12 @@ export const createScenario = functions
           name,
           description,
           includesHands: includesHands ?? false,
-          compositions: compositions.map((c: { id: string; description?: string }) => ({
-            id: c.id,
-            description: c.description || c.id,
-          })),
+          compositionId: effectiveCompositionId,  // Yeni: Tekli kompozisyon (v2.0)
           isActive: true,
           isInterior: isInterior ?? false,
           // Opsiyonel alanları sadece tanımlı ise ekle
+          ...(compositionEntry !== undefined && { compositionEntry }),
+          ...(handPose !== undefined && { handPose }),
           ...(interiorType !== undefined && { interiorType }),
           ...(suggestedProducts !== undefined && { suggestedProducts }),
           ...(suggestedTimeSlots !== undefined && { suggestedTimeSlots }),
@@ -238,12 +243,14 @@ export const updateScenarioEndpoint = functions
           return;
         }
 
-        // Compositions formatını düzelt
-        if (updates.compositions) {
-          updates.compositions = updates.compositions.map((c: { id: string; description?: string }) => ({
-            id: c.id,
-            description: c.description || c.id,
-          }));
+        // compositionId veya compositions'dan birini al
+        if (updates.compositionId) {
+          // Yeni format: compositionId kullanılıyor - compositions array'i kaldır
+          delete updates.compositions;
+        } else if (updates.compositions && Array.isArray(updates.compositions)) {
+          // Eski format: compositions array'inden ilkini compositionId olarak al
+          updates.compositionId = updates.compositions[0]?.id || updates.compositions[0];
+          delete updates.compositions;
         }
 
         await updateScenario(id, updates);
@@ -373,6 +380,72 @@ export const listHandStyles = functions
         });
       } catch (error) {
         errorResponse(response, error, "listHandStyles");
+      }
+    });
+  });
+
+/**
+ * AI ile senaryo açıklaması üret (Gemini)
+ * POST /generateScenarioDescription
+ * Body: { scenarioName, includesHands, handPose?, compositions, compositionEntry? }
+ */
+export const generateScenarioDescription = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 60 })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const {
+          scenarioName,
+          includesHands,
+          handPose,
+          compositions,
+          compositionEntry,
+        } = request.body;
+
+        // Validasyon
+        if (!scenarioName) {
+          response.status(400).json({
+            success: false,
+            error: "scenarioName is required",
+          });
+          return;
+        }
+
+        if (!compositions || !Array.isArray(compositions) || compositions.length === 0) {
+          response.status(400).json({
+            success: false,
+            error: "At least one composition is required",
+          });
+          return;
+        }
+
+        // Gemini Service ile açıklama üret
+        const config = await getConfig();
+        const geminiService = new GeminiService({ apiKey: config.gemini.apiKey });
+        const result = await geminiService.generateScenarioDescription({
+          scenarioName,
+          includesHands: includesHands ?? false,
+          handPose,
+          compositions,
+          compositionEntry,
+        });
+
+        response.json({
+          success: true,
+          data: {
+            description: result.text,
+            cost: result.cost,
+          },
+        });
+      } catch (error) {
+        errorResponse(response, error, "generateScenarioDescription");
       }
     });
   });

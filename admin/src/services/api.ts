@@ -1309,6 +1309,75 @@ class ApiService {
   }
 
   /**
+   * Gemini preset'lerini getir (kompozisyonlar, el pozları vb.)
+   */
+  async getGeminiPresets(): Promise<{
+    compositions: Array<{
+      id: string;
+      name: string;
+      nameEn: string;
+      entryPoint: string;
+      geminiPrompt: string;
+      aspectRatio?: string;
+      bestFor: string[];
+      sortOrder: number;
+    }>;
+    handPoses: Array<{
+      id: string;
+      name: string;
+      nameEn: string;
+      gripType: string;
+      entryPoint: string;
+      geminiPrompt: string;
+      bestFor: string[];
+      sortOrder: number;
+    }>;
+    lightingPresets: Array<{
+      id: string;
+      name: string;
+      nameEn: string;
+      geminiPrompt: string;
+      bestFor: string[];
+      sortOrder: number;
+    }>;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        compositions: Array<{
+          id: string;
+          name: string;
+          nameEn: string;
+          entryPoint: string;
+          geminiPrompt: string;
+          aspectRatio?: string;
+          bestFor: string[];
+          sortOrder: number;
+        }>;
+        handPoses: Array<{
+          id: string;
+          name: string;
+          nameEn: string;
+          gripType: string;
+          entryPoint: string;
+          geminiPrompt: string;
+          bestFor: string[];
+          sortOrder: number;
+        }>;
+        lightingPresets: Array<{
+          id: string;
+          name: string;
+          nameEn: string;
+          geminiPrompt: string;
+          bestFor: string[];
+          sortOrder: number;
+        }>;
+      };
+    }>("getGeminiPresets");
+    return response.data;
+  }
+
+  /**
    * Tüm temaları listele
    */
   async listThemes(): Promise<Theme[]> {
@@ -1904,6 +1973,26 @@ class ApiService {
       body: JSON.stringify({ moodName, keywords, weather, timeOfDay, season }),
     });
     return response.description;
+  }
+
+  /**
+   * AI ile Senaryo açıklaması üret (Claude)
+   */
+  async generateScenarioDescription(params: {
+    scenarioName: string;
+    includesHands: boolean;
+    handPose?: string;
+    compositions: string[];
+    compositionEntry?: string;
+  }): Promise<{ description: string; cost: number }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: { description: string; cost: number };
+    }>("generateScenarioDescription", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+    return response.data;
   }
 
   // ==========================================

@@ -32,228 +32,72 @@ const SCENARIOS_TOUR_STEPS: TourStep[] = [
 ];
 
 // Senaryo tipi
-interface Composition {
-  id: string;
-  description: string;
-}
-
 interface Scenario {
   id: string;
   name: string;
   description: string;
   includesHands: boolean;
-  compositions: Composition[];
+  compositionId?: string;         // Tekli kompozisyon seçimi (v2.0)
+  compositionEntry?: string;
   isActive: boolean;
   isInterior?: boolean;
   interiorType?: string;
-  suggestedProducts?: string[];
-  mood?: string;
-  lightingPreset?: string;
+  mood?: string; // deprecated: Tema'dan devralınıyor
   handPose?: string;
-  compositionEntry?: string;
   createdAt?: number;
   updatedAt?: number;
+  // DEPRECATED: Eski çoklu seçim (geriye uyumluluk için)
+  compositions?: Array<{ id: string; description: string }>;
 }
 
-// Işık preset'leri - Gemini native terminoloji
-// NOT: Atmosfer/Mood artık Tema'daki Mood ayarından devralınır.
-// Senaryo seviyesinde ışık preset'i isteğe bağlı override olarak kalır.
-const LIGHTING_PRESETS = [
-  {
-    id: "soft-diffused",
-    name: "Yumuşak Yayılmış",
-    hint: "Her zaman güvenli seçim",
-    geminiPrompt: "Soft diffused natural light, gentle shadows, even illumination",
-    direction: "diffused-window",
-    temperature: "5000K",
-    bestFor: ["croissants", "cakes", "cookies"],
-  },
-  {
-    id: "dramatic-side",
-    name: "Dramatik Yan Işık",
-    hint: "Doku ve derinlik vurgular",
-    geminiPrompt: "Dramatic side-lighting at 45 degrees, defined shadows, texture emphasis",
-    direction: "side-lighting-45",
-    temperature: "3500K",
-    bestFor: ["chocolates", "macarons", "dark pastries"],
-  },
-  {
-    id: "golden-backlight",
-    name: "Altın Arka Işık",
-    hint: "Sıcak, davetkar görünüm",
-    geminiPrompt: "Warm backlighting, golden rim light, subsurface glow",
-    direction: "backlighting",
-    temperature: "3200K",
-    bestFor: ["bread", "croissants", "honey glazed"],
-  },
-  {
-    id: "morning-window",
-    name: "Sabah Pencere Işığı",
-    hint: "Taze, enerjik sabah",
-    geminiPrompt: "Bright morning window light, clean shadows, fresh atmosphere",
-    direction: "diffused-window",
-    temperature: "5500K",
-    bestFor: ["breakfast items", "fresh pastries", "coffee"],
-  },
-  {
-    id: "rim-highlight",
-    name: "Kenar Vurgulu",
-    hint: "Premium ürün sunumu",
-    geminiPrompt: "Rim lighting with soft fill, luminous edges, professional product shot",
-    direction: "rim-lighting",
-    temperature: "5000K",
-    bestFor: ["glossy items", "chocolates", "decorated cakes"],
-  },
-  {
-    id: "warm-ambient",
-    name: "Sıcak Ortam Işığı",
-    hint: "Ev sıcaklığı, samimi",
-    geminiPrompt: "Warm ambient tungsten light, cozy atmosphere, intimate setting",
-    direction: "diffused-window",
-    temperature: "3000K",
-    bestFor: ["comfort food", "home style", "sharing moments"],
-  },
+// Fallback değerler - API yüklenemezse kullanılır
+const DEFAULT_HAND_POSE_OPTIONS = [
+  { id: "cupping", name: "Kavrama (Cupping)", hint: "Koruyucu, özenli tutma", geminiPrompt: "Elegant feminine hands gently cupping", bestFor: ["Sıcak içecekler", "Bardak/kupa"] },
+  { id: "pinching", name: "Tutma (Pinching)", hint: "Zarif, hassas tutma", geminiPrompt: "Delicate pinch grip between thumb and fingers", bestFor: ["Küçük ürünler", "Çikolata"] },
+  { id: "cradling", name: "Kucaklama (Cradling)", hint: "Değerli nesneyi taşıma", geminiPrompt: "Hands cradling from below", bestFor: ["Tabak", "Sunum"] },
+  { id: "presenting", name: "Sunma (Presenting)", hint: "Açık avuçla gösterme", geminiPrompt: "Open palm presentation", bestFor: ["Hediye", "Sergileme"] },
+  { id: "breaking", name: "Kırma (Breaking)", hint: "Doku gösterimi", geminiPrompt: "Hands gently breaking apart", bestFor: ["Ekmek", "Çikolata bar"] },
+  { id: "dipping", name: "Batırma (Dipping)", hint: "Etkileşim, hareket anı", geminiPrompt: "Hand dipping item into liquid", bestFor: ["Soslar", "Çikolata fondue"] },
 ];
 
-// El poz seçenekleri - Gemini için optimize edilmiş
-const HAND_POSE_OPTIONS = [
-  {
-    id: "cupping",
-    name: "Kavrama (Cupping)",
-    hint: "Koruyucu, özenli tutma",
-    geminiPrompt: "Elegant feminine hands gently cupping, protective hold, nurturing gesture",
-    skinTone: "warm olive",
-    nailStyle: "natural short nails, subtle nude polish",
-    bestFor: ["warm drinks", "delicate items", "round objects"],
-  },
-  {
-    id: "pinching",
-    name: "Tutma (Pinching)",
-    hint: "Zarif, hassas tutma",
-    geminiPrompt: "Delicate pinch grip between thumb and fingers, refined gesture, precise hold",
-    skinTone: "warm olive",
-    nailStyle: "natural manicure",
-    bestFor: ["small pastries", "chocolates", "macarons"],
-  },
-  {
-    id: "cradling",
-    name: "Kucaklama (Cradling)",
-    hint: "Değerli nesneyi taşıma",
-    geminiPrompt: "Hands cradling from below, supportive hold, presenting precious item",
-    skinTone: "warm olive",
-    nailStyle: "clean natural nails",
-    bestFor: ["plates", "bowls", "larger items"],
-  },
-  {
-    id: "presenting",
-    name: "Sunma (Presenting)",
-    hint: "Açık avuçla gösterme",
-    geminiPrompt: "Open palm presentation, offering gesture, welcoming hands",
-    skinTone: "warm olive",
-    nailStyle: "subtle neutral polish",
-    bestFor: ["flat items", "display shots", "invitation poses"],
-  },
-  {
-    id: "breaking",
-    name: "Kırma (Breaking)",
-    hint: "Doku gösterimi",
-    geminiPrompt: "Hands gently breaking apart, revealing interior texture, discovery moment",
-    skinTone: "warm olive",
-    nailStyle: "natural nails",
-    bestFor: ["bread", "croissants", "filled pastries"],
-  },
-  {
-    id: "dipping",
-    name: "Batırma (Dipping)",
-    hint: "Etkileşim, hareket anı",
-    geminiPrompt: "Hand dipping item into liquid, interaction moment, dynamic action",
-    skinTone: "warm olive",
-    nailStyle: "clean short nails",
-    bestFor: ["biscuits with coffee", "chocolate fondue", "sauces"],
-  },
+const DEFAULT_COMPOSITION_TYPES = [
+  { id: "hero-center", name: "Ürün Odaklı (Hero)", description: "Ürün tam ortada, dikkat çekici", icon: "🎯", bestFor: "Yeni ürün tanıtımı" },
+  { id: "lifestyle-hand", name: "Yaşam Tarzı (Lifestyle)", description: "El ürünü tutuyor, doğal", icon: "✋", bestFor: "Sosyal medya" },
+  { id: "flat-lay", name: "Düz Yüzey (Flat Lay)", description: "Yukarıdan çekim", icon: "📐", bestFor: "Instagram kareleri" },
+  { id: "close-up-detail", name: "Yakın Çekim (Macro)", description: "Dokuya odaklanma", icon: "🔍", bestFor: "Kalite vurgulama" },
+  { id: "ambient-scene", name: "Ortam Sahnesi", description: "Ürün sahnenin parçası", icon: "☕", bestFor: "Hikaye anlatımı" },
+  { id: "minimal-clean", name: "Minimal / Sade", description: "Temiz arka plan", icon: "⬜", bestFor: "E-ticaret, katalog" },
 ];
 
-// Kompozisyon giriş noktaları - El senaryoları için
-const COMPOSITION_ENTRY_POINTS = [
-  {
-    id: "bottom-right",
-    name: "↘️ Sağ Alt Köşe",
-    hint: "En doğal giriş noktası - çoğu insan sağ elini kullanır",
-    geminiPrompt: "Hand entering frame from bottom-right corner",
-  },
-  {
-    id: "bottom-left",
-    name: "↙️ Sol Alt Köşe",
-    hint: "Sol el kullanımı veya farklılık için",
-    geminiPrompt: "Hand entering frame from bottom-left corner",
-  },
-  {
-    id: "right-side",
-    name: "➡️ Sağ Kenar",
-    hint: "Yatay çekimler için, el yandan girer",
-    geminiPrompt: "Hand reaching in from right side of frame",
-  },
-  {
-    id: "top-down",
-    name: "⬇️ Yukarıdan",
-    hint: "Kuşbakışı flat-lay çekimler için",
-    geminiPrompt: "Overhead view with hands from top",
-  },
+// El giriş noktaları (compositionEntry) için fallback
+const DEFAULT_COMPOSITION_ENTRY_POINTS = [
+  { id: "bottom-right", name: "Sağ Alt", hint: "El sağ alttan girer" },
+  { id: "bottom-left", name: "Sol Alt", hint: "El sol alttan girer" },
+  { id: "right-side", name: "Sağ Kenar", hint: "El sağ kenardan girer" },
+  { id: "top-down", name: "Yukarıdan", hint: "El yukarıdan girer" },
+  { id: "center", name: "Merkez", hint: "Ürün ortada, eller iki yandan" },
+  { id: "side-left", name: "Sol Kenar", hint: "El sol kenardan girer" },
+  { id: "side-right", name: "Sağ Kenar Alt", hint: "El sağ kenar alttan" },
 ];
 
-// Fotoğraf kompozisyon türleri - Kullanıcı dostu seçenekler
-const COMPOSITION_TYPES = [
-  {
-    id: "hero-center",
-    name: "Ürün Odaklı (Merkez)",
-    description: "Ürün tam ortada, dikkat çekici",
-    icon: "🎯",
-    bestFor: "Yeni ürün tanıtımı, öne çıkarma",
-  },
-  {
-    id: "lifestyle-hand",
-    name: "Yaşam Tarzı (El ile)",
-    description: "El ürünü tutuyor, doğal görünüm",
-    icon: "✋",
-    bestFor: "Sosyal medya, samimi paylaşımlar",
-  },
-  {
-    id: "flat-lay",
-    name: "Düz Yüzey (Kuşbakışı)",
-    description: "Yukarıdan çekim, ürün ve aksesuarlar",
-    icon: "📐",
-    bestFor: "Instagram kareleri, çoklu ürün",
-  },
-  {
-    id: "close-up-detail",
-    name: "Yakın Çekim (Detay)",
-    description: "Ürünün dokusuna odaklanma",
-    icon: "🔍",
-    bestFor: "Kalite vurgulama, doku gösterme",
-  },
-  {
-    id: "ambient-scene",
-    name: "Ortam Sahnesi",
-    description: "Ürün bir sahnenin parçası",
-    icon: "☕",
-    bestFor: "Hikaye anlatımı, atmosfer",
-  },
-  {
-    id: "minimal-clean",
-    name: "Minimal / Sade",
-    description: "Temiz arka plan, sadece ürün",
-    icon: "⬜",
-    bestFor: "Profesyonel katalog, e-ticaret",
-  },
-];
-
-// Varsayılan ürün tipleri (API yüklenene kadar fallback)
-const DEFAULT_PRODUCT_TYPES = [
-  { id: "croissants", name: "Kruvasanlar" },
-  { id: "pastas", name: "Pastalar" },
-  { id: "chocolates", name: "Çikolatalar" },
-  { id: "coffees", name: "Kahveler" },
-];
+// Kompozisyon ID'sine göre ikon döndürür
+const getCompositionIcon = (id: string): string => {
+  const icons: Record<string, string> = {
+    // El giriş noktaları
+    "bottom-right": "↘️",
+    "bottom-left": "↙️",
+    "right-side": "➡️",
+    "top-down": "⬇️",
+    // Fotoğraf türleri
+    "hero-center": "🎯",
+    "lifestyle-hand": "✋",
+    "flat-lay": "📐",
+    "close-up-detail": "🔍",
+    "ambient-scene": "☕",
+    "minimal-clean": "⬜",
+  };
+  return icons[id] || "📷";
+};
 
 // Varsayılan interior tipleri (API yüklenene kadar fallback)
 const DEFAULT_INTERIOR_TYPES = [
@@ -270,11 +114,9 @@ const emptyForm = {
   name: "",
   description: "",
   includesHands: false,
-  compositions: [] as { id: string; description: string }[],
+  compositionId: "",  // Tekli kompozisyon seçimi (v2.0)
   isInterior: false,
   interiorType: "",
-  suggestedProducts: [] as string[],
-  lightingPreset: "",
   handPose: "",
   compositionEntry: "",
 };
@@ -289,6 +131,30 @@ export default function Scenarios() {
   // Dinamik kategoriler
   const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
 
+  // Dinamik Gemini preset'leri (API'den yüklenir)
+  const [geminiPresets, setGeminiPresets] = useState<{
+    compositions: Array<{
+      id: string;
+      name: string;
+      nameEn: string;
+      entryPoint: string;
+      geminiPrompt: string;
+      aspectRatio?: string;
+      bestFor: string[];
+      sortOrder: number;
+    }>;
+    handPoses: Array<{
+      id: string;
+      name: string;
+      nameEn: string;
+      gripType: string;
+      entryPoint: string;
+      geminiPrompt: string;
+      bestFor: string[];
+      sortOrder: number;
+    }>;
+  } | null>(null);
+
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -302,17 +168,8 @@ export default function Scenarios() {
   // Detay modal
   const [detailScenario, setDetailScenario] = useState<Scenario | null>(null);
 
-  // Dinamik ürün tipleri
-  const PRODUCT_TYPES = useMemo(() => {
-    const productsCategory = dynamicCategories.find((c) => c.type === "products");
-    if (productsCategory && productsCategory.subTypes.length > 0) {
-      return productsCategory.subTypes
-        .filter((st) => st.isActive)
-        .sort((a, b) => a.order - b.order)
-        .map((st) => ({ id: st.slug, name: st.displayName }));
-    }
-    return DEFAULT_PRODUCT_TYPES;
-  }, [dynamicCategories]);
+  // AI description generation
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Dinamik interior tipleri
   const INTERIOR_TYPES = useMemo(() => {
@@ -326,19 +183,87 @@ export default function Scenarios() {
     return DEFAULT_INTERIOR_TYPES;
   }, [dynamicCategories]);
 
+  // Dinamik el pozları - API'den gelen veri varsa kullan, yoksa fallback
+  const HAND_POSE_OPTIONS = useMemo(() => {
+    if (geminiPresets?.handPoses && geminiPresets.handPoses.length > 0) {
+      return geminiPresets.handPoses
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((hp) => ({
+          id: hp.id,
+          name: hp.name,
+          hint: hp.bestFor.join(", "),
+          geminiPrompt: hp.geminiPrompt,
+          bestFor: hp.bestFor,
+        }));
+    }
+    return DEFAULT_HAND_POSE_OPTIONS;
+  }, [geminiPresets]);
+
+  // Dinamik kompozisyon tipleri - API'den gelen veri varsa kullan, yoksa fallback
+  const COMPOSITION_TYPES = useMemo(() => {
+    if (geminiPresets?.compositions && geminiPresets.compositions.length > 0) {
+      return geminiPresets.compositions
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((comp) => ({
+          id: comp.id,
+          name: comp.name,
+          description: comp.geminiPrompt.substring(0, 60) + "...",
+          icon: getCompositionIcon(comp.id),
+          bestFor: comp.bestFor.join(", "),
+        }));
+    }
+    return DEFAULT_COMPOSITION_TYPES;
+  }, [geminiPresets]);
+
+  // Dinamik el giriş noktaları - API'den gelen composition'lardan unique entry point'ler çıkar
+  const COMPOSITION_ENTRY_POINTS = useMemo(() => {
+    if (geminiPresets?.compositions && geminiPresets.compositions.length > 0) {
+      // Unique entry point'leri topla
+      const entryPointMap = new Map<string, { id: string; name: string; hint: string }>();
+      geminiPresets.compositions.forEach((comp) => {
+        if (comp.entryPoint && !entryPointMap.has(comp.entryPoint)) {
+          // Entry point'e göre isim ve hint oluştur
+          const epInfo = DEFAULT_COMPOSITION_ENTRY_POINTS.find(ep => ep.id === comp.entryPoint);
+          entryPointMap.set(comp.entryPoint, {
+            id: comp.entryPoint,
+            name: epInfo?.name || comp.entryPoint,
+            hint: epInfo?.hint || `El ${comp.entryPoint} yönünden`,
+          });
+        }
+      });
+      return Array.from(entryPointMap.values());
+    }
+    return DEFAULT_COMPOSITION_ENTRY_POINTS;
+  }, [geminiPresets]);
+
   useEffect(() => {
     loadInitialData();
   }, []);
 
   const loadInitialData = async () => {
-    // Kategorileri ve senaryoları paralel yükle
+    // Kategorileri, Gemini preset'lerini ve senaryoları paralel yükle
     try {
-      const categoriesData = await api.getCategories().catch(() => null);
+      const [categoriesData, presetsData] = await Promise.all([
+        api.getCategories().catch(() => null),
+        api.getGeminiPresets().catch((err) => {
+          console.error("[Scenarios] Gemini preset'leri yüklenemedi:", err);
+          return null;
+        }),
+      ]);
+
       if (categoriesData) {
         setDynamicCategories(categoriesData.categories.filter((c) => !c.isDeleted));
       }
+
+      if (presetsData) {
+        setGeminiPresets(presetsData);
+        console.log("[Scenarios] Gemini preset'leri yüklendi:", {
+          compositions: presetsData.compositions.length,
+          handPoses: presetsData.handPoses.length,
+        });
+      }
     } catch (err) {
-      console.error("[Scenarios] Kategoriler yüklenemedi:", err);
+      console.error("[Scenarios] Initial data yüklenemedi:", err);
     }
     // Senaryoları yükle
     loadScenarios();
@@ -387,16 +312,16 @@ export default function Scenarios() {
   // Modal aç (düzenle)
   const openEditModal = (scenario: Scenario) => {
     setEditingId(scenario.id);
+    // Geriye uyumluluk: Eski compositions array varsa, ilkini al
+    const legacyCompositionId = scenario.compositions?.[0]?.id;
     setForm({
       id: scenario.id,
       name: scenario.name,
       description: scenario.description,
       includesHands: scenario.includesHands,
-      compositions: scenario.compositions || [],
+      compositionId: scenario.compositionId || legacyCompositionId || "",
       isInterior: scenario.isInterior || false,
       interiorType: scenario.interiorType || "",
-      suggestedProducts: scenario.suggestedProducts || [],
-      lightingPreset: scenario.lightingPreset || "",
       handPose: scenario.handPose || "",
       compositionEntry: scenario.compositionEntry || "",
     });
@@ -414,8 +339,8 @@ export default function Scenarios() {
       alert("Açıklama zorunludur");
       return;
     }
-    if (form.compositions.length === 0) {
-      alert("En az bir kompozisyon türü seçmelisiniz");
+    if (!form.compositionId) {
+      alert("Kompozisyon türü seçmelisiniz");
       return;
     }
 
@@ -426,11 +351,9 @@ export default function Scenarios() {
         name: form.name.trim(),
         description: form.description.trim(),
         includesHands: form.includesHands,
-        compositions: form.compositions,
+        compositionId: form.compositionId,  // Tekli kompozisyon (v2.0)
         isInterior: form.isInterior,
         interiorType: form.isInterior ? form.interiorType : undefined,
-        suggestedProducts: form.suggestedProducts,
-        lightingPreset: form.lightingPreset || undefined,
         handPose: form.includesHands ? form.handPose || undefined : undefined,
         compositionEntry: form.includesHands ? form.compositionEntry || undefined : undefined,
       };
@@ -674,30 +597,29 @@ export default function Scenarios() {
 
                       <p className="text-gray-600 text-sm mt-1">{scenario.description}</p>
 
-                      {/* Kompozisyonlar */}
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {scenario.compositions.map((comp) => (
-                          <span
-                            key={comp.id}
-                            className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600"
-                          >
-                            {comp.id}
-                          </span>
-                        ))}
-                      </div>
-
-                      {/* Ek bilgiler - Gemini terminolojisi */}
-                      {(scenario.lightingPreset || scenario.handPose) && (
-                        <div className="flex flex-wrap gap-3 mt-2 text-xs">
-                          {scenario.lightingPreset && (() => {
-                            const l = LIGHTING_PRESETS.find(x => x.id === scenario.lightingPreset);
-                            return l && (
-                              <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded">
-                                {l.name}
+                      {/* Kompozisyon */}
+                      {(scenario.compositionId || scenario.compositions?.[0]?.id) && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {(() => {
+                            const compId = scenario.compositionId || scenario.compositions?.[0]?.id;
+                            const comp = COMPOSITION_TYPES.find(c => c.id === compId);
+                            return comp ? (
+                              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 flex items-center gap-1">
+                                {comp.icon} {comp.name}
+                              </span>
+                            ) : (
+                              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                                {compId}
                               </span>
                             );
                           })()}
-                          {scenario.handPose && (() => {
+                        </div>
+                      )}
+
+                      {/* Ek bilgiler - El pozu */}
+                      {scenario.handPose && (
+                        <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                          {(() => {
                             const h = HAND_POSE_OPTIONS.find(x => x.id === scenario.handPose);
                             return h && (
                               <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded">
@@ -802,25 +724,74 @@ export default function Scenarios() {
                         <p className="text-xs text-gray-500 mt-1">Kısa ve akılda kalıcı bir isim verin</p>
                       </div>
                     </div>
-                    {/* Atmosfer/Mood artık Tema'daki Mood ayarından devralınır */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <p className="text-xs text-blue-700">
-                        <span className="font-medium">Atmosfer / Ruh Hali:</span> Tema&apos;daki Mood ayarından otomatik devralınır (hava durumu, ışık karakteri, renk paleti).
-                      </p>
-                    </div>
-
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Açıklama *
-                      </label>
-                      <textarea
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                        rows={2}
-                        placeholder="Örn: Kahve fincanını zarif bir şekilde tutan eller, sıcak sabah ışığında"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Bu senaryo nasıl bir görsel oluşturacak? Kısaca anlatın.</p>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Açıklama *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!form.name) {
+                              alert("Önce bir Senaryo Adı girin.");
+                              return;
+                            }
+                            if (!form.compositionId) {
+                              alert("Önce Kompozisyon Türü seçin.");
+                              return;
+                            }
+                            setIsGenerating(true);
+                            try {
+                              const result = await api.generateScenarioDescription({
+                                scenarioName: form.name,
+                                includesHands: form.includesHands,
+                                handPose: form.handPose || undefined,
+                                compositions: [form.compositionId],  // Tekli seçim, array olarak gönder
+                                compositionEntry: form.compositionEntry || undefined,
+                              });
+                              setForm(prev => ({ ...prev, description: result.description }));
+                            } catch (err) {
+                              alert("AI üretimi başarısız oldu.");
+                              console.error(err);
+                            } finally {
+                              setIsGenerating(false);
+                            }
+                          }}
+                          disabled={isGenerating || !form.name || !form.compositionId}
+                          className="text-xs bg-gradient-to-r from-teal-500 to-emerald-600 text-white px-3 py-1.5 rounded-full hover:shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {isGenerating ? (
+                            <>
+                              <span className="animate-spin text-[10px]">✨</span>
+                              Yazılıyor...
+                            </>
+                          ) : (
+                            <>
+                              <span>✨</span> Gemini ile Yaz
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <textarea
+                          value={form.description}
+                          onChange={(e) => setForm({ ...form, description: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                          rows={3}
+                          placeholder="Örn: Zarif kadın elleri fincanı kavrarken, buhar yükselirken, samimi bir kahvaltı masası ortamında yakalanan sıcak an"
+                          disabled={isGenerating}
+                        />
+                        {isGenerating && (
+                          <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] rounded-lg flex items-center justify-center">
+                            <div className="text-emerald-600 text-sm font-medium animate-pulse">
+                              Gemini sahneyi hayal ediyor... 🎬
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        *Ad, El ve Kompozisyon seçimleriniz Gemini&apos;ye iletilir. Sadece sahne anını tarif eder (ışık/atmosfer Mood&apos;un işi).
+                      </p>
                     </div>
                   </div>
                 </fieldset>
@@ -875,44 +846,6 @@ export default function Scenarios() {
                         </select>
                       </div>
                     )}
-                  </div>
-                </fieldset>
-
-                {/* ========== IŞIKLANDIRMA ========== */}
-                <fieldset className="border border-gray-200 rounded-lg p-4">
-                  <legend className="text-sm font-semibold text-gray-700 px-2">💡 Işıklandırma</legend>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
-                        Işık Stili
-                        <Tooltip
-                          content="Fotoğraftaki ışık yönü ve karakteri. Dramatik ışık doku vurgular, yumuşak ışık ürünü eşit aydınlatır."
-                          position="right"
-                        />
-                      </label>
-                      <select
-                        value={form.lightingPreset}
-                        onChange={(e) => setForm({ ...form, lightingPreset: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                      >
-                        <option value="">-- Işık stili seçin --</option>
-                        {LIGHTING_PRESETS.map((lp) => (
-                          <option key={lp.id} value={lp.id}>
-                            {lp.name} - {lp.hint}
-                          </option>
-                        ))}
-                      </select>
-                      {form.lightingPreset && (
-                        <div className="mt-2 p-2 bg-amber-50 rounded text-xs">
-                          <span className="font-medium">AI&apos;ya gidecek:</span>{" "}
-                          <span className="text-gray-600">{LIGHTING_PRESETS.find(l => l.id === form.lightingPreset)?.geminiPrompt}</span>
-                        </div>
-                      )}
-                      <p className="text-xs text-blue-600 mt-1">
-                        Tema&apos;daki Mood&apos;da ışık tanımlıysa o önceliklidir. Bu alan isteğe bağlı override&apos;dır.
-                      </p>
-                    </div>
                   </div>
                 </fieldset>
 
@@ -985,177 +918,48 @@ export default function Scenarios() {
                   <legend className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 px-2">
                     📐 Fotoğraf Kompozisyonu *
                     <Tooltip
-                      content="Ürünün karede nasıl konumlandırılacağını belirler. Birden fazla seçerseniz AI rastgele birini kullanır."
+                      content="Ürünün karede nasıl konumlandırılacağını belirler."
                       position="right"
                     />
                   </legend>
-                  <p className="text-xs text-gray-500 mb-3">Bu senaryo için hangi çekim tarzları kullanılabilir? (En az 1 seçin)</p>
+                  <p className="text-xs text-gray-500 mb-3">Bu senaryo için hangi çekim tarzı kullanılacak?</p>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    {COMPOSITION_TYPES.map((comp) => {
-                      const isSelected = form.compositions.some(c => c.id === comp.id);
-                      return (
-                        <label
-                          key={comp.id}
-                          className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition ${isSelected
-                            ? "bg-amber-50 border-amber-300"
-                            : "hover:bg-gray-50 border-gray-200"
-                            }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setForm({
-                                  ...form,
-                                  compositions: [...form.compositions, { id: comp.id, description: comp.name }]
-                                });
-                              } else {
-                                setForm({
-                                  ...form,
-                                  compositions: form.compositions.filter(c => c.id !== comp.id)
-                                });
-                              }
-                            }}
-                            className="w-4 h-4 text-amber-600 rounded mt-0.5"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{comp.icon}</span>
-                              <span className="text-sm font-medium">{comp.name}</span>
+                  <select
+                    value={form.compositionId}
+                    onChange={(e) => setForm({ ...form, compositionId: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">Kompozisyon seçin...</option>
+                    {COMPOSITION_TYPES.map((comp) => (
+                      <option key={comp.id} value={comp.id}>
+                        {comp.icon} {comp.name} - {comp.bestFor}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Seçili kompozisyon detayı */}
+                  {form.compositionId && (
+                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      {(() => {
+                        const selected = COMPOSITION_TYPES.find(c => c.id === form.compositionId);
+                        return selected ? (
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl">{selected.icon}</span>
+                            <div>
+                              <p className="font-medium text-amber-800">{selected.name}</p>
+                              <p className="text-xs text-amber-700 mt-1">{selected.description}</p>
                             </div>
-                            <p className="text-xs text-gray-500 mt-0.5">{comp.description}</p>
-                            <p className="text-xs text-amber-600 mt-1">İyi: {comp.bestFor}</p>
                           </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  {form.compositions.length === 0 && (
-                    <p className="text-xs text-red-500 mt-2">En az bir kompozisyon türü seçmelisiniz</p>
-                  )}
-                </fieldset>
-
-                {/* ========== ÖNERİLEN ÜRÜNLER ========== */}
-                <fieldset className="border border-gray-200 rounded-lg p-4">
-                  <legend className="text-sm font-semibold text-gray-700 px-2">🍰 Uygun Ürün Kategorileri</legend>
-                  <p className="text-xs text-gray-500 mb-3">Bu senaryo hangi ürünlerle iyi sonuç verir? (Birden fazla seçilebilir)</p>
-
-                  <div className="flex flex-wrap gap-3">
-                    {PRODUCT_TYPES.map((p) => {
-                      const isSelected = form.suggestedProducts.includes(p.id);
-                      return (
-                        <label
-                          key={p.id}
-                          className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition ${isSelected
-                            ? "bg-green-50 border-green-300 text-green-700"
-                            : "hover:bg-gray-50 border-gray-200"
-                            }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setForm({ ...form, suggestedProducts: [...form.suggestedProducts, p.id] });
-                              } else {
-                                setForm({ ...form, suggestedProducts: form.suggestedProducts.filter((x) => x !== p.id) });
-                              }
-                            }}
-                            className="w-4 h-4 text-green-600 rounded"
-                          />
-                          <span className="text-sm">{p.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-
-                {/* ========== AI PROMPT ÖNİZLEME ========== */}
-                <fieldset className="border border-purple-200 rounded-lg p-4 bg-gradient-to-r from-purple-50 to-blue-50">
-                  <legend className="text-sm font-semibold text-purple-700 px-2">🎨 AI&apos;ya Gönderilecek Prompt Önizlemesi</legend>
-
-                  {/* Hiçbir şey seçilmemişse */}
-                  {!form.lightingPreset && !form.handPose && !form.compositions.length && (
-                    <p className="text-sm text-gray-500 italic">
-                      Yukarıdan seçimler yaptıkça burada AI&apos;ya gönderilecek prompt önizlemesi görünecek.
-                    </p>
-                  )}
-
-                  {/* Seçimler varsa detaylı göster */}
-                  {(form.lightingPreset || form.handPose || form.compositions.length > 0) && (
-                    <div className="space-y-3">
-                      {/* Işık */}
-                      {form.lightingPreset && (() => {
-                        const selectedLight = LIGHTING_PRESETS.find(l => l.id === form.lightingPreset);
-                        return (
-                          <div className="flex items-start gap-2">
-                            <span className="text-amber-600 font-medium shrink-0">💡 Işık:</span>
-                            {selectedLight ? (
-                              <span className="text-gray-700">{selectedLight.geminiPrompt}</span>
-                            ) : (
-                              <span className="text-orange-600 text-sm">Seçim: {form.lightingPreset} (tanımlı değil)</span>
-                            )}
-                          </div>
-                        );
+                        ) : null;
                       })()}
-
-                      {/* El */}
-                      {form.includesHands && form.handPose && (() => {
-                        const selectedPose = HAND_POSE_OPTIONS.find(h => h.id === form.handPose);
-                        const selectedEntry = COMPOSITION_ENTRY_POINTS.find(c => c.id === form.compositionEntry);
-                        return (
-                          <div className="flex items-start gap-2">
-                            <span className="text-blue-600 font-medium shrink-0">✋ El:</span>
-                            {selectedPose ? (
-                              <span className="text-gray-700">
-                                {selectedPose.geminiPrompt}
-                                {selectedEntry && <span className="text-gray-500">, {selectedEntry.geminiPrompt}</span>}
-                              </span>
-                            ) : (
-                              <span className="text-orange-600 text-sm">Seçim: {form.handPose} (tanımlı değil)</span>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Kompozisyonlar */}
-                      {form.compositions.length > 0 && (
-                        <div className="flex items-start gap-2">
-                          <span className="text-green-600 font-medium shrink-0">📐 Kompozisyon:</span>
-                          <span className="text-gray-700">
-                            {form.compositions.map(c => {
-                              const comp = COMPOSITION_TYPES.find(x => x.id === c.id);
-                              return comp ? comp.name : c.id;
-                            }).join(", ")}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Birleştirilmiş örnek prompt */}
-                      <div className="border-t border-purple-200 pt-3 mt-3">
-                        <p className="text-xs text-gray-500 mb-1">Birleştirilmiş prompt örneği:</p>
-                        <p className="text-xs font-mono text-gray-600 leading-relaxed bg-white p-2 rounded border">
-                          <span className="text-purple-600 font-semibold">[Seçilen Ürün Adı]</span>
-                          <span className="text-purple-700">, [Tema Mood Atmosferi]</span>
-                          {form.lightingPreset && (() => {
-                            const l = LIGHTING_PRESETS.find(x => x.id === form.lightingPreset);
-                            return l ? <span className="text-amber-700">, {l.geminiPrompt}</span> : null;
-                          })()}
-                          {form.includesHands && form.handPose && (() => {
-                            const h = HAND_POSE_OPTIONS.find(x => x.id === form.handPose);
-                            return h ? <span className="text-blue-700">, {h.geminiPrompt}</span> : null;
-                          })()}
-                          {(!form.lightingPreset && !form.handPose) && (
-                            <span className="text-gray-400"> - henüz detay seçilmedi</span>
-                          )}
-                        </p>
-                      </div>
                     </div>
                   )}
+
+                  {!form.compositionId && (
+                    <p className="text-xs text-red-500 mt-2">Kompozisyon türü seçmelisiniz</p>
+                  )}
                 </fieldset>
+
               </div>
 
               <div className="p-6 border-t flex justify-end gap-3 sticky bottom-0 bg-white">
@@ -1241,22 +1045,12 @@ export default function Scenarios() {
                   </div>
                 </div>
 
-                {/* Gemini Ayarları */}
-                {(detailScenario.lightingPreset || detailScenario.handPose) && (
+                {/* El Pozu Ayarları */}
+                {detailScenario.handPose && (
                   <div className="border-t pt-3 space-y-2">
-                    <span className="font-medium text-purple-700">Gemini Ayarları:</span>
+                    <span className="font-medium text-purple-700">El Ayarları:</span>
 
-                    {detailScenario.lightingPreset && (() => {
-                      const l = LIGHTING_PRESETS.find(x => x.id === detailScenario.lightingPreset);
-                      return l && (
-                        <div className="bg-amber-50 p-2 rounded text-xs">
-                          <span className="font-medium">Işık:</span> {l.name} ({l.temperature})
-                          <p className="text-gray-600 mt-1">{l.geminiPrompt}</p>
-                        </div>
-                      );
-                    })()}
-
-                    {detailScenario.handPose && (() => {
+                    {(() => {
                       const h = HAND_POSE_OPTIONS.find(x => x.id === detailScenario.handPose);
                       return h && (
                         <div className="bg-green-50 p-2 rounded text-xs">
@@ -1269,23 +1063,25 @@ export default function Scenarios() {
                 )}
 
                 <div>
-                  <span className="font-medium">Kompozisyonlar:</span>
-                  <div className="mt-1 space-y-1">
-                    {detailScenario.compositions.map((c) => (
-                      <div key={c.id} className="flex gap-2 text-gray-600">
-                        <code className="bg-gray-100 px-1 rounded">{c.id}</code>
-                        <span>- {c.description}</span>
-                      </div>
-                    ))}
+                  <span className="font-medium">Kompozisyon:</span>
+                  <div className="mt-1">
+                    {(() => {
+                      const compId = detailScenario.compositionId || detailScenario.compositions?.[0]?.id;
+                      const comp = COMPOSITION_TYPES.find(c => c.id === compId);
+                      return comp ? (
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <span className="text-lg">{comp.icon}</span>
+                          <code className="bg-gray-100 px-1 rounded">{comp.id}</code>
+                          <span>- {comp.name}</span>
+                        </div>
+                      ) : compId ? (
+                        <code className="bg-gray-100 px-1 rounded">{compId}</code>
+                      ) : (
+                        <span className="text-gray-400 italic">Seçilmemiş</span>
+                      );
+                    })()}
                   </div>
                 </div>
-
-                {detailScenario.suggestedProducts && detailScenario.suggestedProducts.length > 0 && (
-                  <div>
-                    <span className="font-medium">Önerilen Ürünler:</span>{" "}
-                    {detailScenario.suggestedProducts.join(", ")}
-                  </div>
-                )}
               </div>
             </div>
           </div>

@@ -1326,4 +1326,139 @@ Optimize prompt (75-150 words, positive language):
       };
     }
   }
+
+  /**
+   * Senaryo Açıklaması Üret (AI Scenario Writer)
+   * Claude kullanarak, sahne odaklı, atmosferik senaryo açıklaması üretir.
+   *
+   * Mood'dan farklı olarak burada "sahne" ve "an" tarif edilir:
+   * - Mood: Işık, renk, atmosfer (what the scene FEELS like)
+   * - Senaryo: Ne oluyor, el ne yapıyor, kamera nerede (what is HAPPENING)
+   */
+  async generateScenarioDescription(params: {
+    scenarioName: string;
+    includesHands: boolean;
+    handPose?: string;
+    compositions: string[];
+    compositionEntry?: string;
+  }): Promise<ClaudeResponse<{ description: string }>> {
+    const client = this.getClient();
+    const startTime = Date.now();
+
+    // Hand pose Türkçe karşılıkları
+    const handPoseNames: Record<string, string> = {
+      "cupping": "kavrama (fincanı iki elle saran)",
+      "pinching": "tutma (parmak uçlarıyla zarif tutma)",
+      "cradling": "kucaklama (alttan destekleyerek taşıma)",
+      "presenting": "sunma (açık avuçla gösterme)",
+      "breaking": "kırma (parçalayarak iç dokuyu gösterme)",
+      "dipping": "batırma (kahveye/sosa batırma anı)",
+    };
+
+    // Composition entry Türkçe karşılıkları
+    const entryNames: Record<string, string> = {
+      "bottom-right": "sağ alt köşeden",
+      "bottom-left": "sol alt köşeden",
+      "right-side": "sağ kenardan",
+      "top-down": "yukarıdan (kuşbakışı)",
+    };
+
+    const systemPrompt = `Sen profesyonel bir yiyecek fotoğrafçısı ve sahne yönetmenisin.
+Görevin, bir AI görsel üreticisi için "SAHNE AÇIKLAMASI" yazmak.
+
+ÖNEMLİ KURALLAR:
+1. DİL: Türkçe yaz ama teknik terimler İngilizce kalabilir.
+2. UZUNLUK: 40-70 kelime. Kısa ve öz.
+3. ODAK: Sahnede NE OLUYOR? El ne yapıyor? Ürün nasıl konumlanmış?
+4. YASAKLAR:
+   - Işık/aydınlatma tarifi YAPMA (bu Mood'un işi)
+   - Renk paleti YAPMA (bu Mood'un işi)
+   - Hava durumu/mevsim YAPMA (bu Mood'un işi)
+5. YALNIZCA tarif et:
+   - Sahnenin "anı" (kırılma anı, yudumlama anı, sunma anı)
+   - El varsa: zarif, feminen, bakımlı tırnaklar, doğal ten
+   - Kompozisyon (ürün nerede, kamera açısı)
+   - Duygu/his (samimi, şık, rahat, premium)
+
+ÇIKTI: Sadece açıklama metnini yaz. Tırnak işareti, "İşte açıklama:" gibi ön ekler YAZMA.`;
+
+    const handInfo = params.includesHands
+      ? `
+El Pozu: ${params.handPose ? handPoseNames[params.handPose] || params.handPose : "Belirtilmemiş"}
+El Giriş Noktası: ${params.compositionEntry ? entryNames[params.compositionEntry] || params.compositionEntry : "Belirtilmemiş"}`
+      : "El YOK - Sadece ürün odaklı kompozisyon";
+
+    const userPrompt = `Senaryo Adı: ${params.scenarioName}
+El İçeriyor mu: ${params.includesHands ? "EVET" : "HAYIR"}
+${handInfo}
+Kompozisyon Türleri: ${params.compositions.join(", ")}
+
+Bu senaryo için sahne açıklaması yaz:`;
+
+    try {
+      const response = await client.messages.create({
+        model: this.model,
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{
+          role: "user",
+          content: userPrompt,
+        }],
+      });
+
+      const textContent = response.content.find((c: ContentBlock) => c.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        throw new Error("Claude yanıtında metin bulunamadı");
+      }
+
+      const description = textContent.text.trim();
+      const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+      const cost = await this.calculateCost(response.usage.input_tokens, response.usage.output_tokens);
+      const durationMs = Date.now() - startTime;
+
+      // Loglama
+      await AILogService.logClaude("scenario-description-generation" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response: description,
+        status: "success",
+        tokensUsed,
+        cost,
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: this.pipelineContext.productType,
+      });
+
+      return {
+        success: true,
+        data: { description },
+        tokensUsed,
+        cost,
+      };
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      console.error("[ClaudeService] Scenario description generation error:", error);
+
+      await AILogService.logClaude("scenario-description-generation" as AILogStage, {
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+        durationMs,
+        pipelineId: this.pipelineContext.pipelineId,
+        slotId: this.pipelineContext.slotId,
+        productType: this.pipelineContext.productType,
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        tokensUsed: 0,
+        cost: 0,
+      };
+    }
+  }
 }

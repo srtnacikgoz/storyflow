@@ -17,6 +17,7 @@ import {
   buildGeminiPrompt,
   extractGeminiParamsFromScenario,
   buildNegativePrompt,
+  getCompositionTemplate,
 } from "./geminiPromptBuilder";
 import {
   Asset,
@@ -73,11 +74,14 @@ export class Orchestrator {
     this.db = getFirestore();
     this.storage = getStorage();
     // Gemini 3.0 entegrasyonu
+    // Text işlemleri için Flash model (maliyet optimizasyonu: $0.05 → $0.01)
+    // Image işlemleri için Pro Image model
     this.gemini = new GeminiService({
       apiKey: config.geminiApiKey,
       imageModel: "gemini-3-pro-image-preview",
-      textModel: "gemini-3-pro-preview",
+      textModel: "gemini-3-flash-preview",
     });
+    console.log(`[Orchestrator] v2.1.0 - Initialized with Text Model: gemini-3-flash-preview (Target: gemini-3-flash-preview)`);
     this.telegram = new TelegramService({
       botToken: config.telegramBotToken,
       chatId: config.telegramChatId,
@@ -649,7 +653,8 @@ export class Orchestrator {
         filteredScenarios = themeFilteredScenarios.length > 0 ? themeFilteredScenarios : allScenarios;
       }
 
-      // Claude için basitleştirilmiş senaryo listesi
+      // Gemini için basitleştirilmiş senaryo listesi
+      // compositionId artık senaryo tanımında sabit (Gemini seçmiyor, kullanıcı seçiyor)
       const scenariosForClaude = filteredScenarios.map(s => ({
         id: s.id,
         name: s.name,
@@ -657,6 +662,7 @@ export class Orchestrator {
         includesHands: s.includesHands,
         isInterior: s.isInterior,
         interiorType: s.interiorType,
+        compositionId: s.compositionId || s.compositions?.[0]?.id,  // Geriye uyumluluk
       }));
 
       // Kullanıcı geri bildirimlerinden ipuçları al
@@ -695,15 +701,22 @@ export class Orchestrator {
       const isInteriorScenario = selectedScenario?.isInterior || false;
       const interiorType = selectedScenario?.interiorType;
 
+      // compositionId artık senaryo tanımından alınır (Gemini'nin seçimi değil, kullanıcının seçimi)
+      const predefinedCompositionId = selectedScenario?.compositionId || selectedScenario?.compositions?.[0]?.id || "default";
+
       result.scenarioSelection = {
         ...scenarioResponse.data,
-        // KRİTİK: scenarioDescription'ı Firestore'dan al (Claude döndürmezse fallback)
+        // KRİTİK: scenarioDescription'ı Firestore'dan al (Gemini döndürmezse fallback)
         scenarioDescription: scenarioResponse.data.scenarioDescription || selectedScenario?.description || "",
+        // compositionId: Senaryo tanımındaki sabit değer kullanılır
+        compositionId: predefinedCompositionId,
         isInterior: isInteriorScenario,
         interiorType: interiorType,
         themeId: effectiveThemeId,
         themeName: themeData?.name,
       };
+
+      console.log(`[Orchestrator] Using predefined compositionId: ${predefinedCompositionId}`);
       status.completedStages.push("scenario_selection");
 
       console.log(`[Orchestrator] Scenario selected: ${result.scenarioSelection!.scenarioName}, isInterior: ${isInteriorScenario}`);
@@ -813,8 +826,8 @@ export class Orchestrator {
         if (onProgress) await onProgress("prompt_optimization", 3, TOTAL_STAGES);
 
         // Senaryo Gemini ayarlarını al (varsa)
+        // NOT: lightingPreset artık Senaryo'dan değil, Mood'dan geliyor
         const scenarioGeminiData = selectedScenario ? {
-          lightingPreset: selectedScenario.lightingPreset,
           handPose: selectedScenario.handPose,
           compositionEntry: selectedScenario.compositionEntry,
         } : undefined;
@@ -1446,7 +1459,7 @@ export class Orchestrator {
     productType?: string,
     timeOfDay?: string,
     scenarioData?: {
-      lightingPreset?: string;
+      // lightingPreset kaldırıldı - Işık artık Mood'dan geliyor
       handPose?: string;
       compositionEntry?: string;
     },
@@ -1460,7 +1473,7 @@ export class Orchestrator {
       season?: string;
     },
     themeDescription?: string
-  ): Promise<{ mainPrompt: string; negativePrompt?: string; promptBuildingSteps?: Array<{step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown>}> }> {
+  ): Promise<{ mainPrompt: string; negativePrompt?: string; promptBuildingSteps?: Array<{ step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown> }> }> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
 
@@ -1473,7 +1486,7 @@ export class Orchestrator {
         prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
       }
 
-      prompt += this.getCompositionDetails(scenarioId, compositionId);
+      prompt += await this.getCompositionDetails(scenarioId, compositionId);
       prompt += this.getHandStyleDetails(handStyle);
       prompt += this.getCupReferenceDetails(selectedAssets?.cup);
 
@@ -1500,12 +1513,23 @@ export class Orchestrator {
   }
 
   /**
-   * Kompozisyon detaylarını döndür
+   * Kompozisyon detaylarını döndür (Firestore'dan dinamik, fallback hardcoded)
    */
-  private getCompositionDetails(scenarioId: string, compositionId?: string): string {
+  private async getCompositionDetails(scenarioId: string, compositionId?: string): Promise<string> {
     if (!compositionId || compositionId === "default") return "";
 
-    const compositions: Record<string, Record<string, string>> = {
+    // 1. Önce Firestore'dan dinamik kompozisyon şablonunu dene
+    const dynamicComp = await getCompositionTemplate(compositionId);
+    if (dynamicComp) {
+      console.log(`[Orchestrator] Using dynamic composition: ${dynamicComp.id} - ${dynamicComp.name}`);
+      return `
+
+COMPOSITION - ${dynamicComp.nameEn.toUpperCase()}:
+${dynamicComp.geminiPrompt}`;
+    }
+
+    // 2. Fallback: Hardcoded senaryo-spesifik kompozisyonlar
+    const legacyCompositions: Record<string, Record<string, string>> = {
       "kahve-ani": {
         "product-front": `
 
@@ -1585,7 +1609,12 @@ COMPOSITION - CENTER HOLD:
       },
     };
 
-    return compositions[scenarioId]?.[compositionId] || "";
+    const legacyResult = legacyCompositions[scenarioId]?.[compositionId];
+    if (legacyResult) {
+      console.log(`[Orchestrator] Using legacy hardcoded composition for scenario: ${scenarioId}, composition: ${compositionId}`);
+    }
+
+    return legacyResult || "";
   }
 
   /**
@@ -1684,7 +1713,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
     productType?: string,
     timeOfDay?: string,
     scenarioData?: {
-      lightingPreset?: string;
+      // lightingPreset kaldırıldı - Işık artık Mood'dan geliyor
       handPose?: string;
       compositionEntry?: string;
     },
@@ -1698,12 +1727,13 @@ Cup: ${colors} ${material} (from reference)`.trim();
       season?: string;
     },
     themeDescription?: string
-  ): Promise<{ mainPrompt: string; negativePrompt: string; promptBuildingSteps?: Array<{step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown>}> }> {
+  ): Promise<{ mainPrompt: string; negativePrompt: string; promptBuildingSteps?: Array<{ step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown> }> }> {
     // Senaryo verilerinden Gemini parametrelerini çıkar
+    // NOT: lightingPreset artık Senaryo'dan değil, Mood'dan geliyor
     const scenarioParams = scenarioData
       ? extractGeminiParamsFromScenario({
         mood,
-        lightingPreset: scenarioData.lightingPreset,
+        // lightingPreset kaldırıldı - Işık artık sadece Mood'dan
         handPose: scenarioData.handPose,
         compositionEntry: scenarioData.compositionEntry,
         includesHands: !!handStyle,
@@ -1712,9 +1742,10 @@ Cup: ${colors} ${material} (from reference)`.trim();
 
     try {
       // Gemini prompt builder kullan
+      // lightingPresetId artık Senaryo'dan gelmiyor - Mood fallback kullanılacak
       const geminiResult = await buildGeminiPrompt({
         moodId: scenarioParams.moodId,
-        lightingPresetId: scenarioParams.lightingPresetId,
+        // lightingPresetId: Mood'dan otomatik çekilecek (buildGeminiPrompt içinde)
         handPoseId: scenarioParams.handPoseId,
         compositionId: scenarioParams.compositionId || compositionId,
         productType,
@@ -1921,7 +1952,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
       });
 
       // Ek detaylar ekle (eski sistem ile uyumluluk)
-      prompt += this.getCompositionDetails(scenarioId, compositionId);
+      prompt += await this.getCompositionDetails(scenarioId, compositionId);
       prompt += this.getHandStyleDetails(handStyle);
       prompt += this.getCupReferenceDetails(selectedAssets?.cup);
 
@@ -1936,7 +1967,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
       console.warn("[Orchestrator] Gemini prompt builder failed, using fallback:", error);
       // Fallback to legacy prompt
       return {
-        mainPrompt: this.buildDynamicPromptLegacy(scenarioId, compositionId, handStyle, selectedAssets?.cup, mood, scenarioDescription),
+        mainPrompt: await this.buildDynamicPromptLegacy(scenarioId, compositionId, handStyle, selectedAssets?.cup, mood, scenarioDescription),
         negativePrompt: await buildNegativePrompt(handStyle ? ["always", "hands"] : ["always"]),
         promptBuildingSteps: [{
           step: "fallback-legacy",
@@ -1954,14 +1985,14 @@ Cup: ${colors} ${material} (from reference)`.trim();
    * Legacy prompt builder (fallback)
    * Gemini preset'leri yüklenemezse bu kullanılır
    */
-  private buildDynamicPromptLegacy(
+  private async buildDynamicPromptLegacy(
     scenarioId: string,
     compositionId?: string,
     handStyle?: string,
     selectedCup?: Asset,
     mood?: string,
     scenarioDescription?: string  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
-  ): string {
+  ): Promise<string> {
     // ═══════════════════════════════════════════════════════════════════════════
     // Gemini-native terminoloji ile mood bazlı atmosfer
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2127,7 +2158,7 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
     }
 
     // Kompozisyon detayları ekle
-    prompt += this.getCompositionDetails(scenarioId, compositionId);
+    prompt += await this.getCompositionDetails(scenarioId, compositionId);
 
     // El stili detayları ekle
     prompt += this.getHandStyleDetails(handStyle);
