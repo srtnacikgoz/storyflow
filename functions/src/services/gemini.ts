@@ -509,6 +509,10 @@ SCENE:
 
   /**
    * En uygun asset kombinasyonunu seç (Gemini 3 Pro)
+   *
+   * @param assetSelectionRules - Config'den gelen zorunlu/hariç asset kuralları
+   *   enabled=true → ZORUNLU (Gemini mutlaka seçmeli)
+   *   enabled=false → HARİÇ (Gemini'ye hiç gönderilmez)
    */
   async selectAssets(
     productType: string,
@@ -516,7 +520,15 @@ SCENE:
     timeOfDay: string,
     mood: string,
     effectiveRules?: any,
-    fixedAssets?: any
+    fixedAssets?: any,
+    assetSelectionRules?: {
+      plate: { enabled: boolean };
+      table: { enabled: boolean };
+      cup: { enabled: boolean };
+      accessory: { enabled: boolean };
+      napkin: { enabled: boolean };
+      cutlery: { enabled: boolean };
+    }
   ): Promise<{ success: boolean; data?: any; error?: string; cost: number; tokensUsed: number }> {
     const moodGuidelines: Record<string, string> = {
       energetic: "PARLAK ve CANLI renkler seç. Mermer masalar, metal çatallar tercih et.",
@@ -528,48 +540,105 @@ SCENE:
     };
     const moodRule = moodGuidelines[mood] || moodGuidelines.balanced;
 
-    // KULLANILABİLİR LİSTELER AŞAĞIDADIR. diye biten system prompt
+    // Varsayılan kurallar (config yoksa tümü aktif)
+    const rules = assetSelectionRules || {
+      plate: { enabled: true },
+      table: { enabled: true },
+      cup: { enabled: true },
+      accessory: { enabled: true },
+      napkin: { enabled: true },
+      cutlery: { enabled: false },
+    };
+
+    // Zorunlu alanları belirle
+    const requiredFields: string[] = [];
+    if (rules.plate.enabled) requiredFields.push("plateId");
+    if (rules.table.enabled) requiredFields.push("tableId");
+    if (rules.cup.enabled) requiredFields.push("cupId");
+    if (rules.accessory.enabled) requiredFields.push("accessoryId");
+    if (rules.napkin.enabled) requiredFields.push("napkinId");
+    if (rules.cutlery.enabled) requiredFields.push("cutleryId");
+
+    // Zorunlu seçim kurallarını oluştur
+    const requiredRulesText = requiredFields.length > 0
+      ? `2. ZORUNLU SEÇİMLER (null OLAMAZ):\n${requiredFields.map(f => `   - ${f}: Bu kategoriden MUTLAKA bir seçim yap`).join("\n")}`
+      : "2. Hiçbir kategori zorunlu değil - ihtiyaca göre seç.";
+
+    // System prompt
     const systemPrompt = `Sen profesyonel bir food styling uzmanısın. Pastane ürünleri için en uygun asset kombinasyonunu seç.
 MOOD: ${mood.toUpperCase()} - ${moodRule}
 ${effectiveRules?.shouldIncludePet ? "⭐ KÖPEK DAHİL ET" : "Köpek dahil etme"}
 
-ÖNEMLİ: 
+ÖNEMLİ KURALLAR:
 1. usageCount düşük olan asset'lere öncelik ver (çeşitlilik için). tags bilgisini mood ve ürün uyumu için kullan.
-2. AKSESUAR SEÇİMİ (Opsiyonel): Eğer sahneye uygunsa (ör: 'cozy' veya 'energetic' mood) listelenen dekorlardan/aksesuarlardan BİR tane seç. Eğer mood 'minimal' ise seçmeyebilirsin (null).
-3. Eşleşme Mantığı: Ürün bir "Pasta" ise 'cutlery' (çatal) veya 'textile' (peçete) seçebilirsin. İçecek ise 'spoon' veya 'flower' seçebilirsin.
+
+${requiredRulesText}
+
+3. Eşleşme Mantığı:
+   - Ürün bir "Pasta" ise ahşap masa + katlanmış peçete tercih et
+   - İçecek ise mermer/cam masa + düz peçete tercih et
+   - Mood'a uygun renk tonları seç
 
 KULLANILABİLİR LİSTELER AŞAĞIDADIR.`;
 
-    const userPrompt = `
-Ürün tipi: ${productType}
-Zaman: ${timeOfDay}
-Mood: ${mood}
+    // User prompt - sadece enabled kategorileri gönder
+    let userPromptParts = [
+      `Ürün tipi: ${productType}`,
+      `Zaman: ${timeOfDay}`,
+      `Mood: ${mood}`,
+      "",
+      `ÜRÜNLER: ${JSON.stringify(availableAssets.products?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`,
+    ];
 
-ÜRÜNLER: ${JSON.stringify(availableAssets.products?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
-TABAKLAR: ${JSON.stringify(availableAssets.plates?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
-MASALAR: ${JSON.stringify(availableAssets.tables?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
-FİNCANLAR: ${JSON.stringify(availableAssets.cups?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}
-DEKORLAR/AKSESUARLAR: ${JSON.stringify([
-      ...(availableAssets.props || []),
-      ...(availableAssets.accessories || [])
-    ].map((a: any) => ({
-      id: a.id,
-      filename: a.filename,
-      subType: a.subType || "generic",
-      category: a.category,
-      tags: a.tags || [],
-      usageCount: a.usageCount || 0
-    })) || [], null, 2)}
+    // Sadece enabled kategorileri ekle
+    if (rules.plate.enabled) {
+      userPromptParts.push(`TABAKLAR: ${JSON.stringify(availableAssets.plates?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
+    }
+    if (rules.table.enabled) {
+      userPromptParts.push(`MASALAR: ${JSON.stringify(availableAssets.tables?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
+    }
+    if (rules.cup.enabled) {
+      userPromptParts.push(`FİNCANLAR: ${JSON.stringify(availableAssets.cups?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
+    }
+    if (rules.accessory.enabled) {
+      userPromptParts.push(`DEKORLAR/AKSESUARLAR: ${JSON.stringify([
+        ...(availableAssets.props || []),
+        ...(availableAssets.accessories || [])
+      ].map((a: any) => ({
+        id: a.id,
+        filename: a.filename,
+        subType: a.subType || "generic",
+        category: a.category,
+        tags: a.tags || [],
+        usageCount: a.usageCount || 0
+      })) || [], null, 2)}`);
+    }
+    if (rules.napkin.enabled) {
+      userPromptParts.push(`PEÇETELER: ${JSON.stringify(availableAssets.napkins?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
+    }
+    if (rules.cutlery.enabled) {
+      userPromptParts.push(`ÇATAL-BIÇAKLAR: ${JSON.stringify(availableAssets.cutlery?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
+    }
 
-Yanıt formatı (sadece JSON):
-{
-  "productId": "seçilen ürün id",
-  "plateId": "seçilen tabak id veya null",
-  "cupId": "seçilen fincan id veya null",
-  "tableId": "seçilen masa id veya null",
-  "accessoryId": "seçilen dekor/aksesuar id veya null (OPSİYONEL)",
-  "reasoning": "seçim gerekçesi (aksesuar seçildiyse nedenini belirt)"
-}`;
+    // JSON yanıt formatı - sadece enabled alanlar
+    const jsonFields: string[] = ['"productId": "seçilen ürün id (ZORUNLU)"'];
+    if (rules.plate.enabled) jsonFields.push('"plateId": "seçilen tabak id (ZORUNLU)"');
+    if (rules.table.enabled) jsonFields.push('"tableId": "seçilen masa id (ZORUNLU)"');
+    if (rules.cup.enabled) jsonFields.push('"cupId": "seçilen fincan id (ZORUNLU)"');
+    if (rules.accessory.enabled) jsonFields.push('"accessoryId": "seçilen dekor/aksesuar id (ZORUNLU)"');
+    if (rules.napkin.enabled) jsonFields.push('"napkinId": "seçilen peçete id (ZORUNLU)"');
+    if (rules.cutlery.enabled) jsonFields.push('"cutleryId": "seçilen çatal-bıçak id (ZORUNLU)"');
+    jsonFields.push('"reasoning": "seçim gerekçesi"');
+
+    userPromptParts.push("");
+    userPromptParts.push("Yanıt formatı (sadece JSON):");
+    userPromptParts.push("{");
+    userPromptParts.push("  " + jsonFields.join(",\n  "));
+    userPromptParts.push("}");
+
+    const userPrompt = userPromptParts.join("\n");
+
+    console.log(`[Gemini] selectAssets kuralları: plate=${rules.plate.enabled}, table=${rules.table.enabled}, cup=${rules.cup.enabled}, accessory=${rules.accessory.enabled}, napkin=${rules.napkin.enabled}, cutlery=${rules.cutlery.enabled}`);
 
     try {
       const { data, cost } = await this.generateText(userPrompt, systemPrompt, true, "asset-selection");
@@ -579,20 +648,75 @@ Yanıt formatı (sadece JSON):
       }
 
       const product = availableAssets.products?.find((a: any) => a.id === data.productId) || availableAssets.products?.[0];
-      const plate = data.plateId ? availableAssets.plates?.find((a: any) => a.id === data.plateId) : undefined;
-      const cup = data.cupId ? availableAssets.cups?.find((a: any) => a.id === data.cupId) : undefined;
-      const table = data.tableId ? availableAssets.tables?.find((a: any) => a.id === data.tableId) : undefined;
 
-      // Aksesuarı listelerde ara
+      // Plate - sadece enabled ise
+      let plate = undefined;
+      if (rules.plate.enabled) {
+        plate = data.plateId ? availableAssets.plates?.find((a: any) => a.id === data.plateId) : undefined;
+        if (!plate && availableAssets.plates?.length > 0) {
+          plate = availableAssets.plates[0];
+          console.warn("[Gemini] plateId zorunlu ama seçilmedi, fallback kullanıldı:", plate.id);
+        }
+      }
+
+      // Cup - sadece enabled ise
+      let cup = undefined;
+      if (rules.cup.enabled) {
+        cup = data.cupId ? availableAssets.cups?.find((a: any) => a.id === data.cupId) : undefined;
+        if (!cup && availableAssets.cups?.length > 0) {
+          cup = availableAssets.cups[0];
+          console.warn("[Gemini] cupId zorunlu ama seçilmedi, fallback kullanıldı:", cup.id);
+        }
+      }
+
+      // Table - sadece enabled ise
+      let table = undefined;
+      if (rules.table.enabled) {
+        table = data.tableId ? availableAssets.tables?.find((a: any) => a.id === data.tableId) : undefined;
+        if (!table && availableAssets.tables?.length > 0) {
+          table = availableAssets.tables[0];
+          console.warn("[Gemini] tableId zorunlu ama seçilmedi, fallback kullanıldı:", table.id);
+        }
+      }
+
+      // Accessory - sadece enabled ise
       let accessory = undefined;
-      if (data.accessoryId) {
+      if (rules.accessory.enabled) {
         const allProps = [...(availableAssets.props || []), ...(availableAssets.accessories || [])];
-        accessory = allProps.find((a: any) => a.id === data.accessoryId);
+        if (data.accessoryId) {
+          accessory = allProps.find((a: any) => a.id === data.accessoryId);
+        }
+        if (!accessory && allProps.length > 0) {
+          accessory = allProps[0];
+          console.warn("[Gemini] accessoryId zorunlu ama seçilmedi, fallback kullanıldı:", accessory.id);
+        }
+      }
+
+      // Napkin - sadece enabled ise
+      let napkin = undefined;
+      if (rules.napkin.enabled) {
+        napkin = data.napkinId ? availableAssets.napkins?.find((a: any) => a.id === data.napkinId) : undefined;
+        if (!napkin && availableAssets.napkins?.length > 0) {
+          napkin = availableAssets.napkins[0];
+          console.warn("[Gemini] napkinId zorunlu ama seçilmedi, fallback kullanıldı:", napkin.id);
+        }
+      }
+
+      // Cutlery - sadece enabled ise
+      let cutlery = undefined;
+      if (rules.cutlery.enabled) {
+        cutlery = data.cutleryId ? availableAssets.cutlery?.find((a: any) => a.id === data.cutleryId) : undefined;
+        if (!cutlery && availableAssets.cutlery?.length > 0) {
+          cutlery = availableAssets.cutlery[0];
+          console.warn("[Gemini] cutleryId zorunlu ama seçilmedi, fallback kullanıldı:", cutlery.id);
+        }
       }
 
       if (!product) {
         return { success: false, error: "Ürün bulunamadı", cost, tokensUsed: 0 };
       }
+
+      console.log(`[Gemini] selectAssets sonuç: plate=${!!plate}, table=${!!table}, cup=${!!cup}, accessory=${!!accessory}, napkin=${!!napkin}, cutlery=${!!cutlery}`);
 
       return {
         success: true,
@@ -602,6 +726,8 @@ Yanıt formatı (sadece JSON):
           cup,
           table,
           accessory,
+          napkin,
+          cutlery,
           selectionReasoning: data.reasoning,
           includesPet: effectiveRules?.shouldIncludePet || false,
         },

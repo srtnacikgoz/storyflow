@@ -1211,6 +1211,7 @@ export interface GlobalOrchestratorConfig {
   promptStudio: FirestorePromptStudioConfig;  // Config-driven system prompts
   categories: FirestoreCategoriesConfig;  // Dinamik kategoriler
   businessContext: FirestoreBusinessContextConfig;  // İşletme bağlamı (SaaS uyumlu)
+  assetSelectionConfig: FirestoreAssetSelectionConfig;  // Asset seçim kuralları (manuel/otomatik)
 
   // Cache bilgisi
   loadedAt: number;
@@ -1691,6 +1692,57 @@ export interface FirestoreBusinessContextConfig {
 
   // Meta
   isEnabled: boolean;             // false ise prompt'a eklenmez
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+// ==========================================
+// ASSET SELECTION CONFIG
+// ==========================================
+
+/**
+ * Tek bir asset kategorisi için seçim kuralı
+ */
+export interface AssetCategoryRule {
+  // Bu asset kategorisi dahil edilsin mi?
+  // true = ZORUNLU (Gemini mutlaka seçmeli)
+  // false = HARİÇ (Gemini hiç seçmemeli, listeye bile gönderilmez)
+  enabled: boolean;
+}
+
+/**
+ * Asset Seçim Kuralları Konfigürasyonu
+ * Document: global/config/settings/asset-selection
+ *
+ * İki farklı mod için ayrı kurallar:
+ * - manual: "Şimdi Üret" butonu ile manuel tetikleme
+ * - scheduled: Otomatik pipeline (scheduler)
+ *
+ * Her asset kategorisi için enabled/disabled durumu saklar.
+ * enabled=true → ZORUNLU, enabled=false → HARİÇ
+ */
+export interface FirestoreAssetSelectionConfig {
+  // Manuel üretim kuralları ("Şimdi Üret" butonu)
+  manual: {
+    plate: AssetCategoryRule;      // Tabak
+    table: AssetCategoryRule;      // Masa
+    cup: AssetCategoryRule;        // Fincan
+    accessory: AssetCategoryRule;  // Aksesuar (çiçek, mum vb.)
+    napkin: AssetCategoryRule;     // Peçete
+    cutlery: AssetCategoryRule;    // Çatal-bıçak
+  };
+
+  // Otomatik pipeline kuralları (Scheduler)
+  scheduled: {
+    plate: AssetCategoryRule;
+    table: AssetCategoryRule;
+    cup: AssetCategoryRule;
+    accessory: AssetCategoryRule;
+    napkin: AssetCategoryRule;
+    cutlery: AssetCategoryRule;
+  };
+
+  // Meta
   updatedAt: number;
   updatedBy?: string;
 }

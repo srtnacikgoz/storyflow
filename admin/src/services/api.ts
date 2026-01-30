@@ -2193,6 +2193,87 @@ class ApiService {
     });
   }
 
+  // ==========================================
+  // Asset Selection Config (Zorunlu Asset Kuralları)
+  // ==========================================
+
+  /**
+   * Asset seçim kurallarını getir
+   * İki mod: manual (Şimdi Üret) ve scheduled (Otomatik Pipeline)
+   */
+  async getAssetSelectionConfig(): Promise<{
+    manual: {
+      plate: { enabled: boolean };
+      table: { enabled: boolean };
+      cup: { enabled: boolean };
+      accessory: { enabled: boolean };
+      napkin: { enabled: boolean };
+      cutlery: { enabled: boolean };
+    };
+    scheduled: {
+      plate: { enabled: boolean };
+      table: { enabled: boolean };
+      cup: { enabled: boolean };
+      accessory: { enabled: boolean };
+      napkin: { enabled: boolean };
+      cutlery: { enabled: boolean };
+    };
+    updatedAt: number;
+    updatedBy?: string;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        manual: {
+          plate: { enabled: boolean };
+          table: { enabled: boolean };
+          cup: { enabled: boolean };
+          accessory: { enabled: boolean };
+          napkin: { enabled: boolean };
+          cutlery: { enabled: boolean };
+        };
+        scheduled: {
+          plate: { enabled: boolean };
+          table: { enabled: boolean };
+          cup: { enabled: boolean };
+          accessory: { enabled: boolean };
+          napkin: { enabled: boolean };
+          cutlery: { enabled: boolean };
+        };
+        updatedAt: number;
+        updatedBy?: string;
+      };
+    }>("getAssetSelectionConfigEndpoint");
+    return response.data;
+  }
+
+  /**
+   * Asset seçim kurallarını güncelle
+   */
+  async updateAssetSelectionConfig(updates: {
+    manual?: Partial<{
+      plate: { enabled: boolean };
+      table: { enabled: boolean };
+      cup: { enabled: boolean };
+      accessory: { enabled: boolean };
+      napkin: { enabled: boolean };
+      cutlery: { enabled: boolean };
+    }>;
+    scheduled?: Partial<{
+      plate: { enabled: boolean };
+      table: { enabled: boolean };
+      cup: { enabled: boolean };
+      accessory: { enabled: boolean };
+      napkin: { enabled: boolean };
+      cutlery: { enabled: boolean };
+    }>;
+  }): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateAssetSelectionConfigEndpoint", {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
   /**
    * AI Tema Açıklaması Üret
    */

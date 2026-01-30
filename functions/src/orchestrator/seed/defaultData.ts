@@ -27,6 +27,7 @@ import {
   FirestoreSystemSettingsConfig,
   FirestoreFixedAssetsConfig,
   FirestoreBusinessContextConfig,
+  FirestoreAssetSelectionConfig,
   FirestorePromptStudioConfig,
   PromptTemplate,
   CompositionVariant,
@@ -573,6 +574,42 @@ export const DEFAULT_BUSINESS_CONTEXT_CONFIG: Omit<FirestoreBusinessContextConfi
 };
 
 // ==========================================
+// ASSET SEÇİM KURALLARI
+// ==========================================
+
+/**
+ * Varsayılan asset seçim kuralları
+ *
+ * İki farklı mod için ayrı kurallar:
+ * - manual: "Şimdi Üret" butonu (daha zengin sahne)
+ * - scheduled: Otomatik pipeline (daha minimal)
+ *
+ * enabled=true → Bu asset ZORUNLU seçilecek
+ * enabled=false → Bu asset HARİÇ tutulacak
+ */
+export const DEFAULT_ASSET_SELECTION_CONFIG: Omit<FirestoreAssetSelectionConfig, "updatedAt"> = {
+  // Manuel üretim - daha zengin sahne varsayılan
+  manual: {
+    plate: { enabled: true },      // Tabak zorunlu
+    table: { enabled: true },      // Masa zorunlu
+    cup: { enabled: false },       // Fincan opsiyonel (hariç)
+    accessory: { enabled: true },  // Aksesuar zorunlu
+    napkin: { enabled: true },     // Peçete zorunlu
+    cutlery: { enabled: false },   // Çatal-bıçak hariç
+  },
+
+  // Otomatik pipeline - daha minimal varsayılan
+  scheduled: {
+    plate: { enabled: true },      // Tabak zorunlu
+    table: { enabled: true },      // Masa zorunlu
+    cup: { enabled: false },       // Fincan hariç
+    accessory: { enabled: false }, // Aksesuar hariç
+    napkin: { enabled: false },    // Peçete hariç
+    cutlery: { enabled: false },   // Çatal-bıçak hariç
+  },
+};
+
+// ==========================================
 // PROMPT STUDIO (Config-Driven System Prompts)
 // ==========================================
 
@@ -1031,6 +1068,10 @@ export function getAllSeedData() {
     },
     businessContextConfig: {
       ...DEFAULT_BUSINESS_CONTEXT_CONFIG,
+      updatedAt: timestamp,
+    },
+    assetSelectionConfig: {
+      ...DEFAULT_ASSET_SELECTION_CONFIG,
       updatedAt: timestamp,
     },
     promptStudioConfig: {

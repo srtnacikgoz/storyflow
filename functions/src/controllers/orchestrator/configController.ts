@@ -22,6 +22,8 @@ import {
   updateFixedAssets,
   getBusinessContext,
   updateBusinessContext,
+  getAssetSelectionConfig,
+  updateAssetSelectionConfig,
   getPromptStudioConfig as fetchPromptStudioConfig,
   getPromptTemplate as fetchPromptTemplate,
   updatePromptTemplate as updatePromptTemplateService,
@@ -1266,6 +1268,144 @@ export const clearPromptStudioCacheEndpoint = functions
         });
       } catch (error) {
         errorResponse(response, error, "clearPromptStudioCache");
+      }
+    });
+  });
+
+// ==========================================
+// ASSET SELECTION CONFIG ENDPOINTS
+// ==========================================
+
+/**
+ * Asset seçim kurallarını getir
+ * GET /getAssetSelectionConfig
+ *
+ * İki farklı mod için ayrı kurallar:
+ * - manual: "Şimdi Üret" butonu
+ * - scheduled: Otomatik pipeline
+ *
+ * Her kategori için enabled/disabled durumu.
+ * enabled=true → ZORUNLU, enabled=false → HARİÇ
+ */
+export const getAssetSelectionConfigEndpoint = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const config = await getAssetSelectionConfig();
+
+        response.json({
+          success: true,
+          data: config,
+        });
+      } catch (error) {
+        errorResponse(response, error, "getAssetSelectionConfig");
+      }
+    });
+  });
+
+/**
+ * Asset seçim kurallarını güncelle
+ * PUT/POST /updateAssetSelectionConfig
+ *
+ * Body: {
+ *   manual?: {
+ *     plate?: { enabled: boolean },
+ *     table?: { enabled: boolean },
+ *     cup?: { enabled: boolean },
+ *     accessory?: { enabled: boolean },
+ *     napkin?: { enabled: boolean },
+ *     cutlery?: { enabled: boolean },
+ *   },
+ *   scheduled?: {
+ *     plate?: { enabled: boolean },
+ *     table?: { enabled: boolean },
+ *     cup?: { enabled: boolean },
+ *     accessory?: { enabled: boolean },
+ *     napkin?: { enabled: boolean },
+ *     cutlery?: { enabled: boolean },
+ *   }
+ * }
+ */
+export const updateAssetSelectionConfigEndpoint = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const { manual, scheduled } = request.body;
+
+        // Validasyon helper
+        const validateCategoryRules = (rules: Record<string, { enabled?: boolean }> | undefined, modeName: string): string | null => {
+          if (!rules) return null;
+
+          const validCategories = ["plate", "table", "cup", "accessory", "napkin", "cutlery"];
+
+          for (const [key, value] of Object.entries(rules)) {
+            if (!validCategories.includes(key)) {
+              return `Invalid category "${key}" in ${modeName}. Valid: ${validCategories.join(", ")}`;
+            }
+            if (value && typeof value.enabled !== "boolean") {
+              return `${modeName}.${key}.enabled must be a boolean`;
+            }
+          }
+
+          return null;
+        };
+
+        // Manual mode validasyonu
+        const manualError = validateCategoryRules(manual, "manual");
+        if (manualError) {
+          response.status(400).json({ success: false, error: manualError });
+          return;
+        }
+
+        // Scheduled mode validasyonu
+        const scheduledError = validateCategoryRules(scheduled, "scheduled");
+        if (scheduledError) {
+          response.status(400).json({ success: false, error: scheduledError });
+          return;
+        }
+
+        // Mevcut config'i oku
+        const currentConfig = await getAssetSelectionConfig();
+
+        // Deep merge ile güncelle
+        const updatedConfig = {
+          manual: {
+            ...currentConfig.manual,
+            ...(manual ? Object.fromEntries(
+              Object.entries(manual).map(([k, v]) => [k, { ...currentConfig.manual[k as keyof typeof currentConfig.manual], ...(v as object) }])
+            ) : {}),
+          },
+          scheduled: {
+            ...currentConfig.scheduled,
+            ...(scheduled ? Object.fromEntries(
+              Object.entries(scheduled).map(([k, v]) => [k, { ...currentConfig.scheduled[k as keyof typeof currentConfig.scheduled], ...(v as object) }])
+            ) : {}),
+          },
+        };
+
+        // Güncelle
+        await updateAssetSelectionConfig(updatedConfig);
+
+        // Cache temizle
+        clearConfigCache();
+
+        console.log("[updateAssetSelectionConfig] Asset selection config updated:", { manual: !!manual, scheduled: !!scheduled });
+
+        response.json({
+          success: true,
+          message: "Asset selection configuration updated",
+        });
+      } catch (error) {
+        errorResponse(response, error, "updateAssetSelectionConfig");
       }
     });
   });

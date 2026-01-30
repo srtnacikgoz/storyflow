@@ -32,6 +32,7 @@ import {
   PromptVersion,
   PromptStageId,
   GlobalOrchestratorConfig,
+  FirestoreAssetSelectionConfig,
 } from "../orchestrator/types";
 import { getCategories as getCategoriesFromService } from "./categoryService";
 import {
@@ -40,6 +41,7 @@ import {
   DEFAULT_SYSTEM_SETTINGS_CONFIG,
   DEFAULT_FIXED_ASSETS_CONFIG,
   DEFAULT_BUSINESS_CONTEXT_CONFIG,
+  DEFAULT_ASSET_SELECTION_CONFIG,
   DEFAULT_PROMPT_STUDIO_CONFIG,
   DEFAULT_PROMPT_TEMPLATES,
 } from "../orchestrator/seed/defaultData";
@@ -576,6 +578,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     systemSettings,
     fixedAssets,
     businessContext,
+    assetSelectionConfig,
     promptStudio,
     categories,
   ] = await Promise.all([
@@ -591,6 +594,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     getSystemSettings(),
     getFixedAssets(),
     getBusinessContext(),
+    getAssetSelectionConfig(),
     getPromptStudioConfig(),
     getCategoriesFromService(),
   ]);
@@ -609,6 +613,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     systemSettings,
     fixedAssets,
     businessContext,
+    assetSelectionConfig,
     promptStudio,
     categories,
     loadedAt: now,
@@ -693,6 +698,7 @@ export async function seedFirestoreConfig(): Promise<void> {
   batch.set(configRef.doc("system-settings"), seedData.systemSettingsConfig);
   batch.set(configRef.doc("fixed-assets"), seedData.fixedAssetsConfig);
   batch.set(configRef.doc("business-context"), seedData.businessContextConfig);
+  batch.set(configRef.doc("asset-selection"), seedData.assetSelectionConfig);
   batch.set(configRef.doc("prompt-studio"), seedData.promptStudioConfig);
 
   await batch.commit();
@@ -964,6 +970,69 @@ export async function updateBusinessContext(
 
   clearConfigCache();
   console.log("[ConfigService] Business context updated:", Object.keys(updates));
+}
+
+/**
+ * Asset seçim kurallarını getirir
+ * Document: global/config/settings/asset-selection
+ *
+ * İki farklı mod için ayrı kurallar:
+ * - manual: "Şimdi Üret" butonu
+ * - scheduled: Otomatik pipeline
+ */
+export async function getAssetSelectionConfig(): Promise<FirestoreAssetSelectionConfig> {
+  const doc = await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("asset-selection")
+    .get();
+
+  if (!doc.exists) {
+    // Varsayılan değerleri döndür
+    return {
+      ...DEFAULT_ASSET_SELECTION_CONFIG,
+      updatedAt: Date.now(),
+    };
+  }
+
+  return doc.data() as FirestoreAssetSelectionConfig;
+}
+
+/**
+ * Asset seçim kurallarını günceller
+ * Document: global/config/settings/asset-selection
+ *
+ * Her kategori için enabled/disabled durumu günceller.
+ */
+export async function updateAssetSelectionConfig(
+  updates: Partial<FirestoreAssetSelectionConfig>
+): Promise<void> {
+  const docRef = getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("asset-selection");
+
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    // Doküman yoksa oluştur
+    await docRef.set({
+      ...DEFAULT_ASSET_SELECTION_CONFIG,
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  } else {
+    // Güncelle
+    await docRef.update({
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  }
+
+  clearConfigCache();
+  console.log("[ConfigService] Asset selection config updated:", Object.keys(updates));
 }
 
 // ==========================================

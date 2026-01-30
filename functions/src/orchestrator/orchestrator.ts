@@ -12,7 +12,7 @@ import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import { AIRulesService } from "../services/aiRulesService";
 import { AILogService } from "../services/aiLogService";
-import { getFixedAssets } from "../services/configService";
+import { getFixedAssets, getAssetSelectionConfig } from "../services/configService";
 import * as categoryService from "../services/categoryService";
 import {
   buildGeminiPrompt,
@@ -135,6 +135,7 @@ export class Orchestrator {
    * @param onProgress - Her aşamada çağrılan callback (opsiyonel)
    * @param overrideThemeId - Manuel tema seçimi (Dashboard'dan "Şimdi Üret" ile)
    * @param overrideAspectRatio - Manuel aspect ratio seçimi (Instagram formatı için)
+   * @param isManual - Manuel üretim mi? (Şimdi Üret butonu = true, Scheduler = false)
    */
   async runPipeline(
     productType: ProductType,
@@ -143,7 +144,8 @@ export class Orchestrator {
     slotId?: string,
     scheduledHour?: number,
     overrideThemeId?: string,
-    overrideAspectRatio?: "1:1" | "3:4" | "9:16"
+    overrideAspectRatio?: "1:1" | "3:4" | "9:16",
+    isManual?: boolean
   ): Promise<PipelineResult> {
     const TOTAL_STAGES = 6; // asset, scenario, prompt, image, quality, telegram (caption kaldırıldı)
     const startedAt = Date.now();
@@ -578,13 +580,24 @@ export class Orchestrator {
         console.log(`[Orchestrator] Accessory not allowed for theme "${themeData?.name || "default"}"`);
       }
 
+      // Asset seçim kurallarını yükle (manuel vs otomatik)
+      // isManual parametresi yoksa, slotId'ye göre karar ver
+      const actualIsManual = isManual !== undefined ? isManual : !slotId;
+      const assetSelectionConfig = await getAssetSelectionConfig();
+      const assetSelectionRules = actualIsManual
+        ? assetSelectionConfig.manual
+        : assetSelectionConfig.scheduled;
+
+      console.log(`[Orchestrator] Asset selection mode: ${actualIsManual ? "MANUAL" : "SCHEDULED"}`);
+
       const assetResponse = await this.gemini.selectAssets(
         productType,
         assetsForSelection,
         timeOfDay,
         mood,
         effectiveRules,  // Çeşitlilik kurallarını gönder (köpek dahil mi, bloklu masalar, vb.)
-        fixedAssets      // Sabit asset konfigürasyonu (mermer masa sabit vb.)
+        fixedAssets,     // Sabit asset konfigürasyonu (mermer masa sabit vb.)
+        assetSelectionRules  // Asset seçim kuralları (zorunlu/hariç kategoriler)
       );
 
       // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı, maliyet oluştu)
