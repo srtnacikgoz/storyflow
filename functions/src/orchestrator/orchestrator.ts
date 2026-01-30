@@ -109,6 +109,23 @@ export class Orchestrator {
     this.rulesService = new RulesService();
   }
 
+  /**
+   * Pipeline'ın iptal edilip edilmediğini kontrol et
+   * @throws Error eğer pipeline iptal edildiyse
+   */
+  private async checkCancellation(slotId?: string): Promise<void> {
+    if (!slotId) return; // slotId yoksa kontrol edilemez
+
+    const slotDoc = await this.db.collection("scheduled-slots").doc(slotId).get();
+    if (!slotDoc.exists) return;
+
+    const slot = slotDoc.data();
+    if (slot?.status === "cancelled") {
+      console.log(`[Orchestrator] Pipeline cancelled for slot ${slotId}`);
+      throw new Error("PIPELINE_CANCELLED");
+    }
+  }
+
   // ==========================================
   // MAIN PIPELINE
   // ==========================================
@@ -525,6 +542,7 @@ export class Orchestrator {
       // ==========================================
       // STAGE 1: ASSET SELECTION
       // ==========================================
+      await this.checkCancellation(slotId); // İptal kontrolü
       console.log("[Orchestrator] Stage 1: Asset Selection");
       status.currentStage = "asset_selection";
       if (onProgress) await onProgress("asset_selection", 1, TOTAL_STAGES);
@@ -649,6 +667,7 @@ export class Orchestrator {
       // ==========================================
       // STAGE 2: SCENARIO SELECTION
       // ==========================================
+      await this.checkCancellation(slotId); // İptal kontrolü
       console.log("[Orchestrator] Stage 2: Scenario Selection");
       status.currentStage = "scenario_selection";
       if (onProgress) await onProgress("scenario_selection", 2, TOTAL_STAGES);
@@ -840,6 +859,7 @@ export class Orchestrator {
         // ==========================================
         // STAGE 3: PROMPT OPTIMIZATION (Gemini Terminolojisi)
         // ==========================================
+        await this.checkCancellation(slotId); // İptal kontrolü
         console.log("[Orchestrator] Stage 3: Prompt Optimization");
         status.currentStage = "prompt_optimization";
         if (onProgress) await onProgress("prompt_optimization", 3, TOTAL_STAGES);
@@ -936,6 +956,7 @@ export class Orchestrator {
         // ==========================================
         // STAGE 4: IMAGE GENERATION (with retry)
         // ==========================================
+        await this.checkCancellation(slotId); // İptal kontrolü
         console.log("[Orchestrator] Stage 4: Image Generation");
         status.currentStage = "image_generation";
         if (onProgress) await onProgress("image_generation", 4, TOTAL_STAGES);

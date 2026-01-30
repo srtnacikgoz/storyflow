@@ -37,6 +37,7 @@ const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string; i
   approved: { bg: "bg-green-100", text: "text-green-700", label: "Onaylandı", icon: "✅" },
   published: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Yayınlandı", icon: "📤" },
   failed: { bg: "bg-red-100", text: "text-red-700", label: "Başarısız", icon: "❌" },
+  cancelled: { bg: "bg-orange-100", text: "text-orange-700", label: "İptal Edildi", icon: "🛑" },
 };
 
 // Pipeline aşama isimleri
@@ -276,6 +277,26 @@ export default function OrchestratorDashboard() {
     }
   };
 
+  // Pipeline'ı iptal et
+  const handleCancelPipeline = async () => {
+    if (!currentSlotId) return;
+    if (!confirm("Pipeline iptal edilecek. Emin misiniz?")) return;
+
+    try {
+      await api.cancelSlotPipeline(currentSlotId);
+      setProgressInfo({
+        stage: "cancelled",
+        stageIndex: 0,
+        totalStages: 7,
+        status: "cancelled" as ScheduledSlot["status"],
+      });
+      setGenerating(false);
+      loadData();
+    } catch (err) {
+      alert("İptal hatası: " + (err instanceof Error ? err.message : "Bilinmeyen"));
+    }
+  };
+
   // Slot işlemleri
   const handleDeleteSlot = async (slotId: string) => {
     if (!confirm("Bu slot silinecek. Emin misiniz?")) return;
@@ -473,8 +494,15 @@ export default function OrchestratorDashboard() {
               </div>
             )}
 
-            {/* Close Button */}
-            {(!generating || progressInfo?.status === "failed" || progressInfo?.status === "awaiting_approval") && (
+            {/* Action Buttons */}
+            {generating && progressInfo?.status !== "failed" && progressInfo?.status !== "awaiting_approval" ? (
+              <button
+                onClick={handleCancelPipeline}
+                className="mt-4 w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+              >
+                🛑 İptal Et
+              </button>
+            ) : (
               <button
                 onClick={() => { setShowProgressModal(false); setCurrentSlotId(null); }}
                 className="mt-4 w-full btn-primary"

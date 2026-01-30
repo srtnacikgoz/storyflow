@@ -20,6 +20,8 @@ import {
   updateSystemSettings,
   getFixedAssets,
   updateFixedAssets,
+  getBusinessContext,
+  updateBusinessContext,
   getPromptStudioConfig as fetchPromptStudioConfig,
   getPromptTemplate as fetchPromptTemplate,
   updatePromptTemplate as updatePromptTemplateService,
@@ -879,6 +881,155 @@ export const updateFixedAssetsConfig = functions
         });
       } catch (error) {
         errorResponse(response, error, "updateFixedAssetsConfig");
+      }
+    });
+  });
+
+// ==========================================
+// BUSINESS CONTEXT ENDPOINTS (SaaS Uyumlu)
+// ==========================================
+
+/**
+ * İşletme bağlamını getir
+ * GET /getBusinessContextConfig
+ *
+ * SaaS uyumlu: Her tenant kendi işletme bağlamını tanımlayabilir.
+ * Bu bilgiler prompt'a eklenerek AI'ın doğru mekan/ortam üretmesini sağlar.
+ *
+ * Örnek: "high-rise window view" gibi hatalı üretimleri önler.
+ */
+export const getBusinessContextConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const businessContext = await getBusinessContext();
+
+        response.json({
+          success: true,
+          data: businessContext,
+        });
+      } catch (error) {
+        errorResponse(response, error, "getBusinessContextConfig");
+      }
+    });
+  });
+
+/**
+ * İşletme bağlamını güncelle
+ * PUT/POST /updateBusinessContextConfig
+ *
+ * Body: {
+ *   businessName?: string,           // İşletme adı
+ *   businessType?: string,           // pastane, kafe, restoran
+ *   locationDescription?: string,    // Mekan açıklaması
+ *   floorLevel?: "ground" | "upper" | "basement" | "outdoor",
+ *   hasStreetView?: boolean,
+ *   hasWindowView?: boolean,
+ *   windowViewDescription?: string,
+ *   decorStyle?: string,
+ *   dominantMaterials?: string[],
+ *   colorScheme?: string,
+ *   promptContext?: string,          // AI prompt için özet (EN ÖNEMLİ)
+ *   isEnabled?: boolean,
+ * }
+ */
+export const updateBusinessContextConfig = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const updates = request.body;
+        const validatedUpdates: Record<string, unknown> = {};
+
+        // String alanları validasyonu
+        const stringFields = [
+          "businessName",
+          "businessType",
+          "locationDescription",
+          "windowViewDescription",
+          "decorStyle",
+          "colorScheme",
+          "promptContext",
+        ];
+
+        for (const field of stringFields) {
+          if (updates[field] !== undefined) {
+            if (typeof updates[field] !== "string") {
+              response.status(400).json({
+                success: false,
+                error: `${field} must be a string`,
+              });
+              return;
+            }
+            validatedUpdates[field] = updates[field];
+          }
+        }
+
+        // floorLevel validasyonu
+        if (updates.floorLevel !== undefined) {
+          const validLevels = ["ground", "upper", "basement", "outdoor"];
+          if (!validLevels.includes(updates.floorLevel)) {
+            response.status(400).json({
+              success: false,
+              error: `floorLevel must be one of: ${validLevels.join(", ")}`,
+            });
+            return;
+          }
+          validatedUpdates.floorLevel = updates.floorLevel;
+        }
+
+        // Boolean alanları validasyonu
+        const booleanFields = ["hasStreetView", "hasWindowView", "isEnabled"];
+        for (const field of booleanFields) {
+          if (updates[field] !== undefined) {
+            if (typeof updates[field] !== "boolean") {
+              response.status(400).json({
+                success: false,
+                error: `${field} must be a boolean`,
+              });
+              return;
+            }
+            validatedUpdates[field] = updates[field];
+          }
+        }
+
+        // dominantMaterials array validasyonu
+        if (updates.dominantMaterials !== undefined) {
+          if (!Array.isArray(updates.dominantMaterials)) {
+            response.status(400).json({
+              success: false,
+              error: "dominantMaterials must be an array of strings",
+            });
+            return;
+          }
+          validatedUpdates.dominantMaterials = updates.dominantMaterials;
+        }
+
+        if (Object.keys(validatedUpdates).length === 0) {
+          response.status(400).json({
+            success: false,
+            error: "No valid fields to update",
+          });
+          return;
+        }
+
+        await updateBusinessContext(validatedUpdates);
+        console.log("[updateBusinessContextConfig] Business context updated:", Object.keys(validatedUpdates));
+
+        response.json({
+          success: true,
+          message: "Business context configuration updated",
+        });
+      } catch (error) {
+        errorResponse(response, error, "updateBusinessContextConfig");
       }
     });
   });

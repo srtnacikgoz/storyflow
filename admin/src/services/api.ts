@@ -917,6 +917,23 @@ class ApiService {
   }
 
   /**
+   * Pipeline'ı iptal et
+   */
+  async cancelSlotPipeline(slotId: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      message: string;
+    }>("cancelSlotPipeline", {
+      method: "POST",
+      body: JSON.stringify({ slotId }),
+    });
+    return response;
+  }
+
+  /**
    * Tek bir slot'un detaylarını getir (polling için)
    */
   async getScheduledSlot(slotId: string): Promise<{
@@ -2103,6 +2120,74 @@ class ApiService {
     cacheTTLMinutes?: number;
   }): Promise<void> {
     await this.fetch<{ success: boolean }>("updateSystemSettingsConfig", {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  // ==========================================
+  // BUSINESS CONTEXT (SaaS Uyumlu İşletme Bağlamı)
+  // ==========================================
+
+  /**
+   * İşletme bağlamını getir
+   */
+  async getBusinessContext(): Promise<{
+    businessName: string;
+    businessType: string;
+    locationDescription: string;
+    floorLevel: "ground" | "upper" | "basement" | "outdoor";
+    hasStreetView: boolean;
+    hasWindowView: boolean;
+    windowViewDescription?: string;
+    decorStyle: string;
+    dominantMaterials: string[];
+    colorScheme: string;
+    promptContext: string;
+    isEnabled: boolean;
+    updatedAt: number;
+    updatedBy?: string;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        businessName: string;
+        businessType: string;
+        locationDescription: string;
+        floorLevel: "ground" | "upper" | "basement" | "outdoor";
+        hasStreetView: boolean;
+        hasWindowView: boolean;
+        windowViewDescription?: string;
+        decorStyle: string;
+        dominantMaterials: string[];
+        colorScheme: string;
+        promptContext: string;
+        isEnabled: boolean;
+        updatedAt: number;
+        updatedBy?: string;
+      };
+    }>("getBusinessContextConfig");
+    return response.data;
+  }
+
+  /**
+   * İşletme bağlamını güncelle
+   */
+  async updateBusinessContext(updates: {
+    businessName?: string;
+    businessType?: string;
+    locationDescription?: string;
+    floorLevel?: "ground" | "upper" | "basement" | "outdoor";
+    hasStreetView?: boolean;
+    hasWindowView?: boolean;
+    windowViewDescription?: string;
+    decorStyle?: string;
+    dominantMaterials?: string[];
+    colorScheme?: string;
+    promptContext?: string;
+    isEnabled?: boolean;
+  }): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateBusinessContextConfig", {
       method: "POST",
       body: JSON.stringify(updates),
     });

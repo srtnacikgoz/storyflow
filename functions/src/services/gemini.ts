@@ -231,9 +231,32 @@ export class GeminiService {
       }
     }
 
-    // Core constraint - tek seferde, net, ZERO HALLUCINATION
+    // Core constraint - ZERO HALLUCINATION POLİCY (Güçlendirilmiş v2.1)
     editPrefix += `
-Constraint: Maintain 100% material/color fidelity for references. use ONLY provided assets. DO NOT add unreferenced objects (no extra napkins/cutlery/flowers).
+
+=== MANDATORY REFERENCE FIDELITY (ZERO HALLUCINATION) ===
+CRITICAL RULES - VIOLATION IS UNACCEPTABLE:
+
+1. [TABLE REFERENCE] - EXACT MATCH REQUIRED:
+   - Use the EXACT table/surface from reference image [N] (TABLE)
+   - Copy its EXACT texture, color, material, grain pattern
+   - DO NOT replace with different table (no marble if wood shown, no dark if light shown)
+   - DO NOT add window views, backgrounds, or environments not in reference
+   - The table edge and surface must match reference EXACTLY
+
+2. [ALL REFERENCES] - STRICT FIDELITY:
+   - Every reference [1][2][3][4]... must appear EXACTLY as shown
+   - NO color changes, NO material substitution, NO style alterations
+   - If plate is white ceramic, keep white ceramic (not cream, not porcelain)
+   - If cup contains tea, show tea (amber liquid, not water, not empty)
+
+3. [ZERO ADDITIONS] - NO HALLUCINATION:
+   - Add NOTHING that is not in reference images
+   - NO extra napkins, NO cutlery, NO flowers, NO decorations unless referenced
+   - NO background scenery (windows, walls, plants) unless explicitly referenced
+   - Scene should contain ONLY referenced objects + specified composition
+
+VIOLATION = REGENERATION REQUIRED
 
 SCENE:
 `;

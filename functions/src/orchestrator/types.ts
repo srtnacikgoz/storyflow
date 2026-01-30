@@ -388,7 +388,7 @@ export interface ScheduledSlot {
   timeSlotRuleId: string;
 
   // Durum
-  status: "pending" | "generating" | "awaiting_approval" | "approved" | "published" | "failed";
+  status: "pending" | "generating" | "awaiting_approval" | "approved" | "published" | "failed" | "cancelled";
 
   // Pipeline sonuçları (doldurulacak)
   pipelineResult?: PipelineResult;
@@ -1210,6 +1210,7 @@ export interface GlobalOrchestratorConfig {
   fixedAssets: FirestoreFixedAssetsConfig;
   promptStudio: FirestorePromptStudioConfig;  // Config-driven system prompts
   categories: FirestoreCategoriesConfig;  // Dinamik kategoriler
+  businessContext: FirestoreBusinessContextConfig;  // İşletme bağlamı (SaaS uyumlu)
 
   // Cache bilgisi
   loadedAt: number;
@@ -1653,6 +1654,43 @@ export interface FirestoreFixedAssetsConfig {
   isEnabled: boolean;
 
   // Meta
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * İşletme Bağlamı Konfigürasyonu
+ * Document: global/config/settings/business-context
+ *
+ * SaaS uyumlu: Her tenant kendi işletme bağlamını tanımlayabilir.
+ * Bu bilgiler prompt'a eklenerek AI'ın doğru mekan/ortam üretmesini sağlar.
+ *
+ * Örnek kullanım:
+ * - Zemin kat pastane → "high-rise window view" üretilmez
+ * - Ahşap dekorlu mekan → uygun arka plan üretilir
+ */
+export interface FirestoreBusinessContextConfig {
+  // İşletme Bilgileri
+  businessName: string;           // "Sade Patisserie"
+  businessType: string;           // "pastane", "kafe", "restoran"
+
+  // Mekan Bilgileri (AI'ın doğru ortam üretmesi için kritik)
+  locationDescription: string;    // "Zemin kattaki butik pastane, sokak seviyesinde vitrini var"
+  floorLevel: "ground" | "upper" | "basement" | "outdoor";  // Kat bilgisi
+  hasStreetView: boolean;         // Sokak manzarası var mı?
+  hasWindowView: boolean;         // Pencere manzarası var mı?
+  windowViewDescription?: string; // Varsa: "Sokak manzarası", "Bahçe manzarası"
+
+  // Dekorasyon Stili
+  decorStyle: string;             // "Minimal modern", "Rustik ahşap", "Industrial"
+  dominantMaterials: string[];    // ["ahşap", "mermer", "seramik"]
+  colorScheme: string;            // "Sıcak krem ve kahve tonları"
+
+  // AI Prompt için oluşturulmuş özet (otomatik veya manuel)
+  promptContext: string;          // "Ground floor artisan patisserie with warm cream tones, wooden accents, no high-rise views"
+
+  // Meta
+  isEnabled: boolean;             // false ise prompt'a eklenmez
   updatedAt: number;
   updatedBy?: string;
 }

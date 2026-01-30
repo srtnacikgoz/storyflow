@@ -8,6 +8,7 @@
 
 import { getFirestore } from "firebase-admin/firestore";
 import { MoodService } from "../services/moodService";
+import { getBusinessContext } from "../services/configService";
 
 // Gemini Terminology Types
 export interface GeminiMoodDefinition {
@@ -695,7 +696,49 @@ export async function buildGeminiPrompt(params: {
     promptParts.push("");
   }
 
-  // 6. Kurallar
+  // 6. İşletme Bağlamı (SaaS uyumlu - mekan bilgileri)
+  try {
+    const businessContext = await getBusinessContext();
+    if (businessContext.isEnabled && businessContext.promptContext) {
+      promptParts.push(`BUSINESS CONTEXT (MANDATORY):`);
+      promptParts.push(`${businessContext.promptContext}`);
+      promptParts.push("");
+
+      decisions.push({
+        step: "business-context",
+        input: businessContext.businessName,
+        matched: true,
+        result: businessContext.promptContext.substring(0, 100) + "...",
+        fallback: false,
+        details: {
+          businessName: businessContext.businessName,
+          floorLevel: businessContext.floorLevel,
+          isEnabled: businessContext.isEnabled,
+        },
+      });
+    } else {
+      decisions.push({
+        step: "business-context",
+        input: null,
+        matched: false,
+        result: "Business context disabled or empty",
+        fallback: false,
+        details: { isEnabled: businessContext.isEnabled },
+      });
+    }
+  } catch (error) {
+    console.warn("[GeminiPromptBuilder] Failed to load business context:", error);
+    decisions.push({
+      step: "business-context",
+      input: null,
+      matched: false,
+      result: "Failed to load business context",
+      fallback: false,
+      details: { error: String(error) },
+    });
+  }
+
+  // 7. Kurallar
   promptParts.push(`RULES:`);
   promptParts.push(`- Use ONLY assets from reference images`);
   promptParts.push(`- Product clearly recognizable from reference`);

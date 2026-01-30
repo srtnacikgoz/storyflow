@@ -26,6 +26,7 @@ import {
   FirestoreTimeoutsConfig,
   FirestoreSystemSettingsConfig,
   FirestoreFixedAssetsConfig,
+  FirestoreBusinessContextConfig,
   FirestorePromptStudioConfig,
   PromptTemplate,
   CompositionVariant,
@@ -535,6 +536,43 @@ export const DEFAULT_FIXED_ASSETS_CONFIG: Omit<FirestoreFixedAssetsConfig, "upda
 };
 
 // ==========================================
+// BUSINESS CONTEXT (SaaS Uyumlu İşletme Bağlamı)
+// ==========================================
+
+/**
+ * İşletme Bağlamı varsayılan konfigürasyonu
+ *
+ * Bu değerler Sade Patisserie için özelleştirilmiştir.
+ * SaaS modunda her tenant kendi değerlerini girecektir.
+ *
+ * ÖNEMLİ: promptContext alanı AI'ın doğru ortam üretmesi için kritik.
+ * "high-rise window view" gibi hatalı üretimleri önler.
+ */
+export const DEFAULT_BUSINESS_CONTEXT_CONFIG: Omit<FirestoreBusinessContextConfig, "updatedAt"> = {
+  // İşletme Bilgileri
+  businessName: "Sade Patisserie",
+  businessType: "pastane",
+
+  // Mekan Bilgileri (AI için kritik)
+  locationDescription: "Zemin kattaki butik pastane, sokak seviyesinde vitrini var. Samimi ve sıcak atmosfer.",
+  floorLevel: "ground",
+  hasStreetView: true,
+  hasWindowView: true,
+  windowViewDescription: "Sokak manzarası, yaya trafiği görülebilir",
+
+  // Dekorasyon Stili
+  decorStyle: "Minimal modern, sıcak tonlar",
+  dominantMaterials: ["ahşap", "mermer", "seramik"],
+  colorScheme: "Sıcak krem, bej ve kahve tonları",
+
+  // AI Prompt için özet (EN ÖNEMLİ ALAN)
+  promptContext: "Ground floor artisan patisserie with street-level storefront. Warm cream and beige tones, wooden and marble accents. NO high-rise views, NO skyscraper backgrounds, NO aerial city views. Interior shots should show cozy cafe atmosphere at street level.",
+
+  // Varsayılan olarak aktif
+  isEnabled: true,
+};
+
+// ==========================================
 // PROMPT STUDIO (Config-Driven System Prompts)
 // ==========================================
 
@@ -989,6 +1027,10 @@ export function getAllSeedData() {
     },
     fixedAssetsConfig: {
       ...DEFAULT_FIXED_ASSETS_CONFIG,
+      updatedAt: timestamp,
+    },
+    businessContextConfig: {
+      ...DEFAULT_BUSINESS_CONTEXT_CONFIG,
       updatedAt: timestamp,
     },
     promptStudioConfig: {

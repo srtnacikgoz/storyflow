@@ -88,6 +88,9 @@ export {
   updateSystemSettingsConfig,
   getFixedAssetsConfig,
   updateFixedAssetsConfig,
+  // Business Context
+  getBusinessContextConfig,
+  updateBusinessContextConfig,
   // Prompt Studio
   getPromptStudioConfig,
   getPromptTemplateById,

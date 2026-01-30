@@ -26,6 +26,7 @@ import {
   FirestoreTimeoutsConfig,
   FirestoreSystemSettingsConfig,
   FirestoreFixedAssetsConfig,
+  FirestoreBusinessContextConfig,
   FirestorePromptStudioConfig,
   PromptTemplate,
   PromptVersion,
@@ -38,6 +39,7 @@ import {
   DEFAULT_TIMEOUTS_CONFIG,
   DEFAULT_SYSTEM_SETTINGS_CONFIG,
   DEFAULT_FIXED_ASSETS_CONFIG,
+  DEFAULT_BUSINESS_CONTEXT_CONFIG,
   DEFAULT_PROMPT_STUDIO_CONFIG,
   DEFAULT_PROMPT_TEMPLATES,
 } from "../orchestrator/seed/defaultData";
@@ -305,6 +307,32 @@ export async function getFixedAssets(): Promise<FirestoreFixedAssetsConfig> {
 }
 
 /**
+ * İşletme bağlamını getirir
+ * Document: global/config/settings/business-context
+ *
+ * SaaS uyumlu: Her tenant kendi işletme bağlamını tanımlayabilir.
+ * Bu bilgiler prompt'a eklenerek AI'ın doğru mekan/ortam üretmesini sağlar.
+ */
+export async function getBusinessContext(): Promise<FirestoreBusinessContextConfig> {
+  const doc = await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("business-context")
+    .get();
+
+  if (!doc.exists) {
+    // Varsayılan değerleri döndür
+    return {
+      ...DEFAULT_BUSINESS_CONTEXT_CONFIG,
+      updatedAt: Date.now(),
+    };
+  }
+
+  return doc.data() as FirestoreBusinessContextConfig;
+}
+
+/**
  * Prompt Studio config'ini getirir (CACHE'Lİ)
  * Document: global/config/settings/prompt-studio
  *
@@ -547,6 +575,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     timeouts,
     systemSettings,
     fixedAssets,
+    businessContext,
     promptStudio,
     categories,
   ] = await Promise.all([
@@ -561,6 +590,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     getTimeouts(),
     getSystemSettings(),
     getFixedAssets(),
+    getBusinessContext(),
     getPromptStudioConfig(),
     getCategoriesFromService(),
   ]);
@@ -578,6 +608,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     timeouts,
     systemSettings,
     fixedAssets,
+    businessContext,
     promptStudio,
     categories,
     loadedAt: now,
@@ -661,6 +692,7 @@ export async function seedFirestoreConfig(): Promise<void> {
   batch.set(configRef.doc("timeouts"), seedData.timeoutsConfig);
   batch.set(configRef.doc("system-settings"), seedData.systemSettingsConfig);
   batch.set(configRef.doc("fixed-assets"), seedData.fixedAssetsConfig);
+  batch.set(configRef.doc("business-context"), seedData.businessContextConfig);
   batch.set(configRef.doc("prompt-studio"), seedData.promptStudioConfig);
 
   await batch.commit();
@@ -892,6 +924,46 @@ export async function updateFixedAssets(
 
   clearConfigCache();
   console.log("[ConfigService] Fixed assets updated:", Object.keys(updates));
+}
+
+/**
+ * İşletme bağlamını günceller
+ * Document: global/config/settings/business-context
+ *
+ * SaaS uyumlu: Her tenant kendi işletme bağlamını tanımlayabilir.
+ * Bu bilgiler prompt'a eklenerek AI'ın doğru mekan/ortam üretmesini sağlar.
+ *
+ * ÖNEMLİ: promptContext alanı AI prompt'una doğrudan eklenir.
+ * "NO high-rise views" gibi negatif direktifler burada belirtilmeli.
+ */
+export async function updateBusinessContext(
+  updates: Partial<FirestoreBusinessContextConfig>
+): Promise<void> {
+  const docRef = getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("business-context");
+
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    // Doküman yoksa oluştur
+    await docRef.set({
+      ...DEFAULT_BUSINESS_CONTEXT_CONFIG,
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  } else {
+    // Güncelle
+    await docRef.update({
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  }
+
+  clearConfigCache();
+  console.log("[ConfigService] Business context updated:", Object.keys(updates));
 }
 
 // ==========================================

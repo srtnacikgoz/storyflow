@@ -629,3 +629,65 @@ export const updateSlotCaption = functions
       }
     });
   });
+
+/**
+ * Pipeline'ı iptal et
+ * Sadece "generating" durumundaki slot'lar iptal edilebilir
+ */
+export const cancelSlotPipeline = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const { slotId } = request.body as { slotId: string };
+
+        if (!slotId) {
+          response.status(400).json({
+            success: false,
+            error: "slotId is required",
+          });
+          return;
+        }
+
+        const slotDoc = await db.collection("scheduled-slots").doc(slotId).get();
+        if (!slotDoc.exists) {
+          response.status(404).json({ success: false, error: "Slot not found" });
+          return;
+        }
+
+        const slot = slotDoc.data();
+
+        // Sadece generating durumundaki slot'lar iptal edilebilir
+        if (slot?.status !== "generating") {
+          response.status(400).json({
+            success: false,
+            error: `Slot is not generating (current status: ${slot?.status}). Only generating slots can be cancelled.`,
+          });
+          return;
+        }
+
+        // Status'ü cancelled yap
+        await db.collection("scheduled-slots").doc(slotId).update({
+          status: "cancelled",
+          cancelledAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+
+        console.log(`[SlotController] Pipeline cancelled for slot ${slotId}`);
+
+        response.json({
+          success: true,
+          message: "Pipeline cancelled",
+          slotId,
+        });
+      } catch (error) {
+        errorResponse(response, error, "cancelSlotPipeline");
+      }
+    });
+  });
