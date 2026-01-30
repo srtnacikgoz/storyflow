@@ -800,13 +800,23 @@ Yanıt formatı (sadece JSON):
 
   /**
    * Görsel için prompt'u optimize et (Gemini 3 Pro)
+   *
+   * @param assetSelectionRules - Ayarlar'dan gelen asset seçim kuralları (config-driven)
    */
   async optimizePrompt(
     basePrompt: string,
     scenario: any,
     assets: any,
     hints?: string,
-    eatingMethod?: string
+    eatingMethod?: string,
+    assetSelectionRules?: {
+      plate: { enabled: boolean };
+      table: { enabled: boolean };
+      cup: { enabled: boolean };
+      accessory: { enabled: boolean };
+      napkin: { enabled: boolean };
+      cutlery: { enabled: boolean };
+    }
   ): Promise<{ success: boolean; data?: { optimizedPrompt: string; negativePrompt: string; customizations: string[] }; error?: string; cost: number }> {
     const systemPrompt = "Sen bir prompt mühendisisin. Verilen girdilere göre Gemini Görsel Üretim modeli için en estetik ve teknik promptu hazırla.";
 
@@ -824,31 +834,58 @@ Yanıt formatı (sadece JSON):
       physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün yiyecek değil (içecek vb.). Yeme aletleri gerekmez.";
     }
 
-    // Seçilen tüm assetleri formatla (TAGLARI İÇERECEK ŞEKİLDE)
+    // Asset tipi → Türkçe etiket ve özel talimat mapping (config-driven)
+    const ASSET_CONFIG: Record<string, { label: string; instruction: string }> = {
+      product: {
+        label: "ANA ÜRÜN",
+        instruction: "Bu ürünü referans görselinden BİREBİR kullan."
+      },
+      plate: {
+        label: "TABAK",
+        instruction: "Bu tabağı AYNEN kullan, farklı tabak üretme."
+      },
+      table: {
+        label: "MASA/ZEMİN",
+        instruction: "KRİTİK: Bu masa/zemini BİREBİR kullan. Malzemeyi değiştirme (ahşap ise ahşap, mermer ise mermer)."
+      },
+      cup: {
+        label: "FİNCAN/BARDAK",
+        instruction: "Bu bardağı KESİNLİKLE kullan. Tag'lere göre içeriği doldur (tea, coffee, juice vb.)."
+      },
+      accessory: {
+        label: "AKSESUAR",
+        instruction: "Bu aksesuarı sahnede göster."
+      },
+      napkin: {
+        label: "PEÇETE",
+        instruction: "Bu peçeteyi AYNEN kullan, farklı peçete üretme."
+      },
+      cutlery: {
+        label: "ÇATAL-BIÇAK",
+        instruction: "Bu çatal-bıçağı kullan."
+      }
+    };
+
+    // Seçilen assetleri config'e göre dinamik olarak formatla
     const assetDetails: string[] = [];
-    if (assets?.product?.filename) {
-      assetDetails.push(`- Ana Ürün: ${assets.product.filename}. Detaylar: ${assets.product.tags?.join(", ")}`);
-    }
-    if (assets?.plate?.filename) {
-      assetDetails.push(`- Tabak: ${assets.plate.filename}. Detaylar: ${assets.plate.tags?.join(", ")}`);
-    }
-    if (assets?.cup?.filename) {
-      // Bardak içeriği için tagleri önemse
-      const cupTags = assets.cup.tags?.join(", ") || "";
-      assetDetails.push(`- Fincan/Bardak: ${assets.cup.filename} (Bu bardak KESİNLİKLE kullanılmalı). İÇERİK: "${cupTags}" olarak doldur (örn: orange juice ise portakal suyu, boş ise çay).`);
-    }
-    if (assets?.surface?.filename) {
-      assetDetails.push(`- Yüzey/Masa: ${assets.surface.filename}`);
-    }
-    if (assets?.composition?.filename) {
-      assetDetails.push(`- Kompozisyon: ${assets.composition.filename}`);
-    }
-    if (assets?.accessory?.filename) {
-      assetDetails.push(`- Aksesuar: ${assets.accessory.filename} (Tip: ${assets.accessory.subType || "billi değil"}).`);
+
+    for (const [assetKey, config] of Object.entries(ASSET_CONFIG)) {
+      const asset = assets?.[assetKey];
+      if (!asset?.filename) continue;
+
+      // product her zaman eklenir, diğerleri assetSelectionRules'a bağlı
+      if (assetKey !== "product" && assetSelectionRules) {
+        const rule = assetSelectionRules[assetKey as keyof typeof assetSelectionRules];
+        if (!rule?.enabled) continue;
+      }
+
+      const tags = asset.tags?.join(", ") || "";
+      const tagInfo = tags ? ` Detaylar: ${tags}.` : "";
+      assetDetails.push(`- ${config.label}: ${asset.filename}.${tagInfo} ${config.instruction}`);
     }
 
     const assetSection = assetDetails.length > 0
-      ? `\n\nSEÇİLEN ASSETLER (Prompt'ta mutlaka kullan ve içeriklerini taglere göre tanımla):\n${assetDetails.join("\n")}`
+      ? `\n\nSEÇİLEN ASSETLER (Prompt'ta mutlaka kullan - ZERO HALLUCINATION):\n${assetDetails.join("\n")}`
       : "";
 
     const userPrompt = `

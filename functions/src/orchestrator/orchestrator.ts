@@ -919,7 +919,8 @@ export class Orchestrator {
           result.scenarioSelection!,
           result.assetSelection!,
           combinedHints, // Kullanıcı tanımlı kurallar + feedback'ler
-          productEatingMethod
+          productEatingMethod,
+          assetSelectionRules // Config'den gelen asset seçim kuralları
         );
 
         // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı)
