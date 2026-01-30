@@ -91,6 +91,9 @@ export {
   // Business Context
   getBusinessContextConfig,
   updateBusinessContextConfig,
+  // Asset Selection Config
+  getAssetSelectionConfigEndpoint,
+  updateAssetSelectionConfigEndpoint,
   // Prompt Studio
   getPromptStudioConfig,
   getPromptTemplateById,
