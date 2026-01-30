@@ -81,7 +81,12 @@
       "Bash(/tmp/google-cloud-sdk/bin/gcloud auth login:*)",
       "WebFetch(domain:ai.google.dev)",
       "Skill(superpowers:brainstorming)",
-      "Bash(pushd:*)"
+      "Bash(pushd:*)",
+      "Bash(where:*)",
+      "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" --version)",
+      "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only functions,hosting)",
+      "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only functions)",
+      "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only functions:getAssetSelectionConfigEndpoint,functions:updateAssetSelectionConfigEndpoint)"
     ]
   },
   "hooks": {
