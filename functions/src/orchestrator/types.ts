@@ -726,6 +726,35 @@ export interface OrchestratorConfig {
 // VARIATION & RULES TYPES
 // ==========================================
 
+export type RuleType = "include" | "exclude" | "prefer" | "avoid";
+
+
+
+export interface PatronRule {
+  id: string;
+  name: string;
+  description?: string;
+  type: RuleType;
+  target: RuleTarget;
+  conditions: RuleCondition[];
+  priority: number;           // 1-100, yüksek = öncelikli
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type RuleTarget =
+  | { type: "asset"; assetId: string }
+  | { type: "category"; category: AssetCategory }
+  | { type: "tag"; tag: string }
+  | { type: "tags"; tags: string[]; matchMode: "all" | "any" };
+
+export interface RuleCondition {
+  field: "productType" | "mood" | "timeOfDay" | "scenario" | "season";
+  operator: "eq" | "neq" | "in" | "notIn" | "contains";
+  value: string | string[];
+}
+
 /**
  * Çeşitlilik kuralları
  */
@@ -845,6 +874,7 @@ export interface EffectiveRules {
   blockedProducts: string[];    // Son N üretimde kullanılan ürünler
   blockedPlates: string[];      // Son N üretimde kullanılan tabaklar
   blockedCups: string[];        // Son N üretimde kullanılan fincanlar
+  patronRules: PatronRule[];
 }
 
 // ==========================================
@@ -1192,14 +1222,69 @@ export interface FirestoreTimeoutsConfig {
   updatedBy?: string;
 }
 
+// ==========================================
+// RULE ENGINE CONFIG TYPES
+// ==========================================
+
+
+
+export interface FilterThresholds {
+  default: number;           // Varsayılan: 70
+  products: number;
+  tables: number;
+  plates: number;
+  cups: number;
+  accessories: number;
+  napkins: number;
+  cutlery: number;
+}
+
+export interface FirestoreRuleEngineConfig {
+  thresholds: FilterThresholds;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+export interface ScoringWeights {
+  tagMatch: {
+    weight: number;          // Varsayılan: 40
+    exactMatchBonus: number; // Varsayılan: 10
+    partialMatchBonus: number; // Varsayılan: 5
+  };
+  usageBonus: {
+    weight: number;          // Varsayılan: 20
+    formula: "linear" | "logarithmic" | "inverse";
+    maxBonus: number;
+  };
+  moodMatch: {
+    weight: number;          // Varsayılan: 20
+    moodTags: Record<string, string[]>;
+  };
+  productCompat: {
+    weight: number;          // Varsayılan: 20
+    matrix: CompatibilityMatrix;
+  };
+}
+
+export interface CompatibilityMatrix {
+  [productType: string]: {
+    preferredTables: string[];   // Tag'ler: ["wooden", "marble"]
+    avoidTables: string[];
+    preferredPlates: string[];
+    avoidPlates: string[];
+    preferredCups: string[];
+    avoidCups: string[];
+  };
+}
+
 /**
  * Tüm global config'leri birleştiren tip
  * Orchestrator başlatılırken bu tip kullanılır
  */
 export interface GlobalOrchestratorConfig {
-  scenarios: FirestoreScenario[];
-  handStyles: FirestoreHandStyle[];
-  assetPersonalities: FirestoreAssetPersonality[];
+  scenarios: Scenario[];
+  handStyles: HandStyle[];
+  assetPersonalities: AssetPersonality[];
   diversityRules: FirestoreDiversityRules;
   timeMoodConfig: FirestoreTimeMoodConfig;
   weeklyThemes: FirestoreWeeklyThemesConfig;
@@ -1208,12 +1293,13 @@ export interface GlobalOrchestratorConfig {
   timeouts: FirestoreTimeoutsConfig;
   systemSettings: FirestoreSystemSettingsConfig;
   fixedAssets: FirestoreFixedAssetsConfig;
-  promptStudio: FirestorePromptStudioConfig;  // Config-driven system prompts
-  categories: FirestoreCategoriesConfig;  // Dinamik kategoriler
-  businessContext: FirestoreBusinessContextConfig;  // İşletme bağlamı (SaaS uyumlu)
-  assetSelectionConfig: FirestoreAssetSelectionConfig;  // Asset seçim kuralları (manuel/otomatik)
+  businessContext: FirestoreBusinessContextConfig;
+  assetSelectionConfig: FirestoreAssetSelectionConfig;
+  promptStudio: FirestorePromptStudioConfig;
+  // NEW: Rule Engine
+  ruleEngine: FirestoreRuleEngineConfig;
 
-  // Cache bilgisi
+  categories: FirestoreCategoriesConfig;  // Dinamik kategoriler
   loadedAt: number;
   version: string;
 }
@@ -1764,3 +1850,5 @@ export interface Style {
   createdAt: number;
   updatedAt: number;
 }
+
+

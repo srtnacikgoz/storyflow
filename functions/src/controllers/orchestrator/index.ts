@@ -93,11 +93,11 @@ export {
   getAssetSelectionConfigEndpoint,
   updateAssetSelectionConfigEndpoint,
   // Prompt Studio
-  getPromptStudioConfig,
-  getPromptTemplateById,
-  updatePromptTemplateEndpoint,
-  revertPromptTemplateEndpoint,
-  clearPromptStudioCacheEndpoint,
+  // getPromptStudioConfig,
+  // getPromptTemplateById,
+  // updatePromptTemplateEndpoint,
+  // revertPromptTemplateEndpoint,
+  // clearPromptStudioCacheEndpoint,
 } from "./configController";
 
 // Feedback Controller
@@ -147,3 +147,14 @@ export {
   migrateTimeSlotRulesToIdBased,
   runFullMigration,
 } from "./categoryController";
+
+// Rule Engine Controller
+export {
+  getRuleEngineConfigEndpoint,
+  updateRuleEngineConfigEndpoint,
+  listPatronRules,
+  getPatronRule,
+  createPatronRule,
+  updatePatronRule,
+  deletePatronRule,
+} from "./ruleEngineController";

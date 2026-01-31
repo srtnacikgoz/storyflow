@@ -27,11 +27,29 @@ import {
   FirestoreSystemSettingsConfig,
   FirestoreFixedAssetsConfig,
   FirestoreBusinessContextConfig,
-  FirestoreAssetSelectionConfig,
+  FirestoreAssetSelectionConfig, // Restored
   FirestorePromptStudioConfig,
   PromptTemplate,
   CompositionVariant,
+  FirestoreRuleEngineConfig,
 } from "../types";
+
+// ==========================================
+// RULE ENGINE CONFIG (YENİ)
+// ==========================================
+
+export const DEFAULT_RULE_ENGINE_CONFIG: Omit<FirestoreRuleEngineConfig, "updatedAt"> = {
+  thresholds: {
+    default: 50,
+    products: 50,
+    tables: 50,
+    plates: 50,
+    cups: 50,
+    accessories: 50,
+    napkins: 50,
+    cutlery: 50,
+  },
+};
 
 // ==========================================
 // SENARYOLAR
@@ -1081,6 +1099,10 @@ export function getAllSeedData() {
           { ...template, updatedAt: timestamp },
         ])
       ),
+      updatedAt: timestamp,
+    },
+    ruleEngineConfig: {
+      ...DEFAULT_RULE_ENGINE_CONFIG,
       updatedAt: timestamp,
     },
   };

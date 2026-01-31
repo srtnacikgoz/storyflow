@@ -31,6 +31,26 @@ import {
   QualityControlResult,
   OrchestratorConfig,
 } from "./types";
+import { SelectionContext, RuleEngineConfig } from "./ruleEngine/types";
+import { RuleEngine, AuditLogger } from "./ruleEngine"; // We need to create this file or define constants inline. I'll define constants inline for now.
+
+const DEFAULT_SCORING_WEIGHTS_CONST = {
+  tagMatch: { weight: 40, exactMatchBonus: 10, partialMatchBonus: 5 },
+  usageBonus: { weight: 20, formula: "linear" as const, maxBonus: 20 },
+  moodMatch: { weight: 20, moodTags: {} },
+  productCompat: { weight: 20, matrix: {} },
+};
+
+const DEFAULT_THRESHOLDS_CONST = {
+  default: 50, // Lower threshold for testing start
+  products: 50,
+  tables: 50,
+  plates: 50,
+  cups: 50,
+  accessories: 50,
+  napkins: 50,
+  cutlery: 50,
+};
 
 /**
  * Undefined değerleri recursive olarak temizle (Firestore uyumluluğu için)
@@ -69,6 +89,7 @@ export class Orchestrator {
   private reve: ReveService | null = null;
   private telegram: TelegramService;
   private rulesService: RulesService;
+  private auditLogger: AuditLogger;
   private config: OrchestratorConfig;
   private imageProvider: "gemini" | "reve";
 
@@ -107,6 +128,7 @@ export class Orchestrator {
       approvalTimeout: config.approvalTimeout,
     });
     this.rulesService = new RulesService();
+    this.auditLogger = new AuditLogger();
   }
 
   /**
@@ -569,10 +591,6 @@ export class Orchestrator {
 
       // Aksesuar kontrolü - tema izin vermiyorsa accessories'i gönderme
       const accessoryAllowed = themeData?.accessoryAllowed === true;
-      const assetsForSelection = {
-        ...assets,
-        accessories: accessoryAllowed ? assets.accessories : [],
-      };
 
       if (accessoryAllowed && assets.accessories.length > 0) {
         console.log(`[Orchestrator] Accessory allowed - ${assets.accessories.length} accessories available`);
@@ -590,15 +608,92 @@ export class Orchestrator {
 
       console.log(`[Orchestrator] Asset selection mode: ${actualIsManual ? "MANUAL" : "SCHEDULED"}`);
 
+      // ==========================================
+      // RULE ENGINE INTEGRATION (v3.0 deterministic)
+      // ==========================================
+
+      // 1. Rule Engine Config Hazırla
+      const ruleEngineConfig: RuleEngineConfig = {
+        scoringWeights: DEFAULT_SCORING_WEIGHTS_CONST,
+        thresholds: DEFAULT_THRESHOLDS_CONST,
+        strictBlocking: !actualIsManual, // Manuel modda strict blocking kapalı olabilir
+        fallbackToRandom: true,
+        fallbackToHighestScore: true,
+        logWhenFallback: true,
+        patronRules: effectiveRules.patronRules,
+        enableScoring: true,
+        enablePatronRules: true,
+        enablePostValidation: true,
+        enableAuditLog: true,
+        version: "1.0.0",
+        updatedAt: Date.now(),
+      };
+
+      const ruleEngine = new RuleEngine(ruleEngineConfig);
+
+      // 2. Context Oluştur
+      const selectionContext: SelectionContext = {
+        productType,
+        mood,
+        timeOfDay,
+        effectiveRules,
+        assetSelectionRules,
+        season: "winter", // TODO: Dynamic season
+      };
+
+      // 3. Pre-Filter (Blocked/Inactive eleme)
+      const preFilterResult = await ruleEngine.preFilter(assets, selectionContext);
+      console.log(`[RuleEngine] Pre-filter: ${preFilterResult.stats.totalInput} -> ${preFilterResult.stats.totalRemaining} candidates`);
+
+      // 4. Scoring (Puanlama)
+      const scoredAssets = ruleEngine.scoreAll(preFilterResult.candidates, selectionContext);
+
+      // 5. Threshold (Eşik Altı Eleme)
+      const qualifiedAssets = ruleEngine.applyThreshold(scoredAssets);
+
+      // Log qualified counts
+      Object.entries(qualifiedAssets).forEach(([cat, list]: [string, any]) => {
+        if (list.length > 0) console.log(`[RuleEngine] Qualified ${cat}: ${list.length} items (Top: ${list[0].id} - ${list[0].score})`);
+      });
+
+      // 6. Gemini Selection (Optimization from qualified candidates)
+      // Gemini'ye sadece qualified asset'leri gönderiyoruz
       const assetResponse = await this.gemini.selectAssets(
         productType,
-        assetsForSelection,
+        qualifiedAssets, // PRE-FILTERED & SCORED List
         timeOfDay,
         mood,
-        effectiveRules,  // Çeşitlilik kurallarını gönder (köpek dahil mi, bloklu masalar, vb.)
-        fixedAssets,     // Sabit asset konfigürasyonu (mermer masa sabit vb.)
-        assetSelectionRules  // Asset seçim kuralları (zorunlu/hariç kategoriler)
+        effectiveRules,
+        fixedAssets,
+        assetSelectionRules
       );
+
+      // 7. Post-Validation (Safety Check)
+      let validationResult: any = { valid: true, violations: [], auditEntries: [] };
+      if (assetResponse.success && assetResponse.data) {
+        validationResult = ruleEngine.validateSelection(
+          assetResponse.data,
+          qualifiedAssets,
+          selectionContext
+        );
+
+        if (!validationResult.valid) {
+          console.warn("[RuleEngine] Validation violations:", validationResult.violations.map((v: any) => v.message));
+          if (validationResult.correctedSelection) {
+            console.log("[RuleEngine] Applying corrected selection");
+            assetResponse.data = validationResult.correctedSelection;
+          }
+        }
+      }
+
+      // 8. Audit Logging
+      await this.auditLogger.logSelectionDecision(pipelineId, {
+        preFilter: preFilterResult,
+        scoring: scoredAssets,
+        qualified: qualifiedAssets,
+        selection: assetResponse.data || {} as any,
+        validation: validationResult,
+      });
 
       // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı, maliyet oluştu)
       totalCost += assetResponse.cost || 0;

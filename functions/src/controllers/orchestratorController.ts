@@ -140,6 +140,15 @@ export {
   // Migration endpoints
   migrateTimeSlotRulesToIdBased,
   runFullMigration,
+
+  // Rule Engine Endpoints
+  getRuleEngineConfigEndpoint,
+  updateRuleEngineConfigEndpoint,
+  listPatronRules,
+  getPatronRule,
+  createPatronRule,
+  updatePatronRule,
+  deletePatronRule,
 } from "./orchestrator";
 
 // Direct export for Visual Critic (to avoid export issues)

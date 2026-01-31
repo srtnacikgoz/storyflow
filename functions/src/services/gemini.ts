@@ -603,7 +603,8 @@ KULLANILABİLİR LİSTELER AŞAĞIDADIR.`;
     if (rules.accessory.enabled) {
       userPromptParts.push(`DEKORLAR/AKSESUARLAR: ${JSON.stringify([
         ...(availableAssets.props || []),
-        ...(availableAssets.accessories || [])
+        ...(availableAssets.accessories || []),
+        ...(availableAssets.decor || [])
       ].map((a: any) => ({
         id: a.id,
         filename: a.filename,

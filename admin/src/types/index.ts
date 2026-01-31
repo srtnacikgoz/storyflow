@@ -1,4 +1,4 @@
-// Kuyruk item durumu
+// Kuyruk item durumu (Updated)
 export type QueueStatus = "pending" | "processing" | "scheduled" | "completed" | "failed";
 
 // Zamanlama modu
@@ -348,7 +348,7 @@ export interface CalendarData {
 
 // Asset kategorileri
 // Asset kategorileri
-export type AssetCategory = "products" | "props" | "furniture" | "environments" | "pets" | "interior" | "accessories";
+export type AssetCategory = "products" | "props" | "furniture" | "environments" | "pets" | "interior" | "accessories" | "tables" | "plates" | "cups" | "cutlery" | "napkins" | "decor";
 
 // Interior tipleri (mekan atmosferi - AI üretimi yapılmaz)
 export type InteriorType = "vitrin" | "tezgah" | "oturma-alani" | "dekorasyon" | "genel-mekan";
@@ -800,22 +800,75 @@ export interface DecisionDetails {
   selectedScenario?: {
     id: string;
     name: string;
-    description?: string;
-    includesHands: boolean;
-    handStyle?: string;
-    compositionId?: string;
-    compositionNotes?: string;
-    reason?: string;
   };
-  promptDetails?: {
-    mainPrompt: string;
-    negativePrompt?: string;
-    customizations?: string[];
-    referenceImages?: Array<{
-      type: string;
-      filename: string;
-    }>;
+}
+
+// ==========================================
+// Rule Engine Types
+// ==========================================
+
+export type RuleType = "exclude" | "prefer" | "avoid";
+export type RuleTargetType = "tag" | "category";
+
+export interface RuleTarget {
+  type: RuleTargetType;
+  tag?: string;
+  category?: AssetCategory;
+}
+
+export interface RuleCondition {
+  field: string;
+  operator: "equals" | "contains" | "greater_than" | "less_than";
+  value: any;
+}
+
+export interface PatronRule {
+  id: string;
+  name: string;
+  type: RuleType;
+  target: RuleTarget;
+  conditions: RuleCondition[];
+  priority: number;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FilterThresholds {
+  default: number;
+  products: number;
+  tables: number;
+  plates: number;
+  cups: number;
+  accessories: number;
+  [key: string]: number;
+}
+export type CategoryThresholds = FilterThresholds;
+
+export interface ScoringWeights {
+  tags: number;
+  usage: number;
+  mood: number;
+  productCompat: number;
+}
+
+export interface ProductCompatibilityConfig {
+  weight: number;
+  matrix: Record<string, {
+    preferredTags: string[];
+    avoidedTags: string[];
+  }>;
+}
+
+export interface FirestoreRuleEngineConfig {
+  thresholds: FilterThresholds;
+  weights: {
+    scoring: ScoringWeights;
+    productCompat: ProductCompatibilityConfig;
   };
+  patronRules?: PatronRule[];
+  version?: string;
+  updatedAt: number;
 }
 
 // Retry Info tipi
@@ -1206,3 +1259,5 @@ export interface VisualCriticResponse {
   suggestions: string[];
   refined_prompt?: string;
 }
+
+

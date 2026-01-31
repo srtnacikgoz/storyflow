@@ -29,11 +29,12 @@ import {
   updatePromptTemplate as updatePromptTemplateService,
   revertPromptTemplate as revertPromptTemplateService,
   clearPromptStudioCache,
+
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
-import { PromptStageId } from "../../orchestrator/types";
+
 import { getGeminiTerminologySeedData } from "../../orchestrator/seed/geminiTerminologyData";
-import { FirestoreDiversityRules } from "../../orchestrator/types";
+import { FirestoreDiversityRules, PromptStageId } from "../../orchestrator/types";
 
 // Firestore path sabitleri
 const CONFIG_COLLECTION = "global";
@@ -734,7 +735,7 @@ export const getGeminiPresets = functions
         ]);
 
         // Sonuçları dönüştür - sortOrder'a göre sırala
-        type PresetDoc = { id: string; sortOrder?: number; [key: string]: unknown };
+        type PresetDoc = { id: string; sortOrder?: number;[key: string]: unknown };
         const sortByOrder = (a: PresetDoc, b: PresetDoc) => (a.sortOrder || 0) - (b.sortOrder || 0);
 
         const lightingPresets: PresetDoc[] = lightingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1037,7 +1038,8 @@ export const updateBusinessContextConfig = functions
   });
 
 // ==========================================
-// PROMPT STUDIO ENDPOINTS
+// ==========================================
+// PROMPT STUDIO ENDPOINTS (Temporarily Disabled - Missing Service Refs)
 // ==========================================
 
 // Geçerli stage ID'leri

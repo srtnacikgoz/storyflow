@@ -21,6 +21,7 @@ const Moods = lazy(() => import("./pages/Moods"));
 const Categories = lazy(() => import("./pages/Categories"));
 const Styles = lazy(() => import("./pages/Styles"));
 const PromptStudio = lazy(() => import("./pages/PromptStudio"));
+const RuleEngine = lazy(() => import("./pages/RuleEngine"));
 
 // Loading fallback component
 function PageLoader() {
@@ -53,7 +54,9 @@ function App() {
             <Route path="moods" element={<Suspense fallback={<PageLoader />}><Moods /></Suspense>} />
             <Route path="categories" element={<Suspense fallback={<PageLoader />}><Categories /></Suspense>} />
             <Route path="styles" element={<Suspense fallback={<PageLoader />}><Styles /></Suspense>} />
+            <Route path="styles" element={<Suspense fallback={<PageLoader />}><Styles /></Suspense>} />
             <Route path="prompt-studio" element={<Suspense fallback={<PageLoader />}><PromptStudio /></Suspense>} />
+            <Route path="rule-engine" element={<Suspense fallback={<PageLoader />}><RuleEngine /></Suspense>} />
           </Route>
         </Routes>
         {/* Global loading indicator */}

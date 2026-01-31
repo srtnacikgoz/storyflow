@@ -47,7 +47,11 @@ import type {
   PromptTemplate,
   PromptStageId,
   VisualCriticRequest,
+
   VisualCriticResponse,
+  // Rule Engine
+  FirestoreRuleEngineConfig,
+  PatronRule,
 } from "../types";
 
 // Firebase Functions base URL
@@ -2300,6 +2304,96 @@ class ApiService {
       body: JSON.stringify(data),
     });
     return response.data;
+  }
+
+
+  // ==========================================
+  // Rule Engine (Phase 3)
+  // ==========================================
+
+  /**
+   * Rule Engine Config (Eşik değerleri vb.)
+   */
+  async getRuleEngineConfig(): Promise<FirestoreRuleEngineConfig> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: FirestoreRuleEngineConfig;
+    }>("getRuleEngineConfigEndpoint");
+    return response.data;
+  }
+
+  /**
+   * Rule Engine Config Güncelle
+   */
+  async updateRuleEngineConfig(config: Partial<FirestoreRuleEngineConfig>): Promise<FirestoreRuleEngineConfig> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: FirestoreRuleEngineConfig;
+    }>("updateRuleEngineConfigEndpoint", {
+      method: "POST",
+      body: JSON.stringify(config),
+    });
+    return response.data;
+  }
+
+  /**
+   * Patron Kurallarını Listele
+   */
+  async listPatronRules(includeInactive = false): Promise<PatronRule[]> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: PatronRule[];
+    }>(`listPatronRules?includeInactive=${includeInactive}`);
+    return response.data;
+  }
+
+  /**
+   * Patron Kuralı Getir
+   */
+  async getPatronRule(id: string): Promise<PatronRule> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: PatronRule;
+    }>(`getPatronRule?id=${id}`);
+    return response.data;
+  }
+
+  /**
+   * Yeni Patron Kuralı Oluştur
+   */
+  async createPatronRule(rule: Omit<PatronRule, "id" | "createdAt" | "updatedAt">): Promise<PatronRule> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: PatronRule;
+    }>("createPatronRule", {
+      method: "POST",
+      body: JSON.stringify(rule),
+    });
+    return response.data;
+  }
+
+  /**
+   * Patron Kuralı Güncelle
+   */
+  async updatePatronRule(id: string, updates: Partial<PatronRule>): Promise<PatronRule> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: PatronRule;
+    }>("updatePatronRule", {
+      method: "POST",
+      body: JSON.stringify({ id, ...updates }),
+    });
+    return response.data;
+  }
+
+  /**
+   * Patron Kuralı Sil
+   */
+  async deletePatronRule(id: string): Promise<void> {
+    await this.fetch("deletePatronRule", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
   }
 }
 

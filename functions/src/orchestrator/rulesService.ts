@@ -13,6 +13,7 @@ import {
   OrchestratorRules,
   DynamicConfig,
   EffectiveRules,
+  PatronRule,
   RecentHistory,
   VariationRules,
   Scenario,
@@ -502,10 +503,11 @@ export class RulesService {
    * Tüm kuralları birleştir ve etkili kuralları hesapla
    */
   async getEffectiveRules(): Promise<EffectiveRules> {
-    const [staticRules, dynamicConfig, recentHistory] = await Promise.all([
+    const [staticRules, dynamicConfig, recentHistory, patronRules] = await Promise.all([
       this.loadStaticRules(),
       this.loadDynamicConfig(),
       this.loadRecentHistory(),
+      this.loadPatronRules(),
     ]);
 
     const { variationRules } = dynamicConfig;
@@ -555,7 +557,100 @@ export class RulesService {
       blockedProducts,
       blockedPlates,
       blockedCups,
+      patronRules,
     };
+  }
+
+  /**
+   * Patron rules yükle (aktif olanlar)
+   */
+  /**
+   * Patron rules yükle (aktif olanlar) - Orchestrator için
+   */
+  async loadPatronRules(): Promise<PatronRule[]> {
+    try {
+      const snapshot = await this.db.collection("patron-rules")
+        .where("isActive", "==", true)
+        .orderBy("priority", "desc")
+        .get();
+
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as PatronRule[];
+    } catch (error) {
+      console.error("[RulesService] Error loading patron rules:", error);
+      return [];
+    }
+  }
+
+  // ==========================================
+  // PATRON RULES CRUD
+  // ==========================================
+
+  /**
+   * Tüm Patron Rule'ları listele (Admin UI için)
+   */
+  async listPatronRules(includeInactive = false): Promise<PatronRule[]> {
+    let query: FirebaseFirestore.Query = this.db.collection("patron-rules");
+
+    if (!includeInactive) {
+      query = query.where("isActive", "==", true);
+    }
+
+    const snapshot = await query.orderBy("priority", "desc").get();
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as PatronRule[];
+  }
+
+  /**
+   * Tek bir Patron Rule getir
+   */
+  async getPatronRule(id: string): Promise<PatronRule | null> {
+    const doc = await this.db.collection("patron-rules").doc(id).get();
+    if (!doc.exists) return null;
+    return { id: doc.id, ...doc.data() } as PatronRule;
+  }
+
+  /**
+   * Yeni Patron Rule oluştur
+   */
+  async createPatronRule(rule: Omit<PatronRule, "id" | "createdAt" | "updatedAt">): Promise<PatronRule> {
+    const now = Date.now();
+    const newRule = {
+      ...rule,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const docRef = await this.db.collection("patron-rules").add(newRule);
+
+    // Cache'i temizle (Orchestrator hemen görsün)
+    this.clearCache();
+
+    return { id: docRef.id, ...newRule };
+  }
+
+  /**
+   * Patron Rule güncelle
+   */
+  async updatePatronRule(id: string, updates: Partial<PatronRule>): Promise<void> {
+    await this.db.collection("patron-rules").doc(id).update({
+      ...updates,
+      updatedAt: Date.now(),
+    });
+
+    this.clearCache();
+  }
+
+  /**
+   * Patron Rule sil
+   */
+  async deletePatronRule(id: string): Promise<void> {
+    await this.db.collection("patron-rules").doc(id).delete();
+    this.clearCache();
   }
 
   /**
