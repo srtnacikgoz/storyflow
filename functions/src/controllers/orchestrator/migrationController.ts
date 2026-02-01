@@ -118,9 +118,14 @@ export const runCloudinaryMigration = functions
         if (retryFailed) {
           // Sadece failed olanları al
           query = query.where("migrationStatus", "==", "failed");
+        } else {
+          // Migrated OLMAYAN asset'leri al (pending veya undefined)
+          // NOT: Firestore'da "!=" undefined'ı dahil etmez, bu yüzden
+          // daha fazla asset çekip JS'de filtreliyoruz
         }
 
-        const assetsSnapshot = await query.limit(batchSize).get();
+        // Daha fazla asset çek, JS'de filtrele (query sınırlaması nedeniyle)
+        const assetsSnapshot = await query.limit(batchSize * 5).get();
         const assets = assetsSnapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() } as Asset & { id: string }))
           .filter(asset => {
@@ -133,7 +138,8 @@ export const runCloudinaryMigration = functions
               return false;
             }
             return true;
-          });
+          })
+          .slice(0, batchSize); // İstenen batch size kadar al
 
         console.log(`[Migration] Found ${assets.length} assets to migrate`);
 
