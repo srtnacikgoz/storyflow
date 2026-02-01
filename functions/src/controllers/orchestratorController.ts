@@ -26,6 +26,7 @@ export {
   createAsset,
   updateAsset,
   deleteAsset,
+  uploadAssetToCloudinary, // Cloudinary upload endpoint
 
   // TimeSlot Controller
   listTimeSlotRules,
@@ -149,6 +150,16 @@ export {
   createPatronRule,
   updatePatronRule,
   deletePatronRule,
+
+  // Stats Controller
+  getQueueStats,
+  getUsageStats,
+
+  // Migration Controller (Cloudinary)
+  getMigrationStatus,
+  runCloudinaryMigration,
+  migrateSingleAsset,
+  resetMigration,
 } from "./orchestrator";
 
 // Direct export for Visual Critic (to avoid export issues)

@@ -508,6 +508,15 @@ export interface OrchestratorAsset {
   filename: string;
   storageUrl: string;
   thumbnailUrl?: string;
+
+  // Cloudinary (yeni - migration sonrası ana depolama)
+  cloudinaryPublicId?: string;    // "storyflow/assets/products/croissants/1706123456_croissant"
+  cloudinaryUrl?: string;         // "https://res.cloudinary.com/xxx/image/upload/..."
+  cloudinaryVersion?: number;     // Cache invalidation için
+
+  // Migration metadata
+  migrationStatus?: "pending" | "migrated" | "failed";
+  migratedAt?: number;
   visualProperties?: {
     dominantColors: string[];
     style: string;

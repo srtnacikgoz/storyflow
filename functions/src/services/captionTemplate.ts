@@ -33,7 +33,7 @@ export class CaptionTemplateService {
    * @return {Promise<CaptionTemplate[]>} Şablon listesi
    */
   async getAll(category?: ProductCategory): Promise<CaptionTemplate[]> {
-    let query = this.collection
+    const query = this.collection
       .where("isActive", "==", true)
       .orderBy("priority", "asc");
 

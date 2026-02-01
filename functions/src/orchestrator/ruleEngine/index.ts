@@ -4,10 +4,9 @@ export * from "./scorer";
 export * from "./postValidator";
 export * from "./auditLogger";
 
-import { PreFilter, preFilterAssets } from "./preFilter";
-import { ScoringEngine, scoreAllAssets, applyThreshold } from "./scorer";
-import { PostValidator, validateSelection } from "./postValidator";
-import { AuditLogger } from "./auditLogger";
+import { preFilterAssets } from "./preFilter";
+import { scoreAllAssets, applyThreshold } from "./scorer";
+import { validateSelection } from "./postValidator";
 import { RuleEngineConfig, SelectionContext } from "./types";
 
 /**

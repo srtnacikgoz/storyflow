@@ -75,10 +75,10 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Bakımlı el ürün tutuyor. Premium, şık görünüm.",
     includesHands: true,
     compositions: createCompositions([
-      "bottom-right",   // El sağ alt köşeden giriyor, ürün sol üstte
-      "bottom-left",    // El sol alt köşeden giriyor, ürün sağ üstte
-      "top-corner",     // El üst köşeden giriyor, ürün alt kısımda
-      "center-hold",    // Ürün ortada, el alttan tutuyor
+      "bottom-right", // El sağ alt köşeden giriyor, ürün sol üstte
+      "bottom-left", // El sol alt köşeden giriyor, ürün sağ üstte
+      "top-corner", // El üst köşeden giriyor, ürün alt kısımda
+      "center-hold", // Ürün ortada, el alttan tutuyor
     ]),
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
@@ -91,9 +91,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Eller fincan tutuyor, ürün ön planda. Sosyal, paylaşım odaklı.",
     includesHands: true,
     compositions: createCompositions([
-      "product-front",  // Ürün ön planda keskin, eller arkada bulanık
-      "product-side",   // Ürün yanda, eller diagonal pozisyonda
-      "overhead",       // Kuş bakışı, ürün ve fincan yan yana
+      "product-front", // Ürün ön planda keskin, eller arkada bulanık
+      "product-side", // Ürün yanda, eller diagonal pozisyonda
+      "overhead", // Kuş bakışı, ürün ve fincan yan yana
     ]),
     isActive: true,
     suggestedProducts: ["croissants", "pastas"],
@@ -106,9 +106,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "El kutu açıyor. Sürpriz, heyecan anı.",
     includesHands: true,
     compositions: createCompositions([
-      "box-center",     // Kutu ortada, eller açarken
-      "box-angled",     // Kutu açılı, kapak görünür
-      "unwrapping",     // Ambalaj açılma anı
+      "box-center", // Kutu ortada, eller açarken
+      "box-angled", // Kutu açılı, kapak görünür
+      "unwrapping", // Ambalaj açılma anı
     ]),
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
@@ -121,9 +121,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "El çatalla pasta alıyor. İştah açıcı, davetkar.",
     includesHands: true,
     compositions: createCompositions([
-      "fork-entering",  // Çatal pastaya giriyor
-      "slice-lifted",   // Dilim kaldırılmış
-      "mid-bite",       // Yarım alınmış dilim
+      "fork-entering", // Çatal pastaya giriyor
+      "slice-lifted", // Dilim kaldırılmış
+      "mid-bite", // Yarım alınmış dilim
     ]),
     isActive: true,
     suggestedProducts: ["pastas"],
@@ -140,9 +140,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Pencere önü, doğal ışık. Aydınlık, ferah atmosfer.",
     includesHands: false,
     compositions: createCompositions([
-      "window-left",    // Pencere solda
-      "window-right",   // Pencere sağda
-      "window-center",  // Ürün pencere ortasında
+      "window-left", // Pencere solda
+      "window-right", // Pencere sağda
+      "window-center", // Ürün pencere ortasında
     ]),
     isActive: true,
     suggestedProducts: ["croissants", "pastas", "coffees"],
@@ -155,9 +155,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Mermer yüzey, premium sunum. Lüks, sofistike.",
     includesHands: false,
     compositions: createCompositions([
-      "centered",             // Ürün merkeze
-      "diagonal",             // Çapraz yerleşim
-      "corner-composition",   // Köşe kompozisyonu
+      "centered", // Ürün merkeze
+      "diagonal", // Çapraz yerleşim
+      "corner-composition", // Köşe kompozisyonu
     ]),
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
@@ -170,9 +170,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Rahat köşe, cozy atmosfer. Samimi, ev sıcaklığı.",
     includesHands: false,
     compositions: createCompositions([
-      "cozy-corner",    // Rahat köşe düzeni
-      "reading-nook",   // Kitap/dergi ile
-      "pet-friendly",   // Köpek dahil edilebilir
+      "cozy-corner", // Rahat köşe düzeni
+      "reading-nook", // Kitap/dergi ile
+      "pet-friendly", // Köpek dahil edilebilir
     ]),
     isActive: true,
     suggestedProducts: ["croissants", "pastas", "coffees"],
@@ -185,8 +185,8 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Isırık alınmış, yarı dolu fincan. Wabi-sabi, yaşanmışlık.",
     includesHands: false,
     compositions: createCompositions([
-      "bitten-product",   // Isırık izi görünür
-      "half-eaten",       // Yarı yenmiş
+      "bitten-product", // Isırık izi görünür
+      "half-eaten", // Yarı yenmiş
       "crumbs-scattered", // Kırıntılar dağılmış
     ]),
     isActive: true,
@@ -200,9 +200,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "İki tabak, sosyal an. Birliktelik, paylaşım.",
     includesHands: false,
     compositions: createCompositions([
-      "two-plates",         // İki tabak yan yana
-      "sharing-moment",     // Paylaşım anı
-      "conversation",       // Sohbet ortamı
+      "two-plates", // İki tabak yan yana
+      "sharing-moment", // Paylaşım anı
+      "conversation", // Sohbet ortamı
     ]),
     isActive: true,
     suggestedProducts: ["pastas", "croissants"],
@@ -215,9 +215,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Kraft torba, takeaway. Pratik, hareket halinde.",
     includesHands: false,
     compositions: createCompositions([
-      "package-hero",     // Paket ana kahraman
-      "unboxing",         // Açılış anı
-      "takeaway-ready",   // Alıp gitmeye hazır
+      "package-hero", // Paket ana kahraman
+      "unboxing", // Açılış anı
+      "takeaway-ready", // Alıp gitmeye hazır
     ]),
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
@@ -234,9 +234,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Şık kutuda ürünler. Özel günler, hediye konsepti.",
     includesHands: false,
     compositions: createCompositions([
-      "box-open",           // Kutu açık, içi görünür
-      "ribbon-detail",      // Kurdele detayı
-      "gift-arrangement",   // Hediye düzeni
+      "box-open", // Kutu açık, içi görünür
+      "ribbon-detail", // Kurdele detayı
+      "gift-arrangement", // Hediye düzeni
     ]),
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
@@ -249,9 +249,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Kraft çanta, hareket halinde tüketim. Gündelik, pratik.",
     includesHands: true,
     compositions: createCompositions([
-      "bag-held",           // Çanta elde tutuluyor
-      "peek-inside",        // İçerisi görünüyor
-      "on-the-go",          // Hareket halinde
+      "bag-held", // Çanta elde tutuluyor
+      "peek-inside", // İçerisi görünüyor
+      "on-the-go", // Hareket halinde
     ]),
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
@@ -264,9 +264,9 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     description: "Çikolata/pasta kutusu açılış anı. Sürpriz, keşif.",
     includesHands: true,
     compositions: createCompositions([
-      "lid-lifting",        // Kapak kaldırılıyor
-      "first-peek",         // İlk bakış
-      "reveal-moment",      // Açılış anı
+      "lid-lifting", // Kapak kaldırılıyor
+      "first-peek", // İlk bakış
+      "reveal-moment", // Açılış anı
     ]),
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
@@ -460,18 +460,18 @@ export const DEFAULT_ASSET_PERSONALITIES: Omit<FirestoreAssetPersonality, "creat
 
 export const DEFAULT_DIVERSITY_RULES: Omit<FirestoreDiversityRules, "updatedAt"> = {
   // Minimum aralıklar
-  scenarioGap: 3,        // Aynı senaryo min 3 üretim sonra
-  tableGap: 2,           // Aynı masa min 2 üretim sonra
-  handStyleGap: 4,       // Aynı el stili min 4 üretim sonra
-  compositionGap: 5,     // Aynı kompozisyon min 5 üretim sonra
-  productGap: 3,         // Aynı ürün min 3 üretim sonra
-  plateGap: 2,           // Aynı tabak min 2 üretim sonra
-  cupGap: 2,             // Aynı fincan min 2 üretim sonra
+  scenarioGap: 3, // Aynı senaryo min 3 üretim sonra
+  tableGap: 2, // Aynı masa min 2 üretim sonra
+  handStyleGap: 4, // Aynı el stili min 4 üretim sonra
+  compositionGap: 5, // Aynı kompozisyon min 5 üretim sonra
+  productGap: 3, // Aynı ürün min 3 üretim sonra
+  plateGap: 2, // Aynı tabak min 2 üretim sonra
+  cupGap: 2, // Aynı fincan min 2 üretim sonra
 
   // Özel frekanslar
-  petFrequency: 15,      // Köpek her 15 üretimde bir
-  outdoorFrequency: 10,  // Dış mekan her 10 üretimde bir
-  wabiSabiFrequency: 5,  // Wabi-sabi her 5 üretimde bir
+  petFrequency: 15, // Köpek her 15 üretimde bir
+  outdoorFrequency: 10, // Dış mekan her 10 üretimde bir
+  wabiSabiFrequency: 5, // Wabi-sabi her 5 üretimde bir
 
   // Benzerlik eşiği
   similarityThreshold: 50, // Max %50 benzerlik
@@ -608,22 +608,22 @@ export const DEFAULT_BUSINESS_CONTEXT_CONFIG: Omit<FirestoreBusinessContextConfi
 export const DEFAULT_ASSET_SELECTION_CONFIG: Omit<FirestoreAssetSelectionConfig, "updatedAt"> = {
   // Manuel üretim - daha zengin sahne varsayılan
   manual: {
-    plate: { enabled: true },      // Tabak zorunlu
-    table: { enabled: true },      // Masa zorunlu
-    cup: { enabled: false },       // Fincan opsiyonel (hariç)
-    accessory: { enabled: true },  // Aksesuar zorunlu
-    napkin: { enabled: true },     // Peçete zorunlu
-    cutlery: { enabled: false },   // Çatal-bıçak hariç
+    plate: { enabled: true }, // Tabak zorunlu
+    table: { enabled: true }, // Masa zorunlu
+    cup: { enabled: false }, // Fincan opsiyonel (hariç)
+    accessory: { enabled: true }, // Aksesuar zorunlu
+    napkin: { enabled: true }, // Peçete zorunlu
+    cutlery: { enabled: false }, // Çatal-bıçak hariç
   },
 
   // Otomatik pipeline - daha minimal varsayılan
   scheduled: {
-    plate: { enabled: true },      // Tabak zorunlu
-    table: { enabled: true },      // Masa zorunlu
-    cup: { enabled: false },       // Fincan hariç
+    plate: { enabled: true }, // Tabak zorunlu
+    table: { enabled: true }, // Masa zorunlu
+    cup: { enabled: false }, // Fincan hariç
     accessory: { enabled: false }, // Aksesuar hariç
-    napkin: { enabled: false },    // Peçete hariç
-    cutlery: { enabled: false },   // Çatal-bıçak hariç
+    napkin: { enabled: false }, // Peçete hariç
+    cutlery: { enabled: false }, // Çatal-bıçak hariç
   },
 };
 

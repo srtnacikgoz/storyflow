@@ -234,19 +234,22 @@ export class PreFilter {
                     if (contextValue === cond.value) return false;
                     break;
                 case "in":
-                    if (!Array.isArray(cond.value) || !cond.value.includes(contextValue))
-                        return false;
+                    if (!Array.isArray(cond.value) || !cond.value.includes(contextValue)) {
+return false;
+}
                     break;
                 case "notIn":
-                    if (Array.isArray(cond.value) && cond.value.includes(contextValue))
-                        return false;
+                    if (Array.isArray(cond.value) && cond.value.includes(contextValue)) {
+return false;
+}
                     break;
                 case "contains":
                     if (
                         typeof contextValue !== "string" ||
                         !contextValue.includes(String(cond.value))
-                    )
-                        return false;
+                    ) {
+return false;
+}
                     break;
             }
         }
@@ -291,13 +294,14 @@ export class PreFilter {
             case "tag":
                 return (asset.tags || []).includes(target.tag);
 
-            case "tags":
+            case "tags": {
                 const assetTags = asset.tags || [];
                 if (target.matchMode === "all") {
                     return target.tags.every((t: string) => assetTags.includes(t));
                 } else {
                     return target.tags.some((t: string) => assetTags.includes(t));
                 }
+            }
 
             default:
                 return false;
@@ -315,7 +319,7 @@ export class PreFilter {
             .find((r) => r.type === "avoid" && r.isActive);
 
         // Uyumluluk matrisi yoksa geç
-        // NOT: Gerçek matris kontrolü Scorer içindedir, burada sadece 
+        // NOT: Gerçek matris kontrolü Scorer içindedir, burada sadece
         // kesinlikle uyumsuz olanları (patron "avoid" kuralları) kontrol ediyoruz.
         // Ancak planda "incompatible_product" logic'i var.
         // Şimdilik basit tutuyoruz, Scorer daha detaylı puan kıracak.
@@ -323,7 +327,7 @@ export class PreFilter {
         // Eğer PATRON avoid kuralı varsa ve "exclude" gibi davranması isteniyorsa burası kullanılabilir.
         // Ancak avoid kuralları genelde puan kırar (Scorer).
         // Burada sadece "exclude" kurallarına bakıyoruz.
-        // Geriye dönük uyumluluk için burayı şimdilik true dönüyoruz, 
+        // Geriye dönük uyumluluk için burayı şimdilik true dönüyoruz,
         // veya özel bir "HARD avoid" mantığı varsa ekleyebiliriz.
 
         return true;

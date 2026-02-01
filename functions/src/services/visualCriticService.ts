@@ -165,7 +165,6 @@ export class VisualCriticService {
             console.log(`[VisualCritic] Analysis complete. Score: ${data.score}`);
 
             return { success: true, data };
-
         } catch (error) {
             console.error("[VisualCritic] Error:", error);
             return { success: false, error: error instanceof Error ? error.message : "Unknown error" };

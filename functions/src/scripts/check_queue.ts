@@ -29,7 +29,6 @@ async function checkQueue() {
         scheduledSnapshot.forEach(doc => {
             console.log(`- ${doc.id}: ${JSON.stringify(doc.data().productName || 'No Name')}`);
         });
-
     } catch (error) {
         console.error('Error checking queue:', error);
     }

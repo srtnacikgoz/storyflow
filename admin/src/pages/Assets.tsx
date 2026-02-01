@@ -980,6 +980,9 @@ function AssetModal({
                         folder={`orchestrator-assets/${category}`}
                         onUploadComplete={handleUploadComplete}
                         onError={handleUploadError}
+                        assetCategory={category}
+                        assetSubType={subType}
+                        useCloudinary={true}
                       />
                     </div>
                   )}

@@ -117,7 +117,6 @@ export const analyzeImage = onRequest(
 
             // 5. Return Result
             res.status(200).json({ success: true, data: result.data });
-
         } catch (error) {
             console.error("[VisualCriticController] Error:", error);
             res.status(500).json({

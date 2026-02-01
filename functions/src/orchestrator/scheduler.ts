@@ -146,7 +146,6 @@ export class OrchestratorScheduler {
       console.log(`[Scheduler] Summary: ${result.triggered} triggered, ${result.skipped} skipped, ${result.errors.length} errors`);
 
       return result;
-
     } catch (error) {
       console.error("[Scheduler] Fatal error:", error);
       throw error;
@@ -316,7 +315,6 @@ export class OrchestratorScheduler {
       // Bkz: orchestrator.ts satır 550-565 (addToHistory + incrementAssetUsageCounts)
 
       console.log(`[Scheduler] Pipeline completed for slot ${slotId}`);
-
     } catch (error) {
       console.error(`[Scheduler] Pipeline failed for slot ${slotId}:`, error);
 

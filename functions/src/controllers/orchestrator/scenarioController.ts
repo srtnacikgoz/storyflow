@@ -125,10 +125,10 @@ export const createScenario = functions
           name,
           description,
           includesHands,
-          compositionId,     // Yeni: Tekli kompozisyon seçimi (v2.0)
+          compositionId, // Yeni: Tekli kompozisyon seçimi (v2.0)
           compositionEntry,
           handPose,
-          compositions,      // Deprecated: Eski çoklu seçim (geriye uyumluluk)
+          compositions, // Deprecated: Eski çoklu seçim (geriye uyumluluk)
           isInterior,
           interiorType,
           suggestedProducts,
@@ -177,7 +177,7 @@ export const createScenario = functions
           name,
           description,
           includesHands: includesHands ?? false,
-          compositionId: effectiveCompositionId,  // Yeni: Tekli kompozisyon (v2.0)
+          compositionId: effectiveCompositionId, // Yeni: Tekli kompozisyon (v2.0)
           isActive: true,
           isInterior: isInterior ?? false,
           // Opsiyonel alanları sadece tanımlı ise ekle

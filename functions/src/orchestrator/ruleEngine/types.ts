@@ -23,12 +23,12 @@ export {
 };
 
 export type RemovalReason =
-    | "blocked_by_diversity"     // Çeşitlilik kuralı
-    | "blocked_by_patron_rule"   // PATRON SAYFA kuralı
-    | "inactive"                 // isActive: false
-    | "incompatible_product"     // Ürün tipiyle uyumsuz
-    | "threshold_not_met"        // Skor eşiği altında
-    | "manual_exclude";          // Manuel hariç tutma
+    | "blocked_by_diversity" // Çeşitlilik kuralı
+    | "blocked_by_patron_rule" // PATRON SAYFA kuralı
+    | "inactive" // isActive: false
+    | "incompatible_product" // Ürün tipiyle uyumsuz
+    | "threshold_not_met" // Skor eşiği altında
+    | "manual_exclude"; // Manuel hariç tutma
 
 export type AuditAction =
     | "included"
@@ -49,19 +49,19 @@ export interface ScoringResult {
     assetId: string;
     assetName: string;
     category: AssetCategory;
-    score: number;             // 0-100
+    score: number; // 0-100
     breakdown: ScoreBreakdown;
     passesThreshold: boolean;
-    appliedRules: string[];    // Uygulanan PATRON rule ID'leri
+    appliedRules: string[]; // Uygulanan PATRON rule ID'leri
 }
 
 export interface ScoreBreakdown {
-    tagMatch: number;          // 0-40
-    usageBonus: number;        // 0-20
-    moodMatch: number;         // 0-20
-    productCompat: number;     // 0-20
-    patronBonus: number;       // PATRON prefer kurallarından bonus
-    patronPenalty: number;     // PATRON avoid kurallarından ceza
+    tagMatch: number; // 0-40
+    usageBonus: number; // 0-20
+    moodMatch: number; // 0-20
+    productCompat: number; // 0-20
+    patronBonus: number; // PATRON prefer kurallarından bonus
+    patronPenalty: number; // PATRON avoid kurallarından ceza
     total: number;
 }
 
@@ -109,7 +109,7 @@ export interface RemovedAsset {
     assetName: string;
     category: AssetCategory;
     reason: RemovalReason;
-    ruleId?: string;           // Hangi kural nedeniyle çıkarıldı
+    ruleId?: string; // Hangi kural nedeniyle çıkarıldı
     ruleName?: string;
     timestamp: number;
 }
@@ -208,8 +208,8 @@ export interface RuleEngineConfig {
     thresholds: FilterThresholds;
 
     // Behavior
-    strictBlocking: boolean;        // true = kesinlikle geçirme
-    fallbackToRandom: boolean;      // threshold altında random seç
+    strictBlocking: boolean; // true = kesinlikle geçirme
+    fallbackToRandom: boolean; // threshold altında random seç
     fallbackToHighestScore: boolean; // veya en yüksek skorluyu seç
     logWhenFallback: boolean;
 

@@ -123,8 +123,8 @@ export const loadDashboardData = onRequest(
           db.collection("scheduled-slots").orderBy("createdAt", "desc").limit(slotsLimit).get(),
           db.collection("pipeline-results").orderBy("startedAt", "desc").limit(500).get(), // limit artırıldı
           db.collection("themes").orderBy("name").get(),
-          AILogService.getStats(24),   // Son 24 saat
-          AILogService.getStats(720),  // Son 30 gün (720 saat)
+          AILogService.getStats(24), // Son 24 saat
+          AILogService.getStats(720), // Son 30 gün (720 saat)
         ]);
 
         // Stats hesapla

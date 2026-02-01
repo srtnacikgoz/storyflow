@@ -280,19 +280,22 @@ export class ScoringEngine {
                     if (contextValue === cond.value) return false;
                     break;
                 case "in":
-                    if (!Array.isArray(cond.value) || !cond.value.includes(contextValue))
-                        return false;
+                    if (!Array.isArray(cond.value) || !cond.value.includes(contextValue)) {
+return false;
+}
                     break;
                 case "notIn":
-                    if (Array.isArray(cond.value) && cond.value.includes(contextValue))
-                        return false;
+                    if (Array.isArray(cond.value) && cond.value.includes(contextValue)) {
+return false;
+}
                     break;
                 case "contains":
                     if (
                         typeof contextValue !== "string" ||
                         !contextValue.includes(String(cond.value))
-                    )
-                        return false;
+                    ) {
+return false;
+}
                     break;
             }
         }
@@ -324,13 +327,14 @@ export class ScoringEngine {
                 return category === target.category;
             case "tag":
                 return (asset.tags || []).includes(target.tag);
-            case "tags":
+            case "tags": {
                 const assetTags = asset.tags || [];
                 if (target.matchMode === "all") {
                     return target.tags.every((t: string) => assetTags.includes(t));
                 } else {
                     return target.tags.some((t: string) => assetTags.includes(t));
                 }
+            }
             default:
                 return false;
         }

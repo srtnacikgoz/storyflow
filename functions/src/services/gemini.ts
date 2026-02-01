@@ -53,7 +53,7 @@ async function getSafetySettings() {
 /**
  * Gemini model tipleri (Ocak 2026 - Sadece Gemini 3 Serisi)
  * - gemini-3-pro-preview: Flagship Logic modeli
- * - gemini-3-flash-preview: High-speed Logic modeli  
+ * - gemini-3-flash-preview: High-speed Logic modeli
  * - gemini-3-pro-image-preview: Nano Banana Pro (Vision/Image)
  */
 export type GeminiModel =
@@ -66,8 +66,8 @@ export type GeminiModel =
  */
 export interface GeminiConfig {
   apiKey: string;
-  imageModel?: GeminiModel;  // Görsel üretim modeli (varsayılan: gemini-3-pro-image-preview)
-  textModel?: GeminiModel;   // Mantık/Logic modeli (varsayılan: gemini-3-pro-preview)
+  imageModel?: GeminiModel; // Görsel üretim modeli (varsayılan: gemini-3-pro-image-preview)
+  textModel?: GeminiModel; // Mantık/Logic modeli (varsayılan: gemini-3-pro-preview)
 }
 
 /**
@@ -121,8 +121,8 @@ export class GeminiBlockedError extends GeminiApiError {
  */
 export class GeminiService {
   private apiKey: string;
-  private imageModel: GeminiModel;  // Görsel üretim modeli
-  private textModel: GeminiModel;   // Mantık/Logic modeli
+  private imageModel: GeminiModel; // Görsel üretim modeli
+  private textModel: GeminiModel; // Mantık/Logic modeli
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any = null; // Lazy initialized
 
@@ -487,7 +487,6 @@ SCENE:
       });
 
       return { text, data, cost };
-
     } catch (error) {
       const durationMs = Date.now() - startTime;
       console.error(`[GeminiService] Text generation error (${this.textModel}):`, error);
@@ -582,7 +581,7 @@ ${requiredRulesText}
 KULLANILABİLİR LİSTELER AŞAĞIDADIR.`;
 
     // User prompt - sadece enabled kategorileri gönder
-    let userPromptParts = [
+    const userPromptParts = [
       `Ürün tipi: ${productType}`,
       `Zaman: ${timeOfDay}`,
       `Mood: ${mood}`,

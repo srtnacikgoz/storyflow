@@ -308,6 +308,24 @@ export async function getSystemSettings(): Promise<FirestoreSystemSettingsConfig
 }
 
 /**
+ * Cloudinary feature flag'ini kontrol eder
+ * true: Cloudinary URL varsa Cloudinary'den yükle (tercih)
+ * false: Her zaman Firebase Storage kullan (rollback)
+ *
+ * @returns boolean - Cloudinary kullanılıp kullanılmayacağı
+ */
+export async function isCloudinaryEnabled(): Promise<boolean> {
+  try {
+    const settings = await getSystemSettings();
+    // undefined ise varsayılan olarak true (Cloudinary aktif)
+    return settings.useCloudinary !== false;
+  } catch (error) {
+    console.warn("[ConfigService] Failed to read useCloudinary flag, defaulting to true:", error);
+    return true;
+  }
+}
+
+/**
  * Sabit asset ayarlarını getirir
  * Document: global/config/settings/fixed-assets
  *
@@ -445,6 +463,7 @@ export async function getRuleEngineConfig(): Promise<FirestoreRuleEngineConfig> 
 
 /**
  * Rule Engine config'ini günceller
+ * Doküman yoksa oluşturur (set + merge)
  */
 export async function updateRuleEngineConfig(
   updates: Partial<FirestoreRuleEngineConfig>
@@ -454,10 +473,10 @@ export async function updateRuleEngineConfig(
     .doc("config")
     .collection("settings")
     .doc("rule-engine")
-    .update({
+    .set({
       ...updates,
       updatedAt: Date.now(),
-    });
+    }, { merge: true });
 
   clearConfigCache();
 }

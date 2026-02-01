@@ -86,7 +86,9 @@
       "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" --version)",
       "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only functions,hosting)",
       "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only functions)",
-      "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only functions:getAssetSelectionConfigEndpoint,functions:updateAssetSelectionConfigEndpoint)"
+      "Bash(\"C:\\\\Users\\\\Hp\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only functions:getAssetSelectionConfigEndpoint,functions:updateAssetSelectionConfigEndpoint)",
+      "Bash(npm install:*)",
+      "Bash(npx eslint:*)"
     ]
   },
   "hooks": {

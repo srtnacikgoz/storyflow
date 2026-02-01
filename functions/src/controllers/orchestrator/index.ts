@@ -9,6 +9,7 @@ export {
   createAsset,
   updateAsset,
   deleteAsset,
+  uploadAssetToCloudinary, // Cloudinary upload endpoint
 } from "./assetController";
 
 // TimeSlot Controller
@@ -158,3 +159,17 @@ export {
   updatePatronRule,
   deletePatronRule,
 } from "./ruleEngineController";
+
+// Stats Controller
+export {
+  getQueueStats,
+  getUsageStats,
+} from "./statsController";
+
+// Migration Controller (Cloudinary)
+export {
+  getMigrationStatus,
+  runCloudinaryMigration,
+  migrateSingleAsset,
+  resetMigration,
+} from "./migrationController";

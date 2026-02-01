@@ -12,7 +12,7 @@ import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import { AIRulesService } from "../services/aiRulesService";
 import { AILogService } from "../services/aiLogService";
-import { getFixedAssets, getAssetSelectionConfig } from "../services/configService";
+import { getFixedAssets, getAssetSelectionConfig, isCloudinaryEnabled } from "../services/configService";
 import * as categoryService from "../services/categoryService";
 import {
   buildGeminiPrompt,
@@ -462,7 +462,7 @@ export class Orchestrator {
         result.scenarioSelection = {
           scenarioId: randomScenario.id,
           scenarioName: randomScenario.name,
-          scenarioDescription: randomScenario.description || "Interior mekan görseli",  // KRİTİK: Senaryo açıklaması
+          scenarioDescription: randomScenario.description || "Interior mekan görseli", // KRİTİK: Senaryo açıklaması
           reasoning: `Interior senaryo seçildi: ${randomScenario.name} - Mevcut pastane fotoğrafı kullanılacak`,
           includesHands: false,
           compositionId: "interior-default",
@@ -808,7 +808,7 @@ export class Orchestrator {
         includesHands: s.includesHands,
         isInterior: s.isInterior,
         interiorType: s.interiorType,
-        compositionId: s.compositionId || s.compositions?.[0]?.id,  // Geriye uyumluluk
+        compositionId: s.compositionId || s.compositions?.[0]?.id, // Geriye uyumluluk
       }));
 
       // Kullanıcı geri bildirimlerinden ipuçları al
@@ -831,8 +831,8 @@ export class Orchestrator {
         timeOfDay,
         result.assetSelection!,
         scenariosForClaude,
-        effectiveRules,  // Çeşitlilik kurallarını da gönder
-        combinedHints    // Kullanıcı geri bildirimleri + AI kuralları
+        effectiveRules, // Çeşitlilik kurallarını da gönder
+        combinedHints // Kullanıcı geri bildirimleri + AI kuralları
       );
 
       // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı)
@@ -990,7 +990,7 @@ export class Orchestrator {
           productType,
           timeOfDay,
           scenarioGeminiData,
-          result.scenarioSelection!.scenarioDescription,  // KRİTİK: Ortam bilgisi
+          result.scenarioSelection!.scenarioDescription, // KRİTİK: Ortam bilgisi
           {
             weather: moodDetails.weather,
             lightingPrompt: moodDetails.lightingPrompt,
@@ -1079,37 +1079,42 @@ export class Orchestrator {
           console.log(`[Orchestrator] Generation attempt ${generationAttempt}/${this.config.maxRetries}`);
 
           try {
-            // Ürün görselini yükle
-            const productUrl = result.assetSelection!.product.storageUrl;
-            console.log(`[Orchestrator] ASSET DEBUG: Selected product: ${result.assetSelection!.product.filename}`);
-            console.log(`[Orchestrator] ASSET DEBUG: Product URL: ${productUrl}`);
-            console.log(`[Orchestrator] ASSET DEBUG: Product ID: ${result.assetSelection!.product.id}`);
+            // Ürün görselini yükle (Cloudinary veya Firebase Storage)
+            const productAsset = result.assetSelection!.product;
+            console.log(`[Orchestrator] ASSET DEBUG: Selected product: ${productAsset.filename}`);
+            console.log(`[Orchestrator] ASSET DEBUG: Product ID: ${productAsset.id}`);
+            console.log(`[Orchestrator] ASSET DEBUG: Cloudinary URL: ${productAsset.cloudinaryUrl || "N/A"}`);
+            console.log(`[Orchestrator] ASSET DEBUG: Storage URL: ${productAsset.storageUrl || "N/A"}`);
 
-            const productImageBase64 = await this.loadImageAsBase64(productUrl);
+            const productImageBase64 = await this.loadImageAsBase64(productAsset);
             console.log(`[Orchestrator] ASSET DEBUG: Loaded image size: ${productImageBase64.length} chars (base64)`);
 
             // Load reference images (plate, table, cup) if selected
+            // Asset objelerini doğrudan gönderiyoruz - Cloudinary URL varsa otomatik kullanılacak
             const referenceImages: Array<{ base64: string; mimeType: string; label: string; description?: string }> = [];
 
-            if (result.assetSelection!.plate?.storageUrl) {
-              console.log(`[Orchestrator] Loading plate: ${result.assetSelection!.plate.filename}`);
-              const plateBase64 = await this.loadImageAsBase64(result.assetSelection!.plate.storageUrl);
+            if (result.assetSelection!.plate) {
+              const plateAsset = result.assetSelection!.plate;
+              console.log(`[Orchestrator] Loading plate: ${plateAsset.filename}`);
+              const plateBase64 = await this.loadImageAsBase64(plateAsset);
               referenceImages.push({ base64: plateBase64, mimeType: "image/png", label: "plate" });
             }
 
-            if (result.assetSelection!.table?.storageUrl) {
-              console.log(`[Orchestrator] Loading table: ${result.assetSelection!.table.filename}`);
-              const tableBase64 = await this.loadImageAsBase64(result.assetSelection!.table.storageUrl);
+            if (result.assetSelection!.table) {
+              const tableAsset = result.assetSelection!.table;
+              console.log(`[Orchestrator] Loading table: ${tableAsset.filename}`);
+              const tableBase64 = await this.loadImageAsBase64(tableAsset);
               referenceImages.push({ base64: tableBase64, mimeType: "image/png", label: "table" });
             }
 
-            if (result.assetSelection!.cup?.storageUrl) {
-              console.log(`[Orchestrator] Loading cup: ${result.assetSelection!.cup.filename}`);
-              const cupBase64 = await this.loadImageAsBase64(result.assetSelection!.cup.storageUrl);
+            if (result.assetSelection!.cup) {
+              const cupAsset = result.assetSelection!.cup;
+              console.log(`[Orchestrator] Loading cup: ${cupAsset.filename}`);
+              const cupBase64 = await this.loadImageAsBase64(cupAsset);
 
               // Cup için kısa açıklama (RADİKAL SADELEŞTİRME v2.0)
-              const cupColors = result.assetSelection!.cup.visualProperties?.dominantColors?.join(", ") || "";
-              const cupMaterial = result.assetSelection!.cup.visualProperties?.material || "ceramic";
+              const cupColors = cupAsset.visualProperties?.dominantColors?.join(", ") || "";
+              const cupMaterial = cupAsset.visualProperties?.material || "ceramic";
               const cupDescription = `${cupColors} ${cupMaterial}`.trim();
 
               referenceImages.push({
@@ -1121,12 +1126,13 @@ export class Orchestrator {
             }
 
             // Napkin (peçete) referans görseli
-            if (result.assetSelection!.napkin?.storageUrl) {
-              console.log(`[Orchestrator] Loading napkin: ${result.assetSelection!.napkin.filename}`);
-              const napkinBase64 = await this.loadImageAsBase64(result.assetSelection!.napkin.storageUrl);
+            if (result.assetSelection!.napkin) {
+              const napkinAsset = result.assetSelection!.napkin;
+              console.log(`[Orchestrator] Loading napkin: ${napkinAsset.filename}`);
+              const napkinBase64 = await this.loadImageAsBase64(napkinAsset);
 
-              const napkinColors = result.assetSelection!.napkin.visualProperties?.dominantColors?.join(", ") || "";
-              const napkinMaterial = result.assetSelection!.napkin.visualProperties?.material || "fabric";
+              const napkinColors = napkinAsset.visualProperties?.dominantColors?.join(", ") || "";
+              const napkinMaterial = napkinAsset.visualProperties?.material || "fabric";
               const napkinDescription = `${napkinColors} ${napkinMaterial}`.trim();
 
               referenceImages.push({
@@ -1138,12 +1144,13 @@ export class Orchestrator {
             }
 
             // Cutlery (çatal-bıçak) referans görseli
-            if (result.assetSelection!.cutlery?.storageUrl) {
-              console.log(`[Orchestrator] Loading cutlery: ${result.assetSelection!.cutlery.filename}`);
-              const cutleryBase64 = await this.loadImageAsBase64(result.assetSelection!.cutlery.storageUrl);
+            if (result.assetSelection!.cutlery) {
+              const cutleryAsset = result.assetSelection!.cutlery;
+              console.log(`[Orchestrator] Loading cutlery: ${cutleryAsset.filename}`);
+              const cutleryBase64 = await this.loadImageAsBase64(cutleryAsset);
 
-              const cutleryMaterial = result.assetSelection!.cutlery.visualProperties?.material || "metal";
-              const cutleryStyle = result.assetSelection!.cutlery.visualProperties?.style || "";
+              const cutleryMaterial = cutleryAsset.visualProperties?.material || "metal";
+              const cutleryStyle = cutleryAsset.visualProperties?.style || "";
               const cutleryDescription = `${cutleryMaterial} ${cutleryStyle}`.trim();
 
               referenceImages.push({
@@ -1370,7 +1377,6 @@ export class Orchestrator {
       console.log(`[Orchestrator] Production history updated - product: ${result.assetSelection?.product?.id}, scenario: ${isInterior ? "interior" : result.scenarioSelection?.scenarioId}`);
 
       return result;
-
     } catch (error) {
       console.error("[Orchestrator] Pipeline error:", error);
 
@@ -1651,7 +1657,7 @@ export class Orchestrator {
       handPose?: string;
       compositionEntry?: string;
     },
-    scenarioDescription?: string,  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
+    scenarioDescription?: string, // KRİTİK: Senaryo açıklaması - ortam bilgisi için
     moodDetails?: {
       weather?: string;
       lightingPrompt?: string;
@@ -1694,7 +1700,7 @@ export class Orchestrator {
       productType,
       timeOfDay,
       scenarioData,
-      scenarioDescription,  // KRİTİK: Senaryo açıklamasını aktar
+      scenarioDescription, // KRİTİK: Senaryo açıklamasını aktar
       moodDetails,
       themeDescription
     );
@@ -1905,7 +1911,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
       handPose?: string;
       compositionEntry?: string;
     },
-    scenarioDescription?: string,  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
+    scenarioDescription?: string, // KRİTİK: Senaryo açıklaması - ortam bilgisi için
     moodDetails?: {
       weather?: string;
       lightingPrompt?: string;
@@ -2179,7 +2185,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
     handStyle?: string,
     selectedCup?: Asset,
     mood?: string,
-    scenarioDescription?: string  // KRİTİK: Senaryo açıklaması - ortam bilgisi için
+    scenarioDescription?: string // KRİTİK: Senaryo açıklaması - ortam bilgisi için
   ): Promise<string> {
     // ═══════════════════════════════════════════════════════════════════════════
     // Gemini-native terminoloji ile mood bazlı atmosfer
@@ -2222,37 +2228,37 @@ Cup: ${colors} ${material} (from reference)`.trim();
         colorPalette: "gold, cream, burgundy, forest green",
       },
       // Legacy mood mappings for backward compatibility
-      energetic: {
+      "energetic": {
         lighting: "Bright natural morning light, high contrast",
         atmosphere: "Fresh, dynamic energy, clean aesthetic",
         temperature: "5500K",
         colorPalette: "white, cream, bright accents",
       },
-      social: {
+      "social": {
         lighting: "Warm inviting ambient light, soft shadows",
         atmosphere: "Welcoming café scene, ready to share",
         temperature: "4000K",
         colorPalette: "warm neutrals, wood tones",
       },
-      relaxed: {
+      "relaxed": {
         lighting: "Soft diffused window light",
         atmosphere: "Calm, peaceful, minimal",
         temperature: "5000K",
         colorPalette: "soft pastels, white, grey",
       },
-      warm: {
+      "warm": {
         lighting: "Golden hour warm light, amber tones",
         atmosphere: "Romantic, intimate warmth",
         temperature: "3200K",
         colorPalette: "amber, gold, warm brown",
       },
-      cozy: {
+      "cozy": {
         lighting: "Intimate focused lighting, soft shadows",
         atmosphere: "Homey, comfortable, close-up feel",
         temperature: "3000K",
         colorPalette: "warm brown, cream, terracotta",
       },
-      balanced: {
+      "balanced": {
         lighting: "Natural balanced light, neutral tones",
         atmosphere: "Clean, professional, modern aesthetic",
         temperature: "5000K",
@@ -2359,15 +2365,57 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
 
   /**
    * Görseli base64 olarak yükle
-   * Firebase download URL'den doğrudan indir
+   *
+   * Dual-mode loading (Cloudinary Migration):
+   * 1. Feature flag aktif ve Cloudinary URL varsa → Cloudinary'den indir (tercih)
+   * 2. Firebase Storage URL varsa → Firebase'den indir (fallback)
+   *
+   * Feature flag (useCloudinary):
+   * - true (varsayılan): Cloudinary URL varsa Cloudinary kullan
+   * - false (rollback): Her zaman Firebase Storage kullan
+   *
+   * @param urlOrAsset - URL string veya Asset objesi
    */
-  private async loadImageAsBase64(storageUrl: string): Promise<string> {
-    console.log(`[Orchestrator] Loading image from URL: ${storageUrl.substring(0, 80)}...`);
+  private async loadImageAsBase64(urlOrAsset: string | Asset): Promise<string> {
+    // Asset objesi ise Cloudinary'yi kontrol et
+    if (typeof urlOrAsset !== "string") {
+      const asset = urlOrAsset;
+
+      // Feature flag kontrolü - Cloudinary aktif mi?
+      const cloudinaryEnabled = await isCloudinaryEnabled();
+
+      // Cloudinary URL varsa ve feature flag aktifse Cloudinary'den yükle
+      if (cloudinaryEnabled && asset.cloudinaryUrl) {
+        console.log(`[Orchestrator] Loading from Cloudinary (enabled): ${asset.cloudinaryPublicId}`);
+        return this.loadImageFromUrl(asset.cloudinaryUrl);
+      }
+
+      // Cloudinary devre dışı veya URL yok - Firebase Storage kullan
+      if (asset.storageUrl) {
+        const reason = !cloudinaryEnabled ? "feature flag disabled" : "no Cloudinary URL";
+        console.log(`[Orchestrator] Loading from Firebase Storage (${reason}): ${asset.filename}`);
+        return this.loadImageFromUrl(asset.storageUrl);
+      }
+
+      throw new Error(`Asset has no valid URL: ${asset.id}`);
+    }
+
+    // String URL ise doğrudan yükle (geriye uyumluluk)
+    return this.loadImageFromUrl(urlOrAsset);
+  }
+
+  /**
+   * URL'den görsel indir ve base64'e çevir
+   * Firebase Storage ve Cloudinary URL'leri için çalışır
+   */
+  private async loadImageFromUrl(url: string): Promise<string> {
+    console.log(`[Orchestrator] Loading image from URL: ${url.substring(0, 80)}...`);
 
     try {
-      // Firebase download URL ise doğrudan fetch ile indir
-      if (storageUrl.includes("firebasestorage.googleapis.com")) {
-        console.log(`[Orchestrator] Using fetch to download from Firebase URL`);
+      // HTTP/HTTPS URL ise doğrudan fetch ile indir
+      // (Firebase download URL ve Cloudinary URL'leri dahil)
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        console.log(`[Orchestrator] Using fetch to download from URL`);
 
         // 30 saniye timeout
         const controller = new AbortController();
@@ -2376,7 +2424,7 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
         let buffer: Buffer;
         try {
           console.log(`[Orchestrator] Starting fetch request...`);
-          const response = await fetch(storageUrl, { signal: controller.signal });
+          const response = await fetch(url, { signal: controller.signal });
           clearTimeout(timeoutId);
 
           console.log(`[Orchestrator] Fetch response received: ${response.status}`);
@@ -2405,10 +2453,10 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
       const bucket = this.storage.bucket();
       let filePath: string;
 
-      if (storageUrl.startsWith("gs://")) {
-        filePath = storageUrl.replace(`gs://${bucket.name}/`, "");
+      if (url.startsWith("gs://")) {
+        filePath = url.replace(`gs://${bucket.name}/`, "");
       } else {
-        filePath = storageUrl;
+        filePath = url;
       }
 
       console.log(`[Orchestrator] Using Admin SDK for path: ${filePath}`);

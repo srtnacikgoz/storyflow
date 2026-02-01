@@ -314,6 +314,7 @@ export async function processAllPending(
   console.log("[Orchestrator] Processing all pending items...");
 
   // Process items one by one
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const result = await processNextItem(options);
 

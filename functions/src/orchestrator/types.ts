@@ -11,15 +11,15 @@
  * Asset kategorileri
  */
 export type AssetCategory =
-  | "products"    // Ürün fotoğrafları
-  | "props"       // Tabak, çatal, peçete
-  | "furniture"   // Masa, sandalye, dekor
-  | "music"       // Müzik dosyaları
+  | "products" // Ürün fotoğrafları
+  | "props" // Tabak, çatal, peçete
+  | "furniture" // Masa, sandalye, dekor
+  | "music" // Müzik dosyaları
   | "environments" // Mekan, pencere, dış alan
-  | "pets"        // Köpek, kedi
-  | "interior"    // İç mekan fotoğrafları (vitrin, tezgah, oturma alanı)
+  | "pets" // Köpek, kedi
+  | "interior" // İç mekan fotoğrafları (vitrin, tezgah, oturma alanı)
   | "accessories" // Aksesuar (telefon, çanta, anahtar, kitap)
-  | "decor"       // Dekoratif objeler
+  | "decor" // Dekoratif objeler
   | "plates"
   | "cups"
   | "cutlery"
@@ -39,64 +39,64 @@ export type ProductType =
  * Prop alt kategorileri
  */
 export type PropType =
-  | "plates"      // Tabaklar
-  | "cups"        // Fincanlar, bardaklar
-  | "cutlery"     // Çatal, kaşık, bıçak
-  | "napkins"     // Peçeteler, örtüler
-  | "boxes"       // Pasta kutuları, çikolata kutuları
-  | "bags";       // Kağıt çantalar, paket çantaları
+  | "plates" // Tabaklar
+  | "cups" // Fincanlar, bardaklar
+  | "cutlery" // Çatal, kaşık, bıçak
+  | "napkins" // Peçeteler, örtüler
+  | "boxes" // Pasta kutuları, çikolata kutuları
+  | "bags"; // Kağıt çantalar, paket çantaları
 
 /**
  * Mobilya alt kategorileri
  */
 export type FurnitureType =
-  | "tables"      // Masalar
-  | "chairs"      // Sandalyeler
-  | "decor";      // Vazolar, bitkiler
+  | "tables" // Masalar
+  | "chairs" // Sandalyeler
+  | "decor"; // Vazolar, bitkiler
 
 /**
  * Ortam alt kategorileri
  */
 export type EnvironmentType =
-  | "indoor"      // İç mekan
-  | "outdoor"     // Dış mekan
-  | "window"      // Pencere önü
-  | "cafe"        // Kafe ortamı
-  | "home";       // Ev ortamı
+  | "indoor" // İç mekan
+  | "outdoor" // Dış mekan
+  | "window" // Pencere önü
+  | "cafe" // Kafe ortamı
+  | "home"; // Ev ortamı
 
 /**
  * Evcil hayvan alt kategorileri
  */
 export type PetType =
-  | "dogs"        // Köpekler
-  | "cats";       // Kediler
+  | "dogs" // Köpekler
+  | "cats"; // Kediler
 
 /**
  * İç mekan alt kategorileri
  * Bu fotoğraflar AI görsel üretimi ATLANARAK doğrudan kullanılır
  */
 export type InteriorType =
-  | "vitrin"          // Vitrin görünümü
-  | "tezgah"          // Ürün tezgahları
-  | "oturma-alani"    // Oturma köşeleri
-  | "dekorasyon"      // Çiçekler, bitkiler, detaylar
-  | "genel-mekan";    // Pastane genel görünümü
+  | "vitrin" // Vitrin görünümü
+  | "tezgah" // Ürün tezgahları
+  | "oturma-alani" // Oturma köşeleri
+  | "dekorasyon" // Çiçekler, bitkiler, detaylar
+  | "genel-mekan"; // Pastane genel görünümü
 
 /**
  * Aksesuar alt kategorileri
  * Gerçekçi pastane deneyimi için masaya konulan objeler
  */
 export type AccessoryType =
-  | "phone"           // Akıllı telefon (jenerik, logosuz)
-  | "bag"             // El çantası, clutch
-  | "keys"            // Araba/ev anahtarı
-  | "book"            // Kitap, dergi
-  | "toy"             // Çocuk oyuncağı
-  | "tablet"          // Tablet (jenerik, logosuz)
-  | "glasses"         // Güneş gözlüğü
-  | "watch"           // Kol saati
-  | "notebook"        // Defter, ajanda
-  | "wallet";         // Cüzdan
+  | "phone" // Akıllı telefon (jenerik, logosuz)
+  | "bag" // El çantası, clutch
+  | "keys" // Araba/ev anahtarı
+  | "book" // Kitap, dergi
+  | "toy" // Çocuk oyuncağı
+  | "tablet" // Tablet (jenerik, logosuz)
+  | "glasses" // Güneş gözlüğü
+  | "watch" // Kol saati
+  | "notebook" // Defter, ajanda
+  | "wallet"; // Cüzdan
 
 /**
  * Aksesuar kategorileri için label ve icon
@@ -118,20 +118,20 @@ export const ACCESSORY_TYPES: Record<AccessoryType, { label: string; icon: strin
  * Özel asset tipleri (legacy - geriye uyumluluk için)
  */
 export type SpecialAssetType =
-  | "pets"        // Köpek, kedi
+  | "pets" // Köpek, kedi
   | "environments" // Mekan, pencere, dış alan
-  | "books"       // Kitaplar
-  | "plants";     // Bitkiler
+  | "books" // Kitaplar
+  | "plants"; // Bitkiler
 
 /**
  * Müzik kategorileri
  */
 export type MusicMood =
-  | "morning-vibes"   // Sabah
-  | "cozy-cafe"       // Kafe
-  | "upbeat"          // Enerjik
+  | "morning-vibes" // Sabah
+  | "cozy-cafe" // Kafe
+  | "upbeat" // Enerjik
   | "afternoon-chill" // Öğleden sonra
-  | "golden-hour";    // Altın saat
+  | "golden-hour"; // Altın saat
 
 // ==========================================
 // MOOD TYPES
@@ -143,8 +143,8 @@ export type MusicMood =
  */
 export interface Mood {
   id: string;
-  name: string;            // "Kış Sabahı", "Yağmurlu Cafe"
-  description: string;     // UI açıklaması
+  name: string; // "Kış Sabahı", "Yağmurlu Cafe"
+  description: string; // UI açıklaması
 
   // Koşullar
   timeOfDay: "morning" | "afternoon" | "evening" | "night" | "any";
@@ -152,7 +152,7 @@ export interface Mood {
   weather: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
 
   // Prompt Enjeksiyonları
-  lightingPrompt: string;  // "soft window light, overcast shadows"
+  lightingPrompt: string; // "soft window light, overcast shadows"
   colorGradePrompt: string; // "cool blue tones, desaturated, high contrast"
 
   // Durum
@@ -184,37 +184,37 @@ export type TableBaseType = "pedestal" | "four-legged" | "tripod" | "trestle";
  * "white ceramic" yerine "espresso cup" gibi net tanım (çay bardağı-kahve fincanı karışıklığının çözümü)
  */
 export type CupType =
-  | "latte-mug"             // Geniş ağızlı kahve kupası
-  | "espresso-cup"          // Küçük espresso fincanı
+  | "latte-mug" // Geniş ağızlı kahve kupası
+  | "espresso-cup" // Küçük espresso fincanı
   | "traditional-tea-glass" // İnce belli çay bardağı
-  | "ceramic-teacup"        // Kulplu porselen çay fincanı
-  | "tulip-glass"           // Lale bardak (çay)
-  | "cappuccino-cup"        // Orta boy cappuccino fincanı
-  | "glass-mug";            // Cam kupa (latte, americano)
+  | "ceramic-teacup" // Kulplu porselen çay fincanı
+  | "tulip-glass" // Lale bardak (çay)
+  | "cappuccino-cup" // Orta boy cappuccino fincanı
+  | "glass-mug"; // Cam kupa (latte, americano)
 
 /**
  * Çatal-bıçak tipi
  * "metal trendy" yerine "dessert fork" gibi fonksiyonel tanım
  */
 export type CutleryType =
-  | "dessert-fork"     // Küçük tatlı çatalı
-  | "dinner-fork"      // Standart yemek çatalı
-  | "teaspoon"         // Çay kaşığı
-  | "dessert-spoon"    // Tatlı kaşığı
-  | "pastry-knife"     // Pasta bıçağı
-  | "butter-knife"     // Tereyağı bıçağı
-  | "cake-server";     // Pasta servis spatulası
+  | "dessert-fork" // Küçük tatlı çatalı
+  | "dinner-fork" // Standart yemek çatalı
+  | "teaspoon" // Çay kaşığı
+  | "dessert-spoon" // Tatlı kaşığı
+  | "pastry-knife" // Pasta bıçağı
+  | "butter-knife" // Tereyağı bıçağı
+  | "cake-server"; // Pasta servis spatulası
 
 /**
  * Tabak tipi
  * Tabak boyutu ve kullanım amacı
  */
 export type PlateType =
-  | "dessert-plate"    // Küçük tatlı tabağı
-  | "dinner-plate"     // Büyük yemek tabağı
-  | "side-plate"       // Yan tabak
-  | "serving-plate"    // Servis tabağı
-  | "cake-stand";      // Kek standı / ayaklı tabak
+  | "dessert-plate" // Küçük tatlı tabağı
+  | "dinner-plate" // Büyük yemek tabağı
+  | "side-plate" // Yan tabak
+  | "serving-plate" // Servis tabağı
+  | "cake-stand"; // Kek standı / ayaklı tabak
 
 /**
  * Object Identity enum label'ları
@@ -228,10 +228,10 @@ export const TABLE_TOP_SHAPES: Record<TableTopShape, string> = {
 };
 
 export const TABLE_BASE_TYPES: Record<TableBaseType, string> = {
-  pedestal: "Tek Ayak (Merkezi)",
+  "pedestal": "Tek Ayak (Merkezi)",
   "four-legged": "Dört Ayak",
-  tripod: "Üç Ayak",
-  trestle: "Köprü Ayak",
+  "tripod": "Üç Ayak",
+  "trestle": "Köprü Ayak",
 };
 
 export const CUP_TYPES: Record<CupType, string> = {
@@ -247,7 +247,7 @@ export const CUP_TYPES: Record<CupType, string> = {
 export const CUTLERY_TYPES: Record<CutleryType, string> = {
   "dessert-fork": "Tatlı Çatalı (küçük)",
   "dinner-fork": "Yemek Çatalı (standart)",
-  teaspoon: "Çay Kaşığı",
+  "teaspoon": "Çay Kaşığı",
   "dessert-spoon": "Tatlı Kaşığı",
   "pastry-knife": "Pasta Bıçağı",
   "butter-knife": "Tereyağı Bıçağı",
@@ -271,11 +271,11 @@ export const PLATE_TYPES: Record<PlateType, string> = {
  * Bu alan ürünün servis şeklini belirler
  */
 export type EatingMethod =
-  | "hand"       // Elle yenir (kurabiye, sandviç)
-  | "fork"       // Çatalla yenir (tiramisu, cheesecake, pasta dilimi)
+  | "hand" // Elle yenir (kurabiye, sandviç)
+  | "fork" // Çatalla yenir (tiramisu, cheesecake, pasta dilimi)
   | "fork-knife" // Çatal-bıçakla yenir (domatesli kruvasan, börek)
-  | "spoon"      // Kaşıkla yenir (puding, sufle)
-  | "none";      // Yenmez/servis edilir (bütün kek, tart, dekor)
+  | "spoon" // Kaşıkla yenir (puding, sufle)
+  | "none"; // Yenmez/servis edilir (bütün kek, tart, dekor)
 
 /**
  * @deprecated - geriye uyumluluk için tutulur, yeni kodda EatingMethod kullanın
@@ -289,26 +289,35 @@ export type HoldingType = EatingMethod;
 export interface Asset {
   id: string;
   category: AssetCategory;
-  subType: string;                // ProductType | PropType | FurnitureType | MusicMood
+  subType: string; // ProductType | PropType | FurnitureType | MusicMood
 
   // Dosya bilgileri
   filename: string;
   storageUrl: string;
   thumbnailUrl?: string;
 
+  // Cloudinary (yeni - migration sonrası ana depolama)
+  cloudinaryPublicId?: string; // "storyflow/assets/products/croissants/1706123456_croissant"
+  cloudinaryUrl?: string; // "https://res.cloudinary.com/xxx/image/upload/..."
+  cloudinaryVersion?: number; // Cache invalidation için
+
+  // Migration metadata
+  migrationStatus?: "pending" | "migrated" | "failed";
+  migratedAt?: number;
+
   // Görsel özellikleri (ürün/prop/furniture için)
   visualProperties?: {
-    dominantColors: string[];     // ["#D4A574", "#FFFFFF"]
-    style: string;                // "modern", "rustic", "minimal"
-    material?: string;            // "ceramic", "wood", "marble"
-    shape?: string;               // "round", "square", "rectangular"
+    dominantColors: string[]; // ["#D4A574", "#FFFFFF"]
+    style: string; // "modern", "rustic", "minimal"
+    material?: string; // "ceramic", "wood", "marble"
+    shape?: string; // "round", "square", "rectangular"
 
     // Object Identity alanları - Gemini'ye net geometrik/fonksiyonel bilgi verir
-    tableTopShape?: TableTopShape;   // Masa üst tabla şekli (furniture kategorisi)
-    tableBaseType?: TableBaseType;   // Masa ayak yapısı (furniture kategorisi)
-    cupType?: CupType;               // Fincan/bardak tipi (props kategorisi)
-    cutleryType?: CutleryType;       // Çatal-bıçak tipi (props kategorisi)
-    plateType?: PlateType;           // Tabak tipi (props kategorisi)
+    tableTopShape?: TableTopShape; // Masa üst tabla şekli (furniture kategorisi)
+    tableBaseType?: TableBaseType; // Masa ayak yapısı (furniture kategorisi)
+    cupType?: CupType; // Fincan/bardak tipi (props kategorisi)
+    cutleryType?: CutleryType; // Çatal-bıçak tipi (props kategorisi)
+    plateType?: PlateType; // Tabak tipi (props kategorisi)
   };
 
   // Yeme şekli (sadece products kategorisi için)
@@ -325,7 +334,7 @@ export interface Asset {
 
   // Müzik özellikleri
   musicProperties?: {
-    duration: number;             // Saniye
+    duration: number; // Saniye
     bpm?: number;
     mood: MusicMood;
   };
@@ -335,7 +344,7 @@ export interface Asset {
   lastUsedAt?: number;
 
   // Meta
-  tags: string[];                 // ["gold-rim", "white", "elegant"]
+  tags: string[]; // ["gold-rim", "white", "elegant"]
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -352,34 +361,34 @@ export interface TimeSlotRule {
   id: string;
 
   // Zaman aralığı
-  startHour: number;              // 7 (07:00)
-  endHour: number;                // 11 (11:00)
+  startHour: number; // 7 (07:00)
+  endHour: number; // 11 (11:00)
 
   // Hangi günler
-  daysOfWeek: number[];           // [1,2,3,4,5] = Hafta içi
+  daysOfWeek: number[]; // [1,2,3,4,5] = Hafta içi
 
   // Kategori
-  productTypes: ProductType[];    // ["croissants"]
-  allowPairing?: boolean;         // Kahve + pasta gibi kombinasyon
-  pairingWith?: ProductType[];    // ["coffees"]
+  productTypes: ProductType[]; // ["croissants"]
+  allowPairing?: boolean; // Kahve + pasta gibi kombinasyon
+  pairingWith?: ProductType[]; // ["coffees"]
 
   // Tema tercihi (yeni sistem)
-  themeId?: string;               // "morning-energy" - Temalar sayfasından seçilir
+  themeId?: string; // "morning-energy" - Temalar sayfasından seçilir
 
   // Senaryo tercihi (eski sistem, geriye dönük uyumluluk)
   // @deprecated - themeId kullanın
-  scenarioPreference?: string[];  // ["zarif-tutma", "kahve-ani"]
+  scenarioPreference?: string[]; // ["zarif-tutma", "kahve-ani"]
 
   // Aktiflik
   isActive: boolean;
-  priority: number;               // Düşük = öncelikli
+  priority: number; // Düşük = öncelikli
 }
 
 /**
  * Günlük içerik takvimi
  */
 export interface DailySchedule {
-  date: string;                   // "2026-01-18"
+  date: string; // "2026-01-18"
   slots: ScheduledSlot[];
 }
 
@@ -388,7 +397,7 @@ export interface DailySchedule {
  */
 export interface ScheduledSlot {
   id: string;
-  scheduledTime: number;          // Timestamp
+  scheduledTime: number; // Timestamp
 
   // Rule referansı
   timeSlotRuleId: string;
@@ -450,28 +459,28 @@ export interface AssetSelection {
   music?: Asset;
 
   // Genişletilmiş asset'ler
-  decor?: Asset;          // Dekorasyon (bitki, kitap, vb.)
-  pet?: Asset;            // Köpek, kedi
-  environment?: Asset;    // Mekan referansı
-  interior?: Asset;       // İç mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
-  exterior?: Asset;       // Dış mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
-  accessory?: Asset;      // Aksesuar (telefon, çanta, anahtar, kitap vb.)
-  napkin?: Asset;         // Peçete (sofra düzeni için)
-  cutlery?: Asset;        // Çatal-bıçak (servis için)
+  decor?: Asset; // Dekorasyon (bitki, kitap, vb.)
+  pet?: Asset; // Köpek, kedi
+  environment?: Asset; // Mekan referansı
+  interior?: Asset; // İç mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
+  exterior?: Asset; // Dış mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
+  accessory?: Asset; // Aksesuar (telefon, çanta, anahtar, kitap vb.)
+  napkin?: Asset; // Peçete (sofra düzeni için)
+  cutlery?: Asset; // Çatal-bıçak (servis için)
 
   // Claude'un seçim gerekçesi
   selectionReasoning: string;
 
   // Çeşitlilik bilgisi
   includesPet: boolean;
-  petReason?: string;     // Neden köpek dahil/hariç
+  petReason?: string; // Neden köpek dahil/hariç
 
   // Aksesuar bilgisi
-  includesAccessory?: boolean;  // Aksesuar dahil mi
-  accessoryReason?: string;     // Neden aksesuar dahil/hariç
+  includesAccessory?: boolean; // Aksesuar dahil mi
+  accessoryReason?: string; // Neden aksesuar dahil/hariç
 
   // Interior senaryo bilgisi
-  isInteriorScenario?: boolean;  // true ise AI görsel üretimi atlanır
+  isInteriorScenario?: boolean; // true ise AI görsel üretimi atlanır
 }
 
 /**
@@ -510,16 +519,16 @@ export interface Scenario {
   includesHands: boolean;
 
   // Kompozisyon ayarları (tekli seçim - v2.0)
-  compositionId?: string;         // Seçilen kompozisyon ID (Firestore'dan)
-  compositionEntry?: string;      // Composition entry point (bottom-right, overhead, etc.)
+  compositionId?: string; // Seçilen kompozisyon ID (Firestore'dan)
+  compositionEntry?: string; // Composition entry point (bottom-right, overhead, etc.)
 
   // Interior senaryolar için (AI görsel üretimi atlanır)
-  isInterior?: boolean;           // true ise AI görsel üretimi ATLANIR
-  interiorType?: InteriorType;    // Hangi interior kategorisinden asset seçilecek
+  isInterior?: boolean; // true ise AI görsel üretimi ATLANIR
+  interiorType?: InteriorType; // Hangi interior kategorisinden asset seçilecek
 
   // Gemini Terminoloji Ayarları (Admin panelden seçilen)
-  mood?: string;                  // Mood ID (deprecated - Tema'dan devralınıyor)
-  handPose?: string;              // Hand pose ID (cupping, pinching, breaking, etc.)
+  mood?: string; // Mood ID (deprecated - Tema'dan devralınıyor)
+  handPose?: string; // Hand pose ID (cupping, pinching, breaking, etc.)
 
   // DEPRECATED: Eski çoklu kompozisyon array'i (geriye uyumluluk için)
   // Yeni senaryolarda compositionId kullanılır
@@ -532,7 +541,7 @@ export interface Scenario {
 export interface ScenarioSelection {
   scenarioId: string;
   scenarioName: string;
-  scenarioDescription: string;  // KRİTİK: Senaryo açıklaması - Gemini'ye ortam bilgisi için
+  scenarioDescription: string; // KRİTİK: Senaryo açıklaması - Gemini'ye ortam bilgisi için
 
   // Neden bu senaryo seçildi
   reasoning: string;
@@ -545,12 +554,12 @@ export interface ScenarioSelection {
   composition: string;
 
   // Interior senaryolar için
-  isInterior?: boolean;           // true ise AI görsel üretimi ATLANIR
-  interiorType?: InteriorType;    // Kullanılacak interior asset tipi
+  isInterior?: boolean; // true ise AI görsel üretimi ATLANIR
+  interiorType?: InteriorType; // Kullanılacak interior asset tipi
 
   // Tema bilgisi
-  themeId?: string;               // Kullanılan tema ID'si
-  themeName?: string;             // Tema adı (görüntüleme için)
+  themeId?: string; // Kullanılan tema ID'si
+  themeName?: string; // Tema adı (görüntüleme için)
 }
 
 /**
@@ -590,15 +599,15 @@ export interface GeneratedImage {
  */
 export interface QualityControlResult {
   passed: boolean;
-  score: number;                  // 1-10
+  score: number; // 1-10
 
   // Değerlendirme detayları
   evaluation: {
-    productAccuracy: number;      // Ürün doğruluğu (1-10)
-    composition: number;          // Kompozisyon (1-10)
-    lighting: number;             // Işık (1-10)
-    realism: number;              // Gerçekçilik (1-10)
-    instagramReadiness: number;   // Instagram uygunluğu (1-10)
+    productAccuracy: number; // Ürün doğruluğu (1-10)
+    composition: number; // Kompozisyon (1-10)
+    lighting: number; // Işık (1-10)
+    realism: number; // Gerçekçilik (1-10)
+    instagramReadiness: number; // Instagram uygunluğu (1-10)
   };
 
   // Geri bildirim
@@ -677,7 +686,7 @@ export interface ClaudeAnalysisRequest {
   type: "asset_selection" | "scenario" | "quality_control" | "caption";
   context: Record<string, unknown>;
   assets?: Asset[];
-  image?: string;                 // Base64
+  image?: string; // Base64
 }
 
 /**
@@ -701,31 +710,31 @@ export interface ClaudeResponse<T> {
 export interface OrchestratorConfig {
   // Claude API
   claudeApiKey: string;
-  claudeModel: string;            // "claude-sonnet-4-20250514"
+  claudeModel: string; // "claude-sonnet-4-20250514"
 
   // Gemini API (text işlemleri için - asset selection, scenario selection, prompt optimization)
   geminiApiKey: string;
-  geminiModel: string;            // "gemini-3-pro-image-preview"
+  geminiModel: string; // "gemini-3-pro-image-preview"
 
   // Reve API (görsel üretimi için - image-to-image transformation)
-  reveApiKey?: string;            // Opsiyonel: Reve kullanılacaksa gerekli
+  reveApiKey?: string; // Opsiyonel: Reve kullanılacaksa gerekli
   reveVersion?: "latest" | "latest-fast" | "reve-edit@20250915" | "reve-edit-fast@20251030";
 
   // Görsel üretim provider'ı
-  imageProvider?: "gemini" | "reve";  // Default: "gemini"
+  imageProvider?: "gemini" | "reve"; // Default: "gemini"
 
   // Kalite kontrol
-  qualityThreshold: number;       // Minimum skor (default: 7)
-  maxRetries: number;             // Maximum yeniden üretim (default: 3)
+  qualityThreshold: number; // Minimum skor (default: 7)
+  maxRetries: number; // Maximum yeniden üretim (default: 3)
 
   // Telegram
   telegramBotToken: string;
   telegramChatId: string;
-  approvalTimeout: number;        // Dakika (default: 60)
+  approvalTimeout: number; // Dakika (default: 60)
 
   // Zamanlama
-  timezone: string;               // "Europe/Istanbul"
-  scheduleBuffer: number;         // Dakika önce hazırla (default: 30)
+  timezone: string; // "Europe/Istanbul"
+  scheduleBuffer: number; // Dakika önce hazırla (default: 30)
 }
 
 // ==========================================
@@ -735,7 +744,6 @@ export interface OrchestratorConfig {
 export type RuleType = "include" | "exclude" | "prefer" | "avoid";
 
 
-
 export interface PatronRule {
   id: string;
   name: string;
@@ -743,7 +751,7 @@ export interface PatronRule {
   type: RuleType;
   target: RuleTarget;
   conditions: RuleCondition[];
-  priority: number;           // 1-100, yüksek = öncelikli
+  priority: number; // 1-100, yüksek = öncelikli
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -765,17 +773,17 @@ export interface RuleCondition {
  * Çeşitlilik kuralları
  */
 export interface VariationRules {
-  scenarioGap: number;          // Aynı senaryo min kaç üretim sonra (default: 3)
-  tableGap: number;             // Aynı masa min kaç üretim sonra (default: 2)
-  handStyleGap: number;         // Aynı el stili min kaç üretim sonra (default: 4)
-  compositionGap: number;       // Aynı kompozisyon min kaç üretim sonra (default: 5)
-  productGap: number;           // Aynı ürün min kaç üretim sonra (default: 3)
-  plateGap: number;             // Aynı tabak min kaç üretim sonra (default: 2)
-  cupGap: number;               // Aynı fincan min kaç üretim sonra (default: 2)
-  petFrequency: number;         // Köpek her kaç üretimde bir (default: 15)
-  outdoorFrequency: number;     // Dış mekan her kaç üretimde bir (default: 10)
-  wabiSabiFrequency: number;    // Wabi-sabi her kaç üretimde bir (default: 5)
-  similarityThreshold: number;  // Max benzerlik % (default: 50)
+  scenarioGap: number; // Aynı senaryo min kaç üretim sonra (default: 3)
+  tableGap: number; // Aynı masa min kaç üretim sonra (default: 2)
+  handStyleGap: number; // Aynı el stili min kaç üretim sonra (default: 4)
+  compositionGap: number; // Aynı kompozisyon min kaç üretim sonra (default: 5)
+  productGap: number; // Aynı ürün min kaç üretim sonra (default: 3)
+  plateGap: number; // Aynı tabak min kaç üretim sonra (default: 2)
+  cupGap: number; // Aynı fincan min kaç üretim sonra (default: 2)
+  petFrequency: number; // Köpek her kaç üretimde bir (default: 15)
+  outdoorFrequency: number; // Dış mekan her kaç üretimde bir (default: 10)
+  wabiSabiFrequency: number; // Wabi-sabi her kaç üretimde bir (default: 5)
+  similarityThreshold: number; // Max benzerlik % (default: 50)
 }
 
 /**
@@ -833,8 +841,8 @@ export interface ProductionHistoryEntry {
  */
 export interface RecentHistory {
   entries: ProductionHistoryEntry[];
-  petUsageCount: number;        // Son N üretimde köpek kaç kez kullanıldı
-  lastPetUsage?: number;        // Son köpek kullanım timestamp'i
+  petUsageCount: number; // Son N üretimde köpek kaç kez kullanıldı
+  lastPetUsage?: number; // Son köpek kullanım timestamp'i
 }
 
 /**
@@ -845,8 +853,8 @@ export interface DynamicConfig {
   weeklyThemes: Record<string, WeeklyTheme>;
   timeMoodMappings: TimeMoodMapping[];
   assetPriorities: {
-    underusedBoost: number;     // Az kullanılan asset'e çarpan
-    lastUsedPenalty: number;    // Son kullanılan asset'e ceza
+    underusedBoost: number; // Az kullanılan asset'e çarpan
+    lastUsedPenalty: number; // Son kullanılan asset'e ceza
   };
   updatedAt: number;
 }
@@ -858,7 +866,7 @@ export interface OrchestratorRules {
   scenarios: Scenario[];
   handStyles: HandStyle[];
   assetPersonalities: AssetPersonality[];
-  absoluteRules: string[];      // Mutlak kurallar listesi
+  absoluteRules: string[]; // Mutlak kurallar listesi
   version: string;
   parsedAt: number;
 }
@@ -873,13 +881,13 @@ export interface EffectiveRules {
 
   // Hesaplanmış değerler
   shouldIncludePet: boolean;
-  blockedScenarios: string[];   // Son N üretimde kullanılan
+  blockedScenarios: string[]; // Son N üretimde kullanılan
   blockedTables: string[];
   blockedHandStyles: string[];
   blockedCompositions: string[];
-  blockedProducts: string[];    // Son N üretimde kullanılan ürünler
-  blockedPlates: string[];      // Son N üretimde kullanılan tabaklar
-  blockedCups: string[];        // Son N üretimde kullanılan fincanlar
+  blockedProducts: string[]; // Son N üretimde kullanılan ürünler
+  blockedPlates: string[]; // Son N üretimde kullanılan tabaklar
+  blockedCups: string[]; // Son N üretimde kullanılan fincanlar
   patronRules: PatronRule[];
 }
 
@@ -893,18 +901,18 @@ export interface EffectiveRules {
  * TimeSlotRule'dan referans edilir
  */
 export interface Theme {
-  id: string;              // "morning-energy"
-  name: string;            // "Sabah Enerjisi"
-  description?: string;    // "Enerjik sabah paylaşımları için"
-  scenarios: string[];     // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
-  mood: string;            // Firestore Mood document ID referansı (moods collection)
-  petAllowed: boolean;     // Köpek dahil edilebilir mi?
+  id: string; // "morning-energy"
+  name: string; // "Sabah Enerjisi"
+  description?: string; // "Enerjik sabah paylaşımları için"
+  scenarios: string[]; // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
+  mood: string; // Firestore Mood document ID referansı (moods collection)
+  petAllowed: boolean; // Köpek dahil edilebilir mi?
   accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
 
   // Metadata
   createdAt: number;
   updatedAt: number;
-  isDefault?: boolean;     // Varsayılan tema mı (silinemeyen)
+  isDefault?: boolean; // Varsayılan tema mı (silinemeyen)
 }
 
 /**
@@ -993,15 +1001,15 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
  * Kullanıcı üretilen görselde sorun bildirirken seçer
  */
 export type IssueCategoryId =
-  | "holding-mismatch"    // Tutma şekli uyumsuz (elle tiramisu tutma gibi)
+  | "holding-mismatch" // Tutma şekli uyumsuz (elle tiramisu tutma gibi)
   | "product-unrecognized" // Ürün tanınmıyor/bozuk
-  | "composition-bad"      // Kompozisyon kötü
-  | "lighting-bad"         // Işık sorunu
-  | "realism-low"          // Gerçekçilik düşük
-  | "background-issue"     // Arka plan sorunu
-  | "hand-anatomy"         // El anatomisi bozuk
-  | "color-mismatch"       // Renk uyumsuzluğu
-  | "other";               // Diğer
+  | "composition-bad" // Kompozisyon kötü
+  | "lighting-bad" // Işık sorunu
+  | "realism-low" // Gerçekçilik düşük
+  | "background-issue" // Arka plan sorunu
+  | "hand-anatomy" // El anatomisi bozuk
+  | "color-mismatch" // Renk uyumsuzluğu
+  | "other"; // Diğer
 
 /**
  * Sorun kategorisi açıklamaları
@@ -1061,12 +1069,12 @@ export interface IssueFeedback {
   id: string;
 
   // Hangi içerikle ilgili
-  slotId: string;           // scheduled-slots ID
-  pipelineId?: string;      // Pipeline run ID
+  slotId: string; // scheduled-slots ID
+  pipelineId?: string; // Pipeline run ID
 
   // Sorun detayları
   category: IssueCategoryId;
-  customNote?: string;      // Kullanıcının ek açıklaması
+  customNote?: string; // Kullanıcının ek açıklaması
 
   // Bağlam (otomatik doldurulur)
   scenarioId?: string;
@@ -1077,7 +1085,7 @@ export interface IssueFeedback {
 
   // Meta
   createdAt: number;
-  resolved: boolean;        // Sorun çözüldü mü?
+  resolved: boolean; // Sorun çözüldü mü?
   resolvedAt?: number;
 }
 
@@ -1096,9 +1104,9 @@ export interface FirestoreScenario extends Scenario {
   isActive: boolean;
 
   // Ek detaylar (ORCHESTRATOR.md'den)
-  suggestedProducts?: ProductType[];    // Bu senaryo için önerilen ürün tipleri
-  suggestedTimeSlots?: string[];        // Uygun zaman dilimleri (morning, afternoon, vb.)
-  mood?: string;                        // Senaryo mood'u
+  suggestedProducts?: ProductType[]; // Bu senaryo için önerilen ürün tipleri
+  suggestedTimeSlots?: string[]; // Uygun zaman dilimleri (morning, afternoon, vb.)
+  mood?: string; // Senaryo mood'u
 }
 
 /**
@@ -1112,8 +1120,8 @@ export interface FirestoreHandStyle extends HandStyle {
   isActive: boolean;
 
   // Ek detaylar
-  compatibleScenarios?: string[];       // Uyumlu senaryo ID'leri
-  targetDemographic?: string;           // Hedef kitle
+  compatibleScenarios?: string[]; // Uyumlu senaryo ID'leri
+  targetDemographic?: string; // Hedef kitle
 }
 
 /**
@@ -1134,7 +1142,7 @@ export interface FirestoreAssetPersonality extends AssetPersonality {
 export interface FirestoreDiversityRules extends VariationRules {
   // Firestore meta
   updatedAt: number;
-  updatedBy?: string;                   // Son güncelleyen
+  updatedBy?: string; // Son güncelleyen
 }
 
 /**
@@ -1164,9 +1172,9 @@ export interface FirestoreWeeklyThemesConfig {
  */
 export interface FirestoreAbsoluteRulesConfig {
   // Kategori bazlı kurallar
-  productRules: string[];               // Ürün kuralları
-  prohibitedElements: string[];         // Yasak elementler
-  qualityRules: string[];               // Kalite kuralları
+  productRules: string[]; // Ürün kuralları
+  prohibitedElements: string[]; // Yasak elementler
+  qualityRules: string[]; // Kalite kuralları
 
   // Düz liste (tümü)
   allRules: string[];
@@ -1209,19 +1217,19 @@ export interface FirestoreOrchestratorInstructions {
 export interface FirestoreTimeoutsConfig {
   // Telegram onay timeout (dakika)
   // Kullanıcı bu süre içinde onaylamazsa işlem zaman aşımına uğrar
-  telegramApprovalMinutes: number;        // Default: 60
+  telegramApprovalMinutes: number; // Default: 60
 
   // İşlem timeout (dakika)
   // Bir slot bu süre içinde tamamlanmazsa "stuck" olarak işaretlenir
-  processingTimeoutMinutes: number;       // Default: 120 (2 saat)
+  processingTimeoutMinutes: number; // Default: 120 (2 saat)
 
   // Fetch timeout (saniye)
   // Harici API çağrıları için maksimum bekleme süresi
-  fetchTimeoutSeconds: number;            // Default: 30
+  fetchTimeoutSeconds: number; // Default: 30
 
   // Retry bekleme (milisaniye)
   // Başarısız işlemler arasında bekleme süresi
-  retryDelayMs: number;                   // Default: 5000
+  retryDelayMs: number; // Default: 5000
 
   // Meta
   updatedAt: number;
@@ -1233,9 +1241,8 @@ export interface FirestoreTimeoutsConfig {
 // ==========================================
 
 
-
 export interface FilterThresholds {
-  default: number;           // Varsayılan: 70
+  default: number; // Varsayılan: 70
   products: number;
   tables: number;
   plates: number;
@@ -1253,28 +1260,28 @@ export interface FirestoreRuleEngineConfig {
 
 export interface ScoringWeights {
   tagMatch: {
-    weight: number;          // Varsayılan: 40
+    weight: number; // Varsayılan: 40
     exactMatchBonus: number; // Varsayılan: 10
     partialMatchBonus: number; // Varsayılan: 5
   };
   usageBonus: {
-    weight: number;          // Varsayılan: 20
+    weight: number; // Varsayılan: 20
     formula: "linear" | "logarithmic" | "inverse";
     maxBonus: number;
   };
   moodMatch: {
-    weight: number;          // Varsayılan: 20
+    weight: number; // Varsayılan: 20
     moodTags: Record<string, string[]>;
   };
   productCompat: {
-    weight: number;          // Varsayılan: 20
+    weight: number; // Varsayılan: 20
     matrix: CompatibilityMatrix;
   };
 }
 
 export interface CompatibilityMatrix {
   [productType: string]: {
-    preferredTables: string[];   // Tag'ler: ["wooden", "marble"]
+    preferredTables: string[]; // Tag'ler: ["wooden", "marble"]
     avoidTables: string[];
     preferredPlates: string[];
     avoidPlates: string[];
@@ -1305,7 +1312,7 @@ export interface GlobalOrchestratorConfig {
   // NEW: Rule Engine
   ruleEngine: FirestoreRuleEngineConfig;
 
-  categories: FirestoreCategoriesConfig;  // Dinamik kategoriler
+  categories: FirestoreCategoriesConfig; // Dinamik kategoriler
   loadedAt: number;
   version: string;
 }
@@ -1350,13 +1357,13 @@ export function isValidCategorySlug(slug: string, dynamicSlugs: string[] = []): 
  * Bu türler sabittir - alt kategoriler dinamiktir
  */
 export type DynamicCategoryType =
-  | "products"     // Ürünler (kruvasan, pasta, çikolata, kahve)
-  | "props"        // Aksesuarlar (tabak, fincan, çatal)
-  | "furniture"    // Mobilya (masa, sandalye, dekor)
-  | "accessories"  // Kişisel aksesuarlar (telefon, çanta, kitap)
-  | "pets"         // Evcil hayvanlar (köpek, kedi)
+  | "products" // Ürünler (kruvasan, pasta, çikolata, kahve)
+  | "props" // Aksesuarlar (tabak, fincan, çatal)
+  | "furniture" // Mobilya (masa, sandalye, dekor)
+  | "accessories" // Kişisel aksesuarlar (telefon, çanta, kitap)
+  | "pets" // Evcil hayvanlar (köpek, kedi)
   | "environments" // Ortamlar (iç mekan, dış mekan)
-  | "interior";    // İç mekan fotoğrafları (vitrin, tezgah)
+  | "interior"; // İç mekan fotoğrafları (vitrin, tezgah)
 
 /**
  * Alt kategori tanımı
@@ -1370,17 +1377,17 @@ export type DynamicCategoryType =
  * Slug'lar sadece UI gösterimi ve backward-compatibility için tutulur.
  */
 export interface CategorySubType {
-  id: string;                // Auto-generated unique ID (referanslar bu ID'yi kullanır)
-  slug: string;              // "croissants" - human-readable, URL-friendly
-  displayName: string;       // "Kruvasanlar" - değiştirilebilir
-  icon?: string;             // "🥐"
-  description?: string;      // "Taze kruvasanlar ve viennoiseriler"
-  order: number;             // Sıralama (1, 2, 3...)
-  isActive: boolean;         // Aktif/Pasif
+  id: string; // Auto-generated unique ID (referanslar bu ID'yi kullanır)
+  slug: string; // "croissants" - human-readable, URL-friendly
+  displayName: string; // "Kruvasanlar" - değiştirilebilir
+  icon?: string; // "🥐"
+  description?: string; // "Taze kruvasanlar ve viennoiseriler"
+  order: number; // Sıralama (1, 2, 3...)
+  isActive: boolean; // Aktif/Pasif
 
   // Ürün kategorileri için özel alanlar (products için)
-  eatingMethodDefault?: EatingMethod;  // Varsayılan yeme şekli
-  canBeHeldDefault?: boolean;          // Varsayılan elle tutulabilirlik
+  eatingMethodDefault?: EatingMethod; // Varsayılan yeme şekli
+  canBeHeldDefault?: boolean; // Varsayılan elle tutulabilirlik
 }
 
 /**
@@ -1388,11 +1395,11 @@ export interface CategorySubType {
  * Document: global/config/settings/categories
  */
 export interface DynamicCategory {
-  type: DynamicCategoryType;   // "products", "props", "furniture"
-  displayName: string;         // "Ürünler"
-  icon: string;                // "📦"
-  description?: string;        // "Satışa sunulan ürün görselleri"
-  order: number;               // Kategori sıralaması
+  type: DynamicCategoryType; // "products", "props", "furniture"
+  displayName: string; // "Ürünler"
+  icon: string; // "📦"
+  description?: string; // "Satışa sunulan ürün görselleri"
+  order: number; // Kategori sıralaması
 
   // Alt kategoriler
   subTypes: CategorySubType[];
@@ -1424,7 +1431,7 @@ export interface FirestoreCategoriesConfig {
   cacheTTLMinutes: number;
 
   // Meta
-  version: string;           // "1.0.0" - şema versiyonu
+  version: string; // "1.0.0" - şema versiyonu
   updatedAt: number;
   updatedBy?: string;
 }
@@ -1576,13 +1583,13 @@ export function generateUniqueSubTypeId(categoryType: DynamicCategoryType, slug:
  * Kullanıcı Claude'a öğretirken seçer
  */
 export type AIRuleCategoryId =
-  | "beverage"      // İçecek kuralları (bardak dolu olmalı vb.)
-  | "composition"   // Kompozisyon kuralları (aksesuar ekle vb.)
-  | "lighting"      // Işık kuralları
-  | "product"       // Ürün kuralları
-  | "background"    // Arka plan kuralları
-  | "hand"          // El kuralları
-  | "general";      // Genel kurallar
+  | "beverage" // İçecek kuralları (bardak dolu olmalı vb.)
+  | "composition" // Kompozisyon kuralları (aksesuar ekle vb.)
+  | "lighting" // Işık kuralları
+  | "product" // Ürün kuralları
+  | "background" // Arka plan kuralları
+  | "hand" // El kuralları
+  | "general"; // Genel kurallar
 
 /**
  * AI Kural kategorisi açıklamaları
@@ -1605,20 +1612,20 @@ export interface AIRule {
   id: string;
 
   // Kural tipi
-  type: "do" | "dont";            // Yapılacak / Yapılmayacak
+  type: "do" | "dont"; // Yapılacak / Yapılmayacak
 
   // Kategori
   category: AIRuleCategoryId;
 
   // İçerik
-  title: string;                   // Kısa başlık (ör: "Bardak boş olmamalı")
-  description: string;             // Detaylı açıklama
+  title: string; // Kısa başlık (ör: "Bardak boş olmamalı")
+  description: string; // Detaylı açıklama
 
   // Görsel örnek (opsiyonel)
-  exampleImageUrl?: string;        // Kural için örnek görsel
+  exampleImageUrl?: string; // Kural için örnek görsel
 
   // Durum
-  isActive: boolean;               // Aktif/Pasif
+  isActive: boolean; // Aktif/Pasif
 
   // Meta
   createdAt: number;
@@ -1661,13 +1668,13 @@ export interface PromptVersion {
  */
 export interface PromptTemplate {
   id: PromptStageId;
-  name: string;                    // "Asset Seçimi"
-  description: string;             // "Ürün, tabak, masa vb. asset kombinasyonunu seçer"
-  stage: string;                   // Pipeline stage adı
-  systemPrompt: string;            // Template değişkenli system prompt
-  variables: string[];             // Kullanılabilir template değişkenler (bilgi amaçlı)
-  version: number;                 // Otomatik artan versiyon numarası
-  history: PromptVersion[];        // Son 10 versiyon (revert için)
+  name: string; // "Asset Seçimi"
+  description: string; // "Ürün, tabak, masa vb. asset kombinasyonunu seçer"
+  stage: string; // Pipeline stage adı
+  systemPrompt: string; // Template değişkenli system prompt
+  variables: string[]; // Kullanılabilir template değişkenler (bilgi amaçlı)
+  version: number; // Otomatik artan versiyon numarası
+  history: PromptVersion[]; // Son 10 versiyon (revert için)
   updatedAt: number;
   updatedBy?: string;
 }
@@ -1698,22 +1705,27 @@ export interface FirestorePromptStudioConfig {
  */
 export interface FirestoreSystemSettingsConfig {
   // Otomatik Paylaşım (Scheduler)
-  schedulerEnabled: boolean;          // Default: true - Tüm otomatik üretimleri açar/kapar
+  schedulerEnabled: boolean; // Default: true - Tüm otomatik üretimleri açar/kapar
 
   // AI Maliyetleri (USD per 1K token)
-  claudeInputCostPer1K: number;       // Default: 0.003
-  claudeOutputCostPer1K: number;      // Default: 0.015
+  claudeInputCostPer1K: number; // Default: 0.003
+  claudeOutputCostPer1K: number; // Default: 0.015
 
   // AI Ayarları
-  geminiDefaultFaithfulness: number;  // Default: 0.7 (0.0-1.0 arası)
+  geminiDefaultFaithfulness: number; // Default: 0.7 (0.0-1.0 arası)
 
   // Feedback
-  maxFeedbackForPrompt: number;       // Default: 10
+  maxFeedbackForPrompt: number; // Default: 10
 
   // Sistem
-  stuckWarningMinutes: number;        // Default: 15
-  maxLogsPerQuery: number;            // Default: 100
-  cacheTTLMinutes: number;            // Default: 5
+  stuckWarningMinutes: number; // Default: 15
+  maxLogsPerQuery: number; // Default: 100
+  cacheTTLMinutes: number; // Default: 5
+
+  // Cloudinary Migration (Feature Flag)
+  // true: Cloudinary URL varsa Cloudinary'den yükle (tercih)
+  // false: Her zaman Firebase Storage kullan (rollback)
+  useCloudinary?: boolean; // Default: true
 
   // Meta
   updatedAt: number;
@@ -1764,26 +1776,26 @@ export interface FirestoreFixedAssetsConfig {
  */
 export interface FirestoreBusinessContextConfig {
   // İşletme Bilgileri
-  businessName: string;           // "Sade Patisserie"
-  businessType: string;           // "pastane", "kafe", "restoran"
+  businessName: string; // "Sade Patisserie"
+  businessType: string; // "pastane", "kafe", "restoran"
 
   // Mekan Bilgileri (AI'ın doğru ortam üretmesi için kritik)
-  locationDescription: string;    // "Zemin kattaki butik pastane, sokak seviyesinde vitrini var"
-  floorLevel: "ground" | "upper" | "basement" | "outdoor";  // Kat bilgisi
-  hasStreetView: boolean;         // Sokak manzarası var mı?
-  hasWindowView: boolean;         // Pencere manzarası var mı?
+  locationDescription: string; // "Zemin kattaki butik pastane, sokak seviyesinde vitrini var"
+  floorLevel: "ground" | "upper" | "basement" | "outdoor"; // Kat bilgisi
+  hasStreetView: boolean; // Sokak manzarası var mı?
+  hasWindowView: boolean; // Pencere manzarası var mı?
   windowViewDescription?: string; // Varsa: "Sokak manzarası", "Bahçe manzarası"
 
   // Dekorasyon Stili
-  decorStyle: string;             // "Minimal modern", "Rustik ahşap", "Industrial"
-  dominantMaterials: string[];    // ["ahşap", "mermer", "seramik"]
-  colorScheme: string;            // "Sıcak krem ve kahve tonları"
+  decorStyle: string; // "Minimal modern", "Rustik ahşap", "Industrial"
+  dominantMaterials: string[]; // ["ahşap", "mermer", "seramik"]
+  colorScheme: string; // "Sıcak krem ve kahve tonları"
 
   // AI Prompt için oluşturulmuş özet (otomatik veya manuel)
-  promptContext: string;          // "Ground floor artisan patisserie with warm cream tones, wooden accents, no high-rise views"
+  promptContext: string; // "Ground floor artisan patisserie with warm cream tones, wooden accents, no high-rise views"
 
   // Meta
-  isEnabled: boolean;             // false ise prompt'a eklenmez
+  isEnabled: boolean; // false ise prompt'a eklenmez
   updatedAt: number;
   updatedBy?: string;
 }
@@ -1816,12 +1828,12 @@ export interface AssetCategoryRule {
 export interface FirestoreAssetSelectionConfig {
   // Manuel üretim kuralları ("Şimdi Üret" butonu)
   manual: {
-    plate: AssetCategoryRule;      // Tabak
-    table: AssetCategoryRule;      // Masa
-    cup: AssetCategoryRule;        // Fincan
-    accessory: AssetCategoryRule;  // Aksesuar (çiçek, mum vb.)
-    napkin: AssetCategoryRule;     // Peçete
-    cutlery: AssetCategoryRule;    // Çatal-bıçak
+    plate: AssetCategoryRule; // Tabak
+    table: AssetCategoryRule; // Masa
+    cup: AssetCategoryRule; // Fincan
+    accessory: AssetCategoryRule; // Aksesuar (çiçek, mum vb.)
+    napkin: AssetCategoryRule; // Peçete
+    cutlery: AssetCategoryRule; // Çatal-bıçak
   };
 
   // Otomatik pipeline kuralları (Scheduler)
@@ -1848,11 +1860,11 @@ export interface FirestoreAssetSelectionConfig {
  * Dinamik stil tanımları (Modern, Rustic, Minimal vb.)
  */
 export interface Style {
-  id: string;          // slug (örn: "modern", "rustic")
+  id: string; // slug (örn: "modern", "rustic")
   displayName: string; // Görünen ad (örn: "Modern", "Rustik")
   description?: string;// Açıklama
   isActive: boolean;
-  order: number;       // Sıralama
+  order: number; // Sıralama
   createdAt: number;
   updatedAt: number;
 }

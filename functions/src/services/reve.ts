@@ -245,7 +245,6 @@ export class ReveService {
         creditsUsed: data.credits_used,
         creditsRemaining: data.credits_remaining,
       };
-
     } catch (error) {
       const durationMs = Date.now() - startTime;
 
@@ -344,7 +343,6 @@ export class ReveService {
         creditsUsed: data.credits_used,
         creditsRemaining: data.credits_remaining,
       };
-
     } catch (error) {
       if (error instanceof ReveApiError) throw error;
       throw new ReveApiError(

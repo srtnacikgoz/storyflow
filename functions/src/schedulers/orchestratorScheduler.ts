@@ -63,7 +63,6 @@ export const orchestratorScheduler = onSchedule(
             console.log(`🧹 Stuck Slots: ${stuckResult.recovered} recovered (logged), ${stuckResult.failed} marked as failed.`);
 
             console.log("🏁 Scheduler finished successfully.");
-
         } catch (error) {
             console.error("❌ Orchestrator Scheduler Fatal Error:", error);
         }

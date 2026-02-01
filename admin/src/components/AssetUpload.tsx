@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, type ReactNode } from "react";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "../config/firebase";
+import type { AssetCategory } from "../types";
 
 type AssetType = "image" | "audio";
 
@@ -82,6 +83,11 @@ interface AssetUploadProps {
   onUploadComplete: (url: string, filename: string) => void;
   onError?: (error: string) => void;
   folder?: string;
+  // Cloudinary upload için gerekli alanlar
+  // Bu alanlar dolu ise Cloudinary'ye yükler, değilse Firebase Storage'a
+  assetCategory?: AssetCategory;
+  assetSubType?: string;
+  useCloudinary?: boolean; // Feature flag - varsayılan: true
 }
 
 // Dosya tipi konfigürasyonları
@@ -118,11 +124,34 @@ const CONFIG: Record<AssetType, {
   },
 };
 
+// API URL (environment'dan veya hardcoded)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://europe-west1-sade-instagram-automation.cloudfunctions.net";
+
+/**
+ * Blob'u base64 string'e çevirir
+ */
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // data:image/jpeg;base64, prefix'ini çıkar
+      const base64 = result.split(",")[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export default function AssetUpload({
   type,
   onUploadComplete,
   onError,
-  folder = "orchestrator-assets"
+  folder = "orchestrator-assets",
+  assetCategory,
+  assetSubType,
+  useCloudinary = true, // Varsayılan olarak Cloudinary kullan
 }: AssetUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -198,36 +227,91 @@ export default function AssetUpload({
       setPreview("audio");
     }
 
-    // Firebase Storage'a yükle
-    const timestamp = Date.now();
-    const safeFilename = finalFilename.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const storagePath = `${folder}/${type}s/${timestamp}-${safeFilename}`;
-    const storageRef = ref(storage, storagePath);
+    // Cloudinary veya Firebase Storage'a yükle
+    const shouldUseCloudinary = useCloudinary && assetCategory && assetSubType && type === "image";
 
-    const uploadTask = uploadBytesResumable(storageRef, uploadBlob);
+    if (shouldUseCloudinary) {
+      // Cloudinary'ye yükle (backend üzerinden)
+      try {
+        console.log("[AssetUpload] Using Cloudinary upload...");
+        setProgress(10);
 
-    uploadTask.on(
-      "state_changed",
-      (snapshot) => {
-        const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setProgress(Math.round(pct));
-      },
-      (error) => {
-        console.error("Upload error:", error);
+        // Blob'u base64'e çevir
+        const base64Image = await blobToBase64(uploadBlob);
+        setProgress(30);
+
+        // Backend'e gönder
+        const response = await fetch(`${API_BASE_URL}/uploadAssetToCloudinary`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            base64Image,
+            filename: finalFilename,
+            category: assetCategory,
+            subType: assetSubType,
+          }),
+        });
+
+        setProgress(90);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || "Upload failed");
+        }
+
+        setProgress(100);
+        console.log("[AssetUpload] Cloudinary upload complete:", result.data?.cloudinaryUrl);
+
+        // Cloudinary URL'ini parent'a bildir
+        const cloudinaryUrl = result.data?.cloudinaryUrl || "";
+        onUploadCompleteRef.current(cloudinaryUrl, file.name);
+        setIsUploading(false);
+      } catch (error) {
+        console.error("[AssetUpload] Cloudinary upload error:", error);
         setIsUploading(false);
         setPreview(null);
         setUploadedFilename(null);
-        onErrorRef.current?.("Yükleme başarısız: " + error.message);
-      },
-      async () => {
-        // Upload tamamlandı - URL al ve parent'a bildir
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          console.log("[AssetUpload] Upload complete, calling callback with URL");
-          // Ref üzerinden güncel callback'i çağır (stale closure önlenir)
-          onUploadCompleteRef.current(downloadURL, file.name);
+        onErrorRef.current?.("Cloudinary yükleme başarısız: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
+      }
+    } else {
+      // Firebase Storage'a yükle (fallback veya audio dosyaları için)
+      const timestamp = Date.now();
+      const safeFilename = finalFilename.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const storagePath = `${folder}/${type}s/${timestamp}-${safeFilename}`;
+      const storageRef = ref(storage, storagePath);
+
+      const uploadTask = uploadBytesResumable(storageRef, uploadBlob);
+
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setProgress(Math.round(pct));
+        },
+        (error) => {
+          console.error("Upload error:", error);
           setIsUploading(false);
-        } catch (error) {
+          setPreview(null);
+          setUploadedFilename(null);
+          onErrorRef.current?.("Yükleme başarısız: " + error.message);
+        },
+        async () => {
+          // Upload tamamlandı - URL al ve parent'a bildir
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            console.log("[AssetUpload] Firebase upload complete, calling callback with URL");
+            // Ref üzerinden güncel callback'i çağır (stale closure önlenir)
+            onUploadCompleteRef.current(downloadURL, file.name);
+            setIsUploading(false);
+          } catch (error) {
           console.error("Error getting download URL:", error);
           setIsUploading(false);
           setPreview(null);
@@ -235,9 +319,10 @@ export default function AssetUpload({
           onErrorRef.current?.("URL alınamadı: " + (error instanceof Error ? error.message : "Bilinmeyen hata"));
         }
       }
-    );
+      );
+    }
     // Ref'ler kullanıldığı için callback'ler dependency'den çıkarıldı
-  }, [type, folder]);
+  }, [type, folder, useCloudinary, assetCategory, assetSubType]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

@@ -365,12 +365,12 @@ export const approveSlot = functions
 
         // Slot'u güncelle
         await db.collection("scheduled-slots").doc(slotId).update({
-          status: "published",
+          "status": "published",
           "pipelineResult.approvalStatus": "approved",
           "pipelineResult.approvalRespondedAt": Date.now(),
           "pipelineResult.publishedAt": Date.now(),
           "pipelineResult.instagramPostId": publishResult?.id,
-          updatedAt: Date.now(),
+          "updatedAt": Date.now(),
         });
 
         response.json({
@@ -425,11 +425,11 @@ export const rejectSlot = functions
 
         // Slot'u güncelle
         await db.collection("scheduled-slots").doc(slotId).update({
-          status: "failed",
+          "status": "failed",
           "pipelineResult.approvalStatus": "rejected",
           "pipelineResult.approvalRespondedAt": Date.now(),
-          error: "Rejected from dashboard",
-          updatedAt: Date.now(),
+          "error": "Rejected from dashboard",
+          "updatedAt": Date.now(),
         });
 
         response.json({

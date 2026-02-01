@@ -1,10 +1,19 @@
 /**
  * Asset Controller
  * Asset CRUD işlemleri
+ *
+ * Cloudinary Migration:
+ * - uploadAssetToCloudinary: Yeni asset'leri Cloudinary'ye yükler
+ * - Eski Firebase Storage asset'leri hala desteklenir (fallback)
  */
 
 import { functions, db, getCors, REGION, errorResponse } from "./shared";
-import { Asset } from "../../orchestrator/types";
+import { Asset, AssetCategory } from "../../orchestrator/types";
+import {
+  cloudinarySecrets,
+  generateCloudinaryPublicId,
+  uploadBase64ToCloudinary,
+} from "../../config/cloudinary";
 
 /**
  * Tüm asset'leri listele
@@ -155,6 +164,123 @@ export const deleteAsset = functions
         });
       } catch (error) {
         errorResponse(response, error, "deleteAsset");
+      }
+    });
+  });
+
+/**
+ * Asset'i Cloudinary'ye yükle (yeni upload'lar için)
+ *
+ * POST /orchestrator/assets/upload-cloudinary
+ * Body: {
+ *   base64Image: string,  // Base64 encoded görsel (data:image... prefix'i olmadan)
+ *   filename: string,
+ *   category: AssetCategory,
+ *   subType: string,
+ *   tags?: string[],
+ *   visualProperties?: object,
+ *   eatingMethod?: string,
+ *   canBeHeldByHand?: boolean
+ * }
+ *
+ * Neden base64?
+ * - Yeni upload'lar kullanıcının tarayıcısından geliyor
+ * - Dosya henüz hiçbir yerde yok (Firebase'de bile)
+ * - Migration'da URL-based upload kullanılıyor (dosya zaten Firebase'de)
+ */
+export const uploadAssetToCloudinary = functions
+  .region(REGION)
+  .runWith({
+    secrets: cloudinarySecrets,
+    timeoutSeconds: 300,
+    memory: "512MB",
+  })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const {
+          base64Image,
+          filename,
+          category,
+          subType,
+          tags = [],
+          visualProperties,
+          eatingMethod,
+          canBeHeldByHand,
+        } = request.body;
+
+        // Validation
+        if (!base64Image || !filename || !category || !subType) {
+          response.status(400).json({
+            success: false,
+            error: "Missing required fields: base64Image, filename, category, subType",
+          });
+          return;
+        }
+
+        console.log(`[Cloudinary Upload] Starting upload for ${filename} (${category}/${subType})`);
+
+        // 1. Cloudinary public ID oluştur
+        const publicId = generateCloudinaryPublicId(category, subType, filename);
+
+        // 2. Cloudinary'ye yükle
+        const uploadResult = await uploadBase64ToCloudinary(base64Image, publicId);
+
+        if (!uploadResult.success) {
+          console.error(`[Cloudinary Upload] Failed:`, uploadResult.error);
+          response.status(500).json({
+            success: false,
+            error: `Cloudinary upload failed: ${uploadResult.error}`,
+          });
+          return;
+        }
+
+        console.log(`[Cloudinary Upload] Success: ${uploadResult.publicId}`);
+
+        // 3. Firestore'a kaydet
+        const assetData: Omit<Asset, "id"> = {
+          category: category as AssetCategory,
+          subType,
+          filename,
+          // Firebase Storage alanları boş (Cloudinary kullanılıyor)
+          storageUrl: "",
+          thumbnailUrl: undefined,
+          // Cloudinary alanları
+          cloudinaryPublicId: uploadResult.publicId,
+          cloudinaryUrl: uploadResult.url,
+          cloudinaryVersion: uploadResult.version,
+          migrationStatus: "migrated", // Yeni upload'lar zaten Cloudinary'de
+          migratedAt: Date.now(),
+          // Diğer alanlar
+          visualProperties,
+          eatingMethod,
+          canBeHeldByHand,
+          tags,
+          usageCount: 0,
+          isActive: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+
+        const docRef = await db.collection("assets").add(assetData);
+
+        console.log(`[Cloudinary Upload] Asset saved to Firestore: ${docRef.id}`);
+
+        response.status(201).json({
+          success: true,
+          data: {
+            id: docRef.id,
+            ...assetData,
+          },
+        });
+      } catch (error) {
+        errorResponse(response, error, "uploadAssetToCloudinary");
       }
     });
   });

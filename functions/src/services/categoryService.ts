@@ -245,7 +245,7 @@ export async function updateSubType(
     category.subTypes[subTypeIndex] = {
       ...existingSubType,
       ...filteredUpdates,
-      id: existingSubType.id,     // ID değiştirilmesini engelle
+      id: existingSubType.id, // ID değiştirilmesini engelle
       slug: existingSubType.slug, // Slug değiştirilmesini engelle
     };
 

@@ -69,7 +69,7 @@ export const telegramWebhook = functions
             const telegram = new TelegramService(telegramConfig);
 
             console.log(`[Telegram Webhook] Looking for item: ${parsed.itemId} in queue`);
-            let item = await queue.getById(parsed.itemId);
+            const item = await queue.getById(parsed.itemId);
 
             if (!item) {
                 console.error("[Telegram Webhook] Item via QueueService not found:", parsed.itemId);
@@ -171,10 +171,10 @@ export const telegramWebhook = functions
                             try {
                                 const db = getFirestore();
                                 await db.collection("scheduled-slots").doc(item.slotId).update({
-                                    status: "published",
-                                    igPostId: story.id,
-                                    completedAt: Date.now(),
-                                    updatedAt: Date.now(),
+                                    "status": "published",
+                                    "igPostId": story.id,
+                                    "completedAt": Date.now(),
+                                    "updatedAt": Date.now(),
                                     "pipelineResult.approvalStatus": "approved",
                                     "pipelineResult.publishedAt": Date.now(),
                                     "pipelineResult.instagramPostId": story.id,
@@ -255,10 +255,10 @@ export const telegramWebhook = functions
                         try {
                             const db = getFirestore();
                             await db.collection("scheduled-slots").doc(item.slotId).update({
-                                status: "failed",
-                                error: "Kullanıcı tarafından reddedildi",
-                                rejectedAt: Date.now(),
-                                updatedAt: Date.now(),
+                                "status": "failed",
+                                "error": "Kullanıcı tarafından reddedildi",
+                                "rejectedAt": Date.now(),
+                                "updatedAt": Date.now(),
                                 "pipelineResult.approvalStatus": "rejected",
                                 "pipelineResult.approvalRespondedAt": Date.now(),
                             });

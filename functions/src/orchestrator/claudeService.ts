@@ -788,7 +788,7 @@ Yanıt formatı:
         data: {
           scenarioId: scenario.id,
           scenarioName: scenario.name,
-          scenarioDescription: scenario.description,  // KRİTİK: Gemini'ye ortam bilgisi için
+          scenarioDescription: scenario.description, // KRİTİK: Gemini'ye ortam bilgisi için
           reasoning: selection.reasoning,
           includesHands: scenario.includesHands,
           handStyle: selection.handStyle as HandStyleId || undefined,
