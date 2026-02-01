@@ -55,8 +55,11 @@ import type {
 } from "../types";
 
 // Firebase Functions base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
-  "https://europe-west1-instagram-automation-ad77b.cloudfunctions.net";
+// Firebase Functions base URL
+const API_BASE_URL = import.meta.env.DEV
+  ? "/api"
+  : (import.meta.env.VITE_API_URL || "https://europe-west1-instagram-automation-ad77b.cloudfunctions.net");
+
 
 /**
  * API isteklerini yöneten servis

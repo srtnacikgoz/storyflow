@@ -245,6 +245,11 @@ export class PostValidator {
             accessories: "accessory",
             decor: "decor",
             pets: "pet",
+            furniture: "table", // Fallback to table or generic
+            props: "plate",     // Fallback
+            interior: "interior", // New field in AssetSelection
+            environments: "environment", // New field in AssetSelection
+            music: "music",
         };
         return map[category];
     }

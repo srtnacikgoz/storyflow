@@ -18,7 +18,13 @@ export type AssetCategory =
   | "environments" // Mekan, pencere, dış alan
   | "pets"        // Köpek, kedi
   | "interior"    // İç mekan fotoğrafları (vitrin, tezgah, oturma alanı)
-  | "accessories"; // Aksesuar (telefon, çanta, anahtar, kitap)
+  | "accessories" // Aksesuar (telefon, çanta, anahtar, kitap)
+  | "decor"       // Dekoratif objeler
+  | "plates"
+  | "cups"
+  | "cutlery"
+  | "napkins"
+  | "tables";
 
 /**
  * Ürün alt kategorileri

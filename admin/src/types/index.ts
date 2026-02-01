@@ -841,6 +841,8 @@ export interface FilterThresholds {
   plates: number;
   cups: number;
   accessories: number;
+  napkins: number;
+  cutlery: number;
   [key: string]: number;
 }
 export type CategoryThresholds = FilterThresholds;

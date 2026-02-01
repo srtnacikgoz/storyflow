@@ -95,11 +95,11 @@ export {
   getAssetSelectionConfigEndpoint,
   updateAssetSelectionConfigEndpoint,
   // Prompt Studio
-  getPromptStudioConfig,
-  getPromptTemplateById,
-  updatePromptTemplateEndpoint,
-  revertPromptTemplateEndpoint,
-  clearPromptStudioCacheEndpoint,
+  // getPromptStudioConfig,
+  // getPromptTemplateById,
+  // updatePromptTemplateEndpoint,
+  // revertPromptTemplateEndpoint,
+  // clearPromptStudioCacheEndpoint,
 
   // Feedback Controller
   createFeedback,

@@ -65,6 +65,11 @@ export function clearPromptStudioCache(): void {
   // no-op
 }
 
+export function interpolatePrompt(template: string, variables: Record<string, any>): string {
+  // DUMMY IMPLEMENTATION
+  return template;
+}
+
 // Cache süresi (5 dakika)
 const CACHE_TTL = 5 * 60 * 1000;
 

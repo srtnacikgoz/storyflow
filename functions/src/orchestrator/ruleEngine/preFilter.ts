@@ -40,6 +40,11 @@ export class PreFilter {
             accessories: [],
             decor: [],
             pets: [],
+            furniture: [],
+            props: [],
+            interior: [],
+            environments: [],
+            music: [],
         };
 
         // Her kategori için filtreleme
@@ -94,6 +99,36 @@ export class PreFilter {
         candidates.pets = this.filterCategory(
             allAssets.pets || [],
             "pets",
+            []
+        );
+
+        candidates.furniture = this.filterCategory(
+            allAssets.furniture || [],
+            "furniture",
+            []
+        );
+
+        candidates.props = this.filterCategory(
+            allAssets.props || [],
+            "props",
+            []
+        );
+
+        candidates.interior = this.filterCategory(
+            allAssets.interior || [],
+            "interior",
+            []
+        );
+
+        candidates.environments = this.filterCategory(
+            allAssets.environments || [],
+            "environments",
+            []
+        );
+
+        candidates.music = this.filterCategory(
+            allAssets.music || [],
+            "music",
             []
         );
 
@@ -352,6 +387,11 @@ export class PreFilter {
             "accessories",
             "decor",
             "pets",
+            "furniture",
+            "props",
+            "interior",
+            "environments",
+            "music",
         ];
 
         const byCategory: any = {};
@@ -389,6 +429,11 @@ export class PreFilter {
             "accessories",
             "decor",
             "pets",
+            "furniture",
+            "props",
+            "interior",
+            "environments",
+            "music",
         ];
 
         for (const cat of categories) {

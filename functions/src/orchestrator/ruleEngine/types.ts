@@ -85,6 +85,11 @@ export interface FilteredAssets {
     accessories: ScoredAsset[];
     decor: ScoredAsset[];
     pets: ScoredAsset[];
+    furniture: ScoredAsset[];
+    props: ScoredAsset[];
+    interior: ScoredAsset[];
+    environments: ScoredAsset[];
+    music: ScoredAsset[];
 }
 
 export interface ScoredAsset {
@@ -226,17 +231,6 @@ export interface RuleEngineConfig {
 // CONTEXT YAPILARI
 // -----------------------------
 
-export interface SelectionContext {
-    productType: string;
-    mood: string;
-    moodDetails?: any;
-    timeOfDay: string;
-    scenario?: any;
-    season?: string;
-    effectiveRules: EffectiveRules;
-    assetSelectionRules: AssetSelectionRules;
-}
-
 export interface EffectiveRules {
     blockedProducts: string[];
     blockedTables: string[];
@@ -248,6 +242,20 @@ export interface EffectiveRules {
     shouldIncludePet: boolean;
     petInstruction?: string;
     patronRules: PatronRule[];
+    dynamicConfig?: any;
+    recentHistory?: any;
+}
+
+export interface SelectionContext {
+    productType: string;
+    mood: string;
+    moodDetails?: any;
+    timeOfDay: string;
+    scenario?: any;
+    season?: string;
+    effectiveRules: EffectiveRules;
+    assetSelectionRules?: AssetSelectionRules;
+    requiredAssets?: string[];
 }
 
 export interface AssetSelectionRules {

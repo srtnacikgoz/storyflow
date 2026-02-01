@@ -3,7 +3,7 @@ import { ThresholdSliders } from "../components/rule-engine/ThresholdSliders";
 import { PatronRuleBuilder } from "../components/rule-engine/PatronRuleBuilder";
 import { WeightSettings } from "../components/rule-engine/WeightSettings";
 import { CompatMatrix } from "../components/rule-engine/CompatMatrix";
-import { PatronRule, CategoryThresholds, FirestoreRuleEngineConfig } from "../types";
+import type { PatronRule, CategoryThresholds, FirestoreRuleEngineConfig } from "../types";
 import { Trash2, Edit2, Plus, RefreshCw, Save } from "lucide-react";
 import api from "../services/api";
 
@@ -170,8 +170,8 @@ export default function RuleEnginePage() {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
                             className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                                    ? "border-indigo-600 text-indigo-600"
-                                    : "border-transparent text-gray-500 hover:text-gray-700"
+                                ? "border-indigo-600 text-indigo-600"
+                                : "border-transparent text-gray-500 hover:text-gray-700"
                                 }`}
                         >
                             {tab.label}
@@ -228,9 +228,9 @@ export default function RuleEnginePage() {
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-3 mb-1">
                                                         <span className={`px-2 py-0.5 text-xs rounded uppercase font-bold tracking-wider ${rule.type === 'exclude' ? 'bg-red-100 text-red-700' :
-                                                                rule.type === 'prefer' ? 'bg-green-100 text-green-700' :
-                                                                    rule.type === 'avoid' ? 'bg-yellow-100 text-yellow-700' :
-                                                                        'bg-blue-100 text-blue-700'
+                                                            rule.type === 'prefer' ? 'bg-green-100 text-green-700' :
+                                                                rule.type === 'avoid' ? 'bg-yellow-100 text-yellow-700' :
+                                                                    'bg-blue-100 text-blue-700'
                                                             }`}>
                                                             {rule.type}
                                                         </span>

@@ -1,5 +1,5 @@
 
-import { ScoringWeights, FilterThresholds } from "./types";
+import { ScoringWeights, CategoryThresholds as FilterThresholds } from "./types";
 
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
     tagMatch: { weight: 40, exactMatchBonus: 10, partialMatchBonus: 5 },
