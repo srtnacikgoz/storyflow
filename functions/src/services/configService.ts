@@ -62,12 +62,19 @@ export async function revertPromptTemplate(id: PromptStageId, version: number, u
   throw new Error("Not implemented");
 }
 export function clearPromptStudioCache(): void {
-  // no-op
+  promptStudioCache = null;
+  promptStudioCacheTimestamp = 0;
+  console.log("[ConfigService] Prompt Studio cache cleared");
 }
 
 export function interpolatePrompt(template: string, variables: Record<string, any>): string {
-  // DUMMY IMPLEMENTATION
-  return template;
+  // Template değişkenlerini ({{variable}}) gerçek değerlerle değiştir
+  let result = template;
+  for (const [key, value] of Object.entries(variables)) {
+    const placeholder = `{{${key}}}`;
+    result = result.split(placeholder).join(value ?? "");
+  }
+  return result;
 }
 
 // Cache süresi (5 dakika)

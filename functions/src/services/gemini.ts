@@ -5,6 +5,8 @@
 
 import { AILogService } from "./aiLogService";
 import { AILogStage } from "../types";
+import { getPromptTemplate, interpolatePrompt } from "./configService";
+import { getCompactTrainingContext } from "../orchestrator/promptTrainingService";
 
 // Lazy load imports - Cloud Functions startup timeout'unu önler
 // @google/generative-ai ve sharp modülleri ilk kullanımda yüklenir
@@ -818,7 +820,23 @@ Yanıt formatı (sadece JSON):
       cutlery: { enabled: boolean };
     }
   ): Promise<{ success: boolean; data?: { optimizedPrompt: string; negativePrompt: string; customizations: string[] }; error?: string; cost: number }> {
-    const systemPrompt = "Sen bir prompt mühendisisin. Verilen girdilere göre Gemini Görsel Üretim modeli için en estetik ve teknik promptu hazırla.";
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PROMPT STUDIO ENTEGRASYONU
+    // Config'den system prompt template'ini al (Prompt Studio'dan düzenlenebilir)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const optimizationTemplate = await getPromptTemplate("prompt-optimization");
+    const trainingContext = getCompactTrainingContext();
+
+    // Kullanıcı kurallarını (AI Rules) güçlü bir başlıkla ekle
+    const userRulesSection = hints
+      ? `\n\n## ⚠️ ZORUNLU KULLANICI KURALLARI (İHLAL ETME!)\nAşağıdaki kurallar kullanıcı tarafından tanımlanmıştır ve MUTLAKA uygulanmalıdır:\n${hints}`
+      : "";
+
+    // Template'i değişkenlerle doldur
+    const systemPrompt = interpolatePrompt(optimizationTemplate.systemPrompt, {
+      trainingContext,
+      userRulesSection,
+    });
 
     // eatingMethod'a göre fiziksel kısıtlama oluştur
     let physicalConstraint = "";
@@ -888,11 +906,15 @@ Yanıt formatı (sadece JSON):
       ? `\n\nSEÇİLEN ASSETLER (Prompt'ta mutlaka kullan - ZERO HALLUCINATION):\n${assetDetails.join("\n")}`
       : "";
 
+    // Kullanıcı kuralları varsa hatırlat (system prompt'ta detaylı)
+    const rulesReminder = hints
+      ? "\n\n⚠️ HATIRLATMA: Yukarıdaki ZORUNLU KULLANICI KURALLARI'na mutlaka uy!"
+      : "";
+
     const userPrompt = `
 Ana Prompt: ${basePrompt}
 Senaryo: ${scenario?.scenarioName || "bilinmiyor"}
-Yeme Şekli: ${eatingMethod || "bilinmiyor"}
-İpuçları: ${hints || "yok"}${assetSection}${physicalConstraint}
+Yeme Şekli: ${eatingMethod || "bilinmiyor"}${assetSection}${physicalConstraint}${rulesReminder}
 
 ÖNEMLİ (ZERO HALLUCINATION POLICY): 
 1. Optimize edilmiş prompt'ta yukarıdaki seçilen assetlerin HEPSİ açıkça belirtilmeli.
