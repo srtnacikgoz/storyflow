@@ -28,12 +28,9 @@ import {
   FirestoreFixedAssetsConfig,
   FirestoreBusinessContextConfig,
   FirestorePromptStudioConfig,
-
-
   PromptTemplate,
-
+  PromptVersion,
   PromptStageId,
-
   GlobalOrchestratorConfig,
   FirestoreAssetSelectionConfig,
   FirestoreRuleEngineConfig,
@@ -51,15 +48,111 @@ import {
   DEFAULT_RULE_ENGINE_CONFIG,
 } from "../orchestrator/seed/defaultData";
 
-// DUMMY IMPLEMENTATIONS FOR PROMPT STUDIO (To Fix Build)
+// PROMPT STUDIO FONKSIYONLARI
+/**
+ * Belirli bir prompt template'i getirir
+ * Firestore'dan okur, yoksa DEFAULT_PROMPT_TEMPLATES'den döner
+ */
 export async function getPromptTemplate(id: PromptStageId): Promise<PromptTemplate> {
-  throw new Error("Not implemented");
+  const config = await getPromptStudioConfig();
+  const template = config.prompts[id];
+
+  if (!template) {
+    // Fallback: Default template'den oluştur
+    const defaultTemplate = DEFAULT_PROMPT_TEMPLATES[id];
+    if (defaultTemplate) {
+      return {
+        ...defaultTemplate,
+        updatedAt: Date.now(),
+      } as PromptTemplate;
+    }
+    throw new Error(`Prompt template not found: ${id}`);
+  }
+
+  return template;
 }
-export async function updatePromptTemplate(id: PromptStageId, prompt: string, updatedBy?: string, note?: string): Promise<PromptTemplate> {
-  throw new Error("Not implemented");
+
+/**
+ * Prompt template'i günceller
+ * Eski versiyonu history'ye ekler
+ */
+export async function updatePromptTemplate(
+  id: PromptStageId,
+  prompt: string,
+  updatedBy?: string,
+  note?: string
+): Promise<PromptTemplate> {
+  const db = admin.firestore();
+  const docRef = db.collection("global").doc("config").collection("settings").doc("prompt-studio");
+
+  const config = await getPromptStudioConfig();
+  const existingTemplate = config.prompts[id];
+
+  if (!existingTemplate) {
+    throw new Error(`Prompt template not found: ${id}`);
+  }
+
+  // Yeni versiyon oluştur
+  const newVersion = existingTemplate.version + 1;
+  const now = Date.now();
+
+  // Eski versiyonu history'ye ekle (max 10 versiyon tut)
+  const historyEntry: PromptVersion = {
+    version: existingTemplate.version,
+    systemPrompt: existingTemplate.systemPrompt,
+    updatedAt: existingTemplate.updatedAt,
+    updatedBy: existingTemplate.updatedBy,
+  };
+
+  const updatedHistory = [historyEntry, ...(existingTemplate.history || [])].slice(0, 10);
+
+  // Güncel template
+  const updatedTemplate: PromptTemplate = {
+    ...existingTemplate,
+    systemPrompt: prompt,
+    version: newVersion,
+    history: updatedHistory,
+    updatedAt: now,
+    updatedBy,
+  };
+
+  // Firestore'a kaydet
+  await docRef.update({
+    [`prompts.${id}`]: updatedTemplate,
+    updatedAt: now,
+    updatedBy,
+  });
+
+  // Cache'i temizle
+  clearPromptStudioCache();
+
+  console.log(`[ConfigService] Prompt template updated: ${id} v${newVersion}`);
+  return updatedTemplate;
 }
-export async function revertPromptTemplate(id: PromptStageId, version: number, updatedBy?: string): Promise<PromptTemplate> {
-  throw new Error("Not implemented");
+
+/**
+ * Prompt template'i eski bir versiyona geri döndürür
+ */
+export async function revertPromptTemplate(
+  id: PromptStageId,
+  version: number,
+  updatedBy?: string
+): Promise<PromptTemplate> {
+  const config = await getPromptStudioConfig();
+  const existingTemplate = config.prompts[id];
+
+  if (!existingTemplate) {
+    throw new Error(`Prompt template not found: ${id}`);
+  }
+
+  // History'den ilgili versiyonu bul
+  const targetVersion = existingTemplate.history?.find((h) => h.version === version);
+  if (!targetVersion) {
+    throw new Error(`Version ${version} not found in history for ${id}`);
+  }
+
+  // Eski prompt'u geri yükle
+  return updatePromptTemplate(id, targetVersion.systemPrompt, updatedBy, `Reverted to v${version}`);
 }
 export function clearPromptStudioCache(): void {
   promptStudioCache = null;
