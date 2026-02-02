@@ -271,6 +271,7 @@ export class Orchestrator {
         colorGradePrompt?: string;
         timeOfDay?: string;
         season?: string;
+        geminiPresetId?: string; // YENİ: Gemini presets ile eşleşen ID
       } = {};
       if (effectiveMoodId) {
         try {
@@ -285,8 +286,9 @@ export class Orchestrator {
               colorGradePrompt: moodData?.colorGradePrompt,
               timeOfDay: moodData?.timeOfDay,
               season: moodData?.season,
+              geminiPresetId: moodData?.geminiPresetId, // YENİ: Gemini preset eşleştirmesi
             };
-            console.log(`[Orchestrator] 🌤️ Mood loaded: "${moodData?.name}" | weather: ${moodData?.weather} | lighting: ${moodData?.lightingPrompt?.substring(0, 50)}...`);
+            console.log(`[Orchestrator] 🌤️ Mood loaded: "${moodData?.name}" | weather: ${moodData?.weather} | geminiPresetId: ${moodData?.geminiPresetId || "YOK"} | lighting: ${moodData?.lightingPrompt?.substring(0, 50)}...`);
           }
         } catch (e) {
           console.warn(`[Orchestrator] Could not load mood details: ${e}`);
@@ -356,11 +358,15 @@ export class Orchestrator {
 
         userRulesSnapshot.docs.forEach(doc => {
           const data = doc.data();
+          // AIRule tipinde content yok, title + description var
+          // ruleType değil type kullanılıyor
           userRulesForLog.push({
             id: doc.id,
             category: data.category || "general",
-            content: data.content || "",
-            ruleType: data.ruleType || "do",
+            content: data.title
+              ? `${data.title}${data.description ? ": " + data.description : ""}`
+              : data.description || "",
+            ruleType: data.type || "do",
             applied: true,
           });
         });
@@ -586,8 +592,11 @@ export class Orchestrator {
       }
 
       const timeOfDay = this.getTimeOfDay();
-      // Mood: Önce theme'den al, yoksa zaman bazlı fallback
-      const mood = themeData?.mood || this.getMoodFromTime();
+      // Mood: Önce geminiPresetId kullan (varsa), yoksa zaman bazlı fallback
+      // NOT: themeData?.mood Firestore doc ID, ama buildGeminiPrompt gemini-preset ID bekliyor
+      // Bu yüzden mood doc'undaki geminiPresetId alanını kullanıyoruz
+      const mood = moodDetails.geminiPresetId || this.getMoodFromTime();
+      console.log(`[Orchestrator] 🎭 Mood resolved: "${mood}" (geminiPresetId: ${moodDetails.geminiPresetId || "YOK"}, fallback: ${!moodDetails.geminiPresetId})`);
 
       // Aksesuar kontrolü - tema izin vermiyorsa accessories'i gönderme
       const accessoryAllowed = themeData?.accessoryAllowed === true;
@@ -1623,17 +1632,20 @@ export class Orchestrator {
 
   /**
    * Zamana göre mood belirle
+   * ID'ler gemini-presets/mood-definitions collection'daki ID'lerle eşleşmeli
+   * Mevcut preset ID'leri: morning-ritual, cozy-intimate, bright-airy
    */
   private getMoodFromTime(): string {
     const timeOfDay = this.getTimeOfDay();
+    // Gemini presets ile uyumlu ID'ler
     const moodMap: Record<string, string> = {
-      morning: "morning-vibes",
-      noon: "cozy-cafe",
-      afternoon: "afternoon-chill",
-      evening: "golden-hour",
-      night: "cozy-cafe",
+      morning: "morning-ritual",    // Sabah ritüeli - taze, aydınlık
+      noon: "bright-airy",          // Aydınlık/Ferah - öğle için uygun
+      afternoon: "bright-airy",     // Aydınlık/Ferah - öğleden sonra için uygun
+      evening: "cozy-intimate",     // Samimi/Sıcak - akşam için uygun
+      night: "cozy-intimate",       // Samimi/Sıcak - gece için uygun
     };
-    return moodMap[timeOfDay] || "cozy-cafe";
+    return moodMap[timeOfDay] || "cozy-intimate";
   }
 
   /**
@@ -1936,6 +1948,40 @@ Cup: ${colors} ${material} (from reference)`.trim();
       : { moodId: mood };
 
     try {
+      // Asset etiketlerini topla (Gemini'ye constraint olarak gönderilecek)
+      const assetTags: {
+        product?: string[];
+        plate?: string[];
+        table?: string[];
+        cup?: string[];
+        accessory?: string[];
+        napkin?: string[];
+      } = {};
+
+      if (selectedAssets?.product?.tags?.length) {
+        assetTags.product = selectedAssets.product.tags;
+      }
+      if (selectedAssets?.plate?.tags?.length) {
+        assetTags.plate = selectedAssets.plate.tags;
+      }
+      if (selectedAssets?.table?.tags?.length) {
+        assetTags.table = selectedAssets.table.tags;
+      }
+      if (selectedAssets?.cup?.tags?.length) {
+        assetTags.cup = selectedAssets.cup.tags;
+      }
+      if (selectedAssets?.accessory?.tags?.length) {
+        assetTags.accessory = selectedAssets.accessory.tags;
+      }
+      if (selectedAssets?.napkin?.tags?.length) {
+        assetTags.napkin = selectedAssets.napkin.tags;
+      }
+
+      const hasAssetTags = Object.keys(assetTags).length > 0;
+      if (hasAssetTags) {
+        console.log(`[Orchestrator] 🏷️ Asset tags collected for Gemini prompt:`, assetTags);
+      }
+
       // Gemini prompt builder kullan
       // lightingPresetId artık Senaryo'dan gelmiyor - Mood fallback kullanılacak
       const geminiResult = await buildGeminiPrompt({
@@ -1946,6 +1992,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
         productType,
         includesHands: !!handStyle,
         timeOfDay: timeOfDay || this.getTimeOfDay(),
+        assetTags: hasAssetTags ? assetTags : undefined, // YENİ: Asset etiketleri
       });
 
       // Prompt builder kararlarını al

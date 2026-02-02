@@ -1,7 +1,7 @@
 # Prompt Pipeline Sorunları
 
 > **Tarih:** 2026-02-02
-> **Durum:** Araştırma tamamlandı, çözüm bekleniyor
+> **Durum:** ✅ ÇÖZÜLDÜ (2026-02-02)
 > **Kritik Bulgu:** Sorun Gemini 3 Pro'nun görsel üretmesi değil - sorun ona gönderilen prompt'lar.
 
 ---
@@ -168,14 +168,14 @@ Huge floor-to-ceiling windows overlooking a quiet, tree-lined residential street
 
 | # | Sorun | Dosya | Etki Seviyesi |
 |---|-------|-------|---------------|
-| 1 | userRules content boş | orchestrator.ts:362 | Kritik |
-| 2 | BUSINESS CONTEXT hayali ortam | geminiPromptBuilder.ts:701 | Kritik |
-| 3 | Mood ID eşleşmiyor | orchestrator.ts + geminiPromptBuilder.ts | Yüksek |
-| 4 | Etiketler kullanılmıyor | claudeService.ts + geminiPromptBuilder.ts | Kritik |
-| 5 | interpolatePrompt DUMMY | configService.ts | Düzeltildi ✓ |
-| 6 | clearPromptStudioCache çalışmıyor | configService.ts | Düzeltildi ✓ |
-| 7 | Prompt çok uzun/çelişkili | geminiPromptBuilder.ts | Yüksek |
-| 8 | GeminiService template kullanmıyor | gemini.ts | Düzeltildi ✓ |
+| 1 | userRules content boş | orchestrator.ts:362 | ✅ Düzeltildi |
+| 2 | BUSINESS CONTEXT hayali ortam | geminiPromptBuilder.ts:701 | Kritik (Araştırılacak) |
+| 3 | Mood ID eşleşmiyor | orchestrator.ts + geminiPromptBuilder.ts | ✅ Düzeltildi |
+| 4 | Etiketler kullanılmıyor | orchestrator.ts + geminiPromptBuilder.ts | ✅ Düzeltildi |
+| 5 | interpolatePrompt DUMMY | configService.ts | ✅ Düzeltildi |
+| 6 | clearPromptStudioCache çalışmıyor | configService.ts | ✅ Düzeltildi |
+| 7 | Prompt çok uzun/çelişkili | geminiPromptBuilder.ts | Yüksek (Araştırılacak) |
+| 8 | GeminiService template kullanmıyor | gemini.ts | ✅ Düzeltildi |
 
 ---
 

@@ -477,6 +477,15 @@ export async function buildGeminiPrompt(params: {
   productType?: string;
   includesHands: boolean;
   timeOfDay: string;
+  // Asset etiketleri - Gemini'ye constraint olarak gönderilir
+  assetTags?: {
+    product?: string[];
+    plate?: string[];
+    table?: string[];
+    cup?: string[];
+    accessory?: string[];
+    napkin?: string[];
+  };
 }): Promise<{
   mainPrompt: string;
   negativePrompt: string;
@@ -694,6 +703,50 @@ export async function buildGeminiPrompt(params: {
     promptParts.push(`PRODUCT TEXTURE:`);
     promptParts.push(`- ${textureProfile.geminiPrompt}`);
     promptParts.push("");
+  }
+
+  // 5.5 Asset Etiketleri (Gemini önerileri ile - constraint olarak sunuluyor)
+  if (params.assetTags) {
+    const tagLines: string[] = [];
+
+    // Her asset tipi için rol tanımlayarak ekle
+    if (params.assetTags.plate?.length) {
+      tagLines.push(`- PLATE (serving surface): ${params.assetTags.plate.join(", ")}`);
+    }
+    if (params.assetTags.cup?.length) {
+      tagLines.push(`- CUP/MUG (beverage container): ${params.assetTags.cup.join(", ")}`);
+    }
+    if (params.assetTags.table?.length) {
+      tagLines.push(`- TABLE (background surface): ${params.assetTags.table.join(", ")}`);
+    }
+    if (params.assetTags.accessory?.length) {
+      tagLines.push(`- ACCESSORY (decorative element): ${params.assetTags.accessory.join(", ")}`);
+    }
+    if (params.assetTags.napkin?.length) {
+      tagLines.push(`- NAPKIN (textile element): ${params.assetTags.napkin.join(", ")}`);
+    }
+    // Ürün etiketleri de eklenebilir
+    if (params.assetTags.product?.length) {
+      tagLines.push(`- PRODUCT: ${params.assetTags.product.join(", ")}`);
+    }
+
+    if (tagLines.length > 0) {
+      promptParts.push(`ASSET CONSTRAINTS (FOLLOW THESE):`);
+      promptParts.push(`Use reference images exactly as described below:`);
+      promptParts.push(...tagLines);
+      promptParts.push("");
+      promptParts.push(`NOTE: If tags conflict with visual evidence in reference images, prioritize visual evidence.`);
+      promptParts.push("");
+
+      decisions.push({
+        step: "asset-tags",
+        input: JSON.stringify(params.assetTags),
+        matched: true,
+        result: `${tagLines.length} asset tipi için constraint eklendi`,
+        fallback: false,
+        details: { tagCount: tagLines.length, tags: params.assetTags },
+      });
+    }
   }
 
   // 6. İşletme Bağlamı (SaaS uyumlu - mekan bilgileri)
