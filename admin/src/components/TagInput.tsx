@@ -99,12 +99,20 @@ export default function TagInput({
     // Virgül ile ayırma desteği (yapıştırma için)
     if (val.includes(",")) {
       const parts = val.split(",");
+      const newTags: string[] = [];
+
       parts.forEach((part) => {
         const trimmed = part.trim();
-        if (trimmed && !value.includes(trimmed)) {
-          onChange([...value, trimmed]);
+        // Hem mevcut value'da hem de yeni eklenenler arasında duplicate kontrolü
+        if (trimmed && !value.includes(trimmed) && !newTags.includes(trimmed)) {
+          newTags.push(trimmed);
         }
       });
+
+      // Tüm yeni tag'leri tek seferde ekle
+      if (newTags.length > 0) {
+        onChange([...value, ...newTags]);
+      }
       setInputValue("");
       return;
     }

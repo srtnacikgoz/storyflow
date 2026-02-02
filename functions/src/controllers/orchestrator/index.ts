@@ -129,6 +129,7 @@ export {
   updateSubType,
   deactivateSubType,
   activateSubType,
+  deleteSubType,
   reorderSubTypes,
   seedCategories,
   clearCache as clearCategoriesCache,

@@ -1083,6 +1083,7 @@ export class Orchestrator {
             const productAsset = result.assetSelection!.product;
             console.log(`[Orchestrator] ASSET DEBUG: Selected product: ${productAsset.filename}`);
             console.log(`[Orchestrator] ASSET DEBUG: Product ID: ${productAsset.id}`);
+            console.log(`[Orchestrator] ASSET DEBUG: Asset keys: ${Object.keys(productAsset).join(", ")}`);
             console.log(`[Orchestrator] ASSET DEBUG: Cloudinary URL: ${productAsset.cloudinaryUrl || "N/A"}`);
             console.log(`[Orchestrator] ASSET DEBUG: Storage URL: ${productAsset.storageUrl || "N/A"}`);
 
@@ -2379,22 +2380,28 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
   private async loadImageAsBase64(urlOrAsset: string | Asset): Promise<string> {
     // Asset objesi ise Cloudinary'yi kontrol et
     if (typeof urlOrAsset !== "string") {
-      const asset = urlOrAsset;
+      const asset = urlOrAsset as any; // Rule Engine ScoredAsset formatı için any
+
+      // Rule Engine ScoredAsset formatında URL'ler originalData içinde olabilir
+      // Önce üst seviyeye bak, yoksa originalData'ya bak
+      const cloudinaryUrl = asset.cloudinaryUrl || asset.originalData?.cloudinaryUrl;
+      const storageUrl = asset.storageUrl || asset.originalData?.storageUrl;
+      const publicId = asset.cloudinaryPublicId || asset.originalData?.cloudinaryPublicId;
 
       // Feature flag kontrolü - Cloudinary aktif mi?
       const cloudinaryEnabled = await isCloudinaryEnabled();
 
       // Cloudinary URL varsa ve feature flag aktifse Cloudinary'den yükle
-      if (cloudinaryEnabled && asset.cloudinaryUrl) {
-        console.log(`[Orchestrator] Loading from Cloudinary (enabled): ${asset.cloudinaryPublicId}`);
-        return this.loadImageFromUrl(asset.cloudinaryUrl);
+      if (cloudinaryEnabled && cloudinaryUrl) {
+        console.log(`[Orchestrator] Loading from Cloudinary (enabled): ${publicId}`);
+        return this.loadImageFromUrl(cloudinaryUrl);
       }
 
       // Cloudinary devre dışı veya URL yok - Firebase Storage kullan
-      if (asset.storageUrl) {
+      if (storageUrl) {
         const reason = !cloudinaryEnabled ? "feature flag disabled" : "no Cloudinary URL";
         console.log(`[Orchestrator] Loading from Firebase Storage (${reason}): ${asset.filename}`);
-        return this.loadImageFromUrl(asset.storageUrl);
+        return this.loadImageFromUrl(storageUrl);
       }
 
       throw new Error(`Asset has no valid URL: ${asset.id}`);

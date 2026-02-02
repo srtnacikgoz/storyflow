@@ -244,29 +244,39 @@ export const uploadAssetToCloudinary = functions
         console.log(`[Cloudinary Upload] Success: ${uploadResult.publicId}`);
 
         // 3. Firestore'a kaydet
+        // Not: Firestore undefined değer kabul etmez, sadece tanımlı alanları ekliyoruz
         const assetData: Omit<Asset, "id"> = {
           category: category as AssetCategory,
           subType,
           filename,
           // Firebase Storage alanları boş (Cloudinary kullanılıyor)
+          // Not: Cloudinary'de thumbnail, URL'e transformation eklenerek oluşturulur
           storageUrl: "",
-          thumbnailUrl: undefined,
+          thumbnailUrl: "",
           // Cloudinary alanları
           cloudinaryPublicId: uploadResult.publicId,
           cloudinaryUrl: uploadResult.url,
           cloudinaryVersion: uploadResult.version,
           migrationStatus: "migrated", // Yeni upload'lar zaten Cloudinary'de
           migratedAt: Date.now(),
-          // Diğer alanlar
-          visualProperties,
-          eatingMethod,
-          canBeHeldByHand,
-          tags,
+          // Sabit alanlar
+          tags: tags || [],
           usageCount: 0,
           isActive: true,
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
+
+        // Optional alanları sadece tanımlıysa ekle (Firestore undefined kabul etmez)
+        if (visualProperties !== undefined) {
+          assetData.visualProperties = visualProperties;
+        }
+        if (eatingMethod !== undefined) {
+          assetData.eatingMethod = eatingMethod;
+        }
+        if (canBeHeldByHand !== undefined) {
+          assetData.canBeHeldByHand = canBeHeldByHand;
+        }
 
         const docRef = await db.collection("assets").add(assetData);
 

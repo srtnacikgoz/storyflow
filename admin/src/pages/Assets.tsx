@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { api } from "../services/api";
 import AssetUpload from "../components/AssetUpload";
 import TagInput from "../components/TagInput";
@@ -44,8 +44,9 @@ const ASSETS_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-// Kategori etiketleri
-const CATEGORY_LABELS: Record<AssetCategory, string> = {
+// Kategori etiketleri (Fallback - dinamik kategoriler Firestore'dan gelir)
+// Partial kullanıyoruz çünkü yeni kategoriler dinamik olarak eklenebilir
+const CATEGORY_LABELS_FALLBACK: Partial<Record<AssetCategory, string>> = {
   products: "Ürünler",
   props: "Servis & Ambalaj",
   furniture: "Mobilya",
@@ -108,10 +109,9 @@ const SUBTYPE_LABELS: Record<string, string> = {
   wallet: "Cüzdan",
 };
 
-// Alt tipler kategori bazlı
-const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
+// Alt tipler kategori bazlı (Fallback - dinamik kategoriler Firestore'dan gelir)
+const SUBTYPES_BY_CATEGORY_FALLBACK: Partial<Record<AssetCategory, string[]>> = {
   products: ["croissants", "pastas", "chocolates", "coffees"],
-  // Legacy Props (Tabak/Çanak)
   props: [
     "plates", "cups", "cutlery", "fork", "knife", "spoon",
     "napkins", "cutlery-napkin-set",
@@ -122,13 +122,8 @@ const SUBTYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   environments: ["indoor", "outdoor", "window", "cafe", "home"],
   pets: ["dogs", "cats"],
   interior: ["vitrin", "tezgah", "oturma-alani", "dekorasyon", "genel-mekan"],
-  // Yeni Set Designer Props (Aksesuarlar)
   accessories: [
-    "textile",      // Peçete, örtü
-    "cutlery",      // Çatal, bıçak
-    "decoration",   // Vazo, çiçek
-    "ingredient",   // Malzeme
-    // Legacy
+    "textile", "cutlery", "decoration", "ingredient",
     "phone", "bag", "keys", "book", "toy", "tablet", "glasses", "watch", "notebook", "wallet"
   ],
 };
@@ -146,14 +141,23 @@ interface CategoryFieldConfig {
   material: FieldVisibility;
 }
 
-const FIELDS_BY_CATEGORY: Record<AssetCategory, CategoryFieldConfig> = {
+// Varsayılan alan görünürlükleri (bilinmeyen kategoriler için)
+const DEFAULT_FIELD_CONFIG: CategoryFieldConfig = {
+  tags: "required",
+  dominantColors: "hidden",
+  style: "hidden",
+  material: "optional",
+};
+
+// Kategori bazlı alan görünürlükleri (Fallback)
+const FIELDS_BY_CATEGORY_FALLBACK: Partial<Record<AssetCategory, CategoryFieldConfig>> = {
   products: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
   props: { tags: "required", dominantColors: "hidden", style: "hidden", material: "required" },
   furniture: { tags: "required", dominantColors: "hidden", style: "hidden", material: "required" },
   environments: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
   pets: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
   interior: { tags: "required", dominantColors: "hidden", style: "hidden", material: "hidden" },
-  accessories: { tags: "required", dominantColors: "hidden", style: "hidden", material: "required" }, // Materyal artık zorunlu (Kumaş, Metal vb.)
+  accessories: { tags: "required", dominantColors: "hidden", style: "hidden", material: "required" },
 };
 
 export default function Assets() {
@@ -173,18 +177,20 @@ export default function Assets() {
   // Modal state - hem create hem edit için
   const [showModal, setShowModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState<OrchestratorAsset | null>(null);
+  const [modalKey, setModalKey] = useState(0); // Modal her açıldığında artar, state temizlenir
 
   // Global loading hook
   const { startLoading, stopLoading } = useLoading();
   const { execute: executeDelete } = useLoadingOperation("asset-delete");
 
-  // Dinamik CATEGORY_LABELS oluştur
+  // Dinamik CATEGORY_LABELS oluştur (Firestore'dan gelen kategoriler öncelikli)
   const dynamicCategoryLabels = useMemo(() => {
-    const labels: Record<string, string> = { ...CATEGORY_LABELS };
+    const labels: Record<string, string> = { ...CATEGORY_LABELS_FALLBACK };
+    // Dinamik kategoriler fallback'i override eder
     dynamicCategories.forEach((cat) => {
       labels[cat.type] = cat.displayName;
     });
-    return labels as Record<AssetCategory, string>;
+    return labels;
   }, [dynamicCategories]);
 
   // Dinamik SUBTYPE_LABELS oluştur
@@ -198,14 +204,14 @@ export default function Assets() {
     return labels;
   }, [dynamicCategories]);
 
-  // Dinamik SUBTYPES_BY_CATEGORY oluştur
+  // Dinamik SUBTYPES_BY_CATEGORY oluştur (Firestore'dan gelen kategoriler öncelikli)
   const dynamicSubtypesByCategory = useMemo(() => {
     const subtypes: Record<string, string[]> = {};
-    // Önce varsayılanları kopyala
-    Object.entries(SUBTYPES_BY_CATEGORY).forEach(([cat, subs]) => {
-      subtypes[cat] = [...subs];
+    // Önce fallback'leri kopyala
+    Object.entries(SUBTYPES_BY_CATEGORY_FALLBACK).forEach(([cat, subs]) => {
+      if (subs) subtypes[cat] = [...subs];
     });
-    // Dinamik kategorilerden güncelle (aktif olanları)
+    // Dinamik kategoriler fallback'i override eder
     dynamicCategories.forEach((cat) => {
       const activeSlugs = cat.subTypes
         .filter((st) => st.isActive)
@@ -215,7 +221,7 @@ export default function Assets() {
         subtypes[cat.type] = activeSlugs;
       }
     });
-    return subtypes as Record<AssetCategory, string[]>;
+    return subtypes;
   }, [dynamicCategories]);
 
   // Tüm asset'lerdeki unique tag'leri topla (autocomplete önerileri için)
@@ -275,11 +281,13 @@ export default function Assets() {
   // Modal açma fonksiyonları
   const openCreateModal = () => {
     setEditingAsset(null);
+    setModalKey((k) => k + 1); // Yeni key = yeni modal instance = temiz state
     setShowModal(true);
   };
 
   const openEditModal = (asset: OrchestratorAsset) => {
     setEditingAsset(asset);
+    setModalKey((k) => k + 1); // Yeni key = yeni modal instance = temiz state
     setShowModal(true);
   };
 
@@ -604,8 +612,10 @@ export default function Assets() {
       )}
 
       {/* Asset Modal (Create/Edit) */}
+      {/* key prop ile her açılışta yeni instance oluşturulur, state sorunu önlenir */}
       {showModal && (
         <AssetModal
+          key={modalKey}
           asset={editingAsset}
           categoryLabels={dynamicCategoryLabels}
           subtypeLabels={dynamicSubtypeLabels}
@@ -763,7 +773,19 @@ function AssetModal({
   const [subType, setSubType] = useState(asset?.subType || "");
   const [filename, setFilename] = useState(asset?.filename || "");
   const [storageUrl, setStorageUrl] = useState(asset?.storageUrl || "");
-  const [tags, setTags] = useState<string[]>(asset?.tags || []);
+  // Tags state ve ref - closure sorununu önlemek için ref anında güncellenir
+  const tagsRef = useRef<string[]>(asset?.tags || []);
+  const [tagsState, setTagsState] = useState<string[]>(asset?.tags || []);
+
+  // setTags wrapper - hem state hem ref'i aynı anda günceller
+  const setTags = useCallback((newTags: string[] | ((prev: string[]) => string[])) => {
+    const resolvedTags = typeof newTags === 'function' ? newTags(tagsRef.current) : newTags;
+    tagsRef.current = resolvedTags;
+    setTagsState(resolvedTags);
+  }, []);
+
+  // Alias for backward compatibility
+  const tags = tagsState;
   const [dominantColors, setDominantColors] = useState(asset?.visualProperties?.dominantColors?.join(", ") || "");
   const [style, setStyle] = useState(asset?.visualProperties?.style || "modern");
   const [material, setMaterial] = useState(asset?.visualProperties?.material || "");
@@ -806,7 +828,10 @@ function AssetModal({
       setSubType(asset.subType);
       setFilename(asset.filename);
       setStorageUrl(asset.storageUrl);
-      setTags(asset.tags || []);
+      // Tags için hem ref hem state güncelle
+      const assetTags = asset.tags || [];
+      tagsRef.current = assetTags;
+      setTagsState(assetTags);
       setDominantColors(asset.visualProperties?.dominantColors?.join(", ") || "");
       setStyle(asset.visualProperties?.style || "modern");
       setMaterial(asset.visualProperties?.material || "");
@@ -839,8 +864,8 @@ function AssetModal({
     setUploadError(error);
   }, []);
 
-  // Mevcut kategorinin alan konfigürasyonu
-  const fieldConfig = FIELDS_BY_CATEGORY[category];
+  // Mevcut kategorinin alan konfigürasyonu (bilinmeyen kategoriler için varsayılan)
+  const fieldConfig = FIELDS_BY_CATEGORY_FALLBACK[category] || DEFAULT_FIELD_CONFIG;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -853,15 +878,18 @@ function AssetModal({
       return;
     }
 
+    // Ref'ten güncel tags değerini al (closure sorunu önlenir)
+    const currentTags = tagsRef.current;
+
     // Zorunlu alan validasyonu - inline hatalar gösterilir
-    const hasTagError = fieldConfig.tags === "required" && tags.length === 0;
+    const hasTagError = fieldConfig.tags === "required" && currentTags.length === 0;
     const hasColorError = fieldConfig.dominantColors === "required" && !dominantColors.trim();
     if (hasTagError || hasColorError) return;
 
     setSaving(true);
     try {
-      // Alan değerlerini kategori bazlı hazırla
-      const parsedTags = fieldConfig.tags !== "hidden" ? tags : [];
+      // Alan değerlerini kategori bazlı hazırla (currentTags ref'ten geliyor)
+      const parsedTags = fieldConfig.tags !== "hidden" ? currentTags : [];
 
       const parsedColors = fieldConfig.dominantColors !== "hidden"
         ? dominantColors.split(",").map(c => c.trim()).filter(Boolean)

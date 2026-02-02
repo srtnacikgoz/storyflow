@@ -125,7 +125,7 @@ const CONFIG: Record<AssetType, {
 };
 
 // API URL (environment'dan veya hardcoded)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://europe-west1-sade-instagram-automation.cloudfunctions.net";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://europe-west1-instagram-automation-ad77b.cloudfunctions.net";
 
 /**
  * Blob'u base64 string'e çevirir

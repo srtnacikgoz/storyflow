@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, X, Save } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 interface CompatMatrixProps {
     matrix: Record<string, any>; // ProductType -> Config

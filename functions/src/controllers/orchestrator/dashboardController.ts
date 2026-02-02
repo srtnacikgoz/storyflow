@@ -223,13 +223,14 @@ export const getSetupStatus = functions
       try {
         // Tüm verileri paralel çek
         const [
-          productsSnap,
+          productAssetsSnap,
           assetsSnap,
           scenariosSnap,
           themesSnap,
           timeSlotsSnap,
         ] = await Promise.all([
-          db.collection("products").where("isActive", "==", true).limit(1).get(),
+          // Ürün görselleri: assets koleksiyonunda category="products" olanlar
+          db.collection("assets").where("isActive", "==", true).where("category", "==", "products").limit(1).get(),
           db.collection("assets").where("isActive", "==", true).get(),
           db.collection("global").doc("scenarios").collection("items").where("isActive", "==", true).get(),
           db.collection("themes").get(),
@@ -248,12 +249,12 @@ export const getSetupStatus = functions
         const items: SetupItem[] = [
           {
             id: "products",
-            label: "Ürünler",
-            status: productsSnap.empty ? "incomplete" : "complete",
-            count: productsSnap.size,
-            message: productsSnap.empty ? "Henüz ürün eklenmedi" : undefined,
-            action: productsSnap.empty
-              ? { label: "Ürün Ekle", route: "/products" }
+            label: "Ürün Görselleri",
+            status: productAssetsSnap.empty ? "incomplete" : "complete",
+            count: productAssetsSnap.size,
+            message: productAssetsSnap.empty ? "Henüz ürün görseli eklenmedi" : undefined,
+            action: productAssetsSnap.empty
+              ? { label: "Görsel Ekle", route: "/assets" }
               : undefined,
           },
           {

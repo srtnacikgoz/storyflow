@@ -1677,18 +1677,25 @@ class ApiService {
 
   /**
    * Tüm kategorileri getir
+   * @param skipCache - Backend cache'i bypass et (mutasyon sonrası kullanılır)
    */
-  async getCategories(): Promise<{ categories: DynamicCategory[] }> {
+  async getCategories(skipCache = false): Promise<{ categories: DynamicCategory[] }> {
     const cacheKey = "categories";
-    const cached = this.getFromCache<{ categories: DynamicCategory[] }>(cacheKey);
-    if (cached) return cached;
 
+    // skipCache değilse frontend cache'e bak
+    if (!skipCache) {
+      const cached = this.getFromCache<{ categories: DynamicCategory[] }>(cacheKey);
+      if (cached) return cached;
+    }
+
+    // skipCache varsa backend cache'i de bypass et
+    const endpoint = skipCache ? "getCategories?skipCache=true" : "getCategories";
     const response = await this.fetch<{
       success: boolean;
       data: { categories: DynamicCategory[] };
-    }>("getCategories");
+    }>(endpoint);
 
-    // 5 dakika cache
+    // Cache'e kaydet
     this.setCache(cacheKey, response.data, 300);
     return response.data;
   }
@@ -1816,6 +1823,19 @@ class ApiService {
    */
   async activateSubType(type: DynamicCategoryType, slug: string): Promise<void> {
     await this.fetch<{ success: boolean }>("activateSubType", {
+      method: "POST",
+      body: JSON.stringify({ type, slug }),
+    });
+
+    // Cache'i temizle
+    this.clearCache("categories");
+  }
+
+  /**
+   * Alt kategoriyi kalıcı olarak sil (hard delete)
+   */
+  async deleteSubType(type: DynamicCategoryType, slug: string): Promise<void> {
+    await this.fetch<{ success: boolean }>("deleteSubType", {
       method: "POST",
       body: JSON.stringify({ type, slug }),
     });

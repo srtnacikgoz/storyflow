@@ -11,7 +11,7 @@ import { DynamicCategoryType, CategorySubType } from "../../orchestrator/types";
 
 /**
  * Tüm kategorileri getir
- * GET /getCategories
+ * GET /getCategories?skipCache=true (opsiyonel - cache'i bypass eder)
  */
 export const getCategories = functions
   .region(REGION)
@@ -19,6 +19,12 @@ export const getCategories = functions
     const corsHandler = await getCors();
     corsHandler(request, response, async () => {
       try {
+        // skipCache parametresi varsa backend cache'i temizle
+        const skipCache = request.query.skipCache === "true";
+        if (skipCache) {
+          categoryService.clearCategoriesCache();
+        }
+
         const config = await categoryService.getCategories();
         response.json({
           success: true,
@@ -357,6 +363,47 @@ export const activateSubType = functions
         response.json(result);
       } catch (error) {
         errorResponse(response, error, "activateSubType");
+      }
+    });
+  });
+
+/**
+ * Alt kategoriyi kalıcı olarak sil (hard delete)
+ * DELETE /deleteSubType
+ * Body: { type, slug }
+ */
+export const deleteSubType = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      // DELETE veya POST kabul et (bazı client'lar DELETE body gönderemez)
+      if (request.method !== "DELETE" && request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      try {
+        const { type, slug } = request.body as { type: string; slug: string };
+
+        if (!type || !slug) {
+          response.status(400).json({
+            success: false,
+            error: "type ve slug zorunludur",
+          });
+          return;
+        }
+
+        const result = await categoryService.deleteSubType(type as DynamicCategoryType, slug);
+
+        if (!result.success) {
+          response.status(400).json(result);
+          return;
+        }
+
+        response.json(result);
+      } catch (error) {
+        errorResponse(response, error, "deleteSubType");
       }
     });
   });

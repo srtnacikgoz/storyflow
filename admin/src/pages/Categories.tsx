@@ -52,11 +52,12 @@ export default function Categories() {
   });
 
   // Kategorileri yükle
-  const loadCategories = async () => {
+  // skipCache: Mutasyon sonrası backend cache'i bypass etmek için true geç
+  const loadCategories = async (skipCache = false) => {
     try {
       setLoading(true);
       startLoading("categories", "Kategoriler yükleniyor...");
-      const data = await api.getCategories();
+      const data = await api.getCategories(skipCache);
       setConfig(data);
       setError(null);
 
@@ -158,7 +159,7 @@ export default function Categories() {
         });
       }
       closeModal();
-      loadCategories();
+      loadCategories(true); // Mutasyon sonrası cache bypass
     } catch (err) {
       alert(err instanceof Error ? err.message : "Kayıt başarısız");
     }
@@ -174,9 +175,25 @@ export default function Categories() {
       } else {
         await api.activateSubType(selectedCategory, subType.slug);
       }
-      loadCategories();
+      loadCategories(true); // Mutasyon sonrası cache bypass
     } catch (err) {
       alert(err instanceof Error ? err.message : "Güncelleme başarısız");
+    }
+  };
+
+  // Alt kategori sil (hard delete)
+  const handleDeleteSubType = async (subType: CategorySubType) => {
+    if (!selectedCategory) return;
+
+    if (!confirm(`"${subType.displayName}" alt kategorisini kalıcı olarak silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz ve bu kategoriye bağlı asset'ler etkilenebilir.`)) {
+      return;
+    }
+
+    try {
+      await api.deleteSubType(selectedCategory, subType.slug);
+      loadCategories(true); // Mutasyon sonrası cache bypass
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Silme başarısız");
     }
   };
 
@@ -188,7 +205,7 @@ export default function Categories() {
 
     try {
       await api.seedCategories();
-      loadCategories();
+      loadCategories(true); // Mutasyon sonrası cache bypass
     } catch (err) {
       alert(err instanceof Error ? err.message : "Seed başarısız");
     }
@@ -264,7 +281,7 @@ export default function Categories() {
         });
       }
       closeMainCategoryModal();
-      loadCategories();
+      loadCategories(true); // Mutasyon sonrası cache bypass
     } catch (err) {
       alert(err instanceof Error ? err.message : "Kayıt başarısız");
     }
@@ -297,7 +314,7 @@ export default function Categories() {
       if (selectedCategory === type) {
         setSelectedCategory(null);
       }
-      loadCategories();
+      loadCategories(true); // Mutasyon sonrası cache bypass
     } catch (err) {
       alert(err instanceof Error ? err.message : "Silme başarısız");
     }
@@ -316,7 +333,7 @@ export default function Categories() {
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <p className="text-red-600">{error}</p>
         <button
-          onClick={loadCategories}
+          onClick={() => loadCategories()}
           className="mt-2 text-red-600 underline hover:no-underline"
         >
           Tekrar dene
@@ -490,9 +507,21 @@ export default function Categories() {
                         <button
                           onClick={() => openModal(subType)}
                           className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded"
+                          title="Düzenle"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+
+                        {/* Sil butonu */}
+                        <button
+                          onClick={() => handleDeleteSubType(subType)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          title="Kalıcı olarak sil"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>

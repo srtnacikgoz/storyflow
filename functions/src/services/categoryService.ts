@@ -288,6 +288,48 @@ export async function activateSubType(
 }
 
 /**
+ * Alt kategoriyi kalıcı olarak sil (hard delete)
+ * DİKKAT: Bu işlem geri alınamaz. Mevcut asset referansları bozulabilir.
+ */
+export async function deleteSubType(
+  categoryType: DynamicCategoryType,
+  slug: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const config = await getCategories();
+    const categoryIndex = config.categories.findIndex((c) => c.type === categoryType);
+
+    if (categoryIndex === -1) {
+      return { success: false, error: `Kategori bulunamadı: ${categoryType}` };
+    }
+
+    const category = config.categories[categoryIndex];
+    const subTypeIndex = category.subTypes.findIndex((st) => st.slug === slug);
+
+    if (subTypeIndex === -1) {
+      return { success: false, error: `Alt kategori bulunamadı: ${slug}` };
+    }
+
+    // Alt kategoriyi sil
+    category.subTypes.splice(subTypeIndex, 1);
+    category.updatedAt = Date.now();
+    config.updatedAt = Date.now();
+
+    // Firestore'a kaydet
+    await db.doc(CATEGORIES_DOC_PATH).set(config);
+
+    // Cache'i temizle
+    clearCategoriesCache();
+
+    console.log(`[CategoryService] Alt kategori silindi: ${categoryType}/${slug}`);
+    return { success: true };
+  } catch (error) {
+    console.error("[CategoryService] Alt kategori silinemedi:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
  * Alt kategorilerin sırasını güncelle
  */
 export async function reorderSubTypes(

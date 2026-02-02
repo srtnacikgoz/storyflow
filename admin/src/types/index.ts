@@ -809,6 +809,18 @@ export interface DecisionDetails {
   selectedScenario?: {
     id: string;
     name: string;
+    description?: string;
+    includesHands?: boolean;
+    handStyle?: string;
+    compositionId?: string;
+    reason?: string;
+  };
+  promptDetails?: {
+    referenceImages?: Array<{
+      type: string;
+      filename: string;
+    }>;
+    customizations?: string[];
   };
 }
 
