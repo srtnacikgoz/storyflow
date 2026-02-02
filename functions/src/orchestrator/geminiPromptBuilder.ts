@@ -750,11 +750,17 @@ export async function buildGeminiPrompt(params: {
   }
 
   // 6. İşletme Bağlamı (SaaS uyumlu - mekan bilgileri)
+  // NOT: Bu bölüm STYLE GUIDANCE olarak sunuluyor, referans görseller öncelikli
   try {
     const businessContext = await getBusinessContext();
     if (businessContext.isEnabled && businessContext.promptContext) {
-      promptParts.push(`BUSINESS CONTEXT (MANDATORY):`);
+      // "MANDATORY" yerine "STYLE GUIDANCE" kullan - referans görseller öncelikli
+      promptParts.push(`STYLE GUIDANCE (from business context):`);
       promptParts.push(`${businessContext.promptContext}`);
+      promptParts.push("");
+      promptParts.push(`IMPORTANT: Use this as STYLE/ATMOSPHERE reference only.`);
+      promptParts.push(`DO NOT recreate the physical space described above.`);
+      promptParts.push(`ALWAYS prioritize visual evidence from reference images over this text.`);
       promptParts.push("");
 
       decisions.push({
@@ -767,6 +773,7 @@ export async function buildGeminiPrompt(params: {
           businessName: businessContext.businessName,
           floorLevel: businessContext.floorLevel,
           isEnabled: businessContext.isEnabled,
+          approach: "style-guidance-only", // Görsel öncelikli yaklaşım
         },
       });
     } else {

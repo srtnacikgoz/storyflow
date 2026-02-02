@@ -155,6 +155,11 @@ export interface Mood {
   lightingPrompt: string; // "soft window light, overcast shadows"
   colorGradePrompt: string; // "cool blue tones, desaturated, high contrast"
 
+  // Gemini Preset Eşleştirmesi (YENİ)
+  // gemini-presets/mood-definitions ile eşleşen ID
+  // Değerler: "morning-ritual", "cozy-intimate", "bright-airy"
+  geminiPresetId?: string;
+
   // Durum
   isActive: boolean;
   createdAt: number;

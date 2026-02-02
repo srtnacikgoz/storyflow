@@ -1,9 +1,12 @@
 /**
- * Claude Full Orchestrator Module
+ * Orchestrator Module
  * Asset-based content automation system
+ *
+ * NOT: ClaudeService artık kullanılmıyor (GeminiService aktif)
+ * Arşivlendi: _archived/claudeService.ts.bak
  */
 
 export { Orchestrator } from "./orchestrator";
-export { ClaudeService } from "./claudeService";
+// ClaudeService arşivlendi - artık GeminiService kullanılıyor
 export * from "./visualCriticController";
 export * from "./types";
