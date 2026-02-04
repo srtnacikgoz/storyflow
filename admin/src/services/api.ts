@@ -25,7 +25,6 @@ import type {
   PipelineResult,
   OrchestratorDashboardStats,
   Theme,
-  Mood,
   // AI Monitor types
   AILog,
   AIStats,
@@ -694,66 +693,6 @@ class ApiService {
     });
   }
 
-  // ==========================================
-  // Orchestrator - Mood Management
-  // ==========================================
-
-  /**
-   * Mood listesini getir
-   */
-  async getMoods(activeOnly: boolean = false): Promise<Mood[]> {
-    const response = await this.fetch<{
-      success: boolean;
-      moods: Mood[];
-    }>(`getMoods?activeOnly=${activeOnly}`);
-    return response.moods;
-  }
-
-  /**
-   * Mood detayı getir
-   */
-  async getMood(id: string): Promise<Mood> {
-    const response = await this.fetch<{
-      success: boolean;
-      mood: Mood;
-    }>(`getMood?id=${id}`);
-    return response.mood;
-  }
-
-  /**
-   * Yeni mood ekle
-   */
-  async createMood(mood: Omit<Mood, "id" | "createdAt" | "updatedAt">): Promise<Mood> {
-    const response = await this.fetch<{
-      success: boolean;
-      mood: Mood;
-    }>("createMood", {
-      method: "POST",
-      body: JSON.stringify(mood),
-    });
-    return response.mood;
-  }
-
-  /**
-   * Mood güncelle
-   */
-  async updateMood(id: string, updates: Partial<Mood>): Promise<void> {
-    await this.fetch(`updateMood?id=${id}`, {
-      method: "POST",
-      body: JSON.stringify(updates),
-    });
-  }
-
-  /**
-   * Mood sil
-   */
-  async deleteMood(id: string): Promise<void> {
-    await this.fetch(`deleteMood?id=${id}`, {
-      method: "POST",
-      body: JSON.stringify({ id }),
-    });
-  }
-
   /**
    * Varsayılan stilleri yükle
    */
@@ -763,20 +702,6 @@ class ApiService {
       added: number;
       skipped: number;
     }>("seedStyles", {
-      method: "POST"
-    });
-    return { added: response.added, skipped: response.skipped };
-  }
-
-  /**
-   * Varsayılan modları yükle
-   */
-  async seedMoods(): Promise<{ added: number; skipped: number }> {
-    const response = await this.fetch<{
-      success: boolean;
-      added: number;
-      skipped: number;
-    }>("seedMoods", {
       method: "POST"
     });
     return { added: response.added, skipped: response.skipped };
@@ -1414,13 +1339,13 @@ class ApiService {
 
   /**
    * Yeni tema oluştur
+   * v3.0: mood alanı kaldırıldı - atmosfer bilgisi artık Scenario içinde
    */
   async createTheme(theme: {
     id: string;
     name: string;
     description?: string;
     scenarios: string[];
-    mood: string;
     petAllowed: boolean;
     accessoryAllowed: boolean;
   }): Promise<Theme> {
@@ -1436,12 +1361,12 @@ class ApiService {
 
   /**
    * Tema güncelle
+   * v3.0: mood alanı kaldırıldı
    */
   async updateTheme(id: string, updates: Partial<{
     name: string;
     description: string;
     scenarios: string[];
-    mood: string;
     petAllowed: boolean;
     accessoryAllowed: boolean;
   }>): Promise<Theme> {
@@ -2003,20 +1928,6 @@ class ApiService {
     await this.fetch<{ success: boolean }>("clearPromptStudioCacheEndpoint", {
       method: "POST",
     });
-  }
-
-  /**
-   * AI ile Mood açıklaması üret
-   */
-  async generateMoodDescription(moodName: string, keywords?: string, weather?: string, timeOfDay?: string, season?: string): Promise<string> {
-    const response = await this.fetch<{
-      success: boolean;
-      description: string;
-    }>("generateMoodDescription", {
-      method: "POST",
-      body: JSON.stringify({ moodName, keywords, weather, timeOfDay, season }),
-    });
-    return response.description;
   }
 
   /**

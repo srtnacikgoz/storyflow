@@ -31,19 +31,10 @@ const menuGroups = [
     title: "KURULUM ADIMLARI",
     description: "Sırasıyla tamamlayın",
     items: [
-      {
-        path: "/moods",
-        label: "1. Moods (Atmosfer)",
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-          </svg>
-        ),
-      },
+      // v3.0: Moods artık Senaryolar içinde (Mood + Scenario birleşik)
       {
         path: "/scenarios",
-        label: "2. Senaryolar (Aksiyon)",
+        label: "1. Senaryolar",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -53,7 +44,7 @@ const menuGroups = [
       },
       {
         path: "/themes",
-        label: "3. Temalar (Kurgu)",
+        label: "2. Temalar",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -63,7 +54,7 @@ const menuGroups = [
       },
       {
         path: "/time-slots",
-        label: "4. Zaman Kuralları",
+        label: "3. Zaman Kuralları",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

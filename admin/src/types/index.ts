@@ -571,7 +571,7 @@ export interface Theme {
   name: string;
   description?: string;
   scenarios: string[];
-  mood: string;
+  // v3.0: mood alanı kaldırıldı - atmosfer bilgisi artık Scenario içinde
   petAllowed: boolean;
   accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
   createdAt: number;
@@ -615,7 +615,11 @@ export type PipelineStage =
   | "telegram_approval"
   | "publishing";
 
-// Mood Tanımı (Orchestrator için)
+/**
+ * @deprecated v3.0 - Mood ve Scenario birleştirildi.
+ * Atmosfer bilgileri artık Scenario içinde.
+ * Bu interface geriye uyumluluk için korunuyor.
+ */
 export interface Mood {
   id: string;
   name: string;

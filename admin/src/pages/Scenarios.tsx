@@ -31,7 +31,7 @@ const SCENARIOS_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-// Senaryo tipi
+// Senaryo tipi (v3.0 - Mood + Scenario birleşik)
 interface Scenario {
   id: string;
   name: string;
@@ -42,11 +42,20 @@ interface Scenario {
   isActive: boolean;
   isInterior?: boolean;
   interiorType?: string;
-  mood?: string; // deprecated: Tema'dan devralınıyor
   handPose?: string;
   createdAt?: number;
   updatedAt?: number;
-  // DEPRECATED: Eski çoklu seçim (geriye uyumluluk için)
+
+  // v3.0: Atmosfer alanları (eski Mood'dan)
+  timeOfDay?: "morning" | "afternoon" | "evening" | "night" | "any";
+  season?: "winter" | "spring" | "summer" | "autumn" | "any";
+  weather?: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
+  lightingPrompt?: string;
+  colorGradePrompt?: string;
+  geminiPresetId?: string;
+
+  // DEPRECATED: Eski alanlar (geriye uyumluluk için)
+  mood?: string; // deprecated: v3.0'da senaryo kendi atmosfer bilgisini taşıyor
   compositions?: Array<{ id: string; description: string }>;
 }
 
@@ -108,8 +117,28 @@ const DEFAULT_INTERIOR_TYPES = [
   { id: "genel-mekan", name: "Genel Mekan" },
 ];
 
+// Form tipi (v3.0 - Atmosfer alanları dahil)
+interface ScenarioFormData {
+  id: string;
+  name: string;
+  description: string;
+  includesHands: boolean;
+  compositionId: string;
+  isInterior: boolean;
+  interiorType: string;
+  handPose: string;
+  compositionEntry: string;
+  // v3.0: Atmosfer alanları
+  timeOfDay: "morning" | "afternoon" | "evening" | "night" | "any";
+  season: "winter" | "spring" | "summer" | "autumn" | "any";
+  weather: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
+  lightingPrompt: string;
+  colorGradePrompt: string;
+  geminiPresetId: string;
+}
+
 // Boş form
-const emptyForm = {
+const emptyForm: ScenarioFormData = {
   id: "",
   name: "",
   description: "",
@@ -119,6 +148,13 @@ const emptyForm = {
   interiorType: "",
   handPose: "",
   compositionEntry: "",
+  // v3.0: Atmosfer alanları
+  timeOfDay: "any",
+  season: "any",
+  weather: "any",
+  lightingPrompt: "",
+  colorGradePrompt: "",
+  geminiPresetId: "",
 };
 
 export default function Scenarios() {
@@ -324,6 +360,13 @@ export default function Scenarios() {
       interiorType: scenario.interiorType || "",
       handPose: scenario.handPose || "",
       compositionEntry: scenario.compositionEntry || "",
+      // v3.0: Atmosfer alanları
+      timeOfDay: scenario.timeOfDay || "any",
+      season: scenario.season || "any",
+      weather: scenario.weather || "any",
+      lightingPrompt: scenario.lightingPrompt || "",
+      colorGradePrompt: scenario.colorGradePrompt || "",
+      geminiPresetId: scenario.geminiPresetId || "",
     });
     setShowModal(true);
   };
@@ -717,7 +760,14 @@ export default function Scenarios() {
                         <input
                           type="text"
                           value={form.name}
-                          onChange={(e) => setForm({ ...form, name: e.target.value })}
+                          onChange={(e) => {
+                            // Title Case: Her kelimenin ilk harfi büyük
+                            const titleCase = e.target.value
+                              .split(' ')
+                              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                              .join(' ');
+                            setForm({ ...form, name: titleCase });
+                          }}
                           className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                           placeholder="Örn: Sabah Kahve Keyfi"
                         />

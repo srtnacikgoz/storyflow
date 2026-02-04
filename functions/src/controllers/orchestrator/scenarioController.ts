@@ -133,7 +133,15 @@ export const createScenario = functions
           interiorType,
           suggestedProducts,
           suggestedTimeSlots,
-          mood,
+          mood, // Deprecated: v3.0'da senaryo kendi atmosfer bilgisini taşıyor
+
+          // v3.0: Atmosfer alanları (Mood + Scenario birleşik)
+          timeOfDay,
+          season,
+          weather,
+          lightingPrompt,
+          colorGradePrompt,
+          geminiPresetId,
         } = request.body;
 
         // Validasyon
@@ -187,6 +195,14 @@ export const createScenario = functions
           ...(suggestedProducts !== undefined && { suggestedProducts }),
           ...(suggestedTimeSlots !== undefined && { suggestedTimeSlots }),
           ...(mood !== undefined && { mood }),
+
+          // v3.0: Atmosfer alanları (Mood + Scenario birleşik)
+          ...(timeOfDay !== undefined && { timeOfDay }),
+          ...(season !== undefined && { season }),
+          ...(weather !== undefined && { weather }),
+          ...(lightingPrompt !== undefined && { lightingPrompt }),
+          ...(colorGradePrompt !== undefined && { colorGradePrompt }),
+          ...(geminiPresetId !== undefined && { geminiPresetId }),
         };
 
         await addScenario(scenario);

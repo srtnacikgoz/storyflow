@@ -383,9 +383,14 @@ export default function Templates() {
                     <input
                       type="text"
                       value={form.name}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, name: e.target.value }))
-                      }
+                      onChange={(e) => {
+                        // Title Case: Her kelimenin ilk harfi büyük
+                        const titleCase = e.target.value
+                          .split(' ')
+                          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                          .join(' ');
+                        setForm((prev) => ({ ...prev, name: titleCase }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/50 focus:border-brand-blue"
                       placeholder="Minimal"
                     />

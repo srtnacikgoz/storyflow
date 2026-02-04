@@ -7,7 +7,6 @@
  */
 
 import { getFirestore } from "firebase-admin/firestore";
-import { MoodService } from "../services/moodService";
 import { getBusinessContext } from "../services/configService";
 import { TEXTURE_LIGHTING_MAP, PROMPT_POLLUTION_TERMS } from "./seed/geminiTerminologyData";
 import type { SurfaceType, TextureLightingMapping, PromptPollutionTerm } from "../types";
@@ -388,48 +387,11 @@ export async function buildNegativePrompt(categories?: string[]): Promise<string
 
 /**
  * Zamana göre en uygun mood'u öner
+ * v3.0: Artık senaryolardaki atmosfer bilgisi kullanılıyor.
+ * Bu fonksiyon fallback olarak gemini-presets'ten veri çeker.
  */
 export async function suggestMoodForTime(timeOfDay: string): Promise<GeminiMoodDefinition | null> {
-  // 1. Dinamik Mood Servisi'nden mood ara
-  try {
-    const moodService = new MoodService();
-
-    // Mevsimi belirle
-    const month = new Date().getMonth(); // 0-11
-    let season: "winter" | "spring" | "summer" | "autumn" = "winter";
-    if (month >= 2 && month <= 4) season = "spring";
-    else if (month >= 5 && month <= 7) season = "summer";
-    else if (month >= 8 && month <= 10) season = "autumn";
-
-    const hour = new Date().getHours();
-
-    // Servisten eşleşen moodları al
-    const matchingMoods = await moodService.getMatchingMoods(hour, season);
-
-    if (matchingMoods.length > 0) {
-      // Rastgele bir mood seç
-      const randomMood = matchingMoods[Math.floor(Math.random() * matchingMoods.length)];
-
-      console.log(`[GeminiPromptBuilder] Selected dynamic mood: ${randomMood.name} (${randomMood.id})`);
-
-      // GeminiMoodDefinition formatına dönüştür
-      return {
-        id: randomMood.id,
-        name: randomMood.name,
-        nameEn: randomMood.name,
-        geminiAtmosphere: randomMood.description,
-        lighting: randomMood.lightingPrompt,
-        temperature: "warm/neutral/cool", // Mood içinde opsiyonel olabilir, şimdilik generic
-        colorPalette: [randomMood.colorGradePrompt],
-        timeOfDay: [randomMood.timeOfDay],
-        bestFor: []
-      };
-    }
-  } catch (error) {
-    console.warn("[GeminiPromptBuilder] Failed to fetch dynamic moods:", error);
-  }
-
-  // 2. Fallback: Legacy presets
+  // Gemini presets'ten zamana uygun mood bul
   const presets = await loadGeminiPresets();
   if (!presets) return null;
 

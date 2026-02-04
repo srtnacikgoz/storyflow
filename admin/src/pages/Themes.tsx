@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import { useLoading } from "../contexts/LoadingContext";
-import type { Theme, Mood } from "../types";
+import type { Theme } from "../types";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
 import { PageGuide } from "../components/PageGuide"; // New Import
@@ -20,7 +20,7 @@ const THEMES_TOUR_STEPS: TourStep[] = [
   {
     target: "[data-tour='themes-add']",
     title: "Yeni Tema",
-    content: "Buradan yeni tema oluşturabilirsiniz. Her tema belirli senaryoları ve mood ayarlarını içerir.",
+    content: "Buradan yeni tema oluşturabilirsiniz. Her tema belirli senaryoları ve ayarları içerir.",
     position: "left",
   },
   {
@@ -59,16 +59,12 @@ const DEFAULT_VARIATION_RULES: VariationRules = {
   similarityThreshold: 50,
 };
 
-// Mood seçenekleri artık dinamik olarak veritabanından (api.getMoods) yüklenir.
-
-
 // Boş tema formu
 const emptyTheme = {
   id: "",
   name: "",
   description: "",
   scenario: "", // Tekil senaryo seçimi
-  mood: "",
   petAllowed: false,
   accessoryAllowed: false,
 };
@@ -82,9 +78,6 @@ export default function Themes() {
   // Senaryolar state (API'den dinamik yüklenir)
   const [allScenarios, setAllScenarios] = useState<Scenario[]>([]);
   const [scenariosLoading, setScenariosLoading] = useState(true);
-
-  // Moods state (Dinamik)
-  const [moods, setMoods] = useState<Mood[]>([]);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -107,18 +100,7 @@ export default function Themes() {
     loadThemes();
     loadScenarios();
     loadVariationRules();
-    loadMoods();
   }, []);
-
-  // Moodları API'den yükle
-  const loadMoods = async () => {
-    try {
-      const data = await api.getMoods();
-      setMoods(data);
-    } catch (err) {
-      console.error("Moodlar yüklenemedi:", err);
-    }
-  };
 
   // Senaryoları API'den yükle
   const loadScenarios = async () => {
@@ -194,7 +176,6 @@ export default function Themes() {
         name: theme.name,
         description: theme.description || "",
         scenario: theme.scenarios?.[0] || "", // İlk senaryoyu al (tekil seçim)
-        mood: theme.mood,
         petAllowed: theme.petAllowed,
         accessoryAllowed: theme.accessoryAllowed ?? false,
       });
@@ -227,7 +208,6 @@ export default function Themes() {
           name: form.name,
           description: form.description,
           scenarios: scenariosArray,
-          mood: form.mood,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
         });
@@ -238,7 +218,6 @@ export default function Themes() {
           name: form.name,
           description: form.description,
           scenarios: scenariosArray,
-          mood: form.mood,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
         });
@@ -341,8 +320,7 @@ export default function Themes() {
                 Bir tema paketinin içine şunları koyarsınız:
               </p>
               <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Mood (Atmosfer):</strong> O haftanın duygusu (Örn: Neşeli Yaz Sabahı).</li>
-                <li><strong>Senaryolar (Pozlar):</strong> O hafta kullanılacak çekim teknikleri (Örn: Sadece sahil ve piknik pozları).</li>
+                <li><strong>Senaryolar:</strong> O hafta kullanılacak çekim teknikleri ve atmosfer ayarları (Örn: Sabah kahvesi, akşam keyfi).</li>
               </ul>
               <p>
                 Bu paketi takvime bir kere atarsınız ve o hafta üretilen tüm görseller otomatik olarak bu menüye uyar.
@@ -382,7 +360,7 @@ export default function Themes() {
               </ul>
               <div className="mt-4 pt-4 border-t border-stone-100">
                 <p className="text-xs italic bg-emerald-50 p-2 rounded text-emerald-800">
-                  <strong>Mantık Testi:</strong> Temayı kaydetmeden önce kendinize sorun: "Bu paketteki her şey (Mood + Senaryolar) aynı filmin sahnesi gibi mi duruyor?" Cevap evetse, doğru yoldasınız.
+                  <strong>Mantık Testi:</strong> Temayı kaydetmeden önce kendinize sorun: "Bu paketteki her şey aynı filmin sahnesi gibi mi duruyor?" Cevap evetse, doğru yoldasınız.
                 </p>
               </div>
             </div>
@@ -445,45 +423,19 @@ export default function Themes() {
                     )}
                   </div>
 
-                  {/* Mood - Dinamik */}
-                  {(() => {
-                    const moodInfo = (moods || []).find((m) => m.id === theme.mood);
-                    return (
-                      <div className="mb-3">
-                        <div className="flex items-center gap-2 text-sm text-stone-600 mb-2">
-                          <span className="font-medium">Mood:</span>
-                          {moodInfo ? (
-                            <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">
-                              {moodInfo.name}
-                            </span>
-                          ) : (
-                            <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium italic">
-                              Tanımsız ({theme.mood})
-                            </span>
-                          )}
-                        </div>
-                        {moodInfo && (
-                          <div className="space-y-1">
-                            <p className="text-xs text-stone-500 italic line-clamp-1" title={moodInfo.lightingPrompt}>
-                              💡 {moodInfo.lightingPrompt}
-                            </p>
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {theme.petAllowed && (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                              Köpek izinli
-                            </span>
-                          )}
-                          {theme.accessoryAllowed && (
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                              Aksesuar izinli
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  {/* Tema özellikleri */}
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {theme.petAllowed && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                        Köpek izinli
+                      </span>
+                    )}
+                    {theme.accessoryAllowed && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                        Aksesuar izinli
+                      </span>
+                    )}
+                  </div>
 
                   {/* Senaryo */}
                   <div className="mb-4">
@@ -721,7 +673,11 @@ export default function Themes() {
                       type="text"
                       value={form.name}
                       onChange={(e) => {
-                        const name = e.target.value;
+                        // Title Case: Her kelimenin ilk harfi büyük
+                        const name = e.target.value
+                          .split(' ')
+                          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                          .join(' ');
                         setForm({
                           ...form,
                           name,
@@ -797,7 +753,7 @@ export default function Themes() {
                             <span className="text-sm font-medium text-purple-700">Gemini analiz ediyor...</span>
                           </div>
                           <p className="text-xs text-stone-500 text-center px-4">
-                            Mood ve senaryo bilgileri inceleniyor, en uygun tema açıklaması yazılıyor
+                            Senaryo bilgileri inceleniyor, en uygun tema açıklaması yazılıyor
                           </p>
                         </div>
                       )}
@@ -805,59 +761,6 @@ export default function Themes() {
                     <p className="text-[10px] text-stone-400 mt-1 text-right">
                       *AI açıklamayı İngilizce ve yönetmen notu formatında yazar.
                     </p>
-                  </div>
-
-                  {/* Mood - Gemini Terminolojisi ile */}
-                  <div>
-                    <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-2">
-                      Mood (Atmosfer)
-                      <Tooltip
-                        content="Temanın genel havası. AI bu değere göre ışık, renk sıcaklığı ve atmosfer ayarlarını uygular."
-                        position="right"
-                      />
-                    </label>
-                    <select
-                      value={form.mood}
-                      onChange={(e) => setForm({ ...form, mood: e.target.value })}
-                      className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                    >
-                      <option value="">Mood Seçiniz</option>
-                      {moods.map((mood) => (
-                        <option key={mood.id} value={mood.id}>
-                          {mood.name} ({mood.timeOfDay})
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Gemini Atmosfer Önizleme - Dinamik */}
-                    {(() => {
-                      const selectedMood = moods.find((m) => m.id === form.mood);
-                      if (!selectedMood) return null;
-                      return (
-                        <div className="mt-3 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
-                          <p className="text-xs font-medium text-amber-800 mb-2">
-                            Gemini Prompt Önizleme:
-                          </p>
-                          <div className="space-y-2 text-xs text-stone-700">
-                            <div className="flex flex-col gap-1">
-                              <span className="font-medium text-amber-700">💡 Işık:</span>
-                              <span className="font-mono bg-white px-2 py-1 rounded border border-amber-100">
-                                {selectedMood.lightingPrompt}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <span className="font-medium text-amber-700">🎨 Renk & Atmosfer:</span>
-                              <span className="font-mono bg-white px-2 py-1 rounded border border-amber-100">
-                                {selectedMood.colorGradePrompt}
-                              </span>
-                            </div>
-                            <div className="mt-2 text-[10px] text-stone-500 italic">
-                              {selectedMood.description}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
                   </div>
 
                   {/* Pet Allowed */}

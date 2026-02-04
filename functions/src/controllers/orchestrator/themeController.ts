@@ -70,7 +70,7 @@ export const createTheme = functions
           return;
         }
 
-        const { id, name, description, scenarios, mood, petAllowed, accessoryAllowed } = request.body;
+        const { id, name, description, scenarios, petAllowed, accessoryAllowed } = request.body;
 
         if (!id || !name || !scenarios || scenarios.length === 0) {
           response.status(400).json({
@@ -96,7 +96,6 @@ export const createTheme = functions
           name,
           description: description || "",
           scenarios,
-          mood: mood || "balanced",
           petAllowed: petAllowed || false,
           accessoryAllowed: accessoryAllowed || false,
           createdAt: now,
@@ -128,7 +127,7 @@ export const updateTheme = functions
           return;
         }
 
-        const { id, name, description, scenarios, mood, petAllowed, accessoryAllowed } = request.body;
+        const { id, name, description, scenarios, petAllowed, accessoryAllowed } = request.body;
 
         if (!id) {
           response.status(400).json({ success: false, error: "id is required" });
@@ -150,7 +149,6 @@ export const updateTheme = functions
         if (name !== undefined) updateData.name = name;
         if (description !== undefined) updateData.description = description;
         if (scenarios !== undefined) updateData.scenarios = scenarios;
-        if (mood !== undefined) updateData.mood = mood;
         if (petAllowed !== undefined) updateData.petAllowed = petAllowed;
         if (accessoryAllowed !== undefined) updateData.accessoryAllowed = accessoryAllowed;
 

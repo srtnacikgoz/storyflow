@@ -13,7 +13,6 @@ export * from "./controllers/captionTemplateController";
 export * from "./controllers/orchestratorController";
 export * from "./controllers/aiLogController";
 // Visual Critic - orchestratorController üzerinden export ediliyor
-export * from "./controllers/moodController";
 export * from "./controllers/styleController";
 
 // Export Schedulers

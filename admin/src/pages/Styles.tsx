@@ -369,7 +369,14 @@ function StyleModal({ style, onClose, onSuccess }: { style: Style | null, onClos
                                         type="text"
                                         required
                                         value={formData.displayName}
-                                        onChange={e => setFormData({ ...formData, displayName: e.target.value })}
+                                        onChange={e => {
+                                            // Title Case: Her kelimenin ilk harfi büyük
+                                            const titleCase = e.target.value
+                                                .split(' ')
+                                                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                                                .join(' ');
+                                            setFormData({ ...formData, displayName: titleCase });
+                                        }}
                                         className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2"
                                     />
                                 </div>

@@ -134,12 +134,16 @@ export type MusicMood =
   | "golden-hour"; // Altın saat
 
 // ==========================================
-// MOOD TYPES
+// MOOD TYPES (DEPRECATED - Scenario'ya taşındı)
 // ==========================================
 
 /**
- * Dinamik Mood Tanımı
- * Gemini'ye gönderilecek görsel atmosfer detayları
+ * @deprecated Mood ve Scenario birleştirildi.
+ * Yeni kodda doğrudan Scenario kullanın.
+ * Bu interface geriye uyumluluk için tutulur.
+ *
+ * Migration: moods collection → scenarios collection
+ * Mood alanları artık Scenario interface içinde.
  */
 export interface Mood {
   id: string;
@@ -155,7 +159,7 @@ export interface Mood {
   lightingPrompt: string; // "soft window light, overcast shadows"
   colorGradePrompt: string; // "cool blue tones, desaturated, high contrast"
 
-  // Gemini Preset Eşleştirmesi (YENİ)
+  // Gemini Preset Eşleştirmesi
   // gemini-presets/mood-definitions ile eşleşen ID
   // Değerler: "morning-ritual", "cozy-intimate", "bright-airy"
   geminiPresetId?: string;
@@ -520,56 +524,93 @@ export interface CompositionVariant {
 }
 
 /**
- * Senaryo tanımı
+ * Senaryo tanımı (Mood + Scenario birleştirilmiş)
+ *
+ * v3.0 - Mood ve Scenario tek bir yapıda:
+ * - Atmosfer bilgisi (eski Mood)
+ * - El/kompozisyon bilgisi (eski Scenario)
+ *
+ * Firestore: scenarios collection
  */
 export interface Scenario {
   id: string;
   name: string;
-  description: string;
-  includesHands: boolean;
+  description: string; // Senaryo açıklaması (AI scene description için kullanılabilir)
 
-  // Kompozisyon ayarları (tekli seçim - v2.0)
-  compositionId?: string; // Seçilen kompozisyon ID (Firestore'dan)
+  // === ATMOSFER ALANLARI (eski Mood'dan) ===
+  // NOT: Migration tamamlanana kadar opsiyonel.
+  // Yeni senaryolarda bu alanların doldurulması ZORUNLU.
+  timeOfDay?: "morning" | "afternoon" | "evening" | "night" | "any";
+  season?: "winter" | "spring" | "summer" | "autumn" | "any";
+  weather?: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
+  lightingPrompt?: string; // "soft window light, overcast shadows"
+  colorGradePrompt?: string; // "cool blue tones, desaturated, high contrast"
+  geminiPresetId?: string; // gemini-presets/mood-definitions ile eşleşen ID
+
+  // === EL/KOMPOZİSYON ALANLARI ===
+  includesHands: boolean;
+  handPose?: string; // Hand pose ID (cupping, pinching, breaking, etc.)
   compositionEntry?: string; // Composition entry point (bottom-right, overhead, etc.)
 
-  // Interior senaryolar için (AI görsel üretimi atlanır)
+  // === İNTERİOR SENARYO ===
   isInterior?: boolean; // true ise AI görsel üretimi ATLANIR
   interiorType?: InteriorType; // Hangi interior kategorisinden asset seçilecek
 
-  // Gemini Terminoloji Ayarları (Admin panelden seçilen)
-  mood?: string; // Mood ID (deprecated - Tema'dan devralınıyor)
-  handPose?: string; // Hand pose ID (cupping, pinching, breaking, etc.)
+  // === META ===
+  // NOT: Firestore'da saklanan senaryolarda bu alanlar zorunlu.
+  // Fallback senaryolarda runtime'da eklenir.
+  isActive?: boolean;
+  sortOrder?: number; // Sıralama (UI'da liste için)
+  createdAt?: number;
+  updatedAt?: number;
 
-  // DEPRECATED: Eski çoklu kompozisyon array'i (geriye uyumluluk için)
-  // Yeni senaryolarda compositionId kullanılır
+  // === DEPRECATED ALANLAR ===
+  // Geriye uyumluluk için tutulur, yeni kodda kullanılmaz
+  /** @deprecated compositionId hiç işlevsel değildi, kullanılmayacak */
+  compositionId?: string;
+  /** @deprecated Eski çoklu kompozisyon array'i, kullanılmayacak */
   compositions?: Array<{ id: string; description: string }>;
+  /** @deprecated mood artık scenario'nun kendisi, referans gerekmez */
+  mood?: string;
 }
 
 /**
- * Senaryo seçimi
+ * Senaryo seçimi (pipeline sonucu)
+ *
+ * v3.0 - Senaryo artık atmosfer bilgisini de içeriyor
  */
 export interface ScenarioSelection {
   scenarioId: string;
   scenarioName: string;
-  scenarioDescription: string; // KRİTİK: Senaryo açıklaması - Gemini'ye ortam bilgisi için
+  scenarioDescription: string; // Senaryo açıklaması
 
   // Neden bu senaryo seçildi
   reasoning: string;
 
-  // Senaryo parametreleri
+  // === EL/KOMPOZİSYON BİLGİSİ ===
   includesHands: boolean;
   handStyle?: HandStyleId;
   handStyleDetails?: HandStyle;
-  compositionId: string;
-  composition: string;
+  compositionId: string; // Seçilen kompozisyon (artık compositionEntry ile eşleşir)
+  composition: string; // Kompozisyon açıklaması
 
-  // Interior senaryolar için
+  // === ATMOSFER BİLGİSİ (v3.0 - Scenario'dan) ===
+  timeOfDay?: "morning" | "afternoon" | "evening" | "night" | "any";
+  season?: "winter" | "spring" | "summer" | "autumn" | "any";
+  weather?: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
+  lightingPrompt?: string; // Işık prompt'u
+  colorGradePrompt?: string; // Renk paleti prompt'u
+  geminiPresetId?: string; // Gemini preset ID
+
+  // === İNTERİOR SENARYO ===
   isInterior?: boolean; // true ise AI görsel üretimi ATLANIR
   interiorType?: InteriorType; // Kullanılacak interior asset tipi
 
-  // Tema bilgisi
-  themeId?: string; // Kullanılan tema ID'si
-  themeName?: string; // Tema adı (görüntüleme için)
+  // === TEMA BİLGİSİ (geriye uyumluluk) ===
+  /** @deprecated Theme sistemi yeniden değerlendirilecek */
+  themeId?: string;
+  /** @deprecated Theme sistemi yeniden değerlendirilecek */
+  themeName?: string;
 }
 
 /**
@@ -907,15 +948,16 @@ export interface EffectiveRules {
 
 /**
  * Tema tanımı
- * Senaryoları, mood'u ve diğer ayarları gruplar
+ * Senaryoları ve diğer ayarları gruplar
  * TimeSlotRule'dan referans edilir
+ *
+ * v3.0: mood alanı kaldırıldı - atmosfer bilgisi artık Scenario içinde
  */
 export interface Theme {
   id: string; // "morning-energy"
   name: string; // "Sabah Enerjisi"
   description?: string; // "Enerjik sabah paylaşımları için"
   scenarios: string[]; // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
-  mood: string; // Firestore Mood document ID referansı (moods collection)
   petAllowed: boolean; // Köpek dahil edilebilir mi?
   accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
 
@@ -934,7 +976,6 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     name: "Sabah Enerjisi",
     description: "Güne enerjik başlangıç için aydınlık, taze senaryolar",
     scenarios: ["cam-kenari", "zarif-tutma", "ilk-dilim"],
-    mood: "energetic",
     petAllowed: false,
     accessoryAllowed: false, // Ürün odaklı, aksesuar yok
     isDefault: true,
@@ -944,7 +985,6 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     name: "Brunch Keyfi",
     description: "Sosyal, paylaşım odaklı brunch atmosferi",
     scenarios: ["kahve-ani", "paylasim"],
-    mood: "social",
     petAllowed: false,
     accessoryAllowed: true, // Sosyal ortam, aksesuar uygun
     isDefault: true,
@@ -954,7 +994,6 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     name: "Öğleden Sonra Rahatlığı",
     description: "Rahat, dinlendirici öğleden sonra anları",
     scenarios: ["kahve-kosesi", "yarim-kaldi"],
-    mood: "relaxed",
     petAllowed: true,
     accessoryAllowed: true, // Rahat ortam, aksesuar uygun
     isDefault: true,
@@ -964,7 +1003,6 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     name: "Altın Saat",
     description: "Sıcak, romantik akşam ışığı",
     scenarios: ["cam-kenari", "hediye-acilisi"],
-    mood: "warm",
     petAllowed: false,
     accessoryAllowed: false, // Romantik, minimal
     isDefault: true,
@@ -974,7 +1012,6 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
     name: "Gece Samimiyeti",
     description: "Samimi, rahat gece atmosferi",
     scenarios: ["kahve-kosesi", "yarim-kaldi"],
-    mood: "cozy",
     petAllowed: true,
     accessoryAllowed: true, // Samimi ortam, aksesuar uygun
     isDefault: true,
@@ -995,7 +1032,6 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
       "raf-zenginligi",
       "detay-cekimi",
     ],
-    mood: "warm",
     petAllowed: false,
     accessoryAllowed: false, // Mekan odaklı, aksesuar yok
     isDefault: true,
@@ -1105,18 +1141,15 @@ export interface IssueFeedback {
 
 /**
  * Firestore'da saklanan senaryo
- * Collection: global/scenarios/{scenarioId}
+ * Collection: scenarios/{scenarioId}
+ *
+ * v3.0 - Scenario artık tüm meta alanları içeriyor (isActive, createdAt, updatedAt)
+ * FirestoreScenario sadece ek detaylar için extend eder
  */
 export interface FirestoreScenario extends Scenario {
-  // Firestore meta
-  createdAt: number;
-  updatedAt: number;
-  isActive: boolean;
-
-  // Ek detaylar (ORCHESTRATOR.md'den)
+  // Ek detaylar (opsiyonel - Admin panelden yönetilebilir)
   suggestedProducts?: ProductType[]; // Bu senaryo için önerilen ürün tipleri
   suggestedTimeSlots?: string[]; // Uygun zaman dilimleri (morning, afternoon, vb.)
-  mood?: string; // Senaryo mood'u
 }
 
 /**

@@ -954,6 +954,36 @@ export class Orchestrator {
 
       console.log(`[Orchestrator] Scenario selected: ${result.scenarioSelection!.scenarioName}, isInterior: ${isInteriorScenario}`);
 
+      // ==========================================
+      // v3.0: SENARYO'DAN ATMOSFER BİLGİSİ AL (Mood + Scenario Merge)
+      // ==========================================
+      // Eğer senaryo atmosfer alanları içeriyorsa (yeni format),
+      // moodDetails'i senaryo'dan doldur. Yoksa eski Mood sistemi kullanılır (fallback).
+      if (selectedScenario && (selectedScenario.lightingPrompt || selectedScenario.colorGradePrompt)) {
+        console.log(`[Orchestrator] 🌤️ Atmosfer bilgisi SENARYO'dan alınıyor: "${selectedScenario.name}"`);
+        moodDetails = {
+          name: selectedScenario.name,
+          description: selectedScenario.description,
+          weather: selectedScenario.weather,
+          lightingPrompt: selectedScenario.lightingPrompt,
+          colorGradePrompt: selectedScenario.colorGradePrompt,
+          timeOfDay: selectedScenario.timeOfDay,
+          season: selectedScenario.season,
+          geminiPresetId: selectedScenario.geminiPresetId,
+        };
+        console.log(`[Orchestrator] 🌤️ Atmosfer from Scenario: weather=${selectedScenario.weather || "any"}, timeOfDay=${selectedScenario.timeOfDay || "any"}, lighting=${selectedScenario.lightingPrompt?.substring(0, 50) || "yok"}...`);
+
+        // ScenarioSelection'a da atmosfer bilgisini ekle (v3.0)
+        result.scenarioSelection!.timeOfDay = selectedScenario.timeOfDay;
+        result.scenarioSelection!.season = selectedScenario.season;
+        result.scenarioSelection!.weather = selectedScenario.weather;
+        result.scenarioSelection!.lightingPrompt = selectedScenario.lightingPrompt;
+        result.scenarioSelection!.colorGradePrompt = selectedScenario.colorGradePrompt;
+        result.scenarioSelection!.geminiPresetId = selectedScenario.geminiPresetId;
+      } else {
+        console.log(`[Orchestrator] 🌤️ Atmosfer bilgisi ESKİ SİSTEM'den (Mood collection) kullanılıyor - moodId: ${effectiveMoodId || "yok"}`);
+      }
+
       // YENİ: Scenario selection decision log
       await AILogService.logDecision({
         stage: "scenario-selection",

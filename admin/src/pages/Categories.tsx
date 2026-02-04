@@ -587,7 +587,14 @@ export default function Categories() {
                 <input
                   type="text"
                   value={formData.displayName}
-                  onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                  onChange={(e) => {
+                    // Title Case: Her kelimenin ilk harfi büyük
+                    const titleCase = e.target.value
+                      .split(' ')
+                      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                      .join(' ');
+                    setFormData({ ...formData, displayName: titleCase });
+                  }}
                   placeholder="Kruvasanlar"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
                 />
@@ -799,7 +806,14 @@ export default function Categories() {
                 <input
                   type="text"
                   value={mainCategoryForm.displayName}
-                  onChange={(e) => setMainCategoryForm({ ...mainCategoryForm, displayName: e.target.value })}
+                  onChange={(e) => {
+                    // Title Case: Her kelimenin ilk harfi büyük
+                    const titleCase = e.target.value
+                      .split(' ')
+                      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                      .join(' ');
+                    setMainCategoryForm({ ...mainCategoryForm, displayName: titleCase });
+                  }}
                   placeholder="Özel Ürünler"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
                 />
