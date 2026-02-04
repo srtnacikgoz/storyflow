@@ -1230,7 +1230,13 @@ RULES:
 5. HAND RULES (if hands included):
    - Describe hands as: elegant, feminine, well-manicured nails, natural skin tone
    - Focus on the ACTION the hands are performing
-6. OUTPUT: Return ONLY the description. No quotes, no prefixes like "Here is:".`;
+6. PRODUCT REFERENCE RULE (CRITICAL):
+   - DO NOT describe the product's appearance (color, texture, shape, specific type)
+   - Simply refer to it as "the product", "the pastry", or "the item"
+   - The AI image generator will use the reference image for exact product details
+   - WRONG: "A golden, flaky croissant is captured..."
+   - CORRECT: "The pastry is captured..." or "The product is elegantly presented..."
+7. OUTPUT: Return ONLY the description. No quotes, no prefixes like "Here is:".`;
 
     const userPrompt = `Scenario Name: ${scenarioName}
 Compositions: ${compositions.join(", ")}${handInfo}
