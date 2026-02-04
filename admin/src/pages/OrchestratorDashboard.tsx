@@ -248,13 +248,15 @@ export default function OrchestratorDashboard() {
       setCurrentSlotId(result.slotId);
 
       if (result.success) {
+        // Pipeline arka planda başladı, polling ile takip edilecek
+        // "completed" DEĞİL, başlangıç durumu set ediyoruz
         setProgressInfo({
-          stage: "completed",
-          stageIndex: 7,
+          stage: "asset-selection",
+          stageIndex: 1,
           totalStages: 7,
-          status: "awaiting_approval",
+          status: "generating",
         });
-        loadData();
+        // loadData() burada çağrılmaz - polling tamamlandığında çağrılacak
       } else {
         setProgressInfo({
           stage: "failed",

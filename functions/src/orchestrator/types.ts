@@ -334,6 +334,11 @@ export interface Asset {
   // Örn: Tiramisu kaşıkla yenir ama bardakta servis ediliyorsa elle tutulabilir
   canBeHeldByHand?: boolean;
 
+  // Tabak gerekli mi? (sadece products kategorisi için)
+  // false = "Tabaksız" - ürün elde tutulur, tabak seçilmez (Örn: tablet çikolata, bar)
+  // true (varsayılan) = Ürün etiketine göre uygun tabak seçilir
+  plateRequired?: boolean;
+
   // @deprecated - geriye uyumluluk için, yeni kodda eatingMethod kullanın
   holdingType?: HoldingType;
 

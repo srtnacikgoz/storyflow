@@ -30,6 +30,7 @@ import {
   GeneratedImage,
   QualityControlResult,
   OrchestratorConfig,
+  FirestoreScenario,
 } from "./types";
 import { SelectionContext, RuleEngineConfig } from "./ruleEngine/types";
 import { RuleEngine, AuditLogger } from "./ruleEngine"; // We need to create this file or define constants inline. I'll define constants inline for now.
@@ -665,6 +666,56 @@ export class Orchestrator {
         if (list.length > 0) console.log(`[RuleEngine] Qualified ${cat}: ${list.length} items (Top: ${list[0].id} - ${list[0].score})`);
       });
 
+      // 5.5. Tag-bazlı tabak filtreleme (Gemini'den önce)
+      // Ürün etiketlerine göre uyumlu tabakları filtrele
+      // Örn: "kruvasan" etiketli ürün → "kruvasan tabağı" etiketli tabaklar
+      let effectiveAssetSelectionRules = { ...assetSelectionRules };
+      if (qualifiedAssets.plates && qualifiedAssets.plates.length > 0 && qualifiedAssets.products) {
+        // Ürünlerin tüm etiketlerini topla
+        const productTags = new Set<string>();
+        qualifiedAssets.products.forEach((p: any) => {
+          if (p.tags && Array.isArray(p.tags)) {
+            p.tags.forEach((tag: string) => productTags.add(tag.toLowerCase()));
+          }
+        });
+
+        // Eşleşen tabakları bul (ürün etiketi + " tabağı" formatında)
+        const matchingPlates = qualifiedAssets.plates.filter((plate: any) => {
+          if (!plate.tags || !Array.isArray(plate.tags)) return false;
+          return plate.tags.some((plateTag: string) => {
+            const normalizedPlateTag = plateTag.toLowerCase();
+            // "kruvasan tabağı" -> "kruvasan" ürün etiketi ile eşleşmeli
+            for (const productTag of productTags) {
+              if (normalizedPlateTag === `${productTag} tabağı`) {
+                return true;
+              }
+            }
+            return false;
+          });
+        });
+
+        // Eşleşen tabak varsa, sadece onları kullan
+        if (matchingPlates.length > 0) {
+          console.log(`[Orchestrator] Tag-bazlı tabak filtreleme: ${qualifiedAssets.plates.length} -> ${matchingPlates.length} plates (matching product tags: ${Array.from(productTags).join(", ")})`);
+          // usageCount'a göre sırala (düşükten yükseğe - çeşitlilik için)
+          matchingPlates.sort((a: any, b: any) => (a.usageCount || 0) - (b.usageCount || 0));
+          qualifiedAssets.plates = matchingPlates;
+        } else {
+          console.log(`[Orchestrator] Tag-bazlı tabak eşleşmesi bulunamadı (product tags: ${Array.from(productTags).join(", ")}), tüm tabaklar kullanılabilir`);
+        }
+
+        // plateRequired kontrolü: Tüm ürünlerde plateRequired: false ise tabak seçimini devre dışı bırak
+        const allProductsNoPlate = qualifiedAssets.products.every((p: any) => p.plateRequired === false);
+        if (allProductsNoPlate) {
+          console.log(`[Orchestrator] Tüm ürünler tabaksız (plateRequired: false), tabak seçimi devre dışı`);
+          qualifiedAssets.plates = []; // Boşalt ki Gemini tabak seçmesin
+          effectiveAssetSelectionRules = {
+            ...effectiveAssetSelectionRules,
+            plate: { enabled: false },
+          };
+        }
+      }
+
       // 6. Gemini Selection (Optimization from qualified candidates)
       // Gemini'ye sadece qualified asset'leri gönderiyoruz
       const assetResponse = await this.gemini.selectAssets(
@@ -674,7 +725,7 @@ export class Orchestrator {
         mood,
         effectiveRules,
         fixedAssets,
-        assetSelectionRules
+        effectiveAssetSelectionRules // plateRequired kontrolü sonrası güncellenmiş kurallar
       );
 
       // 7. Post-Validation (Safety Check)
@@ -714,7 +765,14 @@ export class Orchestrator {
       result.assetSelection = assetResponse.data;
       status.completedStages.push("asset_selection");
 
-      console.log(`[Orchestrator] Asset selection complete - Pet: ${result.assetSelection!.includesPet}, Accessory: ${result.assetSelection!.includesAccessory || false}`);
+      // 8.5. Post-processing: plateRequired kontrolü
+      // Seçilen ürün tabaksız ise (plateRequired: false), tabağı kaldır
+      if (result.assetSelection?.product && result.assetSelection.product.plateRequired === false) {
+        console.log(`[Orchestrator] Seçilen ürün tabaksız (plateRequired: false): ${result.assetSelection.product.id}, tabak kaldırıldı`);
+        result.assetSelection.plate = null as any;
+      }
+
+      console.log(`[Orchestrator] Asset selection complete - Pet: ${result.assetSelection!.includesPet}, Accessory: ${result.assetSelection!.includesAccessory || false}, Plate: ${result.assetSelection!.plate?.id || "yok"}`);
 
       // YENİ: Asset selection decision log
       await AILogService.logDecision({
@@ -791,6 +849,26 @@ export class Orchestrator {
 
       // Senaryo filtreleme (tema zaten yüklendi, themeFilteredScenarios kullan)
       let filteredScenarios = themeFilteredScenarios;
+
+      // KRİTİK: Ürün tipine göre filtrele (suggestedProducts alanı varsa)
+      // Örn: Kruvasan senaryosu sadece croissants ürün tipiyle çalışmalı
+      const productTypeFiltered = filteredScenarios.filter(s => {
+        const scenario = s as FirestoreScenario;
+        // suggestedProducts tanımlı değilse veya boşsa, tüm ürün tipleriyle uyumlu kabul et
+        if (!scenario.suggestedProducts || scenario.suggestedProducts.length === 0) {
+          return true;
+        }
+        // suggestedProducts tanımlıysa, mevcut ürün tipi listede olmalı
+        return scenario.suggestedProducts.includes(productType);
+      });
+
+      // Eğer ürün tipine göre filtreleme sonucu en az 1 senaryo varsa kullan
+      if (productTypeFiltered.length > 0) {
+        filteredScenarios = productTypeFiltered;
+        console.log(`[Orchestrator] Product type filter applied: ${filteredScenarios.length} scenarios for ${productType}`);
+      } else {
+        console.log(`[Orchestrator] No scenarios specifically for ${productType}, using all theme-filtered`);
+      }
 
       // Deprecated: scenarioPreference (tema yoksa ve eski kural varsa)
       if (!effectiveThemeId && timeSlotRule.scenarioPreference) {
@@ -1688,9 +1766,11 @@ export class Orchestrator {
       // Firestore'dan gelen prompt'a kompozisyon ve el stili ekle
       let prompt = promptDoc.data()?.prompt || "";
 
-      // KRİTİK: Senaryo açıklamasını prompt'a ekle (ortam/mekan bilgisi)
+      // SCENARIO CONTEXT - DEVRE DIŞI (2026-02-03)
+      // NEDEN: Metin ortam tarifleri referans görselleri override ediyor.
+      // scenarioDescription artık prompt'a eklenmiyor.
       if (scenarioDescription) {
-        prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
+        console.log(`[Orchestrator] getScenarioPrompt: scenarioDescription SKIPPED (${scenarioDescription.substring(0, 30)}...)`);
       }
 
       prompt += await this.getCompositionDetails(scenarioId, compositionId);
@@ -2001,18 +2081,29 @@ Cup: ${colors} ${material} (from reference)`.trim();
       let prompt = geminiResult.mainPrompt;
       let negativePrompt = geminiResult.negativePrompt;
 
-      // KRİTİK: Senaryo açıklamasını prompt'a ekle (ortam/mekan bilgisi)
+      // SCENARIO CONTEXT - DEVRE DIŞI (2026-02-03)
+      // NEDEN: Gemini analizi sonucunda, metin ortam tarifleri referans görselleri override ediyor.
+      // "Pencere önü, doğal ışık" gibi tarifler bile referansla çelişebilir.
+      // Senaryo adı ve kompozisyon bilgisi zaten başka yerlerden (geminiPromptBuilder) geliyor.
+      // Bu açıklama gereksiz tekrar yaratıyor ve referans sadakatini bozuyor.
       if (scenarioDescription) {
-        prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
-        console.log(`[Orchestrator] Added scenario description to prompt: ${scenarioDescription.substring(0, 50)}...`);
+        // ÖNCEKİ KOD: prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
+        // Artık prompt'a eklemiyoruz, sadece log'a yazıyoruz
+        console.log(`[Orchestrator] Scenario description SKIPPED - referans görseller öncelikli. İçerik: ${scenarioDescription.substring(0, 50)}...`);
       }
 
       allDecisions.push({
         step: "scenario-description",
         input: scenarioDescription || null,
-        matched: !!scenarioDescription,
-        result: scenarioDescription ? `Eklendi (${scenarioDescription.length} karakter)` : "Senaryo açıklaması yok",
+        matched: false, // matched: false çünkü prompt'a eklenmiyor
+        result: scenarioDescription
+          ? `SKIPPED - Referans sadakati için devre dışı (${scenarioDescription.length} karakter)`
+          : "Senaryo açıklaması yok",
         fallback: false,
+        details: {
+          reason: "Gemini analizi: Metin tarifleri görselleri yeniden yorumluyor",
+          originalContent: scenarioDescription?.substring(0, 100) || null,
+        },
       });
 
       // -----------------------------------------------------------------------
@@ -2394,9 +2485,10 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
     // Öncelik: 1) Senaryo override, 2) handStyle'a göre seçim
     let prompt = scenarioOverrides[scenarioId] || (handStyle ? handPrompt : noHandPrompt);
 
-    // KRİTİK: Senaryo açıklamasını prompt'un başına ekle (ortam/mekan bilgisi)
+    // SCENARIO CONTEXT - DEVRE DIŞI (2026-02-03)
+    // NEDEN: Metin ortam tarifleri referans görselleri override ediyor.
     if (scenarioDescription) {
-      prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
+      console.log(`[Orchestrator] buildDynamicPromptLegacy: scenarioDescription SKIPPED (${scenarioDescription.substring(0, 30)}...)`);
     }
 
     // Kompozisyon detayları ekle

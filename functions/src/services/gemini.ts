@@ -53,6 +53,90 @@ async function getSafetySettings() {
 }
 
 /**
+ * Timeout wrapper - Belirli bir sürede cevap gelmezse hata fırlat
+ * Gemini API bazen hang oluyor (hiç cevap vermiyor) - bu durumda timeout gerekiyor
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, context: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`[${context}] Request timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+/**
+ * Retry wrapper - Gemini API çağrıları için exponential backoff ile yeniden deneme
+ * Cloud Functions'dan Gemini API'ye fetch hataları yaşandığında otomatik retry yapar
+ * Ayrıca timeout mekanizması ile hang olan çağrıları yakalar
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: {
+    maxRetries?: number;
+    initialDelayMs?: number;
+    maxDelayMs?: number;
+    timeoutMs?: number;
+    context?: string;
+  } = {}
+): Promise<T> {
+  const {
+    maxRetries = 3,
+    initialDelayMs = 2000,
+    maxDelayMs = 30000,
+    timeoutMs = 60000, // 60 saniye varsayılan timeout
+    context = "Gemini",
+  } = options;
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Her çağrıya timeout uygula
+      const result = await withTimeout(fn(), timeoutMs, context);
+      return result;
+    } catch (error) {
+      lastError = error as Error;
+      const errorMessage = lastError.message || String(lastError);
+
+      // Retry yapılabilir hatalar: fetch failed, network errors, timeout
+      const isRetryable =
+        errorMessage.includes("fetch failed") ||
+        errorMessage.includes("ECONNRESET") ||
+        errorMessage.includes("ETIMEDOUT") ||
+        errorMessage.includes("socket hang up") ||
+        errorMessage.includes("network") ||
+        errorMessage.includes("timeout") ||
+        errorMessage.includes("Request timeout");
+
+      if (!isRetryable || attempt === maxRetries) {
+        console.error(`[${context}] Final error after ${attempt} attempts:`, errorMessage);
+        throw lastError;
+      }
+
+      // Exponential backoff with jitter
+      const delay = Math.min(initialDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
+      const jitter = delay * 0.2 * Math.random(); // %20 jitter
+      const waitTime = Math.round(delay + jitter);
+
+      console.warn(`[${context}] Attempt ${attempt}/${maxRetries} failed: ${errorMessage}. Retrying in ${waitTime}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+  }
+
+  throw lastError || new Error(`${context} failed after ${maxRetries} attempts`);
+}
+
+/**
  * Gemini model tipleri (Ocak 2026 - Sadece Gemini 3 Serisi)
  * - gemini-3-pro-preview: Flagship Logic modeli
  * - gemini-3-flash-preview: High-speed Logic modeli
@@ -312,7 +396,11 @@ SCENE:
       // Add prompt at the end
       contentParts.push({ text: fullPrompt });
 
-      const result = await genModel.generateContent(contentParts);
+      // Retry wrapper ile generateContent çağrısı (fetch hatalarına karşı koruma)
+      const result = await withRetry(
+        async () => genModel.generateContent(contentParts),
+        { maxRetries: 3, initialDelayMs: 3000, maxDelayMs: 60000, context: `GeminiService.transformImage(${this.imageModel})` }
+      ) as Awaited<ReturnType<typeof genModel.generateContent>>;
 
       const response = result.response;
 
@@ -460,7 +548,11 @@ SCENE:
     try {
       console.log(`[GeminiService] Text generation with ${this.textModel} (JSON: ${jsonMode})`);
 
-      const result = await genModel.generateContent(prompt);
+      // Retry wrapper ile generateContent çağrısı (fetch hatalarına karşı koruma)
+      const result = await withRetry(
+        async () => genModel.generateContent(prompt),
+        { maxRetries: 3, initialDelayMs: 2000, context: `GeminiService.generateText(${this.textModel})` }
+      ) as Awaited<ReturnType<typeof genModel.generateContent>>;
       const response = result.response;
       const text = response.text();
 
@@ -989,10 +1081,14 @@ Yanıt formatı (sadece JSON):
     try {
       console.log(`[GeminiService] Evaluating image with ${this.textModel}`);
 
-      const result = await genModel.generateContent([
-        { inlineData: { data: imageBase64, mimeType } },
-        { text: prompt }
-      ]);
+      // Retry wrapper ile generateContent çağrısı
+      const result = await withRetry(
+        async () => genModel.generateContent([
+          { inlineData: { data: imageBase64, mimeType } },
+          { text: prompt }
+        ]),
+        { maxRetries: 2, initialDelayMs: 2000, context: `GeminiService.evaluateImage` }
+      ) as Awaited<ReturnType<typeof genModel.generateContent>>;
       const text = result.response.text();
       const feedback = JSON.parse(text);
 
@@ -1162,7 +1258,11 @@ Write the scene description:`;
         safetySettings,
       });
 
-      const result = await genModel.generateContent("Say 'OK' if you can hear me.");
+      // Retry wrapper ile bağlantı testi
+      const result = await withRetry(
+        async () => genModel.generateContent("Say 'OK' if you can hear me."),
+        { maxRetries: 2, initialDelayMs: 1000, context: `GeminiService.testConnection` }
+      ) as Awaited<ReturnType<typeof genModel.generateContent>>;
       const response = result.response;
 
       return !!response.text();

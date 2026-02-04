@@ -18,6 +18,10 @@ import {
   MoodDefinition,
   ProductTextureProfile,
   NegativePromptSet,
+  TextureLightingMapping,
+  PromptPollutionTerm,
+  ProductColorExpectation,
+  ColorHarmonyProfile,
 } from "../../types";
 
 // ==========================================
@@ -710,6 +714,190 @@ export const PRODUCT_TEXTURE_PROFILES: Omit<ProductTextureProfile, "id">[] = [
     lightingNotes: "Backlight chocolate sauce for glow, side light for texture",
     avoidTerms: ["dry chocolate", "deflated choux", "no cream visible"],
   },
+  // ==========================================
+  // GRANÜLER DOKU PROFİLLERİ (GEMINI-TEXTURE-DICTIONARY)
+  // Alt kategoriler - daha spesifik doku terimleri
+  // ==========================================
+  {
+    category: "chocolate-tempered",
+    heroFeature: "temper-sheen",
+    criticalTerms: [
+      "tempered chocolate sheen",
+      "mirror-like tempered finish",
+      "professional chocolate photography",
+      "specular highlights on curved chocolate",
+    ],
+    surfaceType: "glossy",
+    geminiPrompt:
+      "Tempered chocolate with professional sheen. Mirror-like surface catching specular highlights. Sharp clean edges showing proper temper. Crisp light bars reflection on curved surfaces.",
+    lightingNotes: "Side lighting to create specular highlights",
+    avoidTerms: ["bloomed", "matte", "fingerprints", "melted"],
+  },
+  {
+    category: "chocolate-glaze",
+    heroFeature: "mirror-glaze",
+    criticalTerms: [
+      "mirror glaze surface reflecting soft window light",
+      "flawless glaze finish",
+      "perfect reflection",
+      "liquid-smooth coating",
+    ],
+    surfaceType: "glossy",
+    geminiPrompt:
+      "Mirror glaze surface reflecting soft window light. Flawless liquid-smooth coating with perfect reflection. Deep rich color with no imperfections.",
+    lightingNotes: "Soft diffused light for even reflections",
+    avoidTerms: ["cracked glaze", "bubbles", "drips", "uneven"],
+  },
+  {
+    category: "chocolate-snap",
+    heroFeature: "snap-texture",
+    criticalTerms: [
+      "snap texture",
+      "clean break edge",
+      "crisp snap lines",
+      "visible temper at break point",
+    ],
+    surfaceType: "matte",
+    geminiPrompt:
+      "Chocolate showing clean snap texture at break point. Crisp break lines revealing proper temper. Matte interior contrasting with glossy exterior.",
+    lightingNotes: "Side lighting for texture depth at snap edge",
+    avoidTerms: ["crumbly", "soft break", "waxy"],
+  },
+  {
+    category: "chocolate-cocoa-dust",
+    heroFeature: "cocoa-dusting",
+    criticalTerms: [
+      "velvety matte cocoa dusting",
+      "fine cocoa powder coating",
+      "soft powdery texture",
+      "dusted truffle surface",
+    ],
+    surfaceType: "matte",
+    geminiPrompt:
+      "Velvety matte cocoa dusting covering the surface. Fine powdery texture with soft edges. Delicate cocoa coating suggesting handcrafted quality.",
+    lightingNotes: "Soft diffused light for velvety matte appearance",
+    avoidTerms: ["clumpy", "wet", "uneven dusting"],
+  },
+  {
+    category: "cream-buttercream",
+    heroFeature: "buttercream-finish",
+    criticalTerms: [
+      "silky smooth buttercream finish",
+      "spatula strokes visible",
+      "velvety frosting",
+      "perfectly piped buttercream",
+    ],
+    surfaceType: "moist",
+    geminiPrompt:
+      "Silky smooth buttercream finish with visible spatula strokes. Velvety texture catching soft light. Perfectly piped with clean edges.",
+    lightingNotes: "Soft diffused light to show contours",
+    avoidTerms: ["grainy", "melting", "air bubbles", "curdled"],
+  },
+  {
+    category: "cream-mousse",
+    heroFeature: "aerated-texture",
+    criticalTerms: [
+      "aerated mousse texture",
+      "light airy foam",
+      "delicate mousse surface",
+      "pillowy soft texture",
+    ],
+    surfaceType: "moist",
+    geminiPrompt:
+      "Aerated mousse texture showing light airy structure. Delicate foam-like surface with soft peaks. Pillowy appearance suggesting lightness.",
+    lightingNotes: "Soft diffused light to prevent harsh shadows on delicate texture",
+    avoidTerms: ["dense", "flat", "collapsed", "separated"],
+  },
+  {
+    category: "cream-meringue",
+    heroFeature: "toasted-peaks",
+    criticalTerms: [
+      "piped meringue peaks with lightly toasted edges",
+      "caramelized meringue tips",
+      "glossy meringue surface",
+      "torch-kissed peaks",
+    ],
+    surfaceType: "caramelized",
+    geminiPrompt:
+      "Piped meringue peaks with lightly toasted edges. Glossy white surface transitioning to golden-brown caramelized tips. Torch-kissed perfection.",
+    lightingNotes: "Side lighting for texture depth on caramelized peaks",
+    avoidTerms: ["burnt", "weeping", "deflated", "raw"],
+  },
+  {
+    category: "cream-ganache",
+    heroFeature: "ganache-richness",
+    criticalTerms: [
+      "luscious, thick ganache",
+      "rich glossy ganache",
+      "velvety chocolate cream",
+      "pourable consistency",
+    ],
+    surfaceType: "glossy",
+    geminiPrompt:
+      "Luscious thick ganache with rich glossy surface. Velvety chocolate cream showing perfect consistency. Deep color with subtle sheen.",
+    lightingNotes: "Side lighting for glossy highlights",
+    avoidTerms: ["grainy", "separated", "too thin", "dull"],
+  },
+  {
+    category: "pastry-laminated",
+    heroFeature: "visible-lamination",
+    criticalTerms: [
+      "visible flaky laminated layers",
+      "honeycomb cross-section",
+      "shattered flakes",
+      "buttery layer separation",
+    ],
+    surfaceType: "porous",
+    geminiPrompt:
+      "Visible flaky laminated layers showing honeycomb structure. Shattered flakes catching the light. Buttery layer separation revealing craftsmanship.",
+    lightingNotes: "Backlighting to show translucency of the crumb",
+    avoidTerms: ["dense", "compressed", "unbaked layers", "soggy"],
+  },
+  {
+    category: "pastry-crumb",
+    heroFeature: "open-crumb",
+    criticalTerms: [
+      "moist, open crumb structure",
+      "porous airy interior",
+      "soft sponge texture",
+      "even hole distribution",
+    ],
+    surfaceType: "porous",
+    geminiPrompt:
+      "Moist open crumb structure with porous airy interior. Even hole distribution suggesting proper fermentation. Soft sponge texture.",
+    lightingNotes: "Backlighting to show crumb translucency",
+    avoidTerms: ["dense", "gummy", "collapsed", "dry"],
+  },
+  {
+    category: "pastry-crust",
+    heroFeature: "golden-crust",
+    criticalTerms: [
+      "golden-brown baked crust",
+      "Maillard reaction surface",
+      "caramelized exterior",
+      "crispy golden shell",
+    ],
+    surfaceType: "caramelized",
+    geminiPrompt:
+      "Golden-brown baked crust showing Maillard reaction. Caramelized exterior with crispy texture. Rich color gradient from golden to brown.",
+    lightingNotes: "Side lighting for texture depth",
+    avoidTerms: ["burnt", "pale", "soft crust", "uneven color"],
+  },
+  {
+    category: "pastry-tart-edge",
+    heroFeature: "tart-shell",
+    criticalTerms: [
+      "buttery tart shell edge",
+      "short crust texture",
+      "crisp pastry border",
+      "golden shortcrust rim",
+    ],
+    surfaceType: "caramelized",
+    geminiPrompt:
+      "Buttery tart shell edge with short crumbly texture. Crisp pastry border showing golden color. Perfect rim definition.",
+    lightingNotes: "Side lighting for edge definition",
+    avoidTerms: ["soggy bottom", "burnt edges", "cracked shell", "raw dough"],
+  },
 ];
 
 // ==========================================
@@ -830,6 +1018,352 @@ export const NEGATIVE_PROMPT_SETS: Omit<NegativePromptSet, "id">[] = [
 ];
 
 // ==========================================
+// IŞIK-DOKU EŞLEŞTİRME MATRİSİ
+// GEMINI-TEXTURE-DICTIONARY.md'den derlendi
+// "Işık Olmadan Doku Olmaz" prensibi
+// ==========================================
+
+export const TEXTURE_LIGHTING_MAP: TextureLightingMapping[] = [
+  // === DÜZELTME (2026-02-03 Gemini Review) ===
+  // glossy: side-lighting → high-angle-specular (yansıma açısı kontrolü için)
+  // porous: backlighting → raking-light (gözenek gölgeleri için)
+  {
+    surfaceType: "glossy",
+    recommendedLighting: "high-angle-specular",
+    reason: "Parlaklığı 'patlatmak' için yüksek açılı specular ışık gerekli. Yansıma açısı (angle of incidence) kontrol edilmeli. Side-lighting derinlik verir ama specular highlights için yetersiz.",
+    geminiTerms: [
+      "high-angle specular lighting",
+      "controlled reflection angle",
+      "crisp specular highlights on glossy surface",
+      "mirror-like reflection with precise light positioning",
+      "hard reflection for chocolate sheen",
+    ],
+    bestLightingPresetIds: ["dramatic-side", "gourmet-midnight"],
+  },
+  {
+    surfaceType: "moist",
+    recommendedLighting: "soft-diffused",
+    reason: "Yumuşak ışık, nemin yarattığı hafif parıltıyı dağıtmadan korur. Sert ışık ıslak yüzeylerde aşırı parlamaya neden olur.",
+    geminiTerms: [
+      "soft diffused light to show contours",
+      "gentle shadows preserving moisture sheen",
+      "even illumination without harsh reflections",
+      "soft natural light",
+    ],
+    bestLightingPresetIds: ["soft-studio", "morning-window"],
+  },
+  // === KRİTİK DÜZELTME: porous için backlighting HATALI ===
+  // Backlighting gözeneklerin içini karanlıkta bırakır, doku kaybolur.
+  // Raking light (yüzeyi yalayan ışık) her gözenek için minik gölge oluşturur.
+  {
+    surfaceType: "porous",
+    recommendedLighting: "raking-light",
+    reason: "Gözenekli yüzeylerde LOW-ANGLE RAKING LIGHT kullanılmalı. Işık yüzeye çok dar açıyla geldiğinde, her küçük gözenek kendi minik gölgesini oluşturur. Bu 'tactile quality' (dokunma hissi) katar. Backlighting HATALI - gözenekleri karanlıkta bırakır.",
+    geminiTerms: [
+      "low-angle raking light",
+      "grazing light across porous surface",
+      "texture-revealing shallow angle illumination",
+      "each pore casting its own tiny shadow",
+      "tactile quality lighting",
+    ],
+    bestLightingPresetIds: ["dramatic-side", "golden-hour"],
+  },
+  {
+    surfaceType: "matte",
+    recommendedLighting: "soft-diffused",
+    reason: "Yumuşak geçişler için dağınık ışık. Mat yüzeylerde sert ışık düzensiz gölgeler yaratır.",
+    geminiTerms: [
+      "diffused soft light",
+      "even soft lighting",
+      "velvety soft shadows",
+      "gentle illumination",
+    ],
+    bestLightingPresetIds: ["soft-studio", "morning-window"],
+  },
+  {
+    surfaceType: "caramelized",
+    recommendedLighting: "side-lighting",
+    reason: "Texture depth için yan ışık. Karamelize yüzeyin doku derinliği ancak açılı ışıkla ortaya çıkar.",
+    geminiTerms: [
+      "side lighting for texture depth",
+      "golden-brown highlights",
+      "defined shadows on crust",
+      "warm side-lighting",
+    ],
+    bestLightingPresetIds: ["golden-hour", "dramatic-side"],
+  },
+  {
+    surfaceType: "liquid",
+    recommendedLighting: "backlighting",
+    reason: "Sıvılarda ışık geçirgenliği için arka ışık. Kahve kreması, bal gibi sıvılar arkadan ışıkla parlar.",
+    geminiTerms: [
+      "backlighting makes liquid glow",
+      "translucent liquid illumination",
+      "light passing through liquid",
+      "subsurface glow",
+    ],
+    bestLightingPresetIds: ["dramatic-backlight"],
+  },
+  {
+    surfaceType: "mixed",
+    recommendedLighting: "soft-diffused",
+    reason: "Karışık yüzeyler için dengeli ışık. Birden fazla doku tipinde yumuşak ışık en güvenli seçim.",
+    geminiTerms: [
+      "balanced soft lighting",
+      "gentle even illumination",
+      "soft diffused natural light",
+    ],
+    bestLightingPresetIds: ["soft-studio", "morning-window"],
+  },
+  // === YENİ DOKU TİPLERİ (Gemini Review 2026-02-03) ===
+  // Patisserie için kritik eksik tipler eklendi
+  {
+    surfaceType: "flaky",
+    recommendedLighting: "high-contrast-side",
+    reason: "Katmanlı/pullu dokular (kruvasan) için yüksek kontrastlı yan ışık. Katmanların arasına gölge girmesi gerekir ki 'ayrışma' net görülsün.",
+    geminiTerms: [
+      "high-contrast side-lighting",
+      "dramatic shadows between flaky layers",
+      "crisp layer separation visible",
+      "texture-emphasizing directional light",
+    ],
+    bestLightingPresetIds: ["dramatic-side", "mediterranean-terrace"],
+  },
+  {
+    surfaceType: "powdery",
+    recommendedLighting: "flat-frontal",
+    reason: "Unlu/pudra şekerli dokular için düşük yoğunluklu düz ön ışık. Tozlu doku sert gölgeleri sevmez; sert gölge tozu 'kirli' gösterir.",
+    geminiTerms: [
+      "flat frontal light",
+      "low-intensity even illumination",
+      "shadow-free powder coating",
+      "clean powder sugar appearance",
+      "diffused front lighting",
+    ],
+    bestLightingPresetIds: ["soft-studio", "morning-window"],
+  },
+  {
+    surfaceType: "velvety",
+    recommendedLighting: "top-down-ambient",
+    reason: "Kadifemsi dokular (velvet sprey çikolata) için yukarıdan ambient ışık. Kadife doku ışığı her yöne dağıttığı için, belirli yönden gelen sert ışık 'mat lüks' hissini bozar.",
+    geminiTerms: [
+      "top-down ambient light",
+      "soft overhead illumination",
+      "even light distribution for velvet texture",
+      "matte luxury appearance",
+      "non-directional soft lighting",
+    ],
+    bestLightingPresetIds: ["soft-studio"],
+  },
+];
+
+// ==========================================
+// PROMPT POLLUTION TERİMLERİ
+// GEMINI-TEXTURE-DICTIONARY.md'den derlendi
+// İşe yaramayan, kaçınılması gereken terimler
+// ==========================================
+
+export const PROMPT_POLLUTION_TERMS: PromptPollutionTerm[] = [
+  {
+    term: "8K",
+    reason: "Fiziksel çözünürlüğü değiştirmez, sadece estetik işaretçi. Gemini zaten maksimum kalite üretir.",
+    severity: "warning",
+    alternative: "sharp focus on details",
+  },
+  {
+    term: "4K",
+    reason: "Fiziksel çözünürlüğü değiştirmez. Çözünürlük model tarafından belirlenir.",
+    severity: "warning",
+    alternative: "crisp details",
+  },
+  {
+    term: "ultra HD",
+    reason: "Anlamsız terim. Model zaten yüksek kalite üretir.",
+    severity: "warning",
+    alternative: "high detail",
+  },
+  {
+    term: "hyper-realistic",
+    reason: "Ters tepebilir, over-processing yapabilir. Aşırı işleme artifaktlara neden olur.",
+    severity: "block",
+    alternative: "realistic photograph",
+  },
+  {
+    term: "photorealistic",
+    reason: "Gereksiz. 'a photo of' ifadesi zaten gerçekçilik sağlar.",
+    severity: "warning",
+    alternative: "a photo of",
+  },
+  {
+    term: "extremely detailed",
+    reason: "Çok genel. Model ne detayını bilmiyor, spesifik olmak gerekir.",
+    severity: "warning",
+    alternative: "intricate textures visible",
+  },
+  {
+    term: "best quality",
+    reason: "Anlamsız. Model her zaman en iyisini yapmaya çalışıyor.",
+    severity: "warning",
+  },
+  {
+    term: "cinematic lighting",
+    reason: "Çok belirsiz. Hangi sinema? Hangi ışık? Spesifik olmak gerekir.",
+    severity: "warning",
+    alternative: "dramatic side-lighting at 45 degrees",
+  },
+  {
+    term: "masterpiece",
+    reason: "Subjektif ve anlamsız. Model kalite kararı veremiyor.",
+    severity: "warning",
+  },
+  {
+    term: "award winning",
+    reason: "Model ödül kavramını anlamıyor. Teknik terimler daha etkili.",
+    severity: "warning",
+  },
+  {
+    term: "professional",
+    reason: "Çok genel. 'Professional lifestyle photography' gibi bağlam gerekir.",
+    severity: "warning",
+    alternative: "professional food photography",
+  },
+  {
+    term: "high resolution",
+    reason: "Çözünürlük prompt'tan bağımsız. Model kapasitesi belirler.",
+    severity: "warning",
+  },
+];
+
+// ==========================================
+// ATMOSPHERIC INTEGRATION - RENK SICAKLIĞI UYUMLULUK MATRİSİ
+// Her ürün kategorisinin doğal görünmesi için tercih ettiği Kelvin aralığı
+// ==========================================
+
+export const PRODUCT_COLOR_EXPECTATIONS: ProductColorExpectation[] = [
+  {
+    category: "chocolate",
+    preferredRange: { min: 2700, max: 3500, label: "warm amber" },
+    tolerableRange: { min: 2500, max: 4000, label: "warm to neutral" },
+    forbiddenRange: { min: 5500, max: 7000, label: "cool blue" }, // Çikolata mavimsi OLMAMALI
+    dominantHue: "warm brown",
+    colorGradingHint: "Enhance warm brown tones, slight orange undertones. Avoid any blue cast on chocolate surface.",
+  },
+  {
+    category: "viennoiserie",
+    preferredRange: { min: 3000, max: 4500, label: "warm golden" },
+    tolerableRange: { min: 2700, max: 5500, label: "warm to daylight" },
+    dominantHue: "golden brown",
+    colorGradingHint: "Emphasize golden-brown crust, warm buttery tones. Maillard reaction colors should pop.",
+  },
+  {
+    category: "coffee",
+    preferredRange: { min: 2700, max: 3500, label: "warm cozy" },
+    tolerableRange: { min: 2500, max: 5000, label: "warm to neutral" },
+    dominantHue: "rich brown",
+    colorGradingHint: "Rich espresso brown, golden crema highlights. Steam should appear warm, not cold.",
+  },
+  {
+    category: "slice-cakes",
+    preferredRange: { min: 4000, max: 5500, label: "neutral daylight" },
+    tolerableRange: { min: 3500, max: 6000, label: "balanced" },
+    dominantHue: "varied",
+    colorGradingHint: "True color representation important. Frosting colors should be accurate, not yellow-shifted.",
+  },
+  {
+    category: "big-cakes",
+    preferredRange: { min: 4000, max: 5500, label: "neutral daylight" },
+    tolerableRange: { min: 3500, max: 6000, label: "balanced" },
+    dominantHue: "varied",
+    colorGradingHint: "Accurate color reproduction for decorations. White frosting should appear white, not cream.",
+  },
+  {
+    category: "small-desserts",
+    preferredRange: { min: 4500, max: 5500, label: "bright neutral" },
+    tolerableRange: { min: 4000, max: 6000, label: "neutral to bright" },
+    dominantHue: "vibrant",
+    colorGradingHint: "Vibrant colors, accurate representation. Pastels should be delicate, not muddy.",
+  },
+  {
+    category: "profiterole",
+    preferredRange: { min: 3000, max: 4000, label: "warm" },
+    tolerableRange: { min: 2700, max: 4500, label: "warm to neutral" },
+    dominantHue: "chocolate brown",
+    colorGradingHint: "Glossy chocolate sauce should appear rich brown. Cream should be warm white, not stark.",
+  },
+  {
+    category: "special-orders",
+    preferredRange: { min: 4000, max: 5500, label: "neutral daylight" },
+    tolerableRange: { min: 3500, max: 6000, label: "flexible" },
+    dominantHue: "varied",
+    colorGradingHint: "Adapt to product dominant color. Prioritize accurate color representation.",
+  },
+];
+
+// ==========================================
+// MOOD-PRODUCT RENK UYUMU MATRİSİ
+// Hangi mood hangi ürünle iyi gider?
+// ==========================================
+
+export const COLOR_HARMONY_PROFILES: ColorHarmonyProfile[] = [
+  // Sabah Enerjisi (5500K) - Soğuk tonlar
+  { productCategory: "chocolate", moodStyle: "morning-ritual", harmonyScore: 45, paletteOverlap: ["cream"], conflictingColors: ["cool blue vs warm brown"], suggestedAdjustment: "warm up +500K" },
+  { productCategory: "viennoiserie", moodStyle: "morning-ritual", harmonyScore: 90, paletteOverlap: ["cream", "golden", "pastel"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "coffee", moodStyle: "morning-ritual", harmonyScore: 85, paletteOverlap: ["cream", "white"], conflictingColors: [], suggestedAdjustment: "slight warm +200K" },
+  { productCategory: "slice-cakes", moodStyle: "morning-ritual", harmonyScore: 80, paletteOverlap: ["pastel", "white"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "small-desserts", moodStyle: "morning-ritual", harmonyScore: 88, paletteOverlap: ["pastel", "vibrant"], conflictingColors: [], suggestedAdjustment: "none" },
+
+  // Rustik Nostalji (3000K) - Sıcak tonlar
+  { productCategory: "chocolate", moodStyle: "rustic-heritage", harmonyScore: 95, paletteOverlap: ["earth tones", "copper", "deep browns"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "viennoiserie", moodStyle: "rustic-heritage", harmonyScore: 92, paletteOverlap: ["golden", "earth tones"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "coffee", moodStyle: "rustic-heritage", harmonyScore: 98, paletteOverlap: ["copper", "deep browns"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "slice-cakes", moodStyle: "rustic-heritage", harmonyScore: 65, paletteOverlap: ["cream"], conflictingColors: ["cool pastels vs warm amber"], suggestedAdjustment: "cool down -300K or use warm-toned cakes" },
+  { productCategory: "small-desserts", moodStyle: "rustic-heritage", harmonyScore: 60, paletteOverlap: [], conflictingColors: ["vibrant colors vs muted earth"], suggestedAdjustment: "cool down -500K" },
+
+  // Lüks Gece (3500K) - Dramatik
+  { productCategory: "chocolate", moodStyle: "gourmet-midnight", harmonyScore: 100, paletteOverlap: ["black", "deep gray", "gold accents"], conflictingColors: [], suggestedAdjustment: "none - perfect match" },
+  { productCategory: "viennoiserie", moodStyle: "gourmet-midnight", harmonyScore: 55, paletteOverlap: ["gold"], conflictingColors: ["bright pastry vs dark mood"], suggestedAdjustment: "brighten pastry with rim light" },
+  { productCategory: "coffee", moodStyle: "gourmet-midnight", harmonyScore: 90, paletteOverlap: ["deep gray", "gold"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "profiterole", moodStyle: "gourmet-midnight", harmonyScore: 95, paletteOverlap: ["black", "gold accents"], conflictingColors: [], suggestedAdjustment: "none" },
+
+  // Sosyal Paylaşım (5000K) - Nötr
+  { productCategory: "chocolate", moodStyle: "bright-airy", harmonyScore: 70, paletteOverlap: ["warm neutrals"], conflictingColors: ["slightly cool for chocolate"], suggestedAdjustment: "warm up +300K" },
+  { productCategory: "viennoiserie", moodStyle: "bright-airy", harmonyScore: 85, paletteOverlap: ["warm neutrals", "soft gold"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "slice-cakes", moodStyle: "bright-airy", harmonyScore: 90, paletteOverlap: ["white", "soft colors"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "small-desserts", moodStyle: "bright-airy", harmonyScore: 92, paletteOverlap: ["vibrant", "soft gold"], conflictingColors: [], suggestedAdjustment: "none" },
+
+  // Samimi Köşe (3200K) - Sıcak samimi
+  { productCategory: "chocolate", moodStyle: "cozy-intimate", harmonyScore: 92, paletteOverlap: ["warm beige", "soft brown"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "viennoiserie", moodStyle: "cozy-intimate", harmonyScore: 88, paletteOverlap: ["warm beige", "cream"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "coffee", moodStyle: "cozy-intimate", harmonyScore: 95, paletteOverlap: ["warm beige", "soft brown", "cream"], conflictingColors: [], suggestedAdjustment: "none" },
+  { productCategory: "slice-cakes", moodStyle: "cozy-intimate", harmonyScore: 75, paletteOverlap: ["cream"], conflictingColors: ["cool frostings may look yellow"], suggestedAdjustment: "use warm-toned cakes or cool down slightly" },
+];
+
+/**
+ * Kelvin değerini string'den parse et
+ * "3000K" -> 3000
+ */
+export function parseKelvin(kelvinStr: string): number {
+  const match = kelvinStr.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 5000; // Default daylight
+}
+
+/**
+ * Ürün kategorisi için renk beklentisini bul
+ */
+export function getProductColorExpectation(category: string): ProductColorExpectation | null {
+  return PRODUCT_COLOR_EXPECTATIONS.find(e => e.category === category) || null;
+}
+
+/**
+ * Mood-Product uyum skorunu bul
+ */
+export function getColorHarmonyScore(productCategory: string, moodStyle: string): ColorHarmonyProfile | null {
+  return COLOR_HARMONY_PROFILES.find(
+    h => h.productCategory === productCategory && h.moodStyle === moodStyle
+  ) || null;
+}
+
+// ==========================================
 // SEED HELPER
 // ==========================================
 
@@ -870,5 +1404,9 @@ export function getGeminiTerminologySeedData() {
       id: createSlug(n.name),
       ...n,
     })),
+    textureLightingMap: TEXTURE_LIGHTING_MAP,
+    promptPollutionTerms: PROMPT_POLLUTION_TERMS,
+    productColorExpectations: PRODUCT_COLOR_EXPECTATIONS,
+    colorHarmonyProfiles: COLOR_HARMONY_PROFILES,
   };
 }

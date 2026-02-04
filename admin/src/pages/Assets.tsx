@@ -798,7 +798,10 @@ function AssetModal({
       ? asset.canBeHeldByHand
       : (asset?.holdingType === "hand" || asset?.eatingMethod === "hand")
   );
-
+  // Tabak gerekli mi? (varsayılan: true - tabak gerekli)
+  const [plateRequired, setPlateRequired] = useState<boolean>(
+    asset?.plateRequired !== undefined ? asset.plateRequired : true
+  );
 
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -841,6 +844,7 @@ function AssetModal({
           ? asset.canBeHeldByHand
           : (asset.holdingType === "hand" || asset.eatingMethod === "hand")
       );
+      setPlateRequired(asset.plateRequired !== undefined ? asset.plateRequired : true);
     }
   }, [asset]);
 
@@ -919,6 +923,7 @@ function AssetModal({
         ...(category === "products" && {
           eatingMethod,
           canBeHeldByHand,
+          plateRequired, // Tabaksız ürünler için false
           holdingType: eatingMethod, // geriye uyumluluk için
         }),
       };
@@ -1250,6 +1255,25 @@ function AssetModal({
                         </span>
                         <span className="text-xs text-gray-500">
                           Bu ürün görsellerde el ile tutularak gösterilebilir mi?
+                        </span>
+                      </div>
+                    </label>
+
+                    {/* Tabaksız checkbox */}
+                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-orange-200 cursor-pointer hover:bg-orange-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        id="plateRequired"
+                        checked={!plateRequired}
+                        onChange={(e) => setPlateRequired(!e.target.checked)}
+                        className="mt-0.5 h-5 w-5 border-gray-300 rounded focus:ring-orange-500 text-orange-600"
+                      />
+                      <div>
+                        <span className="block text-sm font-medium text-gray-800">
+                          🍫 Tabaksız (Elde Tutulur)
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          Bu ürün tabakta sunulmaz, elde tutularak gösterilir. (Örn: tablet çikolata, bar)
                         </span>
                       </div>
                     </label>

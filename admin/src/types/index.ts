@@ -534,6 +534,10 @@ export interface OrchestratorAsset {
   eatingMethod?: EatingMethod;
   // Elle tutulabilir mi? (sadece products için - el senaryoları için)
   canBeHeldByHand?: boolean;
+  // Tabak gerekli mi? (sadece products için)
+  // false = "Tabaksız" - elde tutulur, tabak seçilmez
+  // true (varsayılan) = Ürün etiketine göre uygun tabak seçilir
+  plateRequired?: boolean;
   // @deprecated - geriye uyumluluk için
   holdingType?: HoldingType;
   usageCount: number;

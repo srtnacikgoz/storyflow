@@ -273,8 +273,14 @@ export class OrchestratorScheduler {
     const orchestrator = new Orchestrator(this.config);
 
     try {
-      // Slot durumunu güncelle
-      await this.updateSlotStatus(slotId, "generating");
+      // Slot durumunu güncelle ve başlangıç progress'i set et
+      await this.db.collection("scheduled-slots").doc(slotId).update({
+        status: "generating",
+        currentStage: "initializing",
+        stageIndex: 0,
+        totalStages: 7,
+        updatedAt: Date.now(),
+      });
 
       // Ürün tipini belirle
       const productType = rule.productTypes[0]; // İlk ürün tipi
@@ -363,7 +369,8 @@ export class OrchestratorScheduler {
 
   /**
    * Belirli bir ürün tipi için hemen içerik üret
-   * Pipeline tamamlanana kadar bekler
+   * Pipeline arka planda başlatılır, hemen slotId döner
+   * Frontend polling ile progress takip eder
    * @param productType - Ürün tipi
    * @param overrideThemeId - Opsiyonel tema ID'si (senaryo filtreleme için)
    * @param overrideAspectRatio - Opsiyonel aspect ratio (Instagram formatı için)
@@ -397,6 +404,7 @@ export class OrchestratorScheduler {
 
     try {
       // Pipeline'ı bekleyerek çalıştır (themeId ve aspectRatio override ile)
+      // NOT: await ZORUNLU - Cloud Functions HTTP request bitince instance kapanır
       await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId, overrideAspectRatio);
 
       return {

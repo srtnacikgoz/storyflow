@@ -218,6 +218,26 @@ export type ProductCategory =
   | "special-orders"; // Özel siparişler, custom tasarımlar
 
 /**
+ * Granüler Doku Kategorileri
+ * GEMINI-TEXTURE-DICTIONARY.md'den türetilen alt kategoriler
+ * ProductCategory'den ayrı çünkü bunlar ürün değil, doku profilleri
+ */
+export type TextureCategory =
+  | ProductCategory // Ana ürün kategorileri de kullanılabilir
+  | "chocolate-tempered" // Temperli çikolata parlaklığı
+  | "chocolate-glaze" // Ayna glazür
+  | "chocolate-snap" // Kırık doku
+  | "chocolate-cocoa-dust" // Kakao tozu kaplama
+  | "cream-buttercream" // Buttercream
+  | "cream-mousse" // Mus
+  | "cream-meringue" // Beze
+  | "cream-ganache" // Ganaj
+  | "pastry-laminated" // Katmanlı hamur
+  | "pastry-crumb" // Gözenekli iç
+  | "pastry-crust" // Kabuk
+  | "pastry-tart-edge"; // Tart kenarı
+
+/**
  * Target Audience Segments
  */
 export type TargetAudience =
@@ -942,11 +962,11 @@ export interface MoodDefinition {
 
 /**
  * Ürün Doku Profili
- * Her ürün kategorisi için kritik doku terimleri
+ * Her ürün kategorisi veya doku alt kategorisi için kritik doku terimleri
  */
 export interface ProductTextureProfile {
   id: string;
-  category: ProductCategory;
+  category: TextureCategory; // Ana kategori veya granüler doku kategorisi
   heroFeature: string; // "lamination" | "cross-section" | "reflection"
   criticalTerms: string[]; // ["honeycomb structure", "shattered flakes"]
   surfaceType: string; // "matte" | "glossy" | "porous" | "moist"
@@ -1026,4 +1046,123 @@ export interface GeneratedGeminiPrompt {
     mood: string;
   };
   generatedAt: number;
+}
+
+// ==========================================
+// TEXTURE-LIGHTING EŞLEŞTİRME (GEMINI-TEXTURE-DICTIONARY)
+// ==========================================
+
+/**
+ * Doku Tipi
+ * surfaceType değerleri için tip güvenliği
+ */
+export type SurfaceType =
+  | "glossy"       // Parlak (temperli çikolata, glaze)
+  | "moist"        // Nemli (kremalar, yaş kek)
+  | "porous"       // Gözenekli (ekmek içi, sünger kek)
+  | "matte"        // Mat (kakao tozu kaplama)
+  | "caramelized"  // Karamelize (kabuk, beze uçları)
+  | "liquid"       // Sıvı (kahve, bal, sos)
+  | "mixed"        // Karışık
+  // === YENİ TİPLER (Gemini Review 2026-02-03) ===
+  | "flaky"        // Katmanlı/pullu (kruvasan, milföy)
+  | "powdery"      // Unlu/pudra şekerli (alman pastası)
+  | "velvety";     // Kadifemsi (velvet sprey çikolata)
+
+/**
+ * Işık-Doku Eşleştirmesi
+ * GEMINI-TEXTURE-DICTIONARY.md'den derlenen kurallar
+ * "Işık Olmadan Doku Olmaz" prensibi
+ */
+/**
+ * Işık Yönlendirme Tipleri
+ * Optik fizik ve gastronomi fotoğrafçılığı terminolojisi
+ */
+export type LightingDirection =
+  | "side-lighting"        // Yan ışık (45-90°)
+  | "soft-diffused"        // Yumuşak yayılmış
+  | "backlighting"         // Arka ışık
+  | "rim-lighting"         // Kenar ışığı
+  // === YENİ TİPLER (Gemini Review 2026-02-03) ===
+  | "high-angle-specular"  // Yüksek açılı specular (glossy için)
+  | "raking-light"         // Yüzeyi yalayan ışık (porous için)
+  | "high-contrast-side"   // Yüksek kontrastlı yan (flaky için)
+  | "flat-frontal"         // Düz ön ışık (powdery için)
+  | "top-down-ambient";    // Yukarıdan ambient (velvety için)
+
+export interface TextureLightingMapping {
+  surfaceType: SurfaceType;
+  recommendedLighting: LightingDirection;
+  reason: string; // Neden bu ışık öneriliyor
+  geminiTerms: string[]; // Işık için Gemini terimleri
+  bestLightingPresetIds: string[]; // Önerilen preset ID'leri
+}
+
+/**
+ * Prompt Pollution Terimi
+ * İşe yaramayan, kaçınılması gereken terimler
+ */
+export interface PromptPollutionTerm {
+  term: string;
+  reason: string; // Neden işe yaramıyor
+  severity: "warning" | "block"; // Uyar mı yoksa engelle mi
+  alternative?: string; // Varsa alternatif terim
+}
+
+// ==========================================
+// ATMOSPHERIC INTEGRATION (Renk Sıcaklığı Uyumu)
+// Mood.temperature + Product.colorExpectation çelişki çözümü
+// ==========================================
+
+/**
+ * Renk Sıcaklığı Aralığı (Kelvin)
+ */
+export interface TemperatureRange {
+  min: number; // Minimum Kelvin (örn: 2700)
+  max: number; // Maximum Kelvin (örn: 3500)
+  label: string; // "warm amber" | "neutral daylight" | "cool blue"
+}
+
+/**
+ * Ürün Kategorisi Renk Beklentisi
+ * Her ürün kategorisinin doğal görünmesi için tercih ettiği sıcaklık aralığı
+ */
+export interface ProductColorExpectation {
+  category: ProductCategory;
+  preferredRange: TemperatureRange; // İdeal sıcaklık aralığı
+  tolerableRange: TemperatureRange; // Kabul edilebilir aralık
+  forbiddenRange?: TemperatureRange; // Kesinlikle yasak (örn: çikolata için mavi)
+  dominantHue: string; // "warm brown" | "golden" | "cream" | "dark"
+  colorGradingHint: string; // Renk düzeltme önerisi
+}
+
+/**
+ * Atmosferik Çelişki Sonucu
+ */
+export type AtmosphericConflictSeverity = "none" | "minor" | "moderate" | "severe";
+
+export interface AtmosphericConflictResult {
+  hasConflict: boolean;
+  severity: AtmosphericConflictSeverity;
+  moodTemperature: number; // Kelvin
+  productPreferredRange: TemperatureRange;
+  delta: number; // Fark (Kelvin)
+  recommendation: {
+    adjustedTemperature?: number; // Önerilen düzeltilmiş sıcaklık
+    colorGradingHint: string; // Prompt'a eklenecek renk ipucu
+    warnings: string[]; // Kullanıcıya gösterilecek uyarılar
+  };
+}
+
+/**
+ * Renk Harmonisi Profili
+ * Ürün ve mood arasındaki renk uyumu
+ */
+export interface ColorHarmonyProfile {
+  productCategory: ProductCategory;
+  moodStyle: string; // "morning-ritual" | "rustic-heritage" | "gourmet-midnight"
+  harmonyScore: number; // 0-100 arası uyum skoru
+  paletteOverlap: string[]; // Ortak renkler
+  conflictingColors: string[]; // Çakışan renkler
+  suggestedAdjustment: string; // "warm up slightly" | "cool down" | "none"
 }

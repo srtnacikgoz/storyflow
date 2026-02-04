@@ -9,6 +9,8 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { MoodService } from "../services/moodService";
 import { getBusinessContext } from "../services/configService";
+import { TEXTURE_LIGHTING_MAP, PROMPT_POLLUTION_TERMS } from "./seed/geminiTerminologyData";
+import type { SurfaceType, TextureLightingMapping, PromptPollutionTerm } from "../types";
 
 // Gemini Terminology Types
 export interface GeminiMoodDefinition {
@@ -69,6 +71,7 @@ export interface GeminiProductTextureProfile {
   geminiTerms: string[];
   geminiPrompt: string;
   focusAreas: string[];
+  surfaceType?: string; // "glossy" | "moist" | "porous" | "matte" | "caramelized" | "liquid" | "mixed"
 }
 
 // Cache for loaded presets (performance optimization)
@@ -451,6 +454,310 @@ export async function suggestLightingForProduct(productType: string): Promise<Ge
   return suitable || presets.lighting[0] || null;
 }
 
+// ==========================================
+// TEXTURE-LIGHTING EŞLEŞTİRME FONKSİYONLARI
+// GEMINI-TEXTURE-DICTIONARY.md'den türetildi
+// ==========================================
+
+/**
+ * Doku tipine göre uygun ışık öner
+ * "Işık Olmadan Doku Olmaz" prensibi
+ *
+ * @param surfaceType - Yüzey tipi (glossy, moist, porous, matte, caramelized, liquid, mixed)
+ * @returns Işık önerisi ve gerekçesi
+ */
+export function suggestLightingForTexture(surfaceType: SurfaceType): TextureLightingMapping | null {
+  const mapping = TEXTURE_LIGHTING_MAP.find(m => m.surfaceType === surfaceType);
+
+  if (mapping) {
+    console.log(`[GeminiPromptBuilder] Texture-Lighting Match: ${surfaceType} → ${mapping.recommendedLighting}`);
+    console.log(`[GeminiPromptBuilder] Reason: ${mapping.reason}`);
+  } else {
+    console.warn(`[GeminiPromptBuilder] No lighting mapping found for surface type: ${surfaceType}`);
+  }
+
+  return mapping || null;
+}
+
+/**
+ * Ürün tipinden doku tipini çıkar ve uygun ışık öner
+ * Otomatik zincir: productType → surfaceType → lighting
+ *
+ * @param productType - Ürün kategorisi
+ * @returns Işık önerisi veya null
+ */
+export async function suggestLightingForProductTexture(productType: string): Promise<{
+  surfaceType: SurfaceType | null;
+  lighting: TextureLightingMapping | null;
+  textureProfile: GeminiProductTextureProfile | null;
+}> {
+  // 1. Ürün tipinden texture profile al
+  const textureProfile = await getTextureProfile(productType);
+
+  if (!textureProfile) {
+    console.warn(`[GeminiPromptBuilder] No texture profile for product type: ${productType}`);
+    return { surfaceType: null, lighting: null, textureProfile: null };
+  }
+
+  // 2. surfaceType'dan ışık öner
+  const surfaceType = textureProfile.surfaceType as SurfaceType;
+  const lighting = suggestLightingForTexture(surfaceType);
+
+  console.log(`[GeminiPromptBuilder] Auto chain: ${productType} → ${surfaceType} → ${lighting?.recommendedLighting || "none"}`);
+
+  return { surfaceType, lighting, textureProfile };
+}
+
+/**
+ * Prompt'tan pollution terimlerini temizle veya uyar
+ *
+ * @param prompt - Temizlenecek prompt
+ * @param mode - "clean" (temizle) veya "warn" (sadece uyar)
+ * @returns Temizlenmiş prompt ve bulunan pollution terimleri
+ */
+export function cleanPromptPollution(prompt: string, mode: "clean" | "warn" = "warn"): {
+  cleanedPrompt: string;
+  foundTerms: PromptPollutionTerm[];
+  warnings: string[];
+  blocked: string[];
+} {
+  const foundTerms: PromptPollutionTerm[] = [];
+  const warnings: string[] = [];
+  const blocked: string[] = [];
+  let cleanedPrompt = prompt;
+
+  for (const pollution of PROMPT_POLLUTION_TERMS) {
+    // Case-insensitive arama
+    const regex = new RegExp(`\\b${pollution.term}\\b`, "gi");
+
+    if (regex.test(prompt)) {
+      foundTerms.push(pollution);
+
+      if (pollution.severity === "block") {
+        blocked.push(`❌ BLOCKED: "${pollution.term}" - ${pollution.reason}`);
+        if (mode === "clean") {
+          cleanedPrompt = cleanedPrompt.replace(regex, pollution.alternative || "");
+        }
+      } else {
+        warnings.push(`⚠️ WARNING: "${pollution.term}" - ${pollution.reason}${pollution.alternative ? ` → Alternatif: "${pollution.alternative}"` : ""}`);
+        if (mode === "clean") {
+          cleanedPrompt = cleanedPrompt.replace(regex, pollution.alternative || "");
+        }
+      }
+    }
+  }
+
+  // Log sonuçları
+  if (foundTerms.length > 0) {
+    console.log(`[GeminiPromptBuilder] Prompt Pollution Check: ${foundTerms.length} term(s) found`);
+    warnings.forEach(w => console.log(`  ${w}`));
+    blocked.forEach(b => console.log(`  ${b}`));
+  }
+
+  // Fazla boşlukları temizle
+  cleanedPrompt = cleanedPrompt.replace(/\s+/g, " ").trim();
+
+  return { cleanedPrompt, foundTerms, warnings, blocked };
+}
+
+/**
+ * Tüm texture-lighting eşleştirmelerini getir
+ */
+export function getAllTextureLightingMappings(): TextureLightingMapping[] {
+  return TEXTURE_LIGHTING_MAP;
+}
+
+/**
+ * Tüm pollution terimlerini getir
+ */
+export function getAllPromptPollutionTerms(): PromptPollutionTerm[] {
+  return PROMPT_POLLUTION_TERMS;
+}
+
+// ==========================================
+// ATMOSPHERIC INTEGRATION - ÇELİŞKİ ÇÖZÜM FONKSİYONLARI
+// ==========================================
+
+import {
+  PRODUCT_COLOR_EXPECTATIONS,
+  COLOR_HARMONY_PROFILES,
+  parseKelvin,
+  getProductColorExpectation,
+  getColorHarmonyScore,
+} from "./seed/geminiTerminologyData";
+import type { AtmosphericConflictResult, ProductColorExpectation } from "../types";
+
+/**
+ * Mood sıcaklığı ile ürün renk beklentisi arasındaki çelişkiyi kontrol et
+ *
+ * @param moodTemperatureStr - Mood'un renk sıcaklığı (örn: "3000K")
+ * @param productCategory - Ürün kategorisi (örn: "chocolate")
+ * @returns Çelişki analizi ve öneriler
+ */
+export function checkAtmosphericConflict(
+  moodTemperatureStr: string,
+  productCategory: string
+): AtmosphericConflictResult {
+  const moodTemp = parseKelvin(moodTemperatureStr);
+  const expectation = getProductColorExpectation(productCategory);
+
+  // Ürün için beklenti tanımlı değilse, çelişki yok varsay
+  if (!expectation) {
+    return {
+      hasConflict: false,
+      severity: "none",
+      moodTemperature: moodTemp,
+      productPreferredRange: { min: 4000, max: 5500, label: "neutral" },
+      delta: 0,
+      recommendation: {
+        colorGradingHint: "Standard color grading",
+        warnings: [],
+      },
+    };
+  }
+
+  // Tercih edilen aralık içinde mi?
+  const inPreferred = moodTemp >= expectation.preferredRange.min && moodTemp <= expectation.preferredRange.max;
+  const inTolerable = moodTemp >= expectation.tolerableRange.min && moodTemp <= expectation.tolerableRange.max;
+  const inForbidden = expectation.forbiddenRange
+    ? moodTemp >= expectation.forbiddenRange.min && moodTemp <= expectation.forbiddenRange.max
+    : false;
+
+  // Delta hesapla (tercih edilen aralığın ortasına göre)
+  const preferredMid = (expectation.preferredRange.min + expectation.preferredRange.max) / 2;
+  const delta = moodTemp - preferredMid;
+
+  // Severity belirle
+  let severity: AtmosphericConflictResult["severity"] = "none";
+  let warnings: string[] = [];
+  let adjustedTemperature: number | undefined;
+  let colorGradingHint = expectation.colorGradingHint;
+
+  if (inForbidden) {
+    severity = "severe";
+    warnings.push(`⚠️ SEVERE: ${productCategory} için ${moodTemperatureStr} YASAK bölgede (${expectation.forbiddenRange!.label})`);
+    warnings.push(`Önerilen: ${expectation.preferredRange.min}K - ${expectation.preferredRange.max}K aralığı`);
+    adjustedTemperature = preferredMid;
+    colorGradingHint = `CRITICAL: ${colorGradingHint} Current ${moodTemperatureStr} will make ${productCategory} look unappetizing.`;
+  } else if (!inTolerable) {
+    severity = "moderate";
+    warnings.push(`⚠️ MODERATE: ${moodTemperatureStr} ${productCategory} için kabul edilebilir aralık dışında`);
+    warnings.push(`Tercih edilen: ${expectation.preferredRange.label} (${expectation.preferredRange.min}K-${expectation.preferredRange.max}K)`);
+    adjustedTemperature = moodTemp > expectation.tolerableRange.max
+      ? expectation.tolerableRange.max
+      : expectation.tolerableRange.min;
+    colorGradingHint = `Adjust: ${colorGradingHint} Consider warming/cooling by ${Math.abs(delta)}K.`;
+  } else if (!inPreferred) {
+    severity = "minor";
+    warnings.push(`ℹ️ MINOR: ${moodTemperatureStr} kabul edilebilir ama ideal değil (tercih: ${expectation.preferredRange.label})`);
+    colorGradingHint = `Fine-tune: ${colorGradingHint}`;
+  }
+
+  console.log(`[AtmosphericIntegration] Check: mood=${moodTemperatureStr}, product=${productCategory}, severity=${severity}, delta=${delta}K`);
+
+  return {
+    hasConflict: severity !== "none",
+    severity,
+    moodTemperature: moodTemp,
+    productPreferredRange: expectation.preferredRange,
+    delta,
+    recommendation: {
+      adjustedTemperature,
+      colorGradingHint,
+      warnings,
+    },
+  };
+}
+
+/**
+ * Mood ve ürün arasındaki renk harmonisini kontrol et
+ *
+ * @param moodStyle - Mood stili (örn: "morning-ritual")
+ * @param productCategory - Ürün kategorisi
+ * @returns Harmoni skoru ve öneriler
+ */
+export function checkColorHarmony(
+  moodStyle: string,
+  productCategory: string
+): {
+  harmonyScore: number;
+  isGoodMatch: boolean;
+  adjustment: string;
+  details: ReturnType<typeof getColorHarmonyScore>;
+} {
+  const harmony = getColorHarmonyScore(productCategory, moodStyle);
+
+  if (!harmony) {
+    // Profil bulunamadı - nötr skor döndür
+    return {
+      harmonyScore: 75,
+      isGoodMatch: true,
+      adjustment: "none",
+      details: null,
+    };
+  }
+
+  const isGoodMatch = harmony.harmonyScore >= 70;
+
+  console.log(`[AtmosphericIntegration] Harmony: ${productCategory} + ${moodStyle} = ${harmony.harmonyScore}/100 (${isGoodMatch ? "GOOD" : "WEAK"})`);
+
+  return {
+    harmonyScore: harmony.harmonyScore,
+    isGoodMatch,
+    adjustment: harmony.suggestedAdjustment,
+    details: harmony,
+  };
+}
+
+/**
+ * Tam atmosferik analiz - hem sıcaklık hem harmoni kontrolü
+ */
+export function analyzeAtmosphere(params: {
+  moodTemperature: string;
+  moodStyle: string;
+  productCategory: string;
+}): {
+  temperatureConflict: AtmosphericConflictResult;
+  colorHarmony: ReturnType<typeof checkColorHarmony>;
+  overallScore: number;
+  promptAdjustments: string[];
+  shouldWarnUser: boolean;
+} {
+  const temperatureConflict = checkAtmosphericConflict(params.moodTemperature, params.productCategory);
+  const colorHarmony = checkColorHarmony(params.moodStyle, params.productCategory);
+
+  // Genel skor hesapla (temperature %40, harmony %60)
+  const tempScore = temperatureConflict.severity === "none" ? 100
+    : temperatureConflict.severity === "minor" ? 80
+    : temperatureConflict.severity === "moderate" ? 50
+    : 20;
+  const overallScore = Math.round(tempScore * 0.4 + colorHarmony.harmonyScore * 0.6);
+
+  // Prompt'a eklenecek ayarlamalar
+  const promptAdjustments: string[] = [];
+
+  if (temperatureConflict.hasConflict) {
+    promptAdjustments.push(temperatureConflict.recommendation.colorGradingHint);
+  }
+
+  if (!colorHarmony.isGoodMatch && colorHarmony.adjustment !== "none") {
+    promptAdjustments.push(`Color harmony adjustment: ${colorHarmony.adjustment}`);
+  }
+
+  // Kullanıcıyı uyar mı?
+  const shouldWarnUser = temperatureConflict.severity === "severe" || overallScore < 60;
+
+  console.log(`[AtmosphericIntegration] Overall: score=${overallScore}/100, warn=${shouldWarnUser}, adjustments=${promptAdjustments.length}`);
+
+  return {
+    temperatureConflict,
+    colorHarmony,
+    overallScore,
+    promptAdjustments,
+    shouldWarnUser,
+  };
+}
+
 /**
  * Prompt building karar adımı
  */
@@ -559,17 +866,44 @@ export async function buildGeminiPrompt(params: {
       details: { reason: "Mood lighting takes precedence over Product Default", moodId: mood.id }
     });
   } else if (params.productType) {
-    lighting = await suggestLightingForProduct(params.productType);
-    decisions.push({
-      step: "lighting-selection",
-      input: null,
-      matched: !!lighting,
-      result: lighting ? `${lighting.name} (${lighting.id})` : null,
-      fallback: true,
-      details: lighting
-        ? { geminiPrompt: lighting.geminiPrompt, source: "suggestLightingForProduct", productType: params.productType }
-        : { reason: "suggestLightingForProduct sonuç döndürmedi", productType: params.productType },
-    });
+    // === TEXTURE-LIGHTING CHAIN ===
+    // Önce texture-based lighting dene (GEMINI-TEXTURE-DICTIONARY prensibi)
+    const textureChain = await suggestLightingForProductTexture(params.productType);
+
+    if (textureChain.lighting && textureChain.lighting.bestLightingPresetIds.length > 0) {
+      // Texture-based lighting önerisi var → önerilen preset'i bul
+      const recommendedPresetId = textureChain.lighting.bestLightingPresetIds[0];
+      lighting = presets?.lighting.find(l => l.id === recommendedPresetId) || null;
+
+      decisions.push({
+        step: "lighting-selection",
+        input: null,
+        matched: !!lighting,
+        result: lighting ? `${lighting.name} (${lighting.id})` : textureChain.lighting.recommendedLighting,
+        fallback: true,
+        details: {
+          source: "texture-lighting-chain",
+          productType: params.productType,
+          surfaceType: textureChain.surfaceType,
+          recommendedLighting: textureChain.lighting.recommendedLighting,
+          reason: textureChain.lighting.reason,
+          geminiTerms: textureChain.lighting.geminiTerms,
+        },
+      });
+    } else {
+      // Texture chain başarısız → eski yönteme fallback
+      lighting = await suggestLightingForProduct(params.productType);
+      decisions.push({
+        step: "lighting-selection",
+        input: null,
+        matched: !!lighting,
+        result: lighting ? `${lighting.name} (${lighting.id})` : null,
+        fallback: true,
+        details: lighting
+          ? { geminiPrompt: lighting.geminiPrompt, source: "suggestLightingForProduct-fallback", productType: params.productType }
+          : { reason: "texture-chain ve suggestLightingForProduct sonuç döndürmedi", productType: params.productType },
+      });
+    }
   } else {
     // Ne lightingPresetId ne productType var → ışık yok
     lighting = null;
@@ -638,6 +972,63 @@ export async function buildGeminiPrompt(params: {
       : { reason: params.productType ? `"${params.productType}" için profil bulunamadı` : "productType verilmedi" },
   });
 
+  // === KARAR 6: Atmospheric Integration - Sıcaklık/Renk Uyumu ===
+  // Mood ve ürün tipi belirlendikten sonra atmosferik uyumu kontrol et
+  let atmosphericAnalysis: ReturnType<typeof analyzeAtmosphere> | null = null;
+
+  if (mood && mood.temperature && params.productType) {
+    atmosphericAnalysis = analyzeAtmosphere({
+      moodTemperature: mood.temperature,
+      moodStyle: mood.id,
+      productCategory: params.productType,
+    });
+
+    decisions.push({
+      step: "atmospheric-integration",
+      input: `mood=${mood.id}, product=${params.productType}, temp=${mood.temperature}`,
+      matched: !atmosphericAnalysis.shouldWarnUser, // Uyarı yoksa uyumlu demektir
+      result: atmosphericAnalysis.shouldWarnUser
+        ? `⚠️ Atmosferik uyumsuzluk tespit edildi (skor: ${atmosphericAnalysis.overallScore}/100)`
+        : `✓ Atmosferik uyum sağlandı (skor: ${atmosphericAnalysis.overallScore}/100)`,
+      fallback: false,
+      details: {
+        overallScore: atmosphericAnalysis.overallScore,
+        temperatureConflict: {
+          severity: atmosphericAnalysis.temperatureConflict.severity,
+          delta: atmosphericAnalysis.temperatureConflict.delta,
+          moodTemp: atmosphericAnalysis.temperatureConflict.moodTemperature,
+          productRange: atmosphericAnalysis.temperatureConflict.productPreferredRange,
+        },
+        colorHarmony: {
+          score: atmosphericAnalysis.colorHarmony.harmonyScore,
+          isGoodMatch: atmosphericAnalysis.colorHarmony.isGoodMatch,
+          adjustment: atmosphericAnalysis.colorHarmony.adjustment,
+        },
+        promptAdjustments: atmosphericAnalysis.promptAdjustments,
+        warnings: atmosphericAnalysis.temperatureConflict.recommendation.warnings,
+      },
+    });
+
+    // Severe conflict varsa log'a uyarı yaz
+    if (atmosphericAnalysis.temperatureConflict.severity === "severe") {
+      console.warn(`[GeminiPromptBuilder] ⚠️ SEVERE ATMOSPHERIC CONFLICT: ${mood.id} (${mood.temperature}) + ${params.productType}`);
+      atmosphericAnalysis.temperatureConflict.recommendation.warnings.forEach(w => console.warn(`  ${w}`));
+    }
+  } else {
+    decisions.push({
+      step: "atmospheric-integration",
+      input: null,
+      matched: true, // Kontrol yapılamadı ama hata yok
+      result: "Atmospheric check atlandı - mood veya productType eksik",
+      fallback: false,
+      details: {
+        hasMood: !!mood,
+        hasMoodTemperature: !!(mood && mood.temperature),
+        hasProductType: !!params.productType,
+      },
+    });
+  }
+
   // === PROMPT OLUŞTURMA ===
   const promptParts: string[] = [];
 
@@ -705,7 +1096,23 @@ export async function buildGeminiPrompt(params: {
     promptParts.push("");
   }
 
-  // 5.5 Asset Etiketleri (Gemini önerileri ile - constraint olarak sunuluyor)
+  // 5.5 Atmospheric Color Grading (Sıcaklık/Renk Uyumu Ayarlamaları)
+  // Eğer mood-ürün arasında renk sıcaklığı çelişkisi varsa, Gemini'ye hint ver
+  if (atmosphericAnalysis && atmosphericAnalysis.promptAdjustments.length > 0) {
+    promptParts.push(`COLOR GRADING (IMPORTANT):`);
+    atmosphericAnalysis.promptAdjustments.forEach(adj => {
+      promptParts.push(`- ${adj}`);
+    });
+    promptParts.push("");
+
+    // Severe conflict durumunda ek uyarı
+    if (atmosphericAnalysis.temperatureConflict.severity === "severe") {
+      promptParts.push(`⚠️ WARNING: Temperature mismatch detected. Ensure product colors remain appetizing.`);
+      promptParts.push("");
+    }
+  }
+
+  // 5.6 Asset Etiketleri (Gemini önerileri ile - constraint olarak sunuluyor)
   if (params.assetTags) {
     const tagLines: string[] = [];
 
@@ -749,31 +1156,31 @@ export async function buildGeminiPrompt(params: {
     }
   }
 
-  // 6. İşletme Bağlamı (SaaS uyumlu - mekan bilgileri)
-  // NOT: Bu bölüm STYLE GUIDANCE olarak sunuluyor, referans görseller öncelikli
+  // 6. İşletme Bağlamı - DEVRE DIŞI (2026-02-03)
+  // NEDEN: Gemini analizi sonucunda, metin ortam tarifleri referans görselleri override ediyor.
+  // "ground floor patisserie with floor-to-ceiling windows" gibi tarifler yapay ortam oluşturuyor.
+  // Çözüm: Bu bölümü prompt'a eklemiyoruz, sadece decision log'a kaydediyoruz.
+  // İleride stil bilgisi (warm/cool, color palette) eklenebilir ama ortam tarifi YASAK.
   try {
     const businessContext = await getBusinessContext();
     if (businessContext.isEnabled && businessContext.promptContext) {
-      // "MANDATORY" yerine "STYLE GUIDANCE" kullan - referans görseller öncelikli
-      promptParts.push(`STYLE GUIDANCE (from business context):`);
-      promptParts.push(`${businessContext.promptContext}`);
-      promptParts.push("");
-      promptParts.push(`IMPORTANT: Use this as STYLE/ATMOSPHERE reference only.`);
-      promptParts.push(`DO NOT recreate the physical space described above.`);
-      promptParts.push(`ALWAYS prioritize visual evidence from reference images over this text.`);
-      promptParts.push("");
+      // ÖNCEKİ KOD: Ortam tarifini prompt'a ekliyordu - KALDIRILDI
+      // Artık sadece decision log'a kaydediyoruz (debugging için)
+      console.log(`[GeminiPromptBuilder] Business context SKIPPED - referans görseller öncelikli. İçerik: ${businessContext.promptContext.substring(0, 50)}...`);
 
       decisions.push({
         step: "business-context",
         input: businessContext.businessName,
-        matched: true,
-        result: businessContext.promptContext.substring(0, 100) + "...",
+        matched: false, // matched: false çünkü prompt'a eklenmiyor
+        result: "SKIPPED - Ortam tarifleri referans görselleri override eder",
         fallback: false,
         details: {
           businessName: businessContext.businessName,
           floorLevel: businessContext.floorLevel,
           isEnabled: businessContext.isEnabled,
-          approach: "style-guidance-only", // Görsel öncelikli yaklaşım
+          approach: "disabled-for-reference-fidelity", // Referans sadakati için devre dışı
+          reason: "Gemini analizi: Metin tarifleri görselleri yeniden yorumluyor",
+          originalContent: businessContext.promptContext.substring(0, 100) + "...",
         },
       });
     } else {
@@ -806,17 +1213,47 @@ export async function buildGeminiPrompt(params: {
   promptParts.push(`- NO steam, NO smoke`);
   promptParts.push("");
 
-  // 7. Format
-  promptParts.push(`9:16 vertical for Instagram Stories. 8K photorealistic.`);
+  // 7. Format - POLLUTION TERMS DÜZELTİLDİ (2026-02-03)
+  // "8K photorealistic" yerine Gemini-native terimler kullanıldı
+  promptParts.push(`9:16 vertical for Instagram Stories. Sharp focus on details, crisp textures.`);
 
   // Negative prompt oluştur
   const negativeCategories = params.includesHands ? ["always", "hands"] : ["always"];
   const negativePrompt = await buildNegativePrompt(negativeCategories);
 
+  // === PROMPT POLLUTION KONTROLÜ ===
+  // Oluşturulan prompt'u pollution terimler için kontrol et
+  const rawPrompt = promptParts.join("\n");
+  const pollutionCheck = cleanPromptPollution(rawPrompt, "warn"); // Sadece uyar, temizleme yapma
+
+  if (pollutionCheck.foundTerms.length > 0) {
+    decisions.push({
+      step: "pollution-check",
+      input: rawPrompt.substring(0, 100) + "...",
+      matched: false, // pollution bulundu = istenmeyen durum
+      result: `${pollutionCheck.foundTerms.length} pollution term bulundu`,
+      fallback: false,
+      details: {
+        foundTerms: pollutionCheck.foundTerms.map(t => t.term),
+        warnings: pollutionCheck.warnings,
+        blocked: pollutionCheck.blocked,
+      },
+    });
+  } else {
+    decisions.push({
+      step: "pollution-check",
+      input: null,
+      matched: true, // pollution yok = istenen durum
+      result: "Pollution terms bulunamadı - prompt temiz",
+      fallback: false,
+      details: {},
+    });
+  }
+
   console.log(`[GeminiPromptBuilder] Prompt built: mood=${mood?.id || "NONE"}, lighting=${lighting?.id || lightingSource}, hands=${handPose?.id || "NONE"}, texture=${textureProfile?.productType || "NONE"}, decisions=${decisions.length} steps`);
 
   return {
-    mainPrompt: promptParts.join("\n"),
+    mainPrompt: rawPrompt, // Orijinal prompt (uyarılarla birlikte)
     negativePrompt,
     metadata: {
       mood: mood || undefined,

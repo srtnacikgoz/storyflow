@@ -148,6 +148,7 @@ export default function TimeSlots() {
   }, []);
 
   const loadData = async () => {
+    console.log("[TimeSlots] loadData başladı");
     setLoading(true);
     setError(null);
     startLoading("timeslots", "Zaman dilimleri yükleniyor...");
@@ -161,11 +162,13 @@ export default function TimeSlots() {
           .then((cat) => cat?.subTypes.filter((st) => st.isActive) || [])
           .catch(() => []),
       ]);
+      console.log("[TimeSlots] loadData tamamlandı, rules:", rulesData.length, "themes:", themesData.length);
       setRules(rulesData);
       setSlots(slotsData);
       setThemes(themesData);
       setProductCategories(categoriesData);
     } catch (err) {
+      console.error("[TimeSlots] loadData HATA:", err);
       setError(err instanceof Error ? err.message : "Veri yüklenemedi");
     } finally {
       setLoading(false);
@@ -707,31 +710,59 @@ function RuleModal({
   // Tema seçilmediğinde uyarı gösterip kullanıcıya karar aldıran fonksiyon
   const handleSubmit = async (e: React.FormEvent, skipThemeWarning = false) => {
     e.preventDefault();
+
+    console.log("[TimeSlots] handleSubmit çağrıldı", {
+      productType,
+      daysOfWeek,
+      startHour,
+      endHour,
+      useTheme,
+      themeId,
+      skipThemeWarning,
+    });
+
     if (!productType) {
+      console.log("[TimeSlots] UYARI: productType boş");
       alert("Bir ürün tipi seçmelisiniz");
       return;
     }
     if (daysOfWeek.length === 0) {
+      console.log("[TimeSlots] UYARI: gün seçilmemiş");
       alert("En az bir gün seçmelisiniz");
       return;
     }
     if (endHour <= startHour) {
+      console.log("[TimeSlots] UYARI: geçersiz saat aralığı");
       alert("Bitiş saati başlangıç saatinden büyük olmalıdır");
       return;
     }
 
     // Tema seçilmemiş ve henüz uyarı gösterilmediyse uyarı göster
     const hasNoTheme = !useTheme || (useTheme && !themeId);
+    console.log("[TimeSlots] Tema kontrolü:", { hasNoTheme, useTheme, themeId, skipThemeWarning });
+
     if (hasNoTheme && !skipThemeWarning) {
+      console.log("[TimeSlots] Tema uyarısı gösteriliyor");
       setShowThemeWarning(true);
       return;
     }
 
+    console.log("[TimeSlots] doSave çağrılacak");
     await doSave();
   };
 
   // Gerçek kaydetme işlemi
   const doSave = async () => {
+    console.log("[TimeSlots] doSave başladı", {
+      startHour,
+      endHour,
+      daysOfWeek,
+      productType,
+      useTheme,
+      themeId,
+      isEdit: !!rule,
+    });
+
     setSaving(true);
     try {
       const data: Partial<TimeSlotRule> = {
@@ -744,18 +775,24 @@ function RuleModal({
       // Tema kullan seçildiyse ve tema seçildiyse ekle
       if (useTheme && themeId) {
         data.themeId = themeId;
-      } else {
-        // Tema kullanılmıyorsa themeId'yi temizle
-        data.themeId = undefined;
       }
+      // NOT: themeId undefined olduğunda field'ı ekleme (Firestore FieldValue.delete() gerektirir)
+
+      console.log("[TimeSlots] API'ye gönderilecek data:", data);
 
       if (rule) {
+        console.log("[TimeSlots] updateTimeSlotRule çağrılıyor, id:", rule.id);
         await api.updateTimeSlotRule(rule.id, data);
       } else {
-        await api.createTimeSlotRule(data as Omit<TimeSlotRule, "id" | "isActive">);
+        console.log("[TimeSlots] createTimeSlotRule çağrılıyor");
+        const result = await api.createTimeSlotRule(data as Omit<TimeSlotRule, "id" | "isActive">);
+        console.log("[TimeSlots] createTimeSlotRule sonuç:", result);
       }
+
+      console.log("[TimeSlots] API başarılı, onSuccess çağrılıyor");
       onSuccess();
     } catch (err) {
+      console.error("[TimeSlots] doSave HATA:", err);
       alert(err instanceof Error ? err.message : "Kaydetme hatası");
     } finally {
       setSaving(false);

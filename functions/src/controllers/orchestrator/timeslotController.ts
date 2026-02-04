@@ -102,9 +102,14 @@ export const createTimeSlotRule = functions
           return;
         }
 
+        // Mevcut kuralların sayısını al (priority için)
+        const existingRules = await db.collection("time-slot-rules").get();
+        const nextPriority = existingRules.size + 1;
+
         const ruleData: Omit<TimeSlotRule, "id"> = {
           ...body,
           isActive: true,
+          priority: body.priority ?? nextPriority, // priority yoksa otomatik ata
         };
 
         const docRef = await db.collection("time-slot-rules").add(ruleData);
