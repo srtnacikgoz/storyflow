@@ -33,7 +33,24 @@ import {
   FirestoreScenario,
 } from "./types";
 import { SelectionContext, RuleEngineConfig } from "./ruleEngine/types";
-import { RuleEngine, AuditLogger } from "./ruleEngine"; // We need to create this file or define constants inline. I'll define constants inline for now.
+import { RuleEngine, AuditLogger } from "./ruleEngine";
+
+// Helpers & Stages - Modüler yapı
+import { getTimeOfDay, getMoodFromTime } from "./helpers";
+import {
+  selectInteriorAsset,
+  buildInteriorResult,
+  buildInteriorScenarioSelection,
+  markInteriorStagesComplete,
+} from "./stages";
+import {
+  buildReferenceImages,
+  buildReferenceImagesList,
+  loadAssetAsBase64,
+  loadImageFromUrl,
+  saveImageToStorage,
+  loadImageAsBase64,
+} from "./helpers";
 
 const DEFAULT_SCORING_WEIGHTS_CONST = {
   tagMatch: { weight: 40, exactMatchBonus: 10, partialMatchBonus: 5 },
@@ -258,8 +275,8 @@ export class Orchestrator {
       // ==========================================
       // PRE-STAGE 3: CONFIG SNAPSHOT LOGGING (YENİ!)
       // ==========================================
-      const timeOfDayForConfig = this.getTimeOfDay();
-      const moodForConfig = themeData?.mood || this.getMoodFromTime();
+      const timeOfDayForConfig = getTimeOfDay();
+      const moodForConfig = themeData?.mood || getMoodFromTime();
 
       // Mood detaylarını al
       // Admin panel mood field'ına Mood document ID kaydediyor
@@ -447,7 +464,7 @@ export class Orchestrator {
         console.log(`[Orchestrator] Selected interior scenario: ${randomScenario.name} (type: ${randomScenario.interiorType})`);
 
         // Interior asset seç (interiorType'a göre)
-        const selectedInterior = this.selectInteriorAsset(assets.interior, randomScenario.interiorType);
+        const selectedInterior = selectInteriorAsset(assets.interior, randomScenario.interiorType);
 
         if (!selectedInterior) {
           const typeLabel = randomScenario.interiorType || "herhangi";
@@ -469,7 +486,7 @@ export class Orchestrator {
         result.scenarioSelection = {
           scenarioId: randomScenario.id,
           scenarioName: randomScenario.name,
-          scenarioDescription: randomScenario.description || "Interior mekan görseli", // KRİTİK: Senaryo açıklaması
+          scenarioDescription: randomScenario.description || "Interior mekan görseli",
           reasoning: `Interior senaryo seçildi: ${randomScenario.name} - Mevcut pastane fotoğrafı kullanılacak`,
           includesHands: false,
           compositionId: "interior-default",
@@ -477,8 +494,6 @@ export class Orchestrator {
           handStyle: undefined,
           isInterior: true,
           interiorType: randomScenario.interiorType,
-          themeId: effectiveThemeId,
-          themeName: themeData?.name,
         };
 
         // Stage 1, 2, 3, 4, 5 tamamlandı (interior için hepsi atlanır)
@@ -592,11 +607,11 @@ export class Orchestrator {
         throw new Error(`"${label}" kategorisinde aktif ürün bulunamadı. Assets sayfasından "products" kategorisi ve "${productType}" alt tipinde ürün ekleyin ve "isActive" durumunun açık olduğundan emin olun.`);
       }
 
-      const timeOfDay = this.getTimeOfDay();
+      const timeOfDay = getTimeOfDay();
       // Mood: Önce geminiPresetId kullan (varsa), yoksa zaman bazlı fallback
       // NOT: themeData?.mood Firestore doc ID, ama buildGeminiPrompt gemini-preset ID bekliyor
       // Bu yüzden mood doc'undaki geminiPresetId alanını kullanıyoruz
-      const mood = moodDetails.geminiPresetId || this.getMoodFromTime();
+      const mood = moodDetails.geminiPresetId || getMoodFromTime();
       console.log(`[Orchestrator] 🎭 Mood resolved: "${mood}" (geminiPresetId: ${moodDetails.geminiPresetId || "YOK"}, fallback: ${!moodDetails.geminiPresetId})`);
 
       // Aksesuar kontrolü - tema izin vermiyorsa accessories'i gönderme
@@ -954,35 +969,8 @@ export class Orchestrator {
 
       console.log(`[Orchestrator] Scenario selected: ${result.scenarioSelection!.scenarioName}, isInterior: ${isInteriorScenario}`);
 
-      // ==========================================
-      // v3.0: SENARYO'DAN ATMOSFER BİLGİSİ AL (Mood + Scenario Merge)
-      // ==========================================
-      // Eğer senaryo atmosfer alanları içeriyorsa (yeni format),
-      // moodDetails'i senaryo'dan doldur. Yoksa eski Mood sistemi kullanılır (fallback).
-      if (selectedScenario && (selectedScenario.lightingPrompt || selectedScenario.colorGradePrompt)) {
-        console.log(`[Orchestrator] 🌤️ Atmosfer bilgisi SENARYO'dan alınıyor: "${selectedScenario.name}"`);
-        moodDetails = {
-          name: selectedScenario.name,
-          description: selectedScenario.description,
-          weather: selectedScenario.weather,
-          lightingPrompt: selectedScenario.lightingPrompt,
-          colorGradePrompt: selectedScenario.colorGradePrompt,
-          timeOfDay: selectedScenario.timeOfDay,
-          season: selectedScenario.season,
-          geminiPresetId: selectedScenario.geminiPresetId,
-        };
-        console.log(`[Orchestrator] 🌤️ Atmosfer from Scenario: weather=${selectedScenario.weather || "any"}, timeOfDay=${selectedScenario.timeOfDay || "any"}, lighting=${selectedScenario.lightingPrompt?.substring(0, 50) || "yok"}...`);
-
-        // ScenarioSelection'a da atmosfer bilgisini ekle (v3.0)
-        result.scenarioSelection!.timeOfDay = selectedScenario.timeOfDay;
-        result.scenarioSelection!.season = selectedScenario.season;
-        result.scenarioSelection!.weather = selectedScenario.weather;
-        result.scenarioSelection!.lightingPrompt = selectedScenario.lightingPrompt;
-        result.scenarioSelection!.colorGradePrompt = selectedScenario.colorGradePrompt;
-        result.scenarioSelection!.geminiPresetId = selectedScenario.geminiPresetId;
-      } else {
-        console.log(`[Orchestrator] 🌤️ Atmosfer bilgisi ESKİ SİSTEM'den (Mood collection) kullanılıyor - moodId: ${effectiveMoodId || "yok"}`);
-      }
+      // NOT: Atmosfer bilgisi artık Senaryo içinde tutulmuyor
+      // Mood collection tamamen kaldırıldı
 
       // YENİ: Scenario selection decision log
       await AILogService.logDecision({
@@ -1018,7 +1006,7 @@ export class Orchestrator {
         console.log(`[Orchestrator] Interior type: ${interiorType}`);
 
         // Interior asset seç
-        const selectedInterior = this.selectInteriorAsset(assets.interior, interiorType);
+        const selectedInterior = selectInteriorAsset(assets.interior, interiorType);
 
         if (!selectedInterior) {
           const typeLabel = interiorType || "herhangi";
@@ -1204,7 +1192,7 @@ export class Orchestrator {
             console.log(`[Orchestrator] ASSET DEBUG: Cloudinary URL: ${productAsset.cloudinaryUrl || "N/A"}`);
             console.log(`[Orchestrator] ASSET DEBUG: Storage URL: ${productAsset.storageUrl || "N/A"}`);
 
-            const productImageBase64 = await this.loadImageAsBase64(productAsset);
+            const productImageBase64 = await loadImageAsBase64(productAsset, this.storage);
             console.log(`[Orchestrator] ASSET DEBUG: Loaded image size: ${productImageBase64.length} chars (base64)`);
 
             // Load reference images (plate, table, cup) if selected
@@ -1214,21 +1202,21 @@ export class Orchestrator {
             if (result.assetSelection!.plate) {
               const plateAsset = result.assetSelection!.plate;
               console.log(`[Orchestrator] Loading plate: ${plateAsset.filename}`);
-              const plateBase64 = await this.loadImageAsBase64(plateAsset);
+              const plateBase64 = await loadImageAsBase64(plateAsset, this.storage);
               referenceImages.push({ base64: plateBase64, mimeType: "image/png", label: "plate" });
             }
 
             if (result.assetSelection!.table) {
               const tableAsset = result.assetSelection!.table;
               console.log(`[Orchestrator] Loading table: ${tableAsset.filename}`);
-              const tableBase64 = await this.loadImageAsBase64(tableAsset);
+              const tableBase64 = await loadImageAsBase64(tableAsset, this.storage);
               referenceImages.push({ base64: tableBase64, mimeType: "image/png", label: "table" });
             }
 
             if (result.assetSelection!.cup) {
               const cupAsset = result.assetSelection!.cup;
               console.log(`[Orchestrator] Loading cup: ${cupAsset.filename}`);
-              const cupBase64 = await this.loadImageAsBase64(cupAsset);
+              const cupBase64 = await loadImageAsBase64(cupAsset, this.storage);
 
               // Cup için kısa açıklama (RADİKAL SADELEŞTİRME v2.0)
               const cupColors = cupAsset.visualProperties?.dominantColors?.join(", ") || "";
@@ -1247,7 +1235,7 @@ export class Orchestrator {
             if (result.assetSelection!.napkin) {
               const napkinAsset = result.assetSelection!.napkin;
               console.log(`[Orchestrator] Loading napkin: ${napkinAsset.filename}`);
-              const napkinBase64 = await this.loadImageAsBase64(napkinAsset);
+              const napkinBase64 = await loadImageAsBase64(napkinAsset, this.storage);
 
               const napkinColors = napkinAsset.visualProperties?.dominantColors?.join(", ") || "";
               const napkinMaterial = napkinAsset.visualProperties?.material || "fabric";
@@ -1265,7 +1253,7 @@ export class Orchestrator {
             if (result.assetSelection!.cutlery) {
               const cutleryAsset = result.assetSelection!.cutlery;
               console.log(`[Orchestrator] Loading cutlery: ${cutleryAsset.filename}`);
-              const cutleryBase64 = await this.loadImageAsBase64(cutleryAsset);
+              const cutleryBase64 = await loadImageAsBase64(cutleryAsset, this.storage);
 
               const cutleryMaterial = cutleryAsset.visualProperties?.material || "metal";
               const cutleryStyle = cutleryAsset.visualProperties?.style || "";
@@ -1396,7 +1384,7 @@ export class Orchestrator {
         status.completedStages.push("quality_control");
 
         // Görseli Storage'a kaydet
-        const storageUrl = await this.saveImageToStorage(generatedImage.imageBase64, generatedImage.mimeType);
+        const storageUrl = await saveImageToStorage(generatedImage.imageBase64, generatedImage.mimeType, this.storage);
         result.generatedImage.storageUrl = storageUrl;
 
         // YENİ: Image generation detaylı log
@@ -1688,73 +1676,8 @@ export class Orchestrator {
     };
   }
 
-  /**
-   * Interior asset seç (interiorType'a göre filtreleyerek)
-   * Interior senaryolarında AI görsel üretimi yerine bu asset kullanılır
-   */
-  private selectInteriorAsset(interiorAssets: Asset[], interiorType?: string): Asset | null {
-    if (!interiorAssets || interiorAssets.length === 0) {
-      console.warn("[Orchestrator] No interior assets available");
-      return null;
-    }
-
-    let filtered = interiorAssets;
-
-    // interiorType belirtilmişse filtrele
-    if (interiorType) {
-      filtered = interiorAssets.filter(a => a.subType === interiorType);
-      console.log(`[Orchestrator] Filtered interior assets by type '${interiorType}': ${filtered.length} found`);
-    }
-
-    // Filtreden sonra hiç kalmadıysa tüm interior asset'leri kullan
-    if (filtered.length === 0) {
-      console.warn(`[Orchestrator] No interior assets for type '${interiorType}', using all available`);
-      filtered = interiorAssets;
-    }
-
-    // Rastgele bir interior asset seç
-    const selected = filtered[Math.floor(Math.random() * filtered.length)];
-    console.log(`[Orchestrator] Selected interior asset: ${selected.filename} (type: ${selected.subType})`);
-
-    return selected;
-  }
-
-  /**
-   * Günün zamanını belirle (TRT - Europe/Istanbul)
-   */
-  private getTimeOfDay(): string {
-    // TRT saatine göre saati al
-    const hourStr = new Date().toLocaleString("en-US", {
-      timeZone: "Europe/Istanbul",
-      hour: "numeric",
-      hour12: false
-    });
-    const hour = parseInt(hourStr);
-
-    if (hour >= 6 && hour < 11) return "morning";
-    if (hour >= 11 && hour < 14) return "noon";
-    if (hour >= 14 && hour < 17) return "afternoon";
-    if (hour >= 17 && hour < 20) return "evening";
-    return "night";
-  }
-
-  /**
-   * Zamana göre mood belirle
-   * ID'ler gemini-presets/mood-definitions collection'daki ID'lerle eşleşmeli
-   * Mevcut preset ID'leri: morning-ritual, cozy-intimate, bright-airy
-   */
-  private getMoodFromTime(): string {
-    const timeOfDay = this.getTimeOfDay();
-    // Gemini presets ile uyumlu ID'ler
-    const moodMap: Record<string, string> = {
-      morning: "morning-ritual",    // Sabah ritüeli - taze, aydınlık
-      noon: "bright-airy",          // Aydınlık/Ferah - öğle için uygun
-      afternoon: "bright-airy",     // Aydınlık/Ferah - öğleden sonra için uygun
-      evening: "cozy-intimate",     // Samimi/Sıcak - akşam için uygun
-      night: "cozy-intimate",       // Samimi/Sıcak - gece için uygun
-    };
-    return moodMap[timeOfDay] || "cozy-intimate";
-  }
+  // NOT: getTimeOfDay(), getMoodFromTime(), selectInteriorAsset() metodları
+  // ./helpers ve ./stages modüllerine taşındı (Faz 2 refactoring)
 
   /**
    * Senaryo prompt'unu al (Firestore veya Gemini builder)
@@ -1796,11 +1719,10 @@ export class Orchestrator {
       // Firestore'dan gelen prompt'a kompozisyon ve el stili ekle
       let prompt = promptDoc.data()?.prompt || "";
 
-      // SCENARIO CONTEXT - DEVRE DIŞI (2026-02-03)
-      // NEDEN: Metin ortam tarifleri referans görselleri override ediyor.
-      // scenarioDescription artık prompt'a eklenmiyor.
+      // Senaryo açıklamasını SCENE DIRECTION olarak ekle (referans görseller her zaman öncelikli)
       if (scenarioDescription) {
-        console.log(`[Orchestrator] getScenarioPrompt: scenarioDescription SKIPPED (${scenarioDescription.substring(0, 30)}...)`);
+        prompt += `\n\nSCENE DIRECTION (creative guidance - reference images always take precedence):\n${scenarioDescription}\nNOTE: This describes the desired scene composition. Always prioritize visual evidence from reference images over this description.\n`;
+        console.log(`[Orchestrator] getScenarioPrompt: scenarioDescription ACTIVE (${scenarioDescription.substring(0, 30)}...)`);
       }
 
       prompt += await this.getCompositionDetails(scenarioId, compositionId);
@@ -2101,8 +2023,9 @@ Cup: ${colors} ${material} (from reference)`.trim();
         compositionId: scenarioParams.compositionId || compositionId,
         productType,
         includesHands: !!handStyle,
-        timeOfDay: timeOfDay || this.getTimeOfDay(),
-        assetTags: hasAssetTags ? assetTags : undefined, // YENİ: Asset etiketleri
+        timeOfDay: timeOfDay || getTimeOfDay(),
+        assetTags: hasAssetTags ? assetTags : undefined,
+        scenarioDescription, // Senaryo açıklaması - creative direction olarak kullanılır
       });
 
       // Prompt builder kararlarını al
@@ -2111,30 +2034,11 @@ Cup: ${colors} ${material} (from reference)`.trim();
       let prompt = geminiResult.mainPrompt;
       let negativePrompt = geminiResult.negativePrompt;
 
-      // SCENARIO CONTEXT - DEVRE DIŞI (2026-02-03)
-      // NEDEN: Gemini analizi sonucunda, metin ortam tarifleri referans görselleri override ediyor.
-      // "Pencere önü, doğal ışık" gibi tarifler bile referansla çelişebilir.
-      // Senaryo adı ve kompozisyon bilgisi zaten başka yerlerden (geminiPromptBuilder) geliyor.
-      // Bu açıklama gereksiz tekrar yaratıyor ve referans sadakatini bozuyor.
+      // scenarioDescription artık buildGeminiPrompt içinde handle ediliyor
+      // "SCENE DIRECTION" bölümü olarak prompt'a ekleniyor (referans öncelikli disclaimer ile)
       if (scenarioDescription) {
-        // ÖNCEKİ KOD: prompt = `SCENARIO CONTEXT: ${scenarioDescription}\n\n${prompt}`;
-        // Artık prompt'a eklemiyoruz, sadece log'a yazıyoruz
-        console.log(`[Orchestrator] Scenario description SKIPPED - referans görseller öncelikli. İçerik: ${scenarioDescription.substring(0, 50)}...`);
+        console.log(`[Orchestrator] ✅ Scenario description ACTIVE - buildGeminiPrompt'a gönderildi (${scenarioDescription.length} karakter)`);
       }
-
-      allDecisions.push({
-        step: "scenario-description",
-        input: scenarioDescription || null,
-        matched: false, // matched: false çünkü prompt'a eklenmiyor
-        result: scenarioDescription
-          ? `SKIPPED - Referans sadakati için devre dışı (${scenarioDescription.length} karakter)`
-          : "Senaryo açıklaması yok",
-        fallback: false,
-        details: {
-          reason: "Gemini analizi: Metin tarifleri görselleri yeniden yorumluyor",
-          originalContent: scenarioDescription?.substring(0, 100) || null,
-        },
-      });
 
       // -----------------------------------------------------------------------
       // LOGIC OVERRIDES: KULLANICI GERİ BİLDİRİMİ İLE DÜZELTMELER
@@ -2515,10 +2419,10 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
     // Öncelik: 1) Senaryo override, 2) handStyle'a göre seçim
     let prompt = scenarioOverrides[scenarioId] || (handStyle ? handPrompt : noHandPrompt);
 
-    // SCENARIO CONTEXT - DEVRE DIŞI (2026-02-03)
-    // NEDEN: Metin ortam tarifleri referans görselleri override ediyor.
+    // Senaryo açıklamasını SCENE DIRECTION olarak ekle (referans görseller her zaman öncelikli)
     if (scenarioDescription) {
-      console.log(`[Orchestrator] buildDynamicPromptLegacy: scenarioDescription SKIPPED (${scenarioDescription.substring(0, 30)}...)`);
+      prompt += `\n\nSCENE DIRECTION (creative guidance - reference images always take precedence):\n${scenarioDescription}\nNOTE: This describes the desired scene composition. Always prioritize visual evidence from reference images over this description.\n`;
+      console.log(`[Orchestrator] buildDynamicPromptLegacy: scenarioDescription ACTIVE (${scenarioDescription.substring(0, 30)}...)`);
     }
 
     // Kompozisyon detayları ekle
@@ -2531,141 +2435,6 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
     prompt += this.getCupReferenceDetails(selectedCup);
 
     return prompt;
-  }
-
-  /**
-   * Görseli base64 olarak yükle
-   *
-   * Dual-mode loading (Cloudinary Migration):
-   * 1. Feature flag aktif ve Cloudinary URL varsa → Cloudinary'den indir (tercih)
-   * 2. Firebase Storage URL varsa → Firebase'den indir (fallback)
-   *
-   * Feature flag (useCloudinary):
-   * - true (varsayılan): Cloudinary URL varsa Cloudinary kullan
-   * - false (rollback): Her zaman Firebase Storage kullan
-   *
-   * @param urlOrAsset - URL string veya Asset objesi
-   */
-  private async loadImageAsBase64(urlOrAsset: string | Asset): Promise<string> {
-    // Asset objesi ise Cloudinary'yi kontrol et
-    if (typeof urlOrAsset !== "string") {
-      const asset = urlOrAsset as any; // Rule Engine ScoredAsset formatı için any
-
-      // Rule Engine ScoredAsset formatında URL'ler originalData içinde olabilir
-      // Önce üst seviyeye bak, yoksa originalData'ya bak
-      const cloudinaryUrl = asset.cloudinaryUrl || asset.originalData?.cloudinaryUrl;
-      const storageUrl = asset.storageUrl || asset.originalData?.storageUrl;
-      const publicId = asset.cloudinaryPublicId || asset.originalData?.cloudinaryPublicId;
-
-      // Feature flag kontrolü - Cloudinary aktif mi?
-      const cloudinaryEnabled = await isCloudinaryEnabled();
-
-      // Cloudinary URL varsa ve feature flag aktifse Cloudinary'den yükle
-      if (cloudinaryEnabled && cloudinaryUrl) {
-        console.log(`[Orchestrator] Loading from Cloudinary (enabled): ${publicId}`);
-        return this.loadImageFromUrl(cloudinaryUrl);
-      }
-
-      // Cloudinary devre dışı veya URL yok - Firebase Storage kullan
-      if (storageUrl) {
-        const reason = !cloudinaryEnabled ? "feature flag disabled" : "no Cloudinary URL";
-        console.log(`[Orchestrator] Loading from Firebase Storage (${reason}): ${asset.filename}`);
-        return this.loadImageFromUrl(storageUrl);
-      }
-
-      throw new Error(`Asset has no valid URL: ${asset.id}`);
-    }
-
-    // String URL ise doğrudan yükle (geriye uyumluluk)
-    return this.loadImageFromUrl(urlOrAsset);
-  }
-
-  /**
-   * URL'den görsel indir ve base64'e çevir
-   * Firebase Storage ve Cloudinary URL'leri için çalışır
-   */
-  private async loadImageFromUrl(url: string): Promise<string> {
-    console.log(`[Orchestrator] Loading image from URL: ${url.substring(0, 80)}...`);
-
-    try {
-      // HTTP/HTTPS URL ise doğrudan fetch ile indir
-      // (Firebase download URL ve Cloudinary URL'leri dahil)
-      if (url.startsWith("http://") || url.startsWith("https://")) {
-        console.log(`[Orchestrator] Using fetch to download from URL`);
-
-        // 30 saniye timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-        let buffer: Buffer;
-        try {
-          console.log(`[Orchestrator] Starting fetch request...`);
-          const response = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-
-          console.log(`[Orchestrator] Fetch response received: ${response.status}`);
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-
-          console.log(`[Orchestrator] Reading response body...`);
-          const arrayBuffer = await response.arrayBuffer();
-          buffer = Buffer.from(arrayBuffer);
-          console.log(`[Orchestrator] Image downloaded successfully, size: ${buffer.length} bytes`);
-        } catch (fetchError) {
-          clearTimeout(timeoutId);
-          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-            throw new Error('Fetch timeout after 30 seconds');
-          }
-          throw fetchError;
-        }
-
-        const base64 = buffer.toString("base64");
-        console.log(`[Orchestrator] Image converted to base64, length: ${base64.length}`);
-        return base64;
-      }
-
-      // gs:// formatı için Admin SDK kullan
-      const bucket = this.storage.bucket();
-      let filePath: string;
-
-      if (url.startsWith("gs://")) {
-        filePath = url.replace(`gs://${bucket.name}/`, "");
-      } else {
-        filePath = url;
-      }
-
-      console.log(`[Orchestrator] Using Admin SDK for path: ${filePath}`);
-      const file = bucket.file(filePath);
-      const [buffer] = await file.download();
-      console.log(`[Orchestrator] Image downloaded successfully, size: ${buffer.length} bytes`);
-
-      const base64 = buffer.toString("base64");
-      return base64;
-    } catch (downloadError) {
-      console.error(`[Orchestrator] Image download failed:`, downloadError);
-      throw new Error(`Failed to download image: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
-   * Görseli Storage'a kaydet
-   */
-  private async saveImageToStorage(imageBase64: string, mimeType: string): Promise<string> {
-    const bucket = this.storage.bucket();
-    // Use correct extension based on MIME type
-    const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/gif" ? "gif" : "png";
-    const filename = `generated/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-    const file = bucket.file(filename);
-
-    const buffer = Buffer.from(imageBase64, "base64");
-    await file.save(buffer, {
-      metadata: { contentType: mimeType },
-      public: true, // Dosyayı public yap (frontend erişimi için)
-    });
-
-    // gs:// formatında döndür (Telegram akışı bunu bekliyor)
-    return `gs://${bucket.name}/${filename}`;
   }
 
   /**

@@ -755,6 +755,8 @@ export async function buildGeminiPrompt(params: {
     accessory?: string[];
     napkin?: string[];
   };
+  // Senaryo açıklaması - Creative direction olarak kullanılır
+  scenarioDescription?: string;
 }): Promise<{
   mainPrompt: string;
   negativePrompt: string;
@@ -1116,6 +1118,37 @@ export async function buildGeminiPrompt(params: {
         details: { tagCount: tagLines.length, tags: params.assetTags },
       });
     }
+  }
+
+  // 5.7 Senaryo Yönlendirmesi (Creative Direction)
+  // Senaryo açıklaması prompt'a eklenir ama referans görseller her zaman önceliklidir.
+  // Bu bölüm sahne kompozisyonu ve atmosfer için yaratıcı yön verir.
+  if (params.scenarioDescription) {
+    promptParts.push(`SCENE DIRECTION (creative guidance - reference images always take precedence):`);
+    promptParts.push(params.scenarioDescription);
+    promptParts.push(`NOTE: This describes the desired scene composition. Always prioritize visual evidence from reference images over this description.`);
+    promptParts.push("");
+
+    decisions.push({
+      step: "scenario-description",
+      input: params.scenarioDescription,
+      matched: true,
+      result: `Scene direction eklendi (${params.scenarioDescription.length} karakter)`,
+      fallback: false,
+      details: {
+        content: params.scenarioDescription.substring(0, 100),
+        approach: "creative-guidance-with-reference-priority",
+      },
+    });
+  } else {
+    decisions.push({
+      step: "scenario-description",
+      input: null,
+      matched: false,
+      result: "Senaryo açıklaması yok",
+      fallback: false,
+      details: {},
+    });
   }
 
   // 6. İşletme Bağlamı - DEVRE DIŞI (2026-02-03)

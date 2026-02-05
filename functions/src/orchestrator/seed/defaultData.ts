@@ -83,7 +83,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
     suggestedTimeSlots: ["morning", "afternoon"],
-    mood: "elegant",
   },
   {
     id: "kahve-ani",
@@ -98,7 +97,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["croissants", "pastas"],
     suggestedTimeSlots: ["morning", "brunch"],
-    mood: "social",
   },
   {
     id: "hediye-acilisi",
@@ -113,7 +111,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
-    mood: "exciting",
   },
   {
     id: "ilk-dilim",
@@ -128,7 +125,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
-    mood: "inviting",
   },
 
   // =====================
@@ -147,7 +143,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["croissants", "pastas", "coffees"],
     suggestedTimeSlots: ["morning", "afternoon", "golden-hour"],
-    mood: "fresh",
   },
   {
     id: "mermer-zarafet",
@@ -162,7 +157,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
-    mood: "luxurious",
   },
   {
     id: "kahve-kosesi",
@@ -177,7 +171,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["croissants", "pastas", "coffees"],
     suggestedTimeSlots: ["afternoon", "evening"],
-    mood: "cozy",
   },
   {
     id: "yarim-kaldi",
@@ -192,7 +185,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
     suggestedTimeSlots: ["afternoon", "evening"],
-    mood: "authentic",
   },
   {
     id: "paylasim",
@@ -207,7 +199,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["pastas", "croissants"],
     suggestedTimeSlots: ["brunch", "afternoon"],
-    mood: "social",
   },
   {
     id: "paket-servis",
@@ -222,7 +213,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
     suggestedTimeSlots: ["morning", "afternoon"],
-    mood: "practical",
   },
 
   // =====================
@@ -241,7 +231,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
-    mood: "festive",
   },
   {
     id: "yolda-atistirma",
@@ -256,7 +245,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
     suggestedTimeSlots: ["morning", "afternoon"],
-    mood: "casual",
   },
   {
     id: "kutu-acilis",
@@ -271,7 +259,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
     suggestedTimeSlots: ["afternoon", "evening"],
-    mood: "exciting",
   },
 
   // =====================
@@ -286,7 +273,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     isInterior: true,
     interiorType: "vitrin",
-    mood: "professional",
   },
   {
     id: "kruvasan-tezgahi",
@@ -297,7 +283,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     isInterior: true,
     interiorType: "tezgah",
-    mood: "fresh",
   },
   {
     id: "pastane-ici",
@@ -308,7 +293,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     isInterior: true,
     interiorType: "genel-mekan",
-    mood: "inviting",
   },
   {
     id: "oturma-kosesi",
@@ -319,7 +303,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     isInterior: true,
     interiorType: "oturma-alani",
-    mood: "cozy",
   },
   {
     id: "cicek-detay",
@@ -330,7 +313,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     isInterior: true,
     interiorType: "dekorasyon",
-    mood: "aesthetic",
   },
 ];
 

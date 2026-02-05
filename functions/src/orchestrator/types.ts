@@ -524,11 +524,7 @@ export interface CompositionVariant {
 }
 
 /**
- * Senaryo tanımı (Mood + Scenario birleştirilmiş)
- *
- * v3.0 - Mood ve Scenario tek bir yapıda:
- * - Atmosfer bilgisi (eski Mood)
- * - El/kompozisyon bilgisi (eski Scenario)
+ * Senaryo tanımı
  *
  * Firestore: scenarios collection
  */
@@ -536,16 +532,6 @@ export interface Scenario {
   id: string;
   name: string;
   description: string; // Senaryo açıklaması (AI scene description için kullanılabilir)
-
-  // === ATMOSFER ALANLARI (eski Mood'dan) ===
-  // NOT: Migration tamamlanana kadar opsiyonel.
-  // Yeni senaryolarda bu alanların doldurulması ZORUNLU.
-  timeOfDay?: "morning" | "afternoon" | "evening" | "night" | "any";
-  season?: "winter" | "spring" | "summer" | "autumn" | "any";
-  weather?: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
-  lightingPrompt?: string; // "soft window light, overcast shadows"
-  colorGradePrompt?: string; // "cool blue tones, desaturated, high contrast"
-  geminiPresetId?: string; // gemini-presets/mood-definitions ile eşleşen ID
 
   // === EL/KOMPOZİSYON ALANLARI ===
   includesHands: boolean;
@@ -557,8 +543,6 @@ export interface Scenario {
   interiorType?: InteriorType; // Hangi interior kategorisinden asset seçilecek
 
   // === META ===
-  // NOT: Firestore'da saklanan senaryolarda bu alanlar zorunlu.
-  // Fallback senaryolarda runtime'da eklenir.
   isActive?: boolean;
   sortOrder?: number; // Sıralama (UI'da liste için)
   createdAt?: number;
@@ -570,14 +554,10 @@ export interface Scenario {
   compositionId?: string;
   /** @deprecated Eski çoklu kompozisyon array'i, kullanılmayacak */
   compositions?: Array<{ id: string; description: string }>;
-  /** @deprecated mood artık scenario'nun kendisi, referans gerekmez */
-  mood?: string;
 }
 
 /**
  * Senaryo seçimi (pipeline sonucu)
- *
- * v3.0 - Senaryo artık atmosfer bilgisini de içeriyor
  */
 export interface ScenarioSelection {
   scenarioId: string;
@@ -594,23 +574,9 @@ export interface ScenarioSelection {
   compositionId: string; // Seçilen kompozisyon (artık compositionEntry ile eşleşir)
   composition: string; // Kompozisyon açıklaması
 
-  // === ATMOSFER BİLGİSİ (v3.0 - Scenario'dan) ===
-  timeOfDay?: "morning" | "afternoon" | "evening" | "night" | "any";
-  season?: "winter" | "spring" | "summer" | "autumn" | "any";
-  weather?: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
-  lightingPrompt?: string; // Işık prompt'u
-  colorGradePrompt?: string; // Renk paleti prompt'u
-  geminiPresetId?: string; // Gemini preset ID
-
   // === İNTERİOR SENARYO ===
   isInterior?: boolean; // true ise AI görsel üretimi ATLANIR
   interiorType?: InteriorType; // Kullanılacak interior asset tipi
-
-  // === TEMA BİLGİSİ (geriye uyumluluk) ===
-  /** @deprecated Theme sistemi yeniden değerlendirilecek */
-  themeId?: string;
-  /** @deprecated Theme sistemi yeniden değerlendirilecek */
-  themeName?: string;
 }
 
 /**

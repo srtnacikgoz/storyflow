@@ -31,7 +31,7 @@ const SCENARIOS_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-// Senaryo tipi (v3.0 - Mood + Scenario birleşik)
+// Senaryo tipi
 interface Scenario {
   id: string;
   name: string;
@@ -46,16 +46,7 @@ interface Scenario {
   createdAt?: number;
   updatedAt?: number;
 
-  // v3.0: Atmosfer alanları (eski Mood'dan)
-  timeOfDay?: "morning" | "afternoon" | "evening" | "night" | "any";
-  season?: "winter" | "spring" | "summer" | "autumn" | "any";
-  weather?: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
-  lightingPrompt?: string;
-  colorGradePrompt?: string;
-  geminiPresetId?: string;
-
   // DEPRECATED: Eski alanlar (geriye uyumluluk için)
-  mood?: string; // deprecated: v3.0'da senaryo kendi atmosfer bilgisini taşıyor
   compositions?: Array<{ id: string; description: string }>;
 }
 
@@ -117,7 +108,7 @@ const DEFAULT_INTERIOR_TYPES = [
   { id: "genel-mekan", name: "Genel Mekan" },
 ];
 
-// Form tipi (v3.0 - Atmosfer alanları dahil)
+// Form tipi
 interface ScenarioFormData {
   id: string;
   name: string;
@@ -128,13 +119,6 @@ interface ScenarioFormData {
   interiorType: string;
   handPose: string;
   compositionEntry: string;
-  // v3.0: Atmosfer alanları
-  timeOfDay: "morning" | "afternoon" | "evening" | "night" | "any";
-  season: "winter" | "spring" | "summer" | "autumn" | "any";
-  weather: "sunny" | "cloudy" | "rainy" | "snowy" | "any";
-  lightingPrompt: string;
-  colorGradePrompt: string;
-  geminiPresetId: string;
 }
 
 // Boş form
@@ -143,18 +127,11 @@ const emptyForm: ScenarioFormData = {
   name: "",
   description: "",
   includesHands: false,
-  compositionId: "",  // Tekli kompozisyon seçimi (v2.0)
+  compositionId: "",
   isInterior: false,
   interiorType: "",
   handPose: "",
   compositionEntry: "",
-  // v3.0: Atmosfer alanları
-  timeOfDay: "any",
-  season: "any",
-  weather: "any",
-  lightingPrompt: "",
-  colorGradePrompt: "",
-  geminiPresetId: "",
 };
 
 export default function Scenarios() {
@@ -360,13 +337,6 @@ export default function Scenarios() {
       interiorType: scenario.interiorType || "",
       handPose: scenario.handPose || "",
       compositionEntry: scenario.compositionEntry || "",
-      // v3.0: Atmosfer alanları
-      timeOfDay: scenario.timeOfDay || "any",
-      season: scenario.season || "any",
-      weather: scenario.weather || "any",
-      lightingPrompt: scenario.lightingPrompt || "",
-      colorGradePrompt: scenario.colorGradePrompt || "",
-      geminiPresetId: scenario.geminiPresetId || "",
     });
     setShowModal(true);
   };

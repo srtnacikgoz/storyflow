@@ -95,57 +95,11 @@ export class ScenarioService {
   }
 
   /**
-   * Verilen atmosfer koşullarına uygun senaryoları bul
-   *
-   * @param hourOfDay - Saat (0-23)
-   * @param season - Mevsim (opsiyonel)
-   * @param weather - Hava durumu (opsiyonel)
-   * @returns Uygun senaryolar listesi
+   * Aktif senaryoları getir
+   * NOT: Atmosfer filtreleme kaldırıldı - tüm aktif senaryolar döner
    */
-  async getMatchingScenarios(
-    hourOfDay: number,
-    season?: Scenario["season"],
-    weather?: Scenario["weather"]
-  ): Promise<Scenario[]> {
-    const allActive = await this.getAllScenarios(true);
-
-    // Saat -> timeOfDay dönüşümü
-    let timeOfDay: Scenario["timeOfDay"] = "night";
-    if (hourOfDay >= 5 && hourOfDay < 12) timeOfDay = "morning";
-    else if (hourOfDay >= 12 && hourOfDay < 17) timeOfDay = "afternoon";
-    else if (hourOfDay >= 17 && hourOfDay < 21) timeOfDay = "evening";
-
-    return allActive.filter((scenario) => {
-      // Interior senaryolar her zaman uygun (atmosfer filtresi uygulanmaz)
-      if (scenario.isInterior) return true;
-
-      // Atmosfer alanları yoksa (eski format) her zaman uygun
-      if (!scenario.timeOfDay && !scenario.season && !scenario.weather) {
-        return true;
-      }
-
-      // 1. Zaman kontrolü
-      const timeMatch =
-        !scenario.timeOfDay ||
-        scenario.timeOfDay === "any" ||
-        scenario.timeOfDay === timeOfDay;
-
-      // 2. Mevsim kontrolü
-      const seasonMatch =
-        !season ||
-        !scenario.season ||
-        scenario.season === "any" ||
-        scenario.season === season;
-
-      // 3. Hava durumu kontrolü
-      const weatherMatch =
-        !weather ||
-        !scenario.weather ||
-        scenario.weather === "any" ||
-        scenario.weather === weather;
-
-      return timeMatch && seasonMatch && weatherMatch;
-    });
+  async getMatchingScenarios(): Promise<Scenario[]> {
+    return this.getAllScenarios(true);
   }
 
   /**
@@ -203,44 +157,6 @@ export class ScenarioService {
     console.log(`[ScenarioService] Reordered ${orderedIds.length} scenarios`);
   }
 
-  /**
-   * Atmosfer prompt'unu oluştur (Senaryo'dan)
-   * Bu fonksiyon Gemini promptBuilder'a atmosfer bilgisi sağlar
-   */
-  buildAtmospherePrompt(scenario: Scenario): string | null {
-    // Atmosfer alanları yoksa null döndür
-    if (!scenario.lightingPrompt && !scenario.colorGradePrompt) {
-      return null;
-    }
-
-    const parts: string[] = [];
-
-    if (scenario.lightingPrompt) {
-      parts.push(`LIGHTING: ${scenario.lightingPrompt}`);
-    }
-
-    if (scenario.colorGradePrompt) {
-      parts.push(`COLOR PALETTE: ${scenario.colorGradePrompt}`);
-    }
-
-    // Zaman/mevsim/hava bilgisi ekle (varsa)
-    const conditions: string[] = [];
-    if (scenario.timeOfDay && scenario.timeOfDay !== "any") {
-      conditions.push(scenario.timeOfDay);
-    }
-    if (scenario.season && scenario.season !== "any") {
-      conditions.push(scenario.season);
-    }
-    if (scenario.weather && scenario.weather !== "any") {
-      conditions.push(scenario.weather);
-    }
-
-    if (conditions.length > 0) {
-      parts.push(`CONDITIONS: ${conditions.join(", ")}`);
-    }
-
-    return parts.join("\n");
-  }
 }
 
 // Singleton instance
