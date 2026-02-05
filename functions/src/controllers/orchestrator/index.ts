@@ -167,6 +167,16 @@ export {
   getUsageStats,
 } from "./statsController";
 
+// Tag Schema Controller
+export {
+  listTagSchemas,
+  getTagSchema,
+  updateTagSchema,
+  addTagOption,
+  removeTagOption,
+  autoTagAsset,
+} from "./tagSchemaController";
+
 // Migration Controller (Cloudinary)
 export {
   getMigrationStatus,

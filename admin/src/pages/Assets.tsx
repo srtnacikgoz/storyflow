@@ -7,7 +7,6 @@ import type {
   AssetCategory,
   EatingMethod,
   DynamicCategory,
-  Style,
 } from "../types";
 import { useLoading, useLoadingOperation } from "../contexts/LoadingContext";
 import { Tooltip } from "../components/Tooltip";
@@ -171,8 +170,6 @@ export default function Assets() {
 
   // Dinamik kategoriler
   const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
-  // Dinamik stiller
-  const [styles, setStyles] = useState<Style[]>([]);
 
   // Modal state - hem create hem edit için
   const [showModal, setShowModal] = useState(false);
@@ -249,11 +246,6 @@ export default function Assets() {
         setDynamicCategories(categoriesData.categories.filter((c: DynamicCategory) => !c.isDeleted));
       }
 
-      // Stilleri yükle
-      const stylesData = await api.getStyles(true).catch(() => []); // Sadece aktifleri getir
-      if (stylesData) {
-        setStyles(stylesData);
-      }
     } catch (err) {
       console.error("[Assets] Veriler yüklenemedi:", err);
     }
@@ -621,7 +613,6 @@ export default function Assets() {
           subtypeLabels={dynamicSubtypeLabels}
           subtypesByCategory={dynamicSubtypesByCategory}
           tagSuggestions={allUniqueTags}
-          styleOptions={styles}
           onClose={closeModal}
           onSuccess={handleModalSuccess}
         />
@@ -753,7 +744,6 @@ function AssetModal({
   subtypeLabels,
   subtypesByCategory,
   tagSuggestions,
-  styleOptions,
   onClose,
   onSuccess,
 }: {
@@ -762,7 +752,6 @@ function AssetModal({
   subtypeLabels: Record<string, string>;
   subtypesByCategory: Record<AssetCategory, string[]>;
   tagSuggestions: string[];
-  styleOptions: Style[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -786,9 +775,9 @@ function AssetModal({
 
   // Alias for backward compatibility
   const tags = tagsState;
-  const [dominantColors, setDominantColors] = useState(asset?.visualProperties?.dominantColors?.join(", ") || "");
-  const [style, setStyle] = useState(asset?.visualProperties?.style || "modern");
-  const [material, setMaterial] = useState(asset?.visualProperties?.material || "");
+  // AI etiketleme state
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   // Yeme şekli ve elle tutulabilirlik alanları
   const [eatingMethod, setEatingMethod] = useState<EatingMethod>(
     asset?.eatingMethod || asset?.holdingType || "hand"
@@ -810,16 +799,14 @@ function AssetModal({
   // Edit modunda görsel değiştirme kontrolü
   const [wantsToChangeImage, setWantsToChangeImage] = useState(false);
 
-  // Kategori değişince alt tipi güncelle (sadece create modda veya kategori değişince)
+  // Kategori değişince alt tipi güncelle (görsel korunur)
   useEffect(() => {
     if (!isEditMode) {
-      // Create modda kategori değişince ilk alt tipi seç ve upload'ı temizle
       const subtypes = subtypesByCategory[category];
       if (subtypes.length > 0) {
         setSubType(subtypes[0]);
       }
-      setFilename("");
-      setStorageUrl("");
+      // Görsel korunur - sadece hata sıfırlanır
       setUploadError(null);
     }
   }, [category, isEditMode]);
@@ -835,9 +822,6 @@ function AssetModal({
       const assetTags = asset.tags || [];
       tagsRef.current = assetTags;
       setTagsState(assetTags);
-      setDominantColors(asset.visualProperties?.dominantColors?.join(", ") || "");
-      setStyle(asset.visualProperties?.style || "modern");
-      setMaterial(asset.visualProperties?.material || "");
       setEatingMethod(asset.eatingMethod || asset.holdingType || "hand");
       setCanBeHeldByHand(
         asset.canBeHeldByHand !== undefined
@@ -868,6 +852,28 @@ function AssetModal({
     setUploadError(error);
   }, []);
 
+  // AI ile etiket üret - Gemini görseli analiz edip prompt-odaklı tag'ler üretir
+  const handleAITag = useCallback(async () => {
+    if (!storageUrl) return;
+
+    setAiLoading(true);
+    setAiError(null);
+
+    try {
+      const result = await api.autoTagAsset(storageUrl, subType || category);
+      // Mevcut tag'lerle birleştir, duplicate olmasın
+      const currentTags = tagsRef.current;
+      const newTags = result.tags.filter((t) => !currentTags.includes(t));
+      if (newTags.length > 0) {
+        setTags([...currentTags, ...newTags]);
+      }
+    } catch (err: any) {
+      setAiError(err.message || "AI etiket üretme hatası");
+    } finally {
+      setAiLoading(false);
+    }
+  }, [storageUrl, subType, category, setTags]);
+
   // Mevcut kategorinin alan konfigürasyonu (bilinmeyen kategoriler için varsayılan)
   const fieldConfig = FIELDS_BY_CATEGORY_FALLBACK[category] || DEFAULT_FIELD_CONFIG;
 
@@ -885,46 +891,25 @@ function AssetModal({
     // Ref'ten güncel tags değerini al (closure sorunu önlenir)
     const currentTags = tagsRef.current;
 
-    // Zorunlu alan validasyonu - inline hatalar gösterilir
+    // Zorunlu alan validasyonu
     const hasTagError = fieldConfig.tags === "required" && currentTags.length === 0;
-    const hasColorError = fieldConfig.dominantColors === "required" && !dominantColors.trim();
-    if (hasTagError || hasColorError) return;
+    if (hasTagError) return;
 
     setSaving(true);
     try {
-      // Alan değerlerini kategori bazlı hazırla (currentTags ref'ten geliyor)
-      const parsedTags = fieldConfig.tags !== "hidden" ? currentTags : [];
-
-      const parsedColors = fieldConfig.dominantColors !== "hidden"
-        ? dominantColors.split(",").map(c => c.trim()).filter(Boolean)
-        : [];
-
-      const parsedStyle = fieldConfig.style !== "hidden"
-        ? (style || "modern")
-        : "modern";
-
-      const parsedMaterial = fieldConfig.material !== "hidden" && material
-        ? material
-        : undefined;
-
       // Asset data objesi
       const assetData = {
         category,
         subType,
         filename,
         storageUrl,
-        tags: parsedTags,
-        visualProperties: {
-          dominantColors: parsedColors,
-          style: parsedStyle,
-          ...(parsedMaterial && { material: parsedMaterial }),
-        },
+        tags: currentTags,
         // Sadece products kategorisinde yeme/tutma özellikleri kaydedilir
         ...(category === "products" && {
           eatingMethod,
           canBeHeldByHand,
-          plateRequired, // Tabaksız ürünler için false
-          holdingType: eatingMethod, // geriye uyumluluk için
+          plateRequired,
+          holdingType: eatingMethod,
         }),
       };
 
@@ -996,7 +981,7 @@ function AssetModal({
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
                         <button
                           type="button"
-                          onClick={() => setWantsToChangeImage(true)}
+                          onClick={() => { setWantsToChangeImage(true); setStorageUrl(""); setFilename(""); }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity bg-white text-gray-800 px-4 py-2 rounded-full font-medium shadow-lg hover:bg-gray-50 flex items-center gap-2"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1104,7 +1089,7 @@ function AssetModal({
                   </div>
                 </div>
 
-                {/* Etiketler */}
+                {/* Etiketler - AI ile üretilebilir, serbest giriş */}
                 {fieldConfig.tags !== "hidden" && (
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
                     <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
@@ -1114,101 +1099,71 @@ function AssetModal({
                       )}
                     </label>
                     <p className="text-xs text-gray-500 mb-3">
-                      AI bu etiketlere göre uygun asset'i seçer. Kısa keyword'ler kullanın.
+                      Bu etiketler gorsel uretim prompt'unda ASSET CONSTRAINTS olarak kullanilir.
                     </p>
+
+                    {/* AI ile Etiketle butonu */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <button
+                        type="button"
+                        onClick={handleAITag}
+                        disabled={!storageUrl || aiLoading}
+                        className={`
+                          flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all
+                          ${!storageUrl
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : aiLoading
+                              ? "bg-purple-100 text-purple-400 cursor-wait"
+                              : "bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 shadow-sm hover:shadow"
+                          }
+                        `}
+                      >
+                        {aiLoading ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Analiz Ediliyor...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                            </svg>
+                            AI ile Etiketle
+                          </>
+                        )}
+                      </button>
+                      {!storageUrl && (
+                        <span className="text-xs text-gray-400">Once gorsel yukleyin</span>
+                      )}
+                      {tags.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setTags([])}
+                          className="text-xs text-gray-500 hover:text-red-600 transition-colors"
+                        >
+                          Tumu Temizle
+                        </button>
+                      )}
+                    </div>
+
+                    {/* AI hata mesaji */}
+                    {aiError && (
+                      <div className="text-xs text-red-500 bg-red-50 p-2 rounded-lg mb-3">
+                        AI Hata: {aiError}
+                      </div>
+                    )}
+
+                    {/* Tag giriş alanı */}
                     <TagInput
                       value={tags}
                       onChange={setTags}
                       suggestions={tagSuggestions}
-                      placeholder="Örn: cheesecake, espresso, tea, gift..."
+                      placeholder="Etiket yazin veya AI ile uretin..."
                       error={submitted && fieldConfig.tags === "required" && tags.length === 0}
                     />
-                    {submitted && fieldConfig.tags === "required" && tags.length === 0 && (
-                      <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
-                        <span>⚠️</span> En az 1 etiket gerekli
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Stil & Malzeme - Yan yana */}
-                {(fieldConfig.style !== "hidden" || fieldConfig.material !== "hidden") && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {fieldConfig.style !== "hidden" && (
-                      <div>
-                        <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
-                          ✨ Stil
-                          <Tooltip
-                            content="AI aynı stildeki öğeleri eşleştirir."
-                            position="right"
-                          />
-                        </label>
-                        <select
-                          value={style}
-                          onChange={(e) => setStyle(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                        >
-                          {styleOptions.length > 0 ? (
-                            styleOptions.map((opt) => (
-                              <option key={opt.id} value={opt.id}>{opt.displayName}</option>
-                            ))
-                          ) : (
-                            // Fallback
-                            <>
-                              <option value="modern">🏢 Modern</option>
-                              <option value="rustic">🪵 Rustic</option>
-                              <option value="minimal">⬜ Minimal</option>
-                              <option value="elegant">💎 Elegant</option>
-                            </>
-                          )}
-                        </select>
-                      </div>
-                    )}
-
-                    {fieldConfig.material !== "hidden" && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          🧱 Malzeme
-                        </label>
-                        <select
-                          value={material}
-                          onChange={(e) => setMaterial(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-                        >
-                          <option value="">Seçiniz...</option>
-                          <option value="ceramic">Seramik</option>
-                          <option value="porcelain">Porselen</option>
-                          <option value="glass">Cam</option>
-                          <option value="wood">Ahşap</option>
-                          <option value="metal">Metal</option>
-                          <option value="marble">Mermer</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Dominant Renkler */}
-                {fieldConfig.dominantColors !== "hidden" && (
-                  <div>
-                    <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
-                      🎨 Dominant Renkler
-                      {fieldConfig.dominantColors === "required" && (
-                        <span className="text-red-500">*</span>
-                      )}
-                    </label>
-                    <input
-                      type="text"
-                      value={dominantColors}
-                      onChange={(e) => setDominantColors(e.target.value)}
-                      placeholder="cream, golden-brown, chocolate / #D4A574, #8B4513"
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-gray-400"
-                    />
-                    <p className="text-xs text-gray-400 mt-2">
-                      💡 <span className="text-gray-500">Renk girerseniz AI daha uyumlu görseller üretir.</span>
-                      <br />
-                      <span className="text-gray-400">Örnekler: cream, ivory, golden-brown, chocolate, caramel</span>
-                    </p>
                   </div>
                 )}
 

@@ -156,6 +156,14 @@ export {
   getQueueStats,
   getUsageStats,
 
+  // Tag Schema Controller
+  listTagSchemas,
+  getTagSchema,
+  updateTagSchema,
+  addTagOption,
+  removeTagOption,
+  autoTagAsset,
+
   // Migration Controller (Cloudinary)
   getMigrationStatus,
   runCloudinaryMigration,

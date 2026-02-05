@@ -543,6 +543,7 @@ export interface OrchestratorAsset {
   usageCount: number;
   lastUsedAt?: number;
   tags: string[];
+  structuredTags?: StructuredTags; // Yeni format - alan bazlı yapılandırılmış etiketler
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -1256,6 +1257,49 @@ export interface SetupStatusResponse {
   summary: SetupStatusSummary;
   details: SetupStatusDetails;
 }
+
+// ==========================================
+// TAG SCHEMA SYSTEM (Dinamik Tag Yönetimi)
+// ==========================================
+
+/**
+ * Tag şeması - Her asset kategorisi için yapılandırılmış etiket şablonu
+ * Firestore: tagSchemas/{categoryId}
+ */
+export interface TagSchema {
+  categoryId: string;           // "plates", "tables", "cups", "products", ...
+  label: string;                // "Tabaklar", "Masalar", "Fincanlar", ...
+  groups: TagGroup[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Tag grubu - Bir şema içindeki tek bir etiket kategorisi
+ */
+export interface TagGroup {
+  key: string;                  // "material", "color", "style", ...
+  label: string;                // "Malzeme", "Renk", "Stil", ...
+  required: boolean;            // Zorunlu mu?
+  multiSelect: boolean;         // Birden fazla seçilebilir mi?
+  options: TagOption[];
+  sortOrder: number;            // Admin panelde sıralama
+}
+
+/**
+ * Tag seçeneği - Bir grup içindeki tekil değer
+ */
+export interface TagOption {
+  value: string;                // "ceramic" (backend key)
+  label: string;                // "Seramik" (frontend gösterim)
+  isSystem: boolean;            // Sistem tanımlı mı?
+  addedBy?: string;             // Tenant tarafından eklendiyse
+}
+
+/**
+ * Asset üzerindeki yapılandırılmış etiketler
+ */
+export type StructuredTags = Record<string, string | string[]>;
 
 // ==========================================
 // STYLE TYPES
