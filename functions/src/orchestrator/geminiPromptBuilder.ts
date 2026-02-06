@@ -1151,31 +1151,51 @@ export async function buildGeminiPrompt(params: {
     });
   }
 
-  // 6. İşletme Bağlamı - DEVRE DIŞI (2026-02-03)
-  // NEDEN: Gemini analizi sonucunda, metin ortam tarifleri referans görselleri override ediyor.
-  // "ground floor patisserie with floor-to-ceiling windows" gibi tarifler yapay ortam oluşturuyor.
-  // Çözüm: Bu bölümü prompt'a eklemiyoruz, sadece decision log'a kaydediyoruz.
-  // İleride stil bilgisi (warm/cool, color palette) eklenebilir ama ortam tarifi YASAK.
+  // 6. İşletme Bağlamı - Sadece negatif kısıtlamalar eklenir (ortam tarifi YASAK)
+  // Referans görselleri override eden tarifler yerine, sadece "yapma" kuralları eklenir.
+  // Örn: "NO high-rise views" referans görselle çakışmaz, ama "ground floor patisserie" çakışır.
   try {
     const businessContext = await getBusinessContext();
-    if (businessContext.isEnabled && businessContext.promptContext) {
-      // ÖNCEKİ KOD: Ortam tarifini prompt'a ekliyordu - KALDIRILDI
-      // Artık sadece decision log'a kaydediyoruz (debugging için)
-      console.log(`[GeminiPromptBuilder] Business context SKIPPED - referans görseller öncelikli. İçerik: ${businessContext.promptContext.substring(0, 50)}...`);
+    if (businessContext.isEnabled && businessContext.floorLevel) {
+      // Kat seviyesine göre negatif kısıtlamalar
+      const floorConstraints: Record<string, string[]> = {
+        ground: [
+          "NO high-rise views, NO skyscraper backgrounds, NO aerial city views",
+          "Window views must show street-level perspective (ground floor)",
+        ],
+        upper: [
+          "NO street-level views, show elevated perspective",
+        ],
+        basement: [
+          "NO window views, NO natural light from windows",
+        ],
+        outdoor: [
+          "Outdoor setting, NO interior walls or ceilings",
+        ],
+      };
+
+      const constraints = floorConstraints[businessContext.floorLevel] || [];
+      if (constraints.length > 0) {
+        // Kısıtlamaları RULES bölümünden önce ekle (aşağıda birleşecek)
+        promptParts.push(`ENVIRONMENT CONSTRAINTS:`);
+        constraints.forEach(c => promptParts.push(`- ${c}`));
+        promptParts.push("");
+
+        console.log(`[GeminiPromptBuilder] Business context: floorLevel=${businessContext.floorLevel}, ${constraints.length} constraints added`);
+      }
 
       decisions.push({
         step: "business-context",
         input: businessContext.businessName,
-        matched: false, // matched: false çünkü prompt'a eklenmiyor
-        result: "SKIPPED - Ortam tarifleri referans görselleri override eder",
+        matched: true,
+        result: `Floor constraints eklendi: ${businessContext.floorLevel} (${constraints.length} kural)`,
         fallback: false,
         details: {
           businessName: businessContext.businessName,
           floorLevel: businessContext.floorLevel,
           isEnabled: businessContext.isEnabled,
-          approach: "disabled-for-reference-fidelity", // Referans sadakati için devre dışı
-          reason: "Gemini analizi: Metin tarifleri görselleri yeniden yorumluyor",
-          originalContent: businessContext.promptContext.substring(0, 100) + "...",
+          approach: "negative-constraints-only",
+          constraints,
         },
       });
     } else {
@@ -1183,9 +1203,9 @@ export async function buildGeminiPrompt(params: {
         step: "business-context",
         input: null,
         matched: false,
-        result: "Business context disabled or empty",
+        result: "Business context disabled or no floorLevel",
         fallback: false,
-        details: { isEnabled: businessContext.isEnabled },
+        details: { isEnabled: businessContext?.isEnabled },
       });
     }
   } catch (error) {

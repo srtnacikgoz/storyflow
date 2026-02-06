@@ -156,19 +156,15 @@ export {
   getQueueStats,
   getUsageStats,
 
-  // Tag Schema Controller
-  listTagSchemas,
-  getTagSchema,
-  updateTagSchema,
-  addTagOption,
-  removeTagOption,
-  autoTagAsset,
-
   // Migration Controller (Cloudinary)
   getMigrationStatus,
   runCloudinaryMigration,
   migrateSingleAsset,
   resetMigration,
+
+  // Beverage Rules Controller
+  getBeverageRulesConfigEndpoint,
+  updateBeverageRulesConfigEndpoint,
 } from "./orchestrator";
 
 // Direct export for Visual Critic (to avoid export issues)

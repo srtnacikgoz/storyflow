@@ -32,6 +32,7 @@ import {
   PromptTemplate,
   CompositionVariant,
   FirestoreRuleEngineConfig,
+  BeverageRule,
 } from "../types";
 
 // ==========================================
@@ -49,6 +50,48 @@ export const DEFAULT_RULE_ENGINE_CONFIG: Omit<FirestoreRuleEngineConfig, "update
     napkins: 50,
     cutlery: 50,
   },
+};
+
+// ==========================================
+// İÇECEK KURALLARI
+// ==========================================
+
+/**
+ * Varsayılan içecek kuralları
+ * Ürün kategorisine göre hangi içeceğin sunulacağını belirler
+ */
+export const DEFAULT_BEVERAGE_RULES: Record<string, BeverageRule> = {
+  // Kruvasanlar → Çay (her 3'te 1 meyve suyu)
+  croissants: {
+    default: "tea",
+    alternate: "fruit-juice",
+    alternateFrequency: 3,
+  },
+  // Pastalar → Kahve
+  pastas: {
+    default: "coffee",
+  },
+  // Çikolatalar → Kahve (her 5'te 1 çay)
+  chocolates: {
+    default: "coffee",
+    alternate: "tea",
+    alternateFrequency: 5,
+  },
+  // Kahveler → İçecek yok (zaten kahve)
+  coffees: {
+    default: "none",
+  },
+};
+
+/**
+ * İçecek türü → etiket eşleştirmesi
+ * Bardak seçiminde kullanılır: beverageType → bu etiketlerden biri olan bardak
+ */
+export const DEFAULT_BEVERAGE_TAG_MAPPINGS: Record<string, string[]> = {
+  tea: ["çay", "bitki çayı", "yeşil çay", "siyah çay", "tea", "chai"],
+  coffee: ["kahve", "espresso", "latte", "americano", "cappuccino", "filtre kahve", "türk kahvesi", "coffee"],
+  "fruit-juice": ["meyve suyu", "portakal suyu", "elma suyu", "taze sıkım", "juice", "smoothie"],
+  lemonade: ["limonata", "lemonade", "limon"],
 };
 
 // ==========================================
@@ -1085,6 +1128,11 @@ export function getAllSeedData() {
     },
     ruleEngineConfig: {
       ...DEFAULT_RULE_ENGINE_CONFIG,
+      updatedAt: timestamp,
+    },
+    beverageRulesConfig: {
+      rules: DEFAULT_BEVERAGE_RULES,
+      tagMappings: DEFAULT_BEVERAGE_TAG_MAPPINGS,
       updatedAt: timestamp,
     },
   };

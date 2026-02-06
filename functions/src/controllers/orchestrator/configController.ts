@@ -29,7 +29,8 @@ import {
   updatePromptTemplate as updatePromptTemplateService,
   revertPromptTemplate as revertPromptTemplateService,
   clearPromptStudioCache,
-
+  getBeverageRulesConfig,
+  updateBeverageRulesConfig,
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
 

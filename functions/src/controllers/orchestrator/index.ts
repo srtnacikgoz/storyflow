@@ -167,16 +167,6 @@ export {
   getUsageStats,
 } from "./statsController";
 
-// Tag Schema Controller
-export {
-  listTagSchemas,
-  getTagSchema,
-  updateTagSchema,
-  addTagOption,
-  removeTagOption,
-  autoTagAsset,
-} from "./tagSchemaController";
-
 // Migration Controller (Cloudinary)
 export {
   getMigrationStatus,
@@ -184,3 +174,9 @@ export {
   migrateSingleAsset,
   resetMigration,
 } from "./migrationController";
+
+// Beverage Rules Controller
+export {
+  getBeverageRulesConfigEndpoint,
+  updateBeverageRulesConfigEndpoint,
+} from "./beverageRulesController";

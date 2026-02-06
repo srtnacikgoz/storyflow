@@ -34,6 +34,7 @@ import {
   GlobalOrchestratorConfig,
   FirestoreAssetSelectionConfig,
   FirestoreRuleEngineConfig,
+  BeverageRule,
 } from "../orchestrator/types";
 import { getCategories as getCategoriesFromService } from "./categoryService";
 import {
@@ -46,6 +47,8 @@ import {
   DEFAULT_PROMPT_STUDIO_CONFIG,
   DEFAULT_PROMPT_TEMPLATES,
   DEFAULT_RULE_ENGINE_CONFIG,
+  DEFAULT_BEVERAGE_RULES,
+  DEFAULT_BEVERAGE_TAG_MAPPINGS,
 } from "../orchestrator/seed/defaultData";
 
 // PROMPT STUDIO FONKSIYONLARI
@@ -581,6 +584,63 @@ export async function updateRuleEngineConfig(
   clearConfigCache();
 }
 
+// ==========================================
+// BEVERAGE RULES CONFIG
+// ==========================================
+
+export interface BeverageRulesConfig {
+  rules: Record<string, BeverageRule>;
+  /** İçecek türü → etiket eşleştirmesi (Türkçe/İngilizce) */
+  tagMappings: Record<string, string[]>;
+  updatedAt: number;
+}
+
+/**
+ * İçecek kurallarını getirir
+ */
+export async function getBeverageRulesConfig(): Promise<BeverageRulesConfig> {
+  const doc = await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("beverage-rules")
+    .get();
+
+  if (!doc.exists) {
+    return {
+      rules: DEFAULT_BEVERAGE_RULES,
+      tagMappings: DEFAULT_BEVERAGE_TAG_MAPPINGS,
+      updatedAt: Date.now(),
+    };
+  }
+
+  // Firestore'dan gelen data'da tagMappings yoksa default ekle
+  const data = doc.data() as BeverageRulesConfig;
+  return {
+    ...data,
+    tagMappings: data.tagMappings || DEFAULT_BEVERAGE_TAG_MAPPINGS,
+  };
+}
+
+/**
+ * İçecek kurallarını günceller
+ */
+export async function updateBeverageRulesConfig(
+  updates: Partial<BeverageRulesConfig>
+): Promise<void> {
+  await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("beverage-rules")
+    .set({
+      ...updates,
+      updatedAt: Date.now(),
+    }, { merge: true });
+
+  clearConfigCache();
+}
+
 /**
  * Tüm config'leri tek seferde getirir (cache ile)
  */
@@ -734,6 +794,7 @@ export async function seedFirestoreConfig(): Promise<void> {
   batch.set(configRef.doc("asset-selection"), seedData.assetSelectionConfig);
   batch.set(configRef.doc("prompt-studio"), seedData.promptStudioConfig);
   batch.set(configRef.doc("rule-engine"), seedData.ruleEngineConfig);
+  batch.set(configRef.doc("beverage-rules"), seedData.beverageRulesConfig);
 
   await batch.commit();
 

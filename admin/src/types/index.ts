@@ -500,6 +500,16 @@ export type EatingMethod = "hand" | "fork" | "fork-knife" | "spoon" | "none";
 // @deprecated - geriye uyumluluk için, yeni kodda EatingMethod kullanın
 export type HoldingType = EatingMethod;
 
+// İçecek tipi - ürünle birlikte sunulacak içecek
+export type BeverageType = "coffee" | "tea" | "fruit-juice" | "lemonade" | "none";
+
+// İçecek kuralı - ürün kategorisine göre içecek eşleşmesi
+export interface BeverageRule {
+  default: BeverageType;
+  alternate?: BeverageType;
+  alternateFrequency?: number; // Kaç paylaşımda bir alternatif kullanılır
+}
+
 // Asset
 export interface OrchestratorAsset {
   id: string;
@@ -538,12 +548,15 @@ export interface OrchestratorAsset {
   // false = "Tabaksız" - elde tutulur, tabak seçilmez
   // true (varsayılan) = Ürün etiketine göre uygun tabak seçilir
   plateRequired?: boolean;
+  // İçecek eşleşmesi (sadece products için)
+  defaultBeverage?: BeverageType;
+  // Alternatif içecek - her 3 paylaşımda bir kullanılır
+  alternateBeverage?: BeverageType;
   // @deprecated - geriye uyumluluk için
   holdingType?: HoldingType;
   usageCount: number;
   lastUsedAt?: number;
   tags: string[];
-  structuredTags?: StructuredTags; // Yeni format - alan bazlı yapılandırılmış etiketler
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -1261,45 +1274,6 @@ export interface SetupStatusResponse {
 // ==========================================
 // TAG SCHEMA SYSTEM (Dinamik Tag Yönetimi)
 // ==========================================
-
-/**
- * Tag şeması - Her asset kategorisi için yapılandırılmış etiket şablonu
- * Firestore: tagSchemas/{categoryId}
- */
-export interface TagSchema {
-  categoryId: string;           // "plates", "tables", "cups", "products", ...
-  label: string;                // "Tabaklar", "Masalar", "Fincanlar", ...
-  groups: TagGroup[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-/**
- * Tag grubu - Bir şema içindeki tek bir etiket kategorisi
- */
-export interface TagGroup {
-  key: string;                  // "material", "color", "style", ...
-  label: string;                // "Malzeme", "Renk", "Stil", ...
-  required: boolean;            // Zorunlu mu?
-  multiSelect: boolean;         // Birden fazla seçilebilir mi?
-  options: TagOption[];
-  sortOrder: number;            // Admin panelde sıralama
-}
-
-/**
- * Tag seçeneği - Bir grup içindeki tekil değer
- */
-export interface TagOption {
-  value: string;                // "ceramic" (backend key)
-  label: string;                // "Seramik" (frontend gösterim)
-  isSystem: boolean;            // Sistem tanımlı mı?
-  addedBy?: string;             // Tenant tarafından eklendiyse
-}
-
-/**
- * Asset üzerindeki yapılandırılmış etiketler
- */
-export type StructuredTags = Record<string, string | string[]>;
 
 // ==========================================
 // STYLE TYPES

@@ -12,7 +12,7 @@ import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import { AIRulesService } from "../services/aiRulesService";
 import { AILogService } from "../services/aiLogService";
-import { getFixedAssets, getAssetSelectionConfig, isCloudinaryEnabled } from "../services/configService";
+import { getFixedAssets, getAssetSelectionConfig, isCloudinaryEnabled, getBeverageRulesConfig } from "../services/configService";
 import * as categoryService from "../services/categoryService";
 import {
   buildGeminiPrompt,
@@ -728,6 +728,52 @@ export class Orchestrator {
             ...effectiveAssetSelectionRules,
             plate: { enabled: false },
           };
+        }
+      }
+
+      // İçecek kurallarına göre bardak filtreleme
+      // productType (croissants, pastas vb.) → beverageRules → tagMappings → uyumlu bardaklar
+      if (qualifiedAssets.cups && qualifiedAssets.cups.length > 0) {
+        try {
+          const beverageConfig = await getBeverageRulesConfig();
+          const beverageRule = beverageConfig.rules[productType];
+
+          if (beverageRule && beverageRule.default !== "none") {
+            const beverageType = beverageRule.default; // "tea", "coffee", vb.
+            const matchingTags = beverageConfig.tagMappings[beverageType] || [];
+
+            if (matchingTags.length > 0) {
+              // Bardaklardan bu etiketlerden birini içerenleri filtrele
+              const matchingCups = qualifiedAssets.cups.filter((cup: any) => {
+                if (!cup.tags || !Array.isArray(cup.tags)) return false;
+                return cup.tags.some((cupTag: string) => {
+                  const normalizedCupTag = cupTag.toLowerCase();
+                  return matchingTags.some(matchTag =>
+                    normalizedCupTag.includes(matchTag.toLowerCase())
+                  );
+                });
+              });
+
+              if (matchingCups.length > 0) {
+                console.log(`[Orchestrator] Bardak filtreleme: ${productType} → ${beverageType} → ${qualifiedAssets.cups.length} -> ${matchingCups.length} cups (matching tags: ${matchingTags.join(", ")})`);
+                // usageCount'a göre sırala (düşükten yükseğe - çeşitlilik için)
+                matchingCups.sort((a: any, b: any) => (a.usageCount || 0) - (b.usageCount || 0));
+                qualifiedAssets.cups = matchingCups;
+              } else {
+                console.log(`[Orchestrator] Bardak eşleşmesi bulunamadı (${beverageType} tags: ${matchingTags.join(", ")}), tüm bardaklar kullanılabilir`);
+              }
+            }
+          } else if (beverageRule?.default === "none") {
+            console.log(`[Orchestrator] ${productType} için içecek yok (beverageRule: none), bardak seçimi devre dışı`);
+            qualifiedAssets.cups = [];
+            effectiveAssetSelectionRules = {
+              ...effectiveAssetSelectionRules,
+              cup: { enabled: false },
+            };
+          }
+        } catch (err) {
+          console.warn(`[Orchestrator] Bardak filtreleme hatası:`, err);
+          // Hata durumunda tüm bardaklar kullanılabilir
         }
       }
 

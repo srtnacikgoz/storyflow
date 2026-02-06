@@ -41,8 +41,6 @@ import type {
   DynamicCategoryType,
   // Style types
   Style,
-  // Tag Schema types
-  TagSchema,
   // Prompt Studio types
   PromptStudioConfig,
   PromptTemplate,
@@ -2336,80 +2334,7 @@ class ApiService {
   // Tag Schema (Dinamik Tag Yönetimi)
   // ==========================================
 
-  /**
-   * Tüm tag şemalarını listele
-   */
-  async listTagSchemas(): Promise<TagSchema[]> {
-    const response = await this.fetch<{
-      success: boolean;
-      data: TagSchema[];
-    }>("listTagSchemas");
-    return response.data;
-  }
 
-  /**
-   * Tek bir tag şemasını getir
-   */
-  async getTagSchema(categoryId: string): Promise<TagSchema> {
-    const response = await this.fetch<{
-      success: boolean;
-      data: TagSchema;
-    }>(`getTagSchema?categoryId=${categoryId}`);
-    return response.data;
-  }
-
-  /**
-   * Tag şemasını güncelle
-   */
-  async updateTagSchema(categoryId: string, updates: Partial<TagSchema>): Promise<TagSchema> {
-    const response = await this.fetch<{
-      success: boolean;
-      data: TagSchema;
-    }>("updateTagSchema", {
-      method: "POST",
-      body: JSON.stringify({ categoryId, ...updates }),
-    });
-    return response.data;
-  }
-
-  /**
-   * Tag şemasına yeni seçenek ekle
-   */
-  async addTagOption(categoryId: string, groupKey: string, value: string, label: string): Promise<TagSchema> {
-    const response = await this.fetch<{
-      success: boolean;
-      data: TagSchema;
-    }>("addTagOption", {
-      method: "POST",
-      body: JSON.stringify({ categoryId, groupKey, value, label }),
-    });
-    return response.data;
-  }
-
-  /**
-   * Tag şemasından seçenek sil (sadece tenant eklediği)
-   */
-  async removeTagOption(categoryId: string, groupKey: string, value: string): Promise<void> {
-    await this.fetch("removeTagOption", {
-      method: "POST",
-      body: JSON.stringify({ categoryId, groupKey, value }),
-    });
-  }
-
-  /**
-   * AI Auto-Tag: Görseli Gemini Vision ile analiz ederek prompt-odaklı etiketler üretir
-   * Dönen tags[] doğrudan Asset.tags alanına yazılır
-   */
-  async autoTagAsset(imageUrl: string, categoryId: string): Promise<{
-    tags: string[];
-    model: string;
-  }> {
-    const res = await this.fetch<{ data: { tags: string[]; model: string } }>("autoTagAsset", {
-      method: "POST",
-      body: JSON.stringify({ imageUrl, categoryId }),
-    });
-    return res.data;
-  }
 }
 
 

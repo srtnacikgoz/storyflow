@@ -293,6 +293,30 @@ export type EatingMethod =
 export type HoldingType = EatingMethod;
 
 /**
+ * İçecek tipi - ürünle birlikte sunulacak içecek
+ * Bardak eşleşmesi bu alan + bardak etiketleri ile yapılır
+ */
+export type BeverageType =
+  | "coffee" // Kahve (pasta, çikolata vb.)
+  | "tea" // Çay (kruvasan vb.)
+  | "fruit-juice" // Taze sıkım meyve suyu
+  | "lemonade" // Limonata
+  | "none"; // İçecek yok
+
+/**
+ * Ürün kategorisi için içecek kuralı
+ * orchestratorConfig.beverageRules içinde tanımlanır
+ */
+export interface BeverageRule {
+  /** Varsayılan içecek türü */
+  default: BeverageType;
+  /** Alternatif içecek (çeşitlilik için) */
+  alternate?: BeverageType;
+  /** Kaç paylaşımda bir alternatif kullanılacak (örn: 3 = her 3 paylaşımda 1) */
+  alternateFrequency?: number;
+}
+
+/**
  * Asset metadata
  */
 export interface Asset {
@@ -343,6 +367,15 @@ export interface Asset {
   // true (varsayılan) = Ürün etiketine göre uygun tabak seçilir
   plateRequired?: boolean;
 
+  // İçecek eşleşmesi (sadece products kategorisi için)
+  // Ürünün yanında hangi içecek sunulacağını belirler
+  // Bardak seçimi bu alan + bardak etiketleri ile otomatik eşleşir
+  defaultBeverage?: BeverageType;
+
+  // Alternatif içecek (çeşitlilik için)
+  // Her 3 paylaşımda bir varsayılan yerine bu içecek kullanılır
+  alternateBeverage?: BeverageType;
+
   // @deprecated - geriye uyumluluk için, yeni kodda eatingMethod kullanın
   holdingType?: HoldingType;
 
@@ -357,9 +390,8 @@ export interface Asset {
   usageCount: number;
   lastUsedAt?: number;
 
-  // Etiketler
-  tags: string[]; // Eski format - geriye uyumluluk ["gold-rim", "white", "elegant"]
-  structuredTags?: StructuredTags; // Yeni format - alan bazlı yapılandırılmış etiketler
+  // Etiketler - serbest metin ["gold-rim", "white", "elegant"]
+  tags: string[];
 
   // Meta
   isActive: boolean;
@@ -755,6 +787,10 @@ export interface OrchestratorConfig {
   // Zamanlama
   timezone: string; // "Europe/Istanbul"
   scheduleBuffer: number; // Dakika önce hazırla (default: 30)
+
+  // İçecek kuralları - ürün kategorisine göre içecek eşleşmesi
+  // Key: subType slug (croissants, pastas, chocolates, vb.)
+  beverageRules?: Record<string, BeverageRule>;
 }
 
 // ==========================================
@@ -1862,365 +1898,6 @@ export interface FirestoreAssetSelectionConfig {
   updatedAt: number;
   updatedBy?: string;
 }
-
-// ==========================================
-// TAG SCHEMA SYSTEM (Dinamik Tag Yönetimi)
-// ==========================================
-
-/**
- * Tag şeması - Her asset kategorisi için yapılandırılmış etiket şablonu
- * Firestore: tagSchemas/{categoryId}
- *
- * Serbest metin tag'ler yerine alan bazlı, tutarlı etiketleme sağlar.
- * Tema'nın preferredTags'i bu şemanın gruplarıyla eşleşir.
- */
-export interface TagSchema {
-  categoryId: string;           // "plates", "tables", "cups", "products", ...
-  label: string;                // "Tabaklar", "Masalar", "Fincanlar", ...
-  groups: TagGroup[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-/**
- * Tag grubu - Bir şema içindeki tek bir etiket kategorisi
- * Örn: "Malzeme", "Renk", "Stil" gibi gruplar
- */
-export interface TagGroup {
-  key: string;                  // "material", "color", "style", ...
-  label: string;                // "Malzeme", "Renk", "Stil", ...
-  required: boolean;            // Zorunlu mu?
-  multiSelect: boolean;         // Birden fazla seçilebilir mi? (ör: renkler)
-  options: TagOption[];
-  sortOrder: number;            // Admin panelde sıralama
-}
-
-/**
- * Tag seçeneği - Bir grup içindeki tekil değer
- * Sistem tanımlı seçenekler silinemez, tenant kendi seçeneklerini ekleyebilir
- */
-export interface TagOption {
-  value: string;                // "ceramic" (backend key - İngilizce, standart)
-  label: string;                // "Seramik" (frontend gösterim - Türkçe)
-  isSystem: boolean;            // Sistem tanımlı mı? (tenant silemez)
-  addedBy?: string;             // Tenant tarafından eklendiyse tenant ID
-}
-
-/**
- * Asset üzerindeki yapılandırılmış etiketler
- * Eski tags: string[] ile paralel çalışır (geriye uyumluluk)
- *
- * Örnek:
- * {
- *   material: "ceramic",
- *   color: ["white", "beige"],
- *   style: "minimal",
- *   pattern: "plain"
- * }
- */
-export type StructuredTags = Record<string, string | string[]>;
-
-/**
- * Varsayılan tag şemaları - seed data
- * listTagSchemas çağrıldığında eksik şemalar otomatik oluşturulur
- */
-export const DEFAULT_TAG_SCHEMAS: Omit<TagSchema, "createdAt" | "updatedAt">[] = [
-  {
-    categoryId: "plates",
-    label: "Tabaklar",
-    groups: [
-      {
-        key: "material", label: "Malzeme", required: true, multiSelect: false, sortOrder: 1,
-        options: [
-          { value: "ceramic", label: "Seramik", isSystem: true },
-          { value: "porcelain", label: "Porselen", isSystem: true },
-          { value: "wood", label: "Ahşap", isSystem: true },
-          { value: "glass", label: "Cam", isSystem: true },
-          { value: "metal", label: "Metal", isSystem: true },
-          { value: "stone", label: "Taş", isSystem: true },
-          { value: "bamboo", label: "Bambu", isSystem: true },
-        ],
-      },
-      {
-        key: "color", label: "Renk", required: true, multiSelect: true, sortOrder: 2,
-        options: [
-          { value: "white", label: "Beyaz", isSystem: true },
-          { value: "beige", label: "Bej", isSystem: true },
-          { value: "gray", label: "Gri", isSystem: true },
-          { value: "blue", label: "Mavi", isSystem: true },
-          { value: "black", label: "Siyah", isSystem: true },
-          { value: "terracotta", label: "Toprak", isSystem: true },
-          { value: "brown", label: "Kahverengi", isSystem: true },
-          { value: "green", label: "Yeşil", isSystem: true },
-        ],
-      },
-      {
-        key: "style", label: "Stil", required: true, multiSelect: false, sortOrder: 3,
-        options: [
-          { value: "minimal", label: "Minimal", isSystem: true },
-          { value: "rustic", label: "Rustik", isSystem: true },
-          { value: "modern", label: "Modern", isSystem: true },
-          { value: "vintage", label: "Vintage", isSystem: true },
-          { value: "organic", label: "Organik", isSystem: true },
-          { value: "industrial", label: "Endüstriyel", isSystem: true },
-        ],
-      },
-      {
-        key: "pattern", label: "Desen", required: false, multiSelect: false, sortOrder: 4,
-        options: [
-          { value: "plain", label: "Düz", isSystem: true },
-          { value: "striped", label: "Çizgili", isSystem: true },
-          { value: "textured", label: "Dokulu", isSystem: true },
-          { value: "patterned", label: "Desenli", isSystem: true },
-          { value: "hand-painted", label: "El Boyama", isSystem: true },
-        ],
-      },
-      {
-        key: "size", label: "Boyut", required: false, multiSelect: false, sortOrder: 5,
-        options: [
-          { value: "small", label: "Küçük", isSystem: true },
-          { value: "medium", label: "Orta", isSystem: true },
-          { value: "large", label: "Büyük", isSystem: true },
-        ],
-      },
-      {
-        key: "shape", label: "Form", required: false, multiSelect: false, sortOrder: 6,
-        options: [
-          { value: "round", label: "Yuvarlak", isSystem: true },
-          { value: "square", label: "Kare", isSystem: true },
-          { value: "oval", label: "Oval", isSystem: true },
-          { value: "irregular", label: "Düzensiz", isSystem: true },
-          { value: "rectangular", label: "Dikdörtgen", isSystem: true },
-        ],
-      },
-    ],
-  },
-  {
-    categoryId: "tables",
-    label: "Masalar",
-    groups: [
-      {
-        key: "material", label: "Malzeme", required: true, multiSelect: false, sortOrder: 1,
-        options: [
-          { value: "wood", label: "Ahşap", isSystem: true },
-          { value: "marble", label: "Mermer", isSystem: true },
-          { value: "metal", label: "Metal", isSystem: true },
-          { value: "glass", label: "Cam", isSystem: true },
-          { value: "concrete", label: "Beton", isSystem: true },
-          { value: "stone", label: "Taş", isSystem: true },
-          { value: "laminate", label: "Laminat", isSystem: true },
-        ],
-      },
-      {
-        key: "color", label: "Renk", required: true, multiSelect: true, sortOrder: 2,
-        options: [
-          { value: "natural-wood", label: "Doğal Ahşap", isSystem: true },
-          { value: "white", label: "Beyaz", isSystem: true },
-          { value: "black", label: "Siyah", isSystem: true },
-          { value: "gray", label: "Gri", isSystem: true },
-          { value: "brown", label: "Kahverengi", isSystem: true },
-          { value: "dark-walnut", label: "Koyu Ceviz", isSystem: true },
-        ],
-      },
-      {
-        key: "surface", label: "Yüzey", required: true, multiSelect: false, sortOrder: 3,
-        options: [
-          { value: "smooth", label: "Pürüzsüz", isSystem: true },
-          { value: "grain-textured", label: "Damar Dokulu", isSystem: true },
-          { value: "scratched", label: "Çizik / Yaşlanmış", isSystem: true },
-          { value: "natural", label: "Doğal", isSystem: true },
-          { value: "polished", label: "Cilalı", isSystem: true },
-        ],
-      },
-      {
-        key: "style", label: "Stil", required: true, multiSelect: false, sortOrder: 4,
-        options: [
-          { value: "minimal", label: "Minimal", isSystem: true },
-          { value: "rustic", label: "Rustik", isSystem: true },
-          { value: "modern", label: "Modern", isSystem: true },
-          { value: "vintage", label: "Vintage", isSystem: true },
-          { value: "industrial", label: "Endüstriyel", isSystem: true },
-          { value: "scandinavian", label: "İskandinav", isSystem: true },
-        ],
-      },
-    ],
-  },
-  {
-    categoryId: "cups",
-    label: "Fincanlar",
-    groups: [
-      {
-        key: "material", label: "Malzeme", required: true, multiSelect: false, sortOrder: 1,
-        options: [
-          { value: "ceramic", label: "Seramik", isSystem: true },
-          { value: "porcelain", label: "Porselen", isSystem: true },
-          { value: "glass", label: "Cam", isSystem: true },
-          { value: "metal", label: "Metal", isSystem: true },
-          { value: "paper", label: "Kağıt", isSystem: true },
-        ],
-      },
-      {
-        key: "color", label: "Renk", required: true, multiSelect: true, sortOrder: 2,
-        options: [
-          { value: "white", label: "Beyaz", isSystem: true },
-          { value: "black", label: "Siyah", isSystem: true },
-          { value: "transparent", label: "Şeffaf", isSystem: true },
-          { value: "brown", label: "Kahverengi", isSystem: true },
-          { value: "beige", label: "Bej", isSystem: true },
-          { value: "colored", label: "Renkli", isSystem: true },
-        ],
-      },
-      {
-        key: "type", label: "Tip", required: true, multiSelect: false, sortOrder: 3,
-        options: [
-          { value: "espresso-cup", label: "Espresso Fincanı", isSystem: true },
-          { value: "latte-mug", label: "Latte Kupası", isSystem: true },
-          { value: "tea-glass", label: "Çay Bardağı", isSystem: true },
-          { value: "tumbler", label: "Bardak", isSystem: true },
-          { value: "takeaway", label: "Paket Bardak", isSystem: true },
-          { value: "cappuccino-cup", label: "Cappuccino Fincanı", isSystem: true },
-        ],
-      },
-      {
-        key: "style", label: "Stil", required: true, multiSelect: false, sortOrder: 4,
-        options: [
-          { value: "minimal", label: "Minimal", isSystem: true },
-          { value: "rustic", label: "Rustik", isSystem: true },
-          { value: "modern", label: "Modern", isSystem: true },
-          { value: "vintage", label: "Vintage", isSystem: true },
-          { value: "artisan", label: "Zanaatkar", isSystem: true },
-        ],
-      },
-    ],
-  },
-  {
-    categoryId: "products",
-    label: "Ürünler",
-    groups: [
-      {
-        key: "texture", label: "Doku", required: true, multiSelect: true, sortOrder: 1,
-        options: [
-          { value: "flaky", label: "Pul Pul", isSystem: true },
-          { value: "smooth", label: "Pürüzsüz", isSystem: true },
-          { value: "layered", label: "Katmanlı", isSystem: true },
-          { value: "crispy", label: "Çıtır", isSystem: true },
-          { value: "soft", label: "Yumuşak", isSystem: true },
-          { value: "glazed", label: "Sırlı / Glazürlü", isSystem: true },
-          { value: "powdered", label: "Pudralı", isSystem: true },
-        ],
-      },
-      {
-        key: "color", label: "Renk", required: true, multiSelect: true, sortOrder: 2,
-        options: [
-          { value: "golden", label: "Altın", isSystem: true },
-          { value: "brown", label: "Kahverengi", isSystem: true },
-          { value: "dark-chocolate", label: "Bitter Çikolata", isSystem: true },
-          { value: "white", label: "Beyaz", isSystem: true },
-          { value: "cream", label: "Krem", isSystem: true },
-          { value: "colorful", label: "Renkli", isSystem: true },
-        ],
-      },
-      {
-        key: "size", label: "Boyut", required: false, multiSelect: false, sortOrder: 3,
-        options: [
-          { value: "mini", label: "Mini", isSystem: true },
-          { value: "standard", label: "Standart", isSystem: true },
-          { value: "large", label: "Büyük", isSystem: true },
-          { value: "assorted", label: "Karışık", isSystem: true },
-        ],
-      },
-      {
-        key: "presentation", label: "Sunum", required: false, multiSelect: false, sortOrder: 4,
-        options: [
-          { value: "whole", label: "Bütün", isSystem: true },
-          { value: "sliced", label: "Dilimlenmiş", isSystem: true },
-          { value: "bitten", label: "Isırılmış", isSystem: true },
-          { value: "stacked", label: "Üst Üste", isSystem: true },
-          { value: "scattered", label: "Dağınık", isSystem: true },
-        ],
-      },
-    ],
-  },
-  {
-    categoryId: "napkins",
-    label: "Peçeteler",
-    groups: [
-      {
-        key: "material", label: "Malzeme", required: true, multiSelect: false, sortOrder: 1,
-        options: [
-          { value: "linen", label: "Keten", isSystem: true },
-          { value: "cotton", label: "Pamuk", isSystem: true },
-          { value: "paper", label: "Kağıt", isSystem: true },
-          { value: "silk", label: "İpek", isSystem: true },
-        ],
-      },
-      {
-        key: "color", label: "Renk", required: true, multiSelect: true, sortOrder: 2,
-        options: [
-          { value: "white", label: "Beyaz", isSystem: true },
-          { value: "beige", label: "Bej", isSystem: true },
-          { value: "gray", label: "Gri", isSystem: true },
-          { value: "blue", label: "Mavi", isSystem: true },
-          { value: "green", label: "Yeşil", isSystem: true },
-          { value: "terracotta", label: "Toprak", isSystem: true },
-        ],
-      },
-      {
-        key: "style", label: "Stil", required: true, multiSelect: false, sortOrder: 3,
-        options: [
-          { value: "minimal", label: "Minimal", isSystem: true },
-          { value: "rustic", label: "Rustik", isSystem: true },
-          { value: "elegant", label: "Zarif", isSystem: true },
-          { value: "casual", label: "Günlük", isSystem: true },
-        ],
-      },
-      {
-        key: "fold", label: "Katlama", required: false, multiSelect: false, sortOrder: 4,
-        options: [
-          { value: "flat", label: "Düz", isSystem: true },
-          { value: "folded", label: "Katlanmış", isSystem: true },
-          { value: "crumpled", label: "Buruşuk / Doğal", isSystem: true },
-          { value: "rolled", label: "Rulo", isSystem: true },
-        ],
-      },
-    ],
-  },
-  {
-    categoryId: "cutlery",
-    label: "Çatal-Bıçak",
-    groups: [
-      {
-        key: "material", label: "Malzeme", required: true, multiSelect: false, sortOrder: 1,
-        options: [
-          { value: "stainless-steel", label: "Paslanmaz Çelik", isSystem: true },
-          { value: "silver", label: "Gümüş", isSystem: true },
-          { value: "gold-accent", label: "Altın Detay", isSystem: true },
-          { value: "wood-handle", label: "Ahşap Saplı", isSystem: true },
-          { value: "ceramic-handle", label: "Seramik Saplı", isSystem: true },
-        ],
-      },
-      {
-        key: "color", label: "Renk", required: true, multiSelect: true, sortOrder: 2,
-        options: [
-          { value: "silver", label: "Gümüş", isSystem: true },
-          { value: "gold", label: "Altın", isSystem: true },
-          { value: "black", label: "Siyah (Mat)", isSystem: true },
-          { value: "rose-gold", label: "Rose Gold", isSystem: true },
-        ],
-      },
-      {
-        key: "style", label: "Stil", required: true, multiSelect: false, sortOrder: 3,
-        options: [
-          { value: "minimal", label: "Minimal", isSystem: true },
-          { value: "classic", label: "Klasik", isSystem: true },
-          { value: "modern", label: "Modern", isSystem: true },
-          { value: "vintage", label: "Vintage", isSystem: true },
-          { value: "ornate", label: "Süslü", isSystem: true },
-        ],
-      },
-    ],
-  },
-];
 
 // ==========================================
 // STYLE TYPES

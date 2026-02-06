@@ -173,8 +173,14 @@ export default function Assets() {
 
   // Modal state - hem create hem edit için
   const [showModal, setShowModal] = useState(false);
-  const [editingAsset, setEditingAsset] = useState<OrchestratorAsset | null>(null);
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [modalKey, setModalKey] = useState(0); // Modal her açıldığında artar, state temizlenir
+
+  // editingAsset'i assets listesinden derive et - loadAssets sonrası otomatik güncellenir
+  const editingAsset = useMemo(() => {
+    if (!editingAssetId) return null;
+    return assets.find(a => a.id === editingAssetId) || null;
+  }, [editingAssetId, assets]);
 
   // Global loading hook
   const { startLoading, stopLoading } = useLoading();
@@ -272,25 +278,28 @@ export default function Assets() {
 
   // Modal açma fonksiyonları
   const openCreateModal = () => {
-    setEditingAsset(null);
+    setEditingAssetId(null);
     setModalKey((k) => k + 1); // Yeni key = yeni modal instance = temiz state
     setShowModal(true);
   };
 
   const openEditModal = (asset: OrchestratorAsset) => {
-    setEditingAsset(asset);
+    setEditingAssetId(asset.id); // ID olarak tut, assets listesinden derive edilecek
     setModalKey((k) => k + 1); // Yeni key = yeni modal instance = temiz state
     setShowModal(true);
   };
 
   const closeModal = () => {
-    setEditingAsset(null);
+    setEditingAssetId(null);
     setShowModal(false);
   };
 
-  const handleModalSuccess = () => {
+  const handleModalSuccess = async () => {
     closeModal();
-    loadAssets(true); // Silent reload - scroll pozisyonunu korur
+    // Kısa gecikme - API write işleminin tamamlanmasını bekle
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await loadAssets(true);
+    console.log("[handleModalSuccess] loadAssets completed, assets should be updated");
   };
 
   // Silme onay modalını aç
@@ -775,9 +784,6 @@ function AssetModal({
 
   // Alias for backward compatibility
   const tags = tagsState;
-  // AI etiketleme state
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
   // Yeme şekli ve elle tutulabilirlik alanları
   const [eatingMethod, setEatingMethod] = useState<EatingMethod>(
     asset?.eatingMethod || asset?.holdingType || "hand"
@@ -852,28 +858,6 @@ function AssetModal({
     setUploadError(error);
   }, []);
 
-  // AI ile etiket üret - Gemini görseli analiz edip prompt-odaklı tag'ler üretir
-  const handleAITag = useCallback(async () => {
-    if (!storageUrl) return;
-
-    setAiLoading(true);
-    setAiError(null);
-
-    try {
-      const result = await api.autoTagAsset(storageUrl, subType || category);
-      // Mevcut tag'lerle birleştir, duplicate olmasın
-      const currentTags = tagsRef.current;
-      const newTags = result.tags.filter((t) => !currentTags.includes(t));
-      if (newTags.length > 0) {
-        setTags([...currentTags, ...newTags]);
-      }
-    } catch (err: any) {
-      setAiError(err.message || "AI etiket üretme hatası");
-    } finally {
-      setAiLoading(false);
-    }
-  }, [storageUrl, subType, category, setTags]);
-
   // Mevcut kategorinin alan konfigürasyonu (bilinmeyen kategoriler için varsayılan)
   const fieldConfig = FIELDS_BY_CATEGORY_FALLBACK[category] || DEFAULT_FIELD_CONFIG;
 
@@ -904,7 +888,7 @@ function AssetModal({
         filename,
         storageUrl,
         tags: currentTags,
-        // Sadece products kategorisinde yeme/tutma özellikleri kaydedilir
+        // Sadece products kategorisinde yeme/tutma/içecek özellikleri kaydedilir
         ...(category === "products" && {
           eatingMethod,
           canBeHeldByHand,
@@ -1102,43 +1086,8 @@ function AssetModal({
                       Bu etiketler gorsel uretim prompt'unda ASSET CONSTRAINTS olarak kullanilir.
                     </p>
 
-                    {/* AI ile Etiketle butonu */}
-                    <div className="flex items-center gap-3 mb-3">
-                      <button
-                        type="button"
-                        onClick={handleAITag}
-                        disabled={!storageUrl || aiLoading}
-                        className={`
-                          flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all
-                          ${!storageUrl
-                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                            : aiLoading
-                              ? "bg-purple-100 text-purple-400 cursor-wait"
-                              : "bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 shadow-sm hover:shadow"
-                          }
-                        `}
-                      >
-                        {aiLoading ? (
-                          <>
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                            Analiz Ediliyor...
-                          </>
-                        ) : (
-                          <>
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                            </svg>
-                            AI ile Etiketle
-                          </>
-                        )}
-                      </button>
-                      {!storageUrl && (
-                        <span className="text-xs text-gray-400">Once gorsel yukleyin</span>
-                      )}
-                      {tags.length > 0 && (
+                    {tags.length > 0 && (
+                      <div className="flex justify-end mb-2">
                         <button
                           type="button"
                           onClick={() => setTags([])}
@@ -1146,13 +1095,6 @@ function AssetModal({
                         >
                           Tumu Temizle
                         </button>
-                      )}
-                    </div>
-
-                    {/* AI hata mesaji */}
-                    {aiError && (
-                      <div className="text-xs text-red-500 bg-red-50 p-2 rounded-lg mb-3">
-                        AI Hata: {aiError}
                       </div>
                     )}
 
