@@ -30,7 +30,6 @@ import {
   FirestoreAssetSelectionConfig, // Restored
   FirestorePromptStudioConfig,
   PromptTemplate,
-  CompositionVariant,
   FirestoreRuleEngineConfig,
   BeverageRule,
 } from "../types";
@@ -99,12 +98,6 @@ export const DEFAULT_BEVERAGE_TAG_MAPPINGS: Record<string, string[]> = {
 // ==========================================
 
 /**
- * Kompozisyon varyantları helper
- */
-const createCompositions = (variants: string[]): CompositionVariant[] =>
-  variants.map((v) => ({ id: v, description: v }));
-
-/**
  * Varsayılan senaryolar
  * ORCHESTRATOR.md'den taşındı + ambalaj senaryoları eklendi
  */
@@ -117,57 +110,32 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     name: "Zarif Tutma",
     description: "Bakımlı el ürün tutuyor. Premium, şık görünüm.",
     includesHands: true,
-    compositions: createCompositions([
-      "bottom-right", // El sağ alt köşeden giriyor, ürün sol üstte
-      "bottom-left", // El sol alt köşeden giriyor, ürün sağ üstte
-      "top-corner", // El üst köşeden giriyor, ürün alt kısımda
-      "center-hold", // Ürün ortada, el alttan tutuyor
-    ]),
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
-    suggestedTimeSlots: ["morning", "afternoon"],
   },
   {
     id: "kahve-ani",
     name: "Kahve Anı",
     description: "Eller fincan tutuyor, ürün ön planda. Sosyal, paylaşım odaklı.",
     includesHands: true,
-    compositions: createCompositions([
-      "product-front", // Ürün ön planda keskin, eller arkada bulanık
-      "product-side", // Ürün yanda, eller diagonal pozisyonda
-      "overhead", // Kuş bakışı, ürün ve fincan yan yana
-    ]),
     isActive: true,
     suggestedProducts: ["croissants", "pastas"],
-    suggestedTimeSlots: ["morning", "brunch"],
   },
   {
     id: "hediye-acilisi",
     name: "Hediye Açılışı",
     description: "El kutu açıyor. Sürpriz, heyecan anı.",
     includesHands: true,
-    compositions: createCompositions([
-      "box-center", // Kutu ortada, eller açarken
-      "box-angled", // Kutu açılı, kapak görünür
-      "unwrapping", // Ambalaj açılma anı
-    ]),
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
-    suggestedTimeSlots: ["afternoon", "evening"],
   },
   {
     id: "ilk-dilim",
     name: "İlk Dilim",
     description: "El çatalla pasta alıyor. İştah açıcı, davetkar.",
     includesHands: true,
-    compositions: createCompositions([
-      "fork-entering", // Çatal pastaya giriyor
-      "slice-lifted", // Dilim kaldırılmış
-      "mid-bite", // Yarım alınmış dilim
-    ]),
     isActive: true,
     suggestedProducts: ["pastas"],
-    suggestedTimeSlots: ["afternoon", "evening"],
   },
 
   // =====================
@@ -178,84 +146,48 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     name: "Cam Kenarı",
     description: "Pencere önü, doğal ışık. Aydınlık, ferah atmosfer.",
     includesHands: false,
-    compositions: createCompositions([
-      "window-left", // Pencere solda
-      "window-right", // Pencere sağda
-      "window-center", // Ürün pencere ortasında
-    ]),
     isActive: true,
     suggestedProducts: ["croissants", "pastas", "coffees"],
-    suggestedTimeSlots: ["morning", "afternoon", "golden-hour"],
   },
   {
     id: "mermer-zarafet",
     name: "Mermer Zarafet",
     description: "Mermer yüzey, premium sunum. Lüks, sofistike.",
     includesHands: false,
-    compositions: createCompositions([
-      "centered", // Ürün merkeze
-      "diagonal", // Çapraz yerleşim
-      "corner-composition", // Köşe kompozisyonu
-    ]),
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
-    suggestedTimeSlots: ["afternoon", "evening"],
   },
   {
     id: "kahve-kosesi",
     name: "Kahve Köşesi",
     description: "Rahat köşe, cozy atmosfer. Samimi, ev sıcaklığı.",
     includesHands: false,
-    compositions: createCompositions([
-      "cozy-corner", // Rahat köşe düzeni
-      "reading-nook", // Kitap/dergi ile
-      "pet-friendly", // Köpek dahil edilebilir
-    ]),
     isActive: true,
     suggestedProducts: ["croissants", "pastas", "coffees"],
-    suggestedTimeSlots: ["afternoon", "evening"],
   },
   {
     id: "yarim-kaldi",
     name: "Yarım Kaldı",
     description: "Isırık alınmış, yarı dolu fincan. Wabi-sabi, yaşanmışlık.",
     includesHands: false,
-    compositions: createCompositions([
-      "bitten-product", // Isırık izi görünür
-      "half-eaten", // Yarı yenmiş
-      "crumbs-scattered", // Kırıntılar dağılmış
-    ]),
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
-    suggestedTimeSlots: ["afternoon", "evening"],
   },
   {
     id: "paylasim",
     name: "Paylaşım",
     description: "İki tabak, sosyal an. Birliktelik, paylaşım.",
     includesHands: false,
-    compositions: createCompositions([
-      "two-plates", // İki tabak yan yana
-      "sharing-moment", // Paylaşım anı
-      "conversation", // Sohbet ortamı
-    ]),
     isActive: true,
     suggestedProducts: ["pastas", "croissants"],
-    suggestedTimeSlots: ["brunch", "afternoon"],
   },
   {
     id: "paket-servis",
     name: "Paket Servis",
     description: "Kraft torba, takeaway. Pratik, hareket halinde.",
     includesHands: false,
-    compositions: createCompositions([
-      "package-hero", // Paket ana kahraman
-      "unboxing", // Açılış anı
-      "takeaway-ready", // Alıp gitmeye hazır
-    ]),
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
-    suggestedTimeSlots: ["morning", "afternoon"],
   },
 
   // =====================
@@ -266,42 +198,24 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     name: "Hediye Hazırlığı",
     description: "Şık kutuda ürünler. Özel günler, hediye konsepti.",
     includesHands: false,
-    compositions: createCompositions([
-      "box-open", // Kutu açık, içi görünür
-      "ribbon-detail", // Kurdele detayı
-      "gift-arrangement", // Hediye düzeni
-    ]),
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
-    suggestedTimeSlots: ["afternoon", "evening"],
   },
   {
     id: "yolda-atistirma",
     name: "Yolda Atıştırma",
     description: "Kraft çanta, hareket halinde tüketim. Gündelik, pratik.",
     includesHands: true,
-    compositions: createCompositions([
-      "bag-held", // Çanta elde tutuluyor
-      "peek-inside", // İçerisi görünüyor
-      "on-the-go", // Hareket halinde
-    ]),
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
-    suggestedTimeSlots: ["morning", "afternoon"],
   },
   {
     id: "kutu-acilis",
     name: "Kutu Açılışı",
     description: "Çikolata/pasta kutusu açılış anı. Sürpriz, keşif.",
     includesHands: true,
-    compositions: createCompositions([
-      "lid-lifting", // Kapak kaldırılıyor
-      "first-peek", // İlk bakış
-      "reveal-moment", // Açılış anı
-    ]),
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
-    suggestedTimeSlots: ["afternoon", "evening"],
   },
 
   // =====================
@@ -312,7 +226,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     name: "Vitrin Sergisi",
     description: "Pastane vitrini görünümü. AI görsel üretimi ATLANIR.",
     includesHands: false,
-    compositions: createCompositions(["showcase"]),
     isActive: true,
     isInterior: true,
     interiorType: "vitrin",
@@ -322,7 +235,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     name: "Kruvasan Tezgahı",
     description: "Taze çıkmış ürünler tezgahta. AI görsel üretimi ATLANIR.",
     includesHands: false,
-    compositions: createCompositions(["counter-display"]),
     isActive: true,
     isInterior: true,
     interiorType: "tezgah",
@@ -332,7 +244,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     name: "Pastane İçi",
     description: "Genel mekan görünümü. AI görsel üretimi ATLANIR.",
     includesHands: false,
-    compositions: createCompositions(["wide-shot"]),
     isActive: true,
     isInterior: true,
     interiorType: "genel-mekan",
@@ -342,7 +253,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     name: "Oturma Köşesi",
     description: "Müşteri oturma alanı. AI görsel üretimi ATLANIR.",
     includesHands: false,
-    compositions: createCompositions(["seating-area"]),
     isActive: true,
     isInterior: true,
     interiorType: "oturma-alani",
@@ -352,7 +262,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     name: "Çiçek Detay",
     description: "Dekorasyon detayları. AI görsel üretimi ATLANIR.",
     includesHands: false,
-    compositions: createCompositions(["decor-focus"]),
     isActive: true,
     isInterior: true,
     interiorType: "dekorasyon",

@@ -45,250 +45,27 @@ const DEFAULT_VARIATION_RULES: VariationRules = {
 
 // Varsayılan senaryolar (ORCHESTRATOR.md'den parse edilemezse fallback)
 const DEFAULT_SCENARIOS: Scenario[] = [
-  {
-    id: "zarif-tutma",
-    name: "Zarif Tutma",
-    description: "Bakımlı el ürün tutuyor",
-    includesHands: true,
-    compositions: [
-      { id: "bottom-right", description: "El sağ alt köşeden giriyor" },
-      { id: "bottom-left", description: "El sol alt köşeden giriyor" },
-      { id: "top-corner", description: "El üst köşeden giriyor" },
-      { id: "center-hold", description: "Ürün ortada, el alttan tutuyor" },
-    ],
-  },
-  {
-    id: "kahve-ani",
-    name: "Kahve Anı",
-    description: "İki el fincan tutuyor, ürün yanında",
-    includesHands: true,
-    compositions: [
-      { id: "product-front", description: "Ürün ön planda keskin, eller arkada bulanık" },
-      { id: "product-side", description: "Ürün yanda, eller diagonal pozisyonda" },
-      { id: "overhead", description: "Kuş bakışı, ürün ve fincan yan yana" },
-    ],
-  },
-  {
-    id: "hediye-acilisi",
-    name: "Hediye Açılışı",
-    description: "El kutu açıyor",
-    includesHands: true,
-    compositions: [
-      { id: "box-center", description: "Kutu ortada, eller yanlarda" },
-      { id: "box-angled", description: "Kutu açılı, kapak açılıyor" },
-      { id: "unwrapping", description: "Ambalaj açılma anı" },
-    ],
-  },
-  {
-    id: "ilk-dilim",
-    name: "İlk Dilim",
-    description: "El çatalla pasta alıyor",
-    includesHands: true,
-    compositions: [
-      { id: "fork-entering", description: "Çatal pastaya giriyor" },
-      { id: "slice-lifted", description: "Dilim kaldırılmış" },
-      { id: "mid-bite", description: "Isırık anı" },
-    ],
-  },
-  {
-    id: "cam-kenari",
-    name: "Cam Kenarı",
-    description: "Pencere önü, şehir manzarası",
-    includesHands: false,
-    compositions: [
-      { id: "window-left", description: "Pencere solda, ürün sağda" },
-      { id: "window-right", description: "Pencere sağda, ürün solda" },
-      { id: "window-center", description: "Pencere arkada, ürün önde ortada" },
-    ],
-  },
-  {
-    id: "mermer-zarafet",
-    name: "Mermer Zarafet",
-    description: "Mermer yüzey, altın detaylar",
-    includesHands: false,
-    compositions: [
-      { id: "centered", description: "Ürün tam ortada" },
-      { id: "diagonal", description: "Diagonal kompozisyon" },
-      { id: "corner-composition", description: "Köşe kompozisyonu" },
-    ],
-  },
-  {
-    id: "kahve-kosesi",
-    name: "Kahve Köşesi",
-    description: "Rahat köşe, kitap yanında",
-    includesHands: false,
-    compositions: [
-      { id: "cozy-corner", description: "Rahat köşe düzeni" },
-      { id: "reading-nook", description: "Kitap köşesi" },
-      { id: "pet-friendly", description: "Köpek dahil edilebilir" },
-    ],
-  },
-  {
-    id: "yarim-kaldi",
-    name: "Yarım Kaldı",
-    description: "Isırık alınmış, yarı dolu fincan",
-    includesHands: false,
-    compositions: [
-      { id: "bitten-product", description: "Isırık izi görünür" },
-      { id: "half-eaten", description: "Yarısı yenmiş" },
-      { id: "crumbs-scattered", description: "Kırıntılar dağılmış" },
-    ],
-  },
-  {
-    id: "paylasim",
-    name: "Paylaşım",
-    description: "İki tabak, karşılıklı oturma",
-    includesHands: false,
-    compositions: [
-      { id: "two-plates", description: "İki tabak yan yana" },
-      { id: "sharing-moment", description: "Paylaşım anı" },
-      { id: "conversation", description: "Sohbet ortamı" },
-    ],
-  },
-  {
-    id: "paket-servis",
-    name: "Paket Servis",
-    description: "Kraft torba, takeaway kahve",
-    includesHands: false,
-    compositions: [
-      { id: "package-hero", description: "Paket ön planda" },
-      { id: "unboxing", description: "Kutu açılıyor" },
-      { id: "takeaway-ready", description: "Götürmeye hazır" },
-    ],
-  },
-  // ═══════════════════════════════════════════════════════════════════
-  // INTERIOR SENARYOLARI (AI görsel üretimi YAPILMAZ, gerçek fotoğraf kullanılır)
-  // ═══════════════════════════════════════════════════════════════════
-  {
-    id: "vitrin-sergisi",
-    name: "Vitrin Sergisi",
-    description: "Vitrin içindeki ürün dizilimi",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "vitrin" as InteriorType,
-    compositions: [
-      { id: "full-display", description: "Tam vitrin görünümü" },
-      { id: "detail-focus", description: "Tek ürün odaklı" },
-      { id: "angled-view", description: "Açılı vitrin görünümü" },
-    ],
-  },
-  {
-    id: "kruvasan-tezgahi",
-    name: "Kruvasan Tezgahı",
-    description: "Taze kruvasanlar tezgahta dizili",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "tezgah" as InteriorType,
-    compositions: [
-      { id: "golden-row", description: "Altın renkli sıra" },
-      { id: "steam-fresh", description: "Taze çıkmış, sıcak" },
-      { id: "variety-display", description: "Çeşitlilik gösterisi" },
-    ],
-  },
-  {
-    id: "pastane-ici",
-    name: "Pastane İçi",
-    description: "Genel pastane mekan atmosferi",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "genel-mekan" as InteriorType,
-    compositions: [
-      { id: "wide-angle", description: "Geniş açı mekan" },
-      { id: "cozy-corner", description: "Rahat köşe" },
-      { id: "entrance-view", description: "Giriş görünümü" },
-    ],
-  },
-  {
-    id: "oturma-kosesi",
-    name: "Oturma Köşesi",
-    description: "Samimi oturma alanı görünümü",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "oturma-alani" as InteriorType,
-    compositions: [
-      { id: "intimate-corner", description: "Samimi köşe" },
-      { id: "window-seat", description: "Pencere kenarı koltuk" },
-      { id: "cozy-nook", description: "Rahat köşe" },
-    ],
-  },
-  {
-    id: "cicek-detay",
-    name: "Çiçek Detay",
-    description: "Dekoratif çiçekler ve bitkiler",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "dekorasyon" as InteriorType,
-    compositions: [
-      { id: "vase-focus", description: "Vazo odaklı" },
-      { id: "table-arrangement", description: "Masa üstü düzenleme" },
-      { id: "window-light", description: "Pencere ışığında" },
-    ],
-  },
-  {
-    id: "kahve-hazirligi",
-    name: "Kahve Hazırlığı",
-    description: "Barista veya kahve hazırlama anı",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "tezgah" as InteriorType,
-    compositions: [
-      { id: "pour-moment", description: "Dökme anı" },
-      { id: "machine-action", description: "Makine çalışıyor" },
-      { id: "preparation", description: "Hazırlık aşaması" },
-    ],
-  },
-  {
-    id: "sabah-acilis",
-    name: "Sabah Açılış",
-    description: "Günaydın, kapı girişi görünümü",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "genel-mekan" as InteriorType,
-    compositions: [
-      { id: "door-entrance", description: "Kapıdan giriş" },
-      { id: "morning-light", description: "Sabah ışığı" },
-      { id: "welcome-view", description: "Hoş geldin görünümü" },
-    ],
-  },
-  {
-    id: "pencere-isigi",
-    name: "Pencere Işığı",
-    description: "Pencere kenarı, doğal ışık görünümü",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "genel-mekan" as InteriorType,
-    compositions: [
-      { id: "silhouette", description: "Siluet görünümü" },
-      { id: "golden-rays", description: "Altın ışık huzmesi" },
-      { id: "soft-glow", description: "Yumuşak parıltı" },
-    ],
-  },
-  {
-    id: "raf-zenginligi",
-    name: "Raf Zenginliği",
-    description: "Dolu raflar, bolluk hissi",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "vitrin" as InteriorType,
-    compositions: [
-      { id: "full-shelves", description: "Dolu raflar" },
-      { id: "abundance", description: "Bolluk görünümü" },
-      { id: "organized-display", description: "Düzenli sergi" },
-    ],
-  },
-  {
-    id: "detay-cekimi",
-    name: "Detay Çekimi",
-    description: "Fincan, peçete, aksesuar detayları",
-    includesHands: false,
-    isInterior: true,
-    interiorType: "dekorasyon" as InteriorType,
-    compositions: [
-      { id: "cup-detail", description: "Fincan detayı" },
-      { id: "napkin-fold", description: "Peçete katlama" },
-      { id: "accessory-focus", description: "Aksesuar odağı" },
-    ],
-  },
+  { id: "zarif-tutma", name: "Zarif Tutma", description: "Bakımlı el ürün tutuyor", includesHands: true },
+  { id: "kahve-ani", name: "Kahve Anı", description: "İki el fincan tutuyor, ürün yanında", includesHands: true },
+  { id: "hediye-acilisi", name: "Hediye Açılışı", description: "El kutu açıyor", includesHands: true },
+  { id: "ilk-dilim", name: "İlk Dilim", description: "El çatalla pasta alıyor", includesHands: true },
+  { id: "cam-kenari", name: "Cam Kenarı", description: "Pencere önü, şehir manzarası", includesHands: false },
+  { id: "mermer-zarafet", name: "Mermer Zarafet", description: "Mermer yüzey, altın detaylar", includesHands: false },
+  { id: "kahve-kosesi", name: "Kahve Köşesi", description: "Rahat köşe, kitap yanında", includesHands: false },
+  { id: "yarim-kaldi", name: "Yarım Kaldı", description: "Isırık alınmış, yarı dolu fincan", includesHands: false },
+  { id: "paylasim", name: "Paylaşım", description: "İki tabak, karşılıklı oturma", includesHands: false },
+  { id: "paket-servis", name: "Paket Servis", description: "Kraft torba, takeaway kahve", includesHands: false },
+  // Interior senaryoları
+  { id: "vitrin-sergisi", name: "Vitrin Sergisi", description: "Vitrin içindeki ürün dizilimi", includesHands: false, isInterior: true, interiorType: "vitrin" as InteriorType },
+  { id: "kruvasan-tezgahi", name: "Kruvasan Tezgahı", description: "Taze kruvasanlar tezgahta dizili", includesHands: false, isInterior: true, interiorType: "tezgah" as InteriorType },
+  { id: "pastane-ici", name: "Pastane İçi", description: "Genel pastane mekan atmosferi", includesHands: false, isInterior: true, interiorType: "genel-mekan" as InteriorType },
+  { id: "oturma-kosesi", name: "Oturma Köşesi", description: "Samimi oturma alanı görünümü", includesHands: false, isInterior: true, interiorType: "oturma-alani" as InteriorType },
+  { id: "cicek-detay", name: "Çiçek Detay", description: "Dekoratif çiçekler ve bitkiler", includesHands: false, isInterior: true, interiorType: "dekorasyon" as InteriorType },
+  { id: "kahve-hazirligi", name: "Kahve Hazırlığı", description: "Barista veya kahve hazırlama anı", includesHands: false, isInterior: true, interiorType: "tezgah" as InteriorType },
+  { id: "sabah-acilis", name: "Sabah Açılış", description: "Günaydın, kapı girişi görünümü", includesHands: false, isInterior: true, interiorType: "genel-mekan" as InteriorType },
+  { id: "pencere-isigi", name: "Pencere Işığı", description: "Pencere kenarı, doğal ışık görünümü", includesHands: false, isInterior: true, interiorType: "genel-mekan" as InteriorType },
+  { id: "raf-zenginligi", name: "Raf Zenginliği", description: "Dolu raflar, bolluk hissi", includesHands: false, isInterior: true, interiorType: "vitrin" as InteriorType },
+  { id: "detay-cekimi", name: "Detay Çekimi", description: "Fincan, peçete, aksesuar detayları", includesHands: false, isInterior: true, interiorType: "dekorasyon" as InteriorType },
 ];
 
 // Varsayılan el stilleri
@@ -374,7 +151,7 @@ export class RulesService {
         name: s.name,
         description: s.description,
         includesHands: s.includesHands,
-        compositions: s.compositions,
+        compositionId: s.compositionId,
         isInterior: s.isInterior,
         interiorType: s.interiorType,
       }));
@@ -660,10 +437,10 @@ export class RulesService {
    */
   selectComposition(scenario: Scenario, _blockedCompositions: string[]): { id: string; description: string } {
     // Yeni format: compositionId kullan
-    const compositionId = scenario.compositionId || scenario.compositions?.[0]?.id || "default";
+    const compositionId = scenario.compositionId || "default";
     return {
       id: compositionId,
-      description: scenario.compositions?.find(c => c.id === compositionId)?.description || compositionId,
+      description: compositionId,
     };
   }
 

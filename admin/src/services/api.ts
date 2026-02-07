@@ -25,6 +25,7 @@ import type {
   PipelineResult,
   OrchestratorDashboardStats,
   Theme,
+  ThemeSetting,
   // AI Monitor types
   AILog,
   AIStats,
@@ -1348,6 +1349,7 @@ class ApiService {
     scenarios: string[];
     petAllowed: boolean;
     accessoryAllowed: boolean;
+    setting?: ThemeSetting;
   }): Promise<Theme> {
     const response = await this.fetch<{
       success: boolean;
@@ -1369,6 +1371,7 @@ class ApiService {
     scenarios: string[];
     petAllowed: boolean;
     accessoryAllowed: boolean;
+    setting: ThemeSetting;
   }>): Promise<Theme> {
     const response = await this.fetch<{
       success: boolean;
@@ -1937,7 +1940,7 @@ class ApiService {
     scenarioName: string;
     includesHands: boolean;
     handPose?: string;
-    compositions: string[];
+    compositionId: string;
     compositionEntry?: string;
   }): Promise<{ description: string; cost: number }> {
     const response = await this.fetch<{

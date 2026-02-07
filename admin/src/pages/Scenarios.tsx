@@ -43,11 +43,9 @@ interface Scenario {
   isInterior?: boolean;
   interiorType?: string;
   handPose?: string;
+  suggestedProducts?: string[];
   createdAt?: number;
   updatedAt?: number;
-
-  // DEPRECATED: Eski alanlar (geriye uyumluluk için)
-  compositions?: Array<{ id: string; description: string }>;
 }
 
 // Fallback değerler - API yüklenemezse kullanılır
@@ -109,6 +107,13 @@ const DEFAULT_INTERIOR_TYPES = [
 ];
 
 // Form tipi
+const PRODUCT_TYPE_OPTIONS = [
+  { id: "croissants", name: "Kruvasanlar", icon: "🥐" },
+  { id: "pastas", name: "Pastalar", icon: "🎂" },
+  { id: "chocolates", name: "Çikolatalar", icon: "🍫" },
+  { id: "coffees", name: "Kahveler", icon: "☕" },
+] as const;
+
 interface ScenarioFormData {
   id: string;
   name: string;
@@ -119,6 +124,7 @@ interface ScenarioFormData {
   interiorType: string;
   handPose: string;
   compositionEntry: string;
+  suggestedProducts: string[];
 }
 
 // Boş form
@@ -132,6 +138,7 @@ const emptyForm: ScenarioFormData = {
   interiorType: "",
   handPose: "",
   compositionEntry: "",
+  suggestedProducts: [],
 };
 
 export default function Scenarios() {
@@ -325,18 +332,17 @@ export default function Scenarios() {
   // Modal aç (düzenle)
   const openEditModal = (scenario: Scenario) => {
     setEditingId(scenario.id);
-    // Geriye uyumluluk: Eski compositions array varsa, ilkini al
-    const legacyCompositionId = scenario.compositions?.[0]?.id;
     setForm({
       id: scenario.id,
       name: scenario.name,
       description: scenario.description,
       includesHands: scenario.includesHands,
-      compositionId: scenario.compositionId || legacyCompositionId || "",
+      compositionId: scenario.compositionId || "",
       isInterior: scenario.isInterior || false,
       interiorType: scenario.interiorType || "",
       handPose: scenario.handPose || "",
       compositionEntry: scenario.compositionEntry || "",
+      suggestedProducts: scenario.suggestedProducts || [],
     });
     setShowModal(true);
   };
@@ -369,6 +375,7 @@ export default function Scenarios() {
         interiorType: form.isInterior ? form.interiorType : undefined,
         handPose: form.includesHands ? form.handPose || undefined : undefined,
         compositionEntry: form.includesHands ? form.compositionEntry || undefined : undefined,
+        suggestedProducts: form.suggestedProducts.length > 0 ? form.suggestedProducts : undefined,
       };
 
       if (editingId) {
@@ -611,10 +618,10 @@ export default function Scenarios() {
                       <p className="text-gray-600 text-sm mt-1">{scenario.description}</p>
 
                       {/* Kompozisyon */}
-                      {(scenario.compositionId || scenario.compositions?.[0]?.id) && (
+                      {scenario.compositionId && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {(() => {
-                            const compId = scenario.compositionId || scenario.compositions?.[0]?.id;
+                            const compId = scenario.compositionId;
                             const comp = COMPOSITION_TYPES.find(c => c.id === compId);
                             return comp ? (
                               <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 flex items-center gap-1">
@@ -626,6 +633,20 @@ export default function Scenarios() {
                               </span>
                             );
                           })()}
+                        </div>
+                      )}
+
+                      {/* Önerilen ürünler */}
+                      {scenario.suggestedProducts && scenario.suggestedProducts.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {scenario.suggestedProducts.map((pt: string) => {
+                            const option = PRODUCT_TYPE_OPTIONS.find(o => o.id === pt);
+                            return option ? (
+                              <span key={pt} className="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-700">
+                                {option.icon} {option.name}
+                              </span>
+                            ) : null;
+                          })}
                         </div>
                       )}
 
@@ -766,7 +787,7 @@ export default function Scenarios() {
                                 scenarioName: form.name,
                                 includesHands: form.includesHands,
                                 handPose: form.handPose || undefined,
-                                compositions: [form.compositionId],  // Tekli seçim, array olarak gönder
+                                compositionId: form.compositionId,
                                 compositionEntry: form.compositionEntry || undefined,
                               });
                               setForm(prev => ({ ...prev, description: result.description }));
@@ -866,6 +887,43 @@ export default function Scenarios() {
                         </select>
                       </div>
                     )}
+                  </div>
+                </fieldset>
+
+                {/* ========== ÜRÜN TERCİHLERİ ========== */}
+                <fieldset className="border border-amber-200 rounded-lg p-4 bg-amber-50/30">
+                  <legend className="text-sm font-semibold text-amber-700 px-2">🏷️ Önerilen Ürün Tipleri</legend>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Bu senaryo hangi ürün tipleriyle en iyi sonucu verir? Seçmezseniz tüm ürünlerle eşleşir.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PRODUCT_TYPE_OPTIONS.map((pt) => {
+                      const isSelected = form.suggestedProducts.includes(pt.id);
+                      return (
+                        <label
+                          key={pt.id}
+                          className={`flex items-center gap-2 p-2 border rounded-lg cursor-pointer transition ${
+                            isSelected ? "border-amber-400 bg-amber-50" : "border-gray-200 hover:bg-gray-50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              const updated = isSelected
+                                ? form.suggestedProducts.filter((p: string) => p !== pt.id)
+                                : [...form.suggestedProducts, pt.id];
+                              setForm({ ...form, suggestedProducts: updated });
+                            }}
+                            className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                          />
+                          <span className="text-lg">{pt.icon}</span>
+                          <span className={`text-sm ${isSelected ? "font-medium text-amber-800" : "text-gray-600"}`}>
+                            {pt.name}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </fieldset>
 
@@ -1086,7 +1144,7 @@ export default function Scenarios() {
                   <span className="font-medium">Kompozisyon:</span>
                   <div className="mt-1">
                     {(() => {
-                      const compId = detailScenario.compositionId || detailScenario.compositions?.[0]?.id;
+                      const compId = detailScenario.compositionId;
                       const comp = COMPOSITION_TYPES.find(c => c.id === compId);
                       return comp ? (
                         <div className="flex items-center gap-2 text-gray-600">

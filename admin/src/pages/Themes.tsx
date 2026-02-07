@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../services/api";
 import { useLoading } from "../contexts/LoadingContext";
-import type { Theme } from "../types";
+import type { Theme, ThemeSetting } from "../types";
+import { WEATHER_PRESETS, LIGHTING_PRESETS, ATMOSPHERE_PRESETS } from "../types";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
 import { PageGuide } from "../components/PageGuide"; // New Import
@@ -59,6 +60,15 @@ const DEFAULT_VARIATION_RULES: VariationRules = {
   similarityThreshold: 50,
 };
 
+// Hava durumu → ışık + atmosfer otomatik eşleşme
+const WEATHER_AUTO_MAP: Record<string, { lighting: string; atmosphere: string }> = {
+  "bright-sunny": { lighting: "morning-bright", atmosphere: "energetic-brunch" },
+  "soft-overcast": { lighting: "soft-diffused", atmosphere: "casual-relaxed" },
+  "rainy": { lighting: "window-warm", atmosphere: "cozy-evening" },
+  "golden-hour": { lighting: "dramatic-side", atmosphere: "romantic-dreamy" },
+  "cloudy-neutral": { lighting: "soft-diffused", atmosphere: "peaceful-morning" },
+};
+
 // Boş tema formu
 const emptyTheme = {
   id: "",
@@ -67,6 +77,15 @@ const emptyTheme = {
   scenario: "", // Tekil senaryo seçimi
   petAllowed: false,
   accessoryAllowed: false,
+  // Sahne ayarları
+  setting: {
+    preferredTableTags: [] as string[],
+    preferredPlateTags: [] as string[],
+    preferredCupTags: [] as string[],
+    weatherPreset: "" as string,
+    lightingPreset: "" as string,
+    atmospherePreset: "" as string,
+  },
 };
 
 export default function Themes() {
@@ -78,6 +97,21 @@ export default function Themes() {
   // Senaryolar state (API'den dinamik yüklenir)
   const [allScenarios, setAllScenarios] = useState<Scenario[]>([]);
   const [scenariosLoading, setScenariosLoading] = useState(true);
+
+  // Masa tag'leri (asset'lerden çekilir)
+  const [tableAssetTags, setTableAssetTags] = useState<string[]>([]);
+  const [tableTagsOpen, setTableTagsOpen] = useState(false);
+  const tableTagsRef = useRef<HTMLDivElement>(null);
+
+  // Tabak tag'leri
+  const [plateAssetTags, setPlateAssetTags] = useState<string[]>([]);
+  const [plateTagsOpen, setPlateTagsOpen] = useState(false);
+  const plateTagsRef = useRef<HTMLDivElement>(null);
+
+  // Fincan tag'leri
+  const [cupAssetTags, setCupAssetTags] = useState<string[]>([]);
+  const [cupTagsOpen, setCupTagsOpen] = useState(false);
+  const cupTagsRef = useRef<HTMLDivElement>(null);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -100,6 +134,8 @@ export default function Themes() {
     loadThemes();
     loadScenarios();
     loadVariationRules();
+    loadTableTags();
+    loadPropTags();
   }, []);
 
   // Senaryoları API'den yükle
@@ -123,6 +159,72 @@ export default function Themes() {
       setScenariosLoading(false);
     }
   };
+
+  // Masa asset'lerinden unique tag'leri çek
+  // Firestore'daki category/subType değerleri değişkenlik gösterebilir, tüm olasılıkları kapsa
+  const loadTableTags = async () => {
+    try {
+      const results = await Promise.all([
+        api.listAssets({ category: "furniture", isActive: true }),
+        api.listAssets({ category: "Mobilya", isActive: true }),
+      ]);
+      const allFurniture = [...results[0], ...results[1]];
+      // Sadece masa subType'larını filtrele (çeşitli isimlendirmeler)
+      const tableKeywords = ["tables", "table", "masa", "masalar"];
+      const tables = allFurniture.filter(a =>
+        tableKeywords.some(k => a.subType?.toLowerCase() === k)
+      );
+      const tagSet = new Set<string>();
+      tables.forEach(t => t.tags?.forEach(tag => tagSet.add(tag)));
+      setTableAssetTags(Array.from(tagSet).sort());
+    } catch (err) {
+      console.error("Masa tag'leri yüklenemedi:", err);
+    }
+  };
+
+  // Tabak ve fincan asset'lerinden unique tag'leri çek
+  const loadPropTags = async () => {
+    try {
+      const allProps = await api.listAssets({ category: "props", isActive: true });
+
+      // Tabak tag'leri
+      const plateKeywords = ["plates", "plate", "tabak", "tabaklar"];
+      const plates = allProps.filter(a =>
+        plateKeywords.some(k => a.subType?.toLowerCase() === k)
+      );
+      const plateTagSet = new Set<string>();
+      plates.forEach(p => p.tags?.forEach(tag => plateTagSet.add(tag)));
+      setPlateAssetTags(Array.from(plateTagSet).sort());
+
+      // Fincan tag'leri
+      const cupKeywords = ["cups", "cup", "fincan", "fincanlar", "bardak", "bardaklar"];
+      const cups = allProps.filter(a =>
+        cupKeywords.some(k => a.subType?.toLowerCase() === k)
+      );
+      const cupTagSet = new Set<string>();
+      cups.forEach(c => c.tags?.forEach(tag => cupTagSet.add(tag)));
+      setCupAssetTags(Array.from(cupTagSet).sort());
+    } catch (err) {
+      console.error("Tabak/Fincan tag'leri yüklenemedi:", err);
+    }
+  };
+
+  // Dropdown dışına tıklayınca kapat
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tableTagsRef.current && !tableTagsRef.current.contains(e.target as Node)) {
+        setTableTagsOpen(false);
+      }
+      if (plateTagsRef.current && !plateTagsRef.current.contains(e.target as Node)) {
+        setPlateTagsOpen(false);
+      }
+      if (cupTagsRef.current && !cupTagsRef.current.contains(e.target as Node)) {
+        setCupTagsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const loadThemes = async () => {
     setLoading(true);
@@ -178,6 +280,14 @@ export default function Themes() {
         scenario: theme.scenarios?.[0] || "", // İlk senaryoyu al (tekil seçim)
         petAllowed: theme.petAllowed,
         accessoryAllowed: theme.accessoryAllowed ?? false,
+        setting: {
+          preferredTableTags: theme.setting?.preferredTags?.table || [],
+          preferredPlateTags: theme.setting?.preferredTags?.plate || [],
+          preferredCupTags: theme.setting?.preferredTags?.cup || [],
+          weatherPreset: theme.setting?.weatherPreset || "",
+          lightingPreset: theme.setting?.lightingPreset || "",
+          atmospherePreset: theme.setting?.atmospherePreset || "",
+        },
       });
     } else {
       setEditingId(null);
@@ -202,6 +312,26 @@ export default function Themes() {
       // Backend hâlâ scenarios array bekliyor - tekil seçimi array'e çeviriyoruz
       const scenariosArray = form.scenario ? [form.scenario] : [];
 
+      // Setting objesini oluştur (boş alanları dahil etme)
+      const setting: ThemeSetting = {};
+      const preferredTags: NonNullable<ThemeSetting["preferredTags"]> = {};
+      if (form.setting.preferredTableTags.length > 0) preferredTags.table = form.setting.preferredTableTags;
+      if (form.setting.preferredPlateTags.length > 0) preferredTags.plate = form.setting.preferredPlateTags;
+      if (form.setting.preferredCupTags.length > 0) preferredTags.cup = form.setting.preferredCupTags;
+      if (Object.keys(preferredTags).length > 0) setting.preferredTags = preferredTags;
+      if (form.setting.weatherPreset) {
+        setting.weatherPreset = form.setting.weatherPreset as ThemeSetting["weatherPreset"];
+      }
+      if (form.setting.lightingPreset) {
+        setting.lightingPreset = form.setting.lightingPreset as ThemeSetting["lightingPreset"];
+      }
+      if (form.setting.atmospherePreset) {
+        setting.atmospherePreset = form.setting.atmospherePreset as ThemeSetting["atmospherePreset"];
+      }
+
+      // Setting boşsa undefined olarak gönder (Firestore'da gereksiz alan olmasın)
+      const hasSetting = Object.keys(setting).length > 0;
+
       if (editingId) {
         // Güncelleme - id hariç diğer alanları gönder
         await api.updateTheme(editingId, {
@@ -210,6 +340,7 @@ export default function Themes() {
           scenarios: scenariosArray,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
+          ...(hasSetting ? { setting } : {}),
         });
       } else {
         // Yeni oluşturma
@@ -220,6 +351,7 @@ export default function Themes() {
           scenarios: scenariosArray,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
+          ...(hasSetting ? { setting } : {}),
         });
       }
       await loadThemes();
@@ -433,6 +565,36 @@ export default function Themes() {
                     {theme.accessoryAllowed && (
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                         Aksesuar izinli
+                      </span>
+                    )}
+                    {theme.setting?.weatherPreset && (
+                      <span className="text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded">
+                        {WEATHER_PRESETS.find(p => p.id === theme.setting?.weatherPreset)?.labelTr || theme.setting.weatherPreset}
+                      </span>
+                    )}
+                    {theme.setting?.lightingPreset && (
+                      <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
+                        {LIGHTING_PRESETS.find(p => p.id === theme.setting?.lightingPreset)?.labelTr || theme.setting.lightingPreset}
+                      </span>
+                    )}
+                    {theme.setting?.atmospherePreset && (
+                      <span className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded">
+                        {ATMOSPHERE_PRESETS.find(p => p.id === theme.setting?.atmospherePreset)?.labelTr || theme.setting.atmospherePreset}
+                      </span>
+                    )}
+                    {theme.setting?.preferredTags?.table && theme.setting.preferredTags.table.length > 0 && (
+                      <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded">
+                        Masa: {theme.setting.preferredTags.table.join(", ")}
+                      </span>
+                    )}
+                    {theme.setting?.preferredTags?.plate && theme.setting.preferredTags.plate.length > 0 && (
+                      <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded">
+                        Tabak: {theme.setting.preferredTags.plate.join(", ")}
+                      </span>
+                    )}
+                    {theme.setting?.preferredTags?.cup && theme.setting.preferredTags.cup.length > 0 && (
+                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">
+                        Fincan: {theme.setting.preferredTags.cup.join(", ")}
                       </span>
                     )}
                   </div>
@@ -867,6 +1029,260 @@ export default function Themes() {
                         Bir senaryo seçmelisiniz
                       </p>
                     )}
+                  </div>
+
+                  {/* Sahne Ayarları */}
+                  <div className="border-t border-stone-200 pt-6">
+                    <h3 className="text-sm font-semibold text-stone-800 mb-4 flex items-center gap-2">
+                      Sahne Ayarları
+                      <span className="text-xs font-normal text-stone-400">(opsiyonel)</span>
+                    </h3>
+
+                    <div className="space-y-4">
+                      {/* Masa Tercihi (multi-select dropdown) */}
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-1">
+                          Masa Tercihi
+                          <Tooltip
+                            content="Seçtiğiniz tag'lere sahip masalar öncelikli kullanılır. Birden fazla seçebilirsiniz."
+                            position="right"
+                          />
+                        </label>
+                        {tableAssetTags.length > 0 ? (
+                          <div className="relative" ref={tableTagsRef}>
+                            <button
+                              type="button"
+                              onClick={() => setTableTagsOpen(!tableTagsOpen)}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg bg-white text-left text-sm flex items-center justify-between focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                            >
+                              <span className={form.setting.preferredTableTags.length > 0 ? "text-stone-800" : "text-stone-400"}>
+                                {form.setting.preferredTableTags.length > 0
+                                  ? form.setting.preferredTableTags.join(", ")
+                                  : "Masa tag'i seçin (opsiyonel)"}
+                              </span>
+                              <svg className={`w-4 h-4 text-stone-400 transition-transform ${tableTagsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {tableTagsOpen && (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                {tableAssetTags.map(tag => {
+                                  const isSelected = form.setting.preferredTableTags.includes(tag);
+                                  return (
+                                    <label
+                                      key={tag}
+                                      className="flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          const updated = isSelected
+                                            ? form.setting.preferredTableTags.filter(t => t !== tag)
+                                            : [...form.setting.preferredTableTags, tag];
+                                          setForm({
+                                            ...form,
+                                            setting: { ...form.setting, preferredTableTags: updated },
+                                          });
+                                        }}
+                                        className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                                      />
+                                      <span className={isSelected ? "text-stone-800 font-medium" : "text-stone-600"}>
+                                        {tag}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-stone-400 italic">
+                            Masa asset'lerine tag eklediğinizde burada görünecek.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Tabak Tercihi */}
+                      <div>
+                        <label className="block text-sm font-medium text-stone-700 mb-1">
+                          Tabak Tercihi
+                        </label>
+                        {plateAssetTags.length > 0 ? (
+                          <div className="relative" ref={plateTagsRef}>
+                            <button
+                              type="button"
+                              onClick={() => setPlateTagsOpen(!plateTagsOpen)}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg bg-white text-left text-sm flex items-center justify-between focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                            >
+                              <span className={form.setting.preferredPlateTags.length > 0 ? "text-stone-800" : "text-stone-400"}>
+                                {form.setting.preferredPlateTags.length > 0
+                                  ? form.setting.preferredPlateTags.join(", ")
+                                  : "Tabak tag'i seçin (opsiyonel)"}
+                              </span>
+                              <svg className={`w-4 h-4 text-stone-400 transition-transform ${plateTagsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {plateTagsOpen && (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                {plateAssetTags.map(tag => {
+                                  const isSelected = form.setting.preferredPlateTags.includes(tag);
+                                  return (
+                                    <label key={tag} className="flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          const updated = isSelected
+                                            ? form.setting.preferredPlateTags.filter(t => t !== tag)
+                                            : [...form.setting.preferredPlateTags, tag];
+                                          setForm({ ...form, setting: { ...form.setting, preferredPlateTags: updated } });
+                                        }}
+                                        className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                                      />
+                                      <span className={isSelected ? "text-stone-800 font-medium" : "text-stone-600"}>{tag}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-stone-400 italic">Tabak asset'lerine tag eklediğinizde burada görünecek.</p>
+                        )}
+                      </div>
+
+                      {/* Fincan Tercihi */}
+                      <div>
+                        <label className="block text-sm font-medium text-stone-700 mb-1">
+                          Fincan Tercihi
+                        </label>
+                        {cupAssetTags.length > 0 ? (
+                          <div className="relative" ref={cupTagsRef}>
+                            <button
+                              type="button"
+                              onClick={() => setCupTagsOpen(!cupTagsOpen)}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg bg-white text-left text-sm flex items-center justify-between focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                            >
+                              <span className={form.setting.preferredCupTags.length > 0 ? "text-stone-800" : "text-stone-400"}>
+                                {form.setting.preferredCupTags.length > 0
+                                  ? form.setting.preferredCupTags.join(", ")
+                                  : "Fincan tag'i seçin (opsiyonel)"}
+                              </span>
+                              <svg className={`w-4 h-4 text-stone-400 transition-transform ${cupTagsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {cupTagsOpen && (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                {cupAssetTags.map(tag => {
+                                  const isSelected = form.setting.preferredCupTags.includes(tag);
+                                  return (
+                                    <label key={tag} className="flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          const updated = isSelected
+                                            ? form.setting.preferredCupTags.filter(t => t !== tag)
+                                            : [...form.setting.preferredCupTags, tag];
+                                          setForm({ ...form, setting: { ...form.setting, preferredCupTags: updated } });
+                                        }}
+                                        className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                                      />
+                                      <span className={isSelected ? "text-stone-800 font-medium" : "text-stone-600"}>{tag}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-stone-400 italic">Fincan asset'lerine tag eklediğinizde burada görünecek.</p>
+                        )}
+                      </div>
+
+                      {/* Hava Durumu (ışık + atmosferi otomatik ayarlar) */}
+                      <div>
+                        <label className="block text-sm font-medium text-stone-700 mb-1">
+                          Hava Durumu
+                        </label>
+                        <select
+                          value={form.setting.weatherPreset}
+                          onChange={(e) => {
+                            const weather = e.target.value;
+                            const autoMap = WEATHER_AUTO_MAP[weather];
+                            setForm({
+                              ...form,
+                              setting: {
+                                ...form.setting,
+                                weatherPreset: weather,
+                                ...(autoMap ? { lightingPreset: autoMap.lighting, atmospherePreset: autoMap.atmosphere } : {}),
+                              },
+                            });
+                          }}
+                          className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+                        >
+                          <option value="">Seçiniz (opsiyonel)</option>
+                          {WEATHER_PRESETS.map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.labelTr}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Işık (hava durumuna göre otomatik seçilir, değiştirilebilir) */}
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-1">
+                          Işık
+                          {form.setting.weatherPreset && (
+                            <span className="text-xs text-amber-500 font-normal">otomatik ayarlandı</span>
+                          )}
+                        </label>
+                        <select
+                          value={form.setting.lightingPreset}
+                          onChange={(e) => setForm({
+                            ...form,
+                            setting: { ...form.setting, lightingPreset: e.target.value },
+                          })}
+                          className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+                        >
+                          <option value="">Seçiniz (opsiyonel)</option>
+                          {LIGHTING_PRESETS.map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.labelTr}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Atmosfer (hava durumuna göre otomatik seçilir, değiştirilebilir) */}
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-1">
+                          Atmosfer
+                          {form.setting.weatherPreset && (
+                            <span className="text-xs text-amber-500 font-normal">otomatik ayarlandı</span>
+                          )}
+                        </label>
+                        <select
+                          value={form.setting.atmospherePreset}
+                          onChange={(e) => setForm({
+                            ...form,
+                            setting: { ...form.setting, atmospherePreset: e.target.value },
+                          })}
+                          className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+                        >
+                          <option value="">Seçiniz (opsiyonel)</option>
+                          {ATMOSPHERE_PRESETS.map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.labelTr}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

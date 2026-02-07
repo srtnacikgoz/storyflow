@@ -596,7 +596,8 @@ export class Orchestrator {
       const assets = await this.loadAvailableAssets(productType);
 
       // Ürün kontrolü - Claude'a göndermeden önce
-      if (assets.products.length === 0) {
+      // Kahve özel durum: ürün fotoğrafı yok, bardak asset'i yeterli, AI içeriği belirler
+      if (assets.products.length === 0 && productType !== "coffees") {
         const productTypeLabels: Record<ProductType, string> = {
           croissants: "Kruvasan",
           pastas: "Pasta",
@@ -632,6 +633,42 @@ export class Orchestrator {
         : assetSelectionConfig.scheduled;
 
       console.log(`[Orchestrator] Asset selection mode: ${actualIsManual ? "MANUAL" : "SCHEDULED"}`);
+
+      // ==========================================
+      // PREFERRED TAGS: Diversity block muafiyeti
+      // Tema'da tercih edilen tag'lere sahip asset'ler çeşitlilik bloğundan muaf
+      // ==========================================
+      if (themeData?.setting?.preferredTags) {
+        const preferredTags = themeData.setting.preferredTags as { table?: string[]; plate?: string[]; cup?: string[] };
+
+        const unblockPreferred = (
+          assetList: any[],
+          blockedIds: string[],
+          tagList?: string[],
+          label?: string
+        ): string[] => {
+          if (!tagList || tagList.length === 0 || blockedIds.length === 0) return blockedIds;
+
+          return blockedIds.filter(id => {
+            const asset = assetList.find((a: any) => a.id === id);
+            if (!asset?.tags || !Array.isArray(asset.tags)) return true;
+
+            const hasMatch = asset.tags.some((t: string) =>
+              tagList.some(pt => t.toLowerCase().includes(pt.toLowerCase()))
+            );
+
+            if (hasMatch) {
+              console.log(`[Orchestrator] PreferredTags muafiyet: ${label} "${id}" diversity block'tan çıkarıldı (eşleşen tag: ${asset.tags.join(", ")})`);
+              return false; // bloktan çıkar
+            }
+            return true; // bloklu kalsın
+          });
+        };
+
+        effectiveRules.blockedTables = unblockPreferred(assets.tables, effectiveRules.blockedTables, preferredTags.table, "masa");
+        effectiveRules.blockedPlates = unblockPreferred(assets.plates, effectiveRules.blockedPlates, preferredTags.plate, "tabak");
+        effectiveRules.blockedCups = unblockPreferred(assets.cups, effectiveRules.blockedCups, preferredTags.cup, "fincan");
+      }
 
       // ==========================================
       // RULE ENGINE INTEGRATION (v3.0 deterministic)
@@ -681,6 +718,37 @@ export class Orchestrator {
         if (list.length > 0) console.log(`[RuleEngine] Qualified ${cat}: ${list.length} items (Top: ${list[0].id} - ${list[0].score})`);
       });
 
+      // 5.3. Tema Setting: preferredTags bonus
+      // Spesifik tag'ler belirli masayı/tabağı/bardağı önceliklendirir (pinnedTable yerine)
+      if (themeData?.setting) {
+        const themeSetting = themeData.setting;
+
+        // Preferred Tags: Eşleşen asset'lere bonus skor
+        if (themeSetting.preferredTags) {
+          const applyPreferredTagBonus = (assetList: any[], preferredTags?: string[]) => {
+            if (!preferredTags || preferredTags.length === 0 || !assetList) return;
+            assetList.forEach((asset: any) => {
+              if (asset.tags && Array.isArray(asset.tags)) {
+                const matchCount = asset.tags.filter((t: string) =>
+                  preferredTags.some(pt => t.toLowerCase().includes(pt.toLowerCase()))
+                ).length;
+                if (matchCount > 0) {
+                  asset.score = (asset.score || 0) + matchCount * 15;
+                }
+              }
+            });
+            // Bonus sonrası yeniden sırala
+            assetList.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+          };
+
+          applyPreferredTagBonus(qualifiedAssets.tables, themeSetting.preferredTags.table);
+          applyPreferredTagBonus(qualifiedAssets.plates, themeSetting.preferredTags.plate);
+          applyPreferredTagBonus(qualifiedAssets.cups, themeSetting.preferredTags.cup);
+
+          console.log(`[Orchestrator] PreferredTags bonus uygulandı (tema: ${themeData.name})`);
+        }
+      }
+
       // 5.5. Tag-bazlı tabak filtreleme (Gemini'den önce)
       // Ürün etiketlerine göre uyumlu tabakları filtrele
       // Örn: "kruvasan" etiketli ürün → "kruvasan tabağı" etiketli tabaklar
@@ -695,11 +763,23 @@ export class Orchestrator {
         });
 
         // Eşleşen tabakları bul (ürün etiketi + " tabağı" formatında)
+        // preferredTags override: kullanıcının açık tercihi her zaman geçer
+        const preferredPlateTags = (themeData?.setting?.preferredTags?.plate || []) as string[];
+
         const matchingPlates = qualifiedAssets.plates.filter((plate: any) => {
           if (!plate.tags || !Array.isArray(plate.tags)) return false;
+
+          // preferredTags override: tercih edilen tabak filtreyi bypass eder
+          if (preferredPlateTags.length > 0) {
+            const isPreferred = plate.tags.some((t: string) =>
+              preferredPlateTags.some((pt: string) => t.toLowerCase().includes(pt.toLowerCase()))
+            );
+            if (isPreferred) return true;
+          }
+
+          // Normal ürün-tag eşleştirmesi
           return plate.tags.some((plateTag: string) => {
             const normalizedPlateTag = plateTag.toLowerCase();
-            // "kruvasan tabağı" -> "kruvasan" ürün etiketi ile eşleşmeli
             for (const productTag of productTags) {
               if (normalizedPlateTag === `${productTag} tabağı`) {
                 return true;
@@ -733,6 +813,7 @@ export class Orchestrator {
 
       // İçecek kurallarına göre bardak filtreleme
       // productType (croissants, pastas vb.) → beverageRules → tagMappings → uyumlu bardaklar
+      let resolvedBeverageType: string | undefined; // Prompt'a aktarılacak
       if (qualifiedAssets.cups && qualifiedAssets.cups.length > 0) {
         try {
           const beverageConfig = await getBeverageRulesConfig();
@@ -740,12 +821,26 @@ export class Orchestrator {
 
           if (beverageRule && beverageRule.default !== "none") {
             const beverageType = beverageRule.default; // "tea", "coffee", vb.
+            resolvedBeverageType = beverageType;
             const matchingTags = beverageConfig.tagMappings[beverageType] || [];
 
             if (matchingTags.length > 0) {
               // Bardaklardan bu etiketlerden birini içerenleri filtrele
+              // preferredTags override: kullanıcının açık tercihi her zaman geçer
+              const preferredCupTags = (themeData?.setting?.preferredTags?.cup || []) as string[];
+
               const matchingCups = qualifiedAssets.cups.filter((cup: any) => {
                 if (!cup.tags || !Array.isArray(cup.tags)) return false;
+
+                // preferredTags override: tercih edilen fincan filtreyi bypass eder
+                if (preferredCupTags.length > 0) {
+                  const isPreferred = cup.tags.some((t: string) =>
+                    preferredCupTags.some((pt: string) => t.toLowerCase().includes(pt.toLowerCase()))
+                  );
+                  if (isPreferred) return true;
+                }
+
+                // Normal beverage tag eşleştirmesi
                 return cup.tags.some((cupTag: string) => {
                   const normalizedCupTag = cupTag.toLowerCase();
                   return matchingTags.some(matchTag =>
@@ -956,7 +1051,7 @@ export class Orchestrator {
         includesHands: s.includesHands,
         isInterior: s.isInterior,
         interiorType: s.interiorType,
-        compositionId: s.compositionId || s.compositions?.[0]?.id, // Geriye uyumluluk
+        compositionId: s.compositionId,
       }));
 
       // Kullanıcı geri bildirimlerinden ipuçları al
@@ -996,7 +1091,7 @@ export class Orchestrator {
       const interiorType = selectedScenario?.interiorType;
 
       // compositionId artık senaryo tanımından alınır (Gemini'nin seçimi değil, kullanıcının seçimi)
-      const predefinedCompositionId = selectedScenario?.compositionId || selectedScenario?.compositions?.[0]?.id || "default";
+      const predefinedCompositionId = selectedScenario?.compositionId || "default";
 
       result.scenarioSelection = {
         ...scenarioResponse.data,
@@ -1150,7 +1245,9 @@ export class Orchestrator {
             timeOfDay: moodDetails.timeOfDay,
             season: moodDetails.season,
           },
-          themeData?.description
+          themeData?.description,
+          themeData,
+          resolvedBeverageType // İçecek tipi: "tea", "coffee" vb.
         );
 
         console.log(`[Orchestrator] Base prompt built with Gemini terminology`);
@@ -1756,7 +1853,9 @@ export class Orchestrator {
       timeOfDay?: string;
       season?: string;
     },
-    themeDescription?: string
+    themeDescription?: string,
+    themeData?: FirebaseFirestore.DocumentData,
+    beverageType?: string // İçecek tipi: "tea", "coffee" vb.
   ): Promise<{ mainPrompt: string; negativePrompt?: string; promptBuildingSteps?: Array<{ step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown> }> }> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
@@ -1793,7 +1892,9 @@ export class Orchestrator {
       scenarioData,
       scenarioDescription, // KRİTİK: Senaryo açıklamasını aktar
       moodDetails,
-      themeDescription
+      themeDescription,
+      themeData?.setting,
+      beverageType
     );
   }
 
@@ -2011,7 +2112,9 @@ Cup: ${colors} ${material} (from reference)`.trim();
       timeOfDay?: string;
       season?: string;
     },
-    themeDescription?: string
+    themeDescription?: string,
+    themeSetting?: Record<string, unknown>,
+    beverageType?: string // İçecek tipi: "tea", "coffee" vb.
   ): Promise<{ mainPrompt: string; negativePrompt: string; promptBuildingSteps?: Array<{ step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown> }> }> {
     // Senaryo verilerinden Gemini parametrelerini çıkar
     // NOT: lightingPreset artık Senaryo'dan değil, Mood'dan geliyor
@@ -2072,6 +2175,8 @@ Cup: ${colors} ${material} (from reference)`.trim();
         timeOfDay: timeOfDay || getTimeOfDay(),
         assetTags: hasAssetTags ? assetTags : undefined,
         scenarioDescription, // Senaryo açıklaması - creative direction olarak kullanılır
+        themeSetting: themeSetting as any, // Tema sahne ayarları (hava, ışık, atmosfer)
+        beverageType, // İçecek tipi: "tea", "coffee" vb. (beverageRules'dan)
       });
 
       // Prompt builder kararlarını al

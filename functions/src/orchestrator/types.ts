@@ -551,13 +551,6 @@ export interface HandStyle {
 
 /**
  * Kompozisyon varyantı (geriye uyumluluk için)
- * @deprecated Yeni senaryolarda compositionId kullanılır
- */
-export interface CompositionVariant {
-  id: string;
-  description: string;
-}
-
 /**
  * Senaryo tanımı
  *
@@ -583,12 +576,8 @@ export interface Scenario {
   createdAt?: number;
   updatedAt?: number;
 
-  // === DEPRECATED ALANLAR ===
-  // Geriye uyumluluk için tutulur, yeni kodda kullanılmaz
-  /** @deprecated compositionId hiç işlevsel değildi, kullanılmayacak */
+  // Tekli kompozisyon ID'si - kullanıcının seçtiği çekim tarzı
   compositionId?: string;
-  /** @deprecated Eski çoklu kompozisyon array'i, kullanılmayacak */
-  compositions?: Array<{ id: string; description: string }>;
 }
 
 /**
@@ -952,11 +941,164 @@ export interface EffectiveRules {
 // ==========================================
 
 /**
+ * Hava durumu preset'leri
+ * Tema sahne ayarlarında kullanılır
+ */
+export const WEATHER_PRESETS = [
+  {
+    id: "bright-sunny",
+    labelTr: "Parlak Güneşli",
+    prompt: "Bright sunshine, warm natural light with defined shadows",
+  },
+  {
+    id: "soft-overcast",
+    labelTr: "Yumuşak Bulutlu",
+    prompt: "Soft overcast daylight, diffused even illumination, no harsh shadows",
+  },
+  {
+    id: "rainy",
+    labelTr: "Yağmurlu",
+    prompt: "Rainy day atmosphere, water droplets visible on glass, moody diffused light",
+  },
+  {
+    id: "golden-hour",
+    labelTr: "Altın Saat",
+    prompt: "Golden hour warm light, long soft shadows, orange-amber tones",
+  },
+  {
+    id: "cloudy-neutral",
+    labelTr: "Bulutlu Nötr",
+    prompt: "Cloudy day, neutral balanced light, soft shadows",
+  },
+] as const;
+
+export type WeatherPresetId = typeof WEATHER_PRESETS[number]["id"];
+
+/**
+ * Işık preset'leri
+ * Hava durumundan bağımsız, sahne ışığını belirler
+ */
+export const LIGHTING_PRESETS = [
+  {
+    id: "window-warm",
+    labelTr: "Pencereden Sıcak Işık",
+    prompt: "Warm side lighting from window, natural golden tones on subject",
+  },
+  {
+    id: "soft-diffused",
+    labelTr: "Yumuşak Doğal Işık",
+    prompt: "Soft diffused natural light, even illumination, minimal shadows",
+  },
+  {
+    id: "dramatic-side",
+    labelTr: "Dramatik Yan Işık",
+    prompt: "Dramatic side shadows with warm highlights, strong directional light",
+  },
+  {
+    id: "backlit-glow",
+    labelTr: "Arkadan Aydınlatma",
+    prompt: "Backlit with gentle rim glow, ethereal halo effect around subject",
+  },
+  {
+    id: "morning-bright",
+    labelTr: "Sabah Aydınlığı",
+    prompt: "Bright morning light, clean and fresh illumination, crisp shadows",
+  },
+  {
+    id: "candle-warm",
+    labelTr: "Mum Işığı Sıcaklığı",
+    prompt: "Warm candlelight ambiance, low-key intimate lighting, orange-amber tones",
+  },
+] as const;
+
+export type LightingPresetId = typeof LIGHTING_PRESETS[number]["id"];
+
+/**
+ * Atmosfer preset'leri
+ * Sahnenin duygusal havasını belirler
+ */
+export const ATMOSPHERE_PRESETS = [
+  {
+    id: "peaceful-morning",
+    labelTr: "Huzurlu Sabah",
+    prompt: "Peaceful morning coffee moment, intimate and contemplative",
+  },
+  {
+    id: "energetic-brunch",
+    labelTr: "Enerjik Brunch",
+    prompt: "Lively social brunch atmosphere, warm and inviting",
+  },
+  {
+    id: "cozy-evening",
+    labelTr: "Samimi Akşam",
+    prompt: "Cozy intimate evening, warm and comforting atmosphere",
+  },
+  {
+    id: "elegant-minimal",
+    labelTr: "Zarif Minimal",
+    prompt: "Elegant minimalist presentation, refined and sophisticated",
+  },
+  {
+    id: "casual-relaxed",
+    labelTr: "Rahat Günlük",
+    prompt: "Casual relaxed atmosphere, everyday comfort and ease",
+  },
+  {
+    id: "romantic-dreamy",
+    labelTr: "Romantik Rüya",
+    prompt: "Romantic dreamy atmosphere, soft and ethereal mood",
+  },
+  {
+    id: "festive-celebration",
+    labelTr: "Kutlama Havası",
+    prompt: "Festive celebration atmosphere, joyful and vibrant energy",
+  },
+] as const;
+
+export type AtmospherePresetId = typeof ATMOSPHERE_PRESETS[number]["id"];
+
+/**
+ * Tema sahne ayarları
+ * Asset seçiminde tag bazlı tercih, hava/ışık/atmosfer
+ */
+export interface ThemeSetting {
+  /**
+   * Tercih edilen asset tag'leri (Türkçe)
+   * Scoring'de bonus puan için kullanılır
+   * Spesifik tag = spesifik masa (pinnedTable yerine)
+   */
+  preferredTags?: {
+    table?: string[];   // ["cam önü", "dışarısı", "pencere"]
+    plate?: string[];   // ["modern", "minimal"]
+    cup?: string[];     // ["şeffaf", "porselen"]
+  };
+
+  /**
+   * Hava durumu preset ID
+   * WEATHER_PRESETS'ten seçilir
+   */
+  weatherPreset?: WeatherPresetId;
+
+  /**
+   * Işık preset ID
+   * LIGHTING_PRESETS'ten seçilir
+   */
+  lightingPreset?: LightingPresetId;
+
+  /**
+   * Atmosfer preset ID
+   * ATMOSPHERE_PRESETS'ten seçilir
+   */
+  atmospherePreset?: AtmospherePresetId;
+}
+
+/**
  * Tema tanımı
  * Senaryoları ve diğer ayarları gruplar
  * TimeSlotRule'dan referans edilir
  *
  * v3.0: mood alanı kaldırıldı - atmosfer bilgisi artık Scenario içinde
+ * v3.1: setting alanı eklendi - sahne ayarları (hava, ışık, masa tercihi)
  */
 export interface Theme {
   id: string; // "morning-energy"
@@ -965,6 +1107,9 @@ export interface Theme {
   scenarios: string[]; // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
   petAllowed: boolean; // Köpek dahil edilebilir mi?
   accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
+
+  // Sahne ayarları (v3.1)
+  setting?: ThemeSetting;
 
   // Metadata
   createdAt: number;
@@ -1154,7 +1299,6 @@ export interface IssueFeedback {
 export interface FirestoreScenario extends Scenario {
   // Ek detaylar (opsiyonel - Admin panelden yönetilebilir)
   suggestedProducts?: ProductType[]; // Bu senaryo için önerilen ürün tipleri
-  suggestedTimeSlots?: string[]; // Uygun zaman dilimleri (morning, afternoon, vb.)
 }
 
 /**

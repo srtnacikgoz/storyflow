@@ -579,6 +579,54 @@ export interface TimeSlotRule {
   priority: number;
 }
 
+// Hava durumu preset'leri (Tema sahne ayarları için)
+export const WEATHER_PRESETS = [
+  { id: "bright-sunny", labelTr: "Parlak Güneşli" },
+  { id: "soft-overcast", labelTr: "Yumuşak Bulutlu" },
+  { id: "rainy", labelTr: "Yağmurlu" },
+  { id: "golden-hour", labelTr: "Altın Saat" },
+  { id: "cloudy-neutral", labelTr: "Bulutlu Nötr" },
+] as const;
+
+export type WeatherPresetId = typeof WEATHER_PRESETS[number]["id"];
+
+// Işık preset'leri
+export const LIGHTING_PRESETS = [
+  { id: "window-warm", labelTr: "Pencereden Sıcak Işık" },
+  { id: "soft-diffused", labelTr: "Yumuşak Doğal Işık" },
+  { id: "dramatic-side", labelTr: "Dramatik Yan Işık" },
+  { id: "backlit-glow", labelTr: "Arkadan Aydınlatma" },
+  { id: "morning-bright", labelTr: "Sabah Aydınlığı" },
+  { id: "candle-warm", labelTr: "Mum Işığı Sıcaklığı" },
+] as const;
+
+export type LightingPresetId = typeof LIGHTING_PRESETS[number]["id"];
+
+// Atmosfer preset'leri
+export const ATMOSPHERE_PRESETS = [
+  { id: "peaceful-morning", labelTr: "Huzurlu Sabah" },
+  { id: "energetic-brunch", labelTr: "Enerjik Brunch" },
+  { id: "cozy-evening", labelTr: "Samimi Akşam" },
+  { id: "elegant-minimal", labelTr: "Zarif Minimal" },
+  { id: "casual-relaxed", labelTr: "Rahat Günlük" },
+  { id: "romantic-dreamy", labelTr: "Romantik Rüya" },
+  { id: "festive-celebration", labelTr: "Kutlama Havası" },
+] as const;
+
+export type AtmospherePresetId = typeof ATMOSPHERE_PRESETS[number]["id"];
+
+// Tema sahne ayarları
+export interface ThemeSetting {
+  preferredTags?: {
+    table?: string[];
+    plate?: string[];
+    cup?: string[];
+  };
+  weatherPreset?: WeatherPresetId;
+  lightingPreset?: LightingPresetId;
+  atmospherePreset?: AtmospherePresetId;
+}
+
 // Tema tanımı
 export interface Theme {
   id: string;
@@ -588,6 +636,7 @@ export interface Theme {
   // v3.0: mood alanı kaldırıldı - atmosfer bilgisi artık Scenario içinde
   petAllowed: boolean;
   accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
+  setting?: ThemeSetting; // v3.1: Sahne ayarları
   createdAt: number;
   updatedAt: number;
   isDefault?: boolean;

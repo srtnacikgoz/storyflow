@@ -125,14 +125,12 @@ export const createScenario = functions
           name,
           description,
           includesHands,
-          compositionId, // Yeni: Tekli kompozisyon seçimi (v2.0)
+          compositionId,
           compositionEntry,
           handPose,
-          compositions, // Deprecated: Eski çoklu seçim (geriye uyumluluk)
           isInterior,
           interiorType,
           suggestedProducts,
-          suggestedTimeSlots,
           mood, // Deprecated: v3.0'da senaryo kendi atmosfer bilgisini taşıyor
 
           // v3.0: Atmosfer alanları (Mood + Scenario birleşik)
@@ -153,9 +151,7 @@ export const createScenario = functions
           return;
         }
 
-        // compositionId veya compositions'dan en az biri gerekli
-        const effectiveCompositionId = compositionId || compositions?.[0]?.id;
-        if (!effectiveCompositionId) {
+        if (!compositionId) {
           response.status(400).json({
             success: false,
             error: "compositionId is required",
@@ -185,7 +181,7 @@ export const createScenario = functions
           name,
           description,
           includesHands: includesHands ?? false,
-          compositionId: effectiveCompositionId, // Yeni: Tekli kompozisyon (v2.0)
+          compositionId,
           isActive: true,
           isInterior: isInterior ?? false,
           // Opsiyonel alanları sadece tanımlı ise ekle
@@ -193,7 +189,6 @@ export const createScenario = functions
           ...(handPose !== undefined && { handPose }),
           ...(interiorType !== undefined && { interiorType }),
           ...(suggestedProducts !== undefined && { suggestedProducts }),
-          ...(suggestedTimeSlots !== undefined && { suggestedTimeSlots }),
           ...(mood !== undefined && { mood }),
 
           // v3.0: Atmosfer alanları (Mood + Scenario birleşik)
@@ -257,16 +252,6 @@ export const updateScenarioEndpoint = functions
             error: "Scenario not found",
           });
           return;
-        }
-
-        // compositionId veya compositions'dan birini al
-        if (updates.compositionId) {
-          // Yeni format: compositionId kullanılıyor - compositions array'i kaldır
-          delete updates.compositions;
-        } else if (updates.compositions && Array.isArray(updates.compositions)) {
-          // Eski format: compositions array'inden ilkini compositionId olarak al
-          updates.compositionId = updates.compositions[0]?.id || updates.compositions[0];
-          delete updates.compositions;
         }
 
         await updateScenario(id, updates);

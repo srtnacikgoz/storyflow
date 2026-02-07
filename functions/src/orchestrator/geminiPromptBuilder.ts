@@ -10,6 +10,8 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getBusinessContext } from "../services/configService";
 import { TEXTURE_LIGHTING_MAP, PROMPT_POLLUTION_TERMS } from "./seed/geminiTerminologyData";
 import type { SurfaceType, TextureLightingMapping, PromptPollutionTerm } from "../types";
+import { WEATHER_PRESETS, LIGHTING_PRESETS, ATMOSPHERE_PRESETS } from "./types";
+import type { ThemeSetting } from "./types";
 
 // Gemini Terminology Types
 export interface GeminiMoodDefinition {
@@ -733,6 +735,46 @@ interface PromptBuildingStep {
 }
 
 /**
+ * Tema setting'inden SCENE SETTING bloğu oluşturur
+ * Pozitif tanımlamalar - "ne yap" formatında
+ */
+function buildSceneSettingFromTheme(setting: ThemeSetting): string[] {
+  const lines: string[] = [];
+
+  // Hava durumu preset
+  if (setting.weatherPreset) {
+    const preset = WEATHER_PRESETS.find(p => p.id === setting.weatherPreset);
+    if (preset) {
+      lines.push(preset.prompt);
+    }
+  }
+
+  // Işık preset
+  if (setting.lightingPreset) {
+    const preset = LIGHTING_PRESETS.find(p => p.id === setting.lightingPreset);
+    if (preset) {
+      lines.push(preset.prompt);
+    }
+  }
+
+  // Atmosfer preset
+  if (setting.atmospherePreset) {
+    const preset = ATMOSPHERE_PRESETS.find(p => p.id === setting.atmospherePreset);
+    if (preset) {
+      lines.push(preset.prompt);
+    }
+  }
+
+  if (lines.length === 0) return [];
+
+  return [
+    "SCENE SETTING:",
+    ...lines.map(l => `- ${l}`),
+    "",
+  ];
+}
+
+/**
  * Senaryo için tam Gemini prompt oluştur
  * Bu fonksiyon orchestrator.ts'deki buildDynamicPrompt'un yerini alabilir
  *
@@ -757,6 +799,10 @@ export async function buildGeminiPrompt(params: {
   };
   // Senaryo açıklaması - Creative direction olarak kullanılır
   scenarioDescription?: string;
+  // Tema sahne ayarları - Hava, ışık, atmosfer
+  themeSetting?: ThemeSetting;
+  // İçecek tipi - beverageRules'dan gelen: "tea", "coffee" vb.
+  beverageType?: string;
 }): Promise<{
   mainPrompt: string;
   negativePrompt: string;
@@ -1120,6 +1166,29 @@ export async function buildGeminiPrompt(params: {
     }
   }
 
+  // 5.6b İçecek Tipi Constraint (beverageRules'dan)
+  if (params.beverageType) {
+    const beverageLabels: Record<string, string> = {
+      tea: "TEA (amber/golden liquid)",
+      coffee: "COFFEE (dark brown liquid)",
+      "fruit-juice": "FRUIT JUICE (colorful liquid)",
+      lemonade: "LEMONADE (pale yellow liquid)",
+    };
+    const label = beverageLabels[params.beverageType] || params.beverageType.toUpperCase();
+    promptParts.push(`BEVERAGE RULE (MANDATORY):`);
+    promptParts.push(`The cup/mug MUST contain ${label}. Do NOT fill with any other beverage.`);
+    promptParts.push("");
+
+    decisions.push({
+      step: "beverage-type",
+      input: params.beverageType,
+      matched: true,
+      result: `İçecek tipi: ${label}`,
+      fallback: false,
+      details: { beverageType: params.beverageType, label },
+    });
+  }
+
   // 5.7 Senaryo Yönlendirmesi (Creative Direction)
   // Senaryo açıklaması prompt'a eklenir ama referans görseller her zaman önceliklidir.
   // Bu bölüm sahne kompozisyonu ve atmosfer için yaratıcı yön verir.
@@ -1149,6 +1218,28 @@ export async function buildGeminiPrompt(params: {
       fallback: false,
       details: {},
     });
+  }
+
+  // 5.8 Tema Sahne Ayarları (Scene Setting)
+  // Tema'nın weatherPreset, customLighting, atmosphere alanlarından oluşur
+  if (params.themeSetting) {
+    const sceneSettingLines = buildSceneSettingFromTheme(params.themeSetting);
+    if (sceneSettingLines.length > 0) {
+      promptParts.push(...sceneSettingLines);
+
+      decisions.push({
+        step: "theme-scene-setting",
+        input: JSON.stringify(params.themeSetting),
+        matched: true,
+        result: `Scene setting eklendi (${sceneSettingLines.length - 2} satır)`,
+        fallback: false,
+        details: {
+          weatherPreset: params.themeSetting.weatherPreset || null,
+          lightingPreset: params.themeSetting.lightingPreset || null,
+          atmospherePreset: params.themeSetting.atmospherePreset || null,
+        },
+      });
+    }
   }
 
   // 6. İşletme Bağlamı - Sadece negatif kısıtlamalar eklenir (ortam tarifi YASAK)
