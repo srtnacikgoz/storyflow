@@ -94,7 +94,8 @@
       "Bash(gh search repos:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(npx firebase functions:log:*)",
-      "Bash(npx firebase:*)"
+      "Bash(npx firebase:*)",
+      "WebFetch(domain:deepwiki.com)"
     ]
   },
   "hooks": {}
