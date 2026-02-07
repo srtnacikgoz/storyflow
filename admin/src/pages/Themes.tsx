@@ -9,6 +9,7 @@ import { PageGuide } from "../components/PageGuide"; // New Import
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageTour } from "../components/PageTour";
 import type { TourStep } from "../components/PageTour";
+import { slugify } from "../utils/stringUtils";
 
 // Themes sayfası tour adımları
 const THEMES_TOUR_STEPS: TourStep[] = [
@@ -329,9 +330,6 @@ export default function Themes() {
         setting.atmospherePreset = form.setting.atmospherePreset as ThemeSetting["atmospherePreset"];
       }
 
-      // Setting boşsa undefined olarak gönder (Firestore'da gereksiz alan olmasın)
-      const hasSetting = Object.keys(setting).length > 0;
-
       if (editingId) {
         // Güncelleme - id hariç diğer alanları gönder
         await api.updateTheme(editingId, {
@@ -340,7 +338,7 @@ export default function Themes() {
           scenarios: scenariosArray,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
-          ...(hasSetting ? { setting } : {}),
+          setting,
         });
       } else {
         // Yeni oluşturma
@@ -351,7 +349,7 @@ export default function Themes() {
           scenarios: scenariosArray,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
-          ...(hasSetting ? { setting } : {}),
+          setting,
         });
       }
       await loadThemes();
@@ -379,19 +377,7 @@ export default function Themes() {
     }
   };
 
-  // ID oluştur (name'den)
-  const generateId = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/ğ/g, "g")
-      .replace(/ü/g, "u")
-      .replace(/ş/g, "s")
-      .replace(/ı/g, "i")
-      .replace(/ö/g, "o")
-      .replace(/ç/g, "c")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-  };
+  const generateId = slugify;
 
   if (loading) {
     return (
@@ -583,18 +569,18 @@ export default function Themes() {
                       </span>
                     )}
                     {theme.setting?.preferredTags?.table && theme.setting.preferredTags.table.length > 0 && (
-                      <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded">
-                        Masa: {theme.setting.preferredTags.table.join(", ")}
+                      <span className={`text-xs px-2 py-0.5 rounded ${theme.setting.preferredTags.table.includes("__none__") ? "bg-stone-100 text-stone-500 line-through" : "bg-violet-100 text-violet-700"}`}>
+                        Masa: {theme.setting.preferredTags.table.includes("__none__") ? "Yok" : theme.setting.preferredTags.table.join(", ")}
                       </span>
                     )}
                     {theme.setting?.preferredTags?.plate && theme.setting.preferredTags.plate.length > 0 && (
-                      <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded">
-                        Tabak: {theme.setting.preferredTags.plate.join(", ")}
+                      <span className={`text-xs px-2 py-0.5 rounded ${theme.setting.preferredTags.plate.includes("__none__") ? "bg-stone-100 text-stone-500 line-through" : "bg-rose-100 text-rose-700"}`}>
+                        Tabak: {theme.setting.preferredTags.plate.includes("__none__") ? "Yok" : theme.setting.preferredTags.plate.join(", ")}
                       </span>
                     )}
                     {theme.setting?.preferredTags?.cup && theme.setting.preferredTags.cup.length > 0 && (
-                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">
-                        Fincan: {theme.setting.preferredTags.cup.join(", ")}
+                      <span className={`text-xs px-2 py-0.5 rounded ${theme.setting.preferredTags.cup.includes("__none__") ? "bg-stone-100 text-stone-500 line-through" : "bg-teal-100 text-teal-700"}`}>
+                        Fincan: {theme.setting.preferredTags.cup.includes("__none__") ? "Yok" : theme.setting.preferredTags.cup.join(", ")}
                       </span>
                     )}
                   </div>
@@ -1055,10 +1041,12 @@ export default function Themes() {
                               onClick={() => setTableTagsOpen(!tableTagsOpen)}
                               className="w-full px-4 py-2 border border-stone-300 rounded-lg bg-white text-left text-sm flex items-center justify-between focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                             >
-                              <span className={form.setting.preferredTableTags.length > 0 ? "text-stone-800" : "text-stone-400"}>
-                                {form.setting.preferredTableTags.length > 0
-                                  ? form.setting.preferredTableTags.join(", ")
-                                  : "Masa tag'i seçin (opsiyonel)"}
+                              <span className={form.setting.preferredTableTags.length > 0 ? (form.setting.preferredTableTags.includes("__none__") ? "text-stone-500 italic" : "text-stone-800") : "text-stone-400"}>
+                                {form.setting.preferredTableTags.includes("__none__")
+                                  ? "Yok (sahnede olmasın)"
+                                  : form.setting.preferredTableTags.length > 0
+                                    ? form.setting.preferredTableTags.join(", ")
+                                    : "Masa tag'i seçin (opsiyonel)"}
                               </span>
                               <svg className={`w-4 h-4 text-stone-400 transition-transform ${tableTagsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1066,20 +1054,39 @@ export default function Themes() {
                             </button>
                             {tableTagsOpen && (
                               <div className="absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <label className="flex items-center gap-2 px-4 py-2 hover:bg-red-50 cursor-pointer text-sm border-b border-stone-100">
+                                  <input
+                                    type="checkbox"
+                                    checked={form.setting.preferredTableTags.includes("__none__")}
+                                    onChange={() => {
+                                      const isNone = form.setting.preferredTableTags.includes("__none__");
+                                      setForm({
+                                        ...form,
+                                        setting: { ...form.setting, preferredTableTags: isNone ? [] : ["__none__"] },
+                                      });
+                                    }}
+                                    className="rounded border-stone-300 text-red-500 focus:ring-red-400"
+                                  />
+                                  <span className={form.setting.preferredTableTags.includes("__none__") ? "text-red-600 font-medium" : "text-stone-600"}>
+                                    Yok (sahnede olmasın)
+                                  </span>
+                                </label>
                                 {tableAssetTags.map(tag => {
+                                  const isNone = form.setting.preferredTableTags.includes("__none__");
                                   const isSelected = form.setting.preferredTableTags.includes(tag);
                                   return (
                                     <label
                                       key={tag}
-                                      className="flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm"
+                                      className={`flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm ${isNone ? "opacity-40 pointer-events-none" : ""}`}
                                     >
                                       <input
                                         type="checkbox"
                                         checked={isSelected}
+                                        disabled={isNone}
                                         onChange={() => {
                                           const updated = isSelected
                                             ? form.setting.preferredTableTags.filter(t => t !== tag)
-                                            : [...form.setting.preferredTableTags, tag];
+                                            : [...form.setting.preferredTableTags.filter(t => t !== "__none__"), tag];
                                           setForm({
                                             ...form,
                                             setting: { ...form.setting, preferredTableTags: updated },
@@ -1115,10 +1122,12 @@ export default function Themes() {
                               onClick={() => setPlateTagsOpen(!plateTagsOpen)}
                               className="w-full px-4 py-2 border border-stone-300 rounded-lg bg-white text-left text-sm flex items-center justify-between focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                             >
-                              <span className={form.setting.preferredPlateTags.length > 0 ? "text-stone-800" : "text-stone-400"}>
-                                {form.setting.preferredPlateTags.length > 0
-                                  ? form.setting.preferredPlateTags.join(", ")
-                                  : "Tabak tag'i seçin (opsiyonel)"}
+                              <span className={form.setting.preferredPlateTags.length > 0 ? (form.setting.preferredPlateTags.includes("__none__") ? "text-stone-500 italic" : "text-stone-800") : "text-stone-400"}>
+                                {form.setting.preferredPlateTags.includes("__none__")
+                                  ? "Yok (sahnede olmasın)"
+                                  : form.setting.preferredPlateTags.length > 0
+                                    ? form.setting.preferredPlateTags.join(", ")
+                                    : "Tabak tag'i seçin (opsiyonel)"}
                               </span>
                               <svg className={`w-4 h-4 text-stone-400 transition-transform ${plateTagsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1126,17 +1135,36 @@ export default function Themes() {
                             </button>
                             {plateTagsOpen && (
                               <div className="absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <label className="flex items-center gap-2 px-4 py-2 hover:bg-red-50 cursor-pointer text-sm border-b border-stone-100">
+                                  <input
+                                    type="checkbox"
+                                    checked={form.setting.preferredPlateTags.includes("__none__")}
+                                    onChange={() => {
+                                      const isNone = form.setting.preferredPlateTags.includes("__none__");
+                                      setForm({
+                                        ...form,
+                                        setting: { ...form.setting, preferredPlateTags: isNone ? [] : ["__none__"] },
+                                      });
+                                    }}
+                                    className="rounded border-stone-300 text-red-500 focus:ring-red-400"
+                                  />
+                                  <span className={form.setting.preferredPlateTags.includes("__none__") ? "text-red-600 font-medium" : "text-stone-600"}>
+                                    Yok (sahnede olmasın)
+                                  </span>
+                                </label>
                                 {plateAssetTags.map(tag => {
+                                  const isNone = form.setting.preferredPlateTags.includes("__none__");
                                   const isSelected = form.setting.preferredPlateTags.includes(tag);
                                   return (
-                                    <label key={tag} className="flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm">
+                                    <label key={tag} className={`flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm ${isNone ? "opacity-40 pointer-events-none" : ""}`}>
                                       <input
                                         type="checkbox"
                                         checked={isSelected}
+                                        disabled={isNone}
                                         onChange={() => {
                                           const updated = isSelected
                                             ? form.setting.preferredPlateTags.filter(t => t !== tag)
-                                            : [...form.setting.preferredPlateTags, tag];
+                                            : [...form.setting.preferredPlateTags.filter(t => t !== "__none__"), tag];
                                           setForm({ ...form, setting: { ...form.setting, preferredPlateTags: updated } });
                                         }}
                                         className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
@@ -1165,10 +1193,12 @@ export default function Themes() {
                               onClick={() => setCupTagsOpen(!cupTagsOpen)}
                               className="w-full px-4 py-2 border border-stone-300 rounded-lg bg-white text-left text-sm flex items-center justify-between focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                             >
-                              <span className={form.setting.preferredCupTags.length > 0 ? "text-stone-800" : "text-stone-400"}>
-                                {form.setting.preferredCupTags.length > 0
-                                  ? form.setting.preferredCupTags.join(", ")
-                                  : "Fincan tag'i seçin (opsiyonel)"}
+                              <span className={form.setting.preferredCupTags.length > 0 ? (form.setting.preferredCupTags.includes("__none__") ? "text-stone-500 italic" : "text-stone-800") : "text-stone-400"}>
+                                {form.setting.preferredCupTags.includes("__none__")
+                                  ? "Yok (sahnede olmasın)"
+                                  : form.setting.preferredCupTags.length > 0
+                                    ? form.setting.preferredCupTags.join(", ")
+                                    : "Fincan tag'i seçin (opsiyonel)"}
                               </span>
                               <svg className={`w-4 h-4 text-stone-400 transition-transform ${cupTagsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1176,17 +1206,36 @@ export default function Themes() {
                             </button>
                             {cupTagsOpen && (
                               <div className="absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <label className="flex items-center gap-2 px-4 py-2 hover:bg-red-50 cursor-pointer text-sm border-b border-stone-100">
+                                  <input
+                                    type="checkbox"
+                                    checked={form.setting.preferredCupTags.includes("__none__")}
+                                    onChange={() => {
+                                      const isNone = form.setting.preferredCupTags.includes("__none__");
+                                      setForm({
+                                        ...form,
+                                        setting: { ...form.setting, preferredCupTags: isNone ? [] : ["__none__"] },
+                                      });
+                                    }}
+                                    className="rounded border-stone-300 text-red-500 focus:ring-red-400"
+                                  />
+                                  <span className={form.setting.preferredCupTags.includes("__none__") ? "text-red-600 font-medium" : "text-stone-600"}>
+                                    Yok (sahnede olmasın)
+                                  </span>
+                                </label>
                                 {cupAssetTags.map(tag => {
+                                  const isNone = form.setting.preferredCupTags.includes("__none__");
                                   const isSelected = form.setting.preferredCupTags.includes(tag);
                                   return (
-                                    <label key={tag} className="flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm">
+                                    <label key={tag} className={`flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm ${isNone ? "opacity-40 pointer-events-none" : ""}`}>
                                       <input
                                         type="checkbox"
                                         checked={isSelected}
+                                        disabled={isNone}
                                         onChange={() => {
                                           const updated = isSelected
                                             ? form.setting.preferredCupTags.filter(t => t !== tag)
-                                            : [...form.setting.preferredCupTags, tag];
+                                            : [...form.setting.preferredCupTags.filter(t => t !== "__none__"), tag];
                                           setForm({ ...form, setting: { ...form.setting, preferredCupTags: updated } });
                                         }}
                                         className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"

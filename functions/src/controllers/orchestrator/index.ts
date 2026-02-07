@@ -47,6 +47,7 @@ export {
   orchestratorGenerateNow,
   orchestratorResendTelegram,
   orchestratorScheduledTrigger,
+  validateBeforeGenerate,
 } from "./pipelineController";
 
 // Slot Controller

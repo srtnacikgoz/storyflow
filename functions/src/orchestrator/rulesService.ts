@@ -154,6 +154,7 @@ export class RulesService {
         compositionId: s.compositionId,
         isInterior: s.isInterior,
         interiorType: s.interiorType,
+        suggestedProducts: s.suggestedProducts,
       }));
 
       // FirestoreHandStyle'ı HandStyle'a dönüştür
@@ -298,9 +299,8 @@ export class RulesService {
     const recentScenarios = entries.slice(0, variationRules.scenarioGap);
     const blockedScenarios = [...new Set(recentScenarios.map(e => e.scenarioId))];
 
-    // Bloklanmış masalar
-    const recentTables = entries.slice(0, variationRules.tableGap);
-    const blockedTables = [...new Set(recentTables.map(e => e.tableId).filter(Boolean))] as string[];
+    // Masa diversity KALDIRILD — tema preferredTags yeterli
+    const blockedTables: string[] = [];
 
     // Bloklanmış el stilleri
     const recentHandStyles = entries.slice(0, variationRules.handStyleGap);
@@ -310,9 +310,8 @@ export class RulesService {
     const recentCompositions = entries.slice(0, variationRules.compositionGap);
     const blockedCompositions = [...new Set(recentCompositions.map(e => e.compositionId))];
 
-    // Bloklanmış ürünler
-    const recentProducts = entries.slice(0, variationRules.productGap);
-    const blockedProducts = [...new Set(recentProducts.map(e => e.productId).filter(Boolean))] as string[];
+    // Ürün diversity KALDIRILD — her üretimde en uygun ürün seçilmeli
+    const blockedProducts: string[] = [];
 
     // Bloklanmış tabaklar
     const recentPlates = entries.slice(0, variationRules.plateGap);

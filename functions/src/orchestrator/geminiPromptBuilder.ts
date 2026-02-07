@@ -803,6 +803,8 @@ export async function buildGeminiPrompt(params: {
   themeSetting?: ThemeSetting;
   // İçecek tipi - beverageRules'dan gelen: "tea", "coffee" vb.
   beverageType?: string;
+  // Tema izni: AI dekoratif aksesuar üretsin mi?
+  accessoryAllowed?: boolean;
 }): Promise<{
   mainPrompt: string;
   negativePrompt: string;
@@ -1164,6 +1166,23 @@ export async function buildGeminiPrompt(params: {
         details: { tagCount: tagLines.length, tags: params.assetTags },
       });
     }
+  }
+
+  // 5.6a Aksesuar Yönlendirmesi (AI tarafından üretilecek)
+  if (params.accessoryAllowed) {
+    promptParts.push(`ACCESSORY DIRECTION:`);
+    promptParts.push(`Add ONE small decorative accessory to the scene — a closed book, a smartphone, a keychain, reading glasses, or a small notebook.`);
+    promptParts.push(`The accessory should look natural and not compete with the hero product. Place it at the edge of the composition.`);
+    promptParts.push(``);
+
+    decisions.push({
+      step: "accessory-direction",
+      input: "accessoryAllowed: true",
+      matched: true,
+      result: "AI-generated accessory instruction added",
+      fallback: false,
+      details: { source: "theme.accessoryAllowed" },
+    });
   }
 
   // 5.6b İçecek Tipi Constraint (beverageRules'dan)

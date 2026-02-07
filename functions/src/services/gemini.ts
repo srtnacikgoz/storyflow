@@ -837,7 +837,7 @@ KULLANILABİLİR LİSTELER AŞAĞIDADIR.`;
    * En uygun senaryoyu seç (Gemini 3 Pro)
    */
   async selectScenario(
-    productType: string,
+    productType: string | undefined,
     timeOfDay: string,
     selectedAssets: any,
     availableScenarios: any[],
@@ -849,7 +849,7 @@ ${selectedAssets?.includesPet ? "⭐ KÖPEK SEÇİLDİ - Köpek uyumlu senaryo s
 ${feedbackHints || ""}`;
 
     const userPrompt = `
-Ürün: ${productType}
+${productType ? `Ürün: ${productType}` : ""}
 Zaman: ${timeOfDay}
 Seçilen Asset'ler:
 - Ürün: ${selectedAssets?.product?.filename || "bilinmiyor"}

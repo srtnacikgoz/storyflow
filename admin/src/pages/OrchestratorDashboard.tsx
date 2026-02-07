@@ -4,21 +4,12 @@ import { useLoading } from "../contexts/LoadingContext";
 import type {
   OrchestratorDashboardStats,
   ScheduledSlot,
-  OrchestratorProductType,
   ScheduledSlotStatus,
   Theme,
   IssueCategoryId,
 } from "../types";
 import { ISSUE_CATEGORIES } from "../types";
 import VisualCriticModal from "../components/VisualCriticModal";
-
-// Ürün tipi etiketleri
-const PRODUCT_LABELS: Record<OrchestratorProductType, string> = {
-  croissants: "Kruvasan",
-  pastas: "Pasta",
-  chocolates: "Çikolata",
-  coffees: "Kahve",
-};
 
 // Instagram aspect ratio seçenekleri
 // Gemini desteklediği formatlar: 1:1, 3:4, 9:16
@@ -97,8 +88,13 @@ export default function OrchestratorDashboard() {
 
   // Üretim
   const [generating, setGenerating] = useState(false);
-  const [selectedProductType, setSelectedProductType] = useState<OrchestratorProductType>("croissants");
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<InstagramAspectRatio>("1:1");
+  const [isRandomMode, setIsRandomMode] = useState(false);
+
+  // Pre-flight Validation
+  const [validationWarnings, setValidationWarnings] = useState<Array<{ type: "info" | "warning" | "error"; message: string }>>([]);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationLoading, setValidationLoading] = useState(false);
 
   // Tema seçimi
   const [themes, setThemes] = useState<Theme[]>([]);
@@ -231,19 +227,20 @@ export default function OrchestratorDashboard() {
     return true;
   });
 
-  // Hemen üret
-  const handleGenerateNow = async () => {
+  // Pre-flight validation çalıştır ve sonra üret
+  const runGenerateAfterValidation = async () => {
     setGenerating(true);
     setElapsedTime(0);
     setProgressInfo(null);
     setShowProgressModal(true);
+    setShowValidationModal(false);
 
     try {
-      // themeId ve aspectRatio ile üret
+      // themeId, aspectRatio ve isRandomMode ile üret
       const result = await api.orchestratorGenerateNow(
-        selectedProductType,
         selectedThemeId || undefined,
-        selectedAspectRatio
+        selectedAspectRatio,
+        isRandomMode || undefined
       );
       setCurrentSlotId(result.slotId);
 
@@ -276,6 +273,38 @@ export default function OrchestratorDashboard() {
       });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  // Hemen üret (pre-flight validation ile)
+  const handleGenerateNow = async () => {
+    // Rastgele modda veya tema seçilmemişse direkt üret
+    if (isRandomMode || !selectedThemeId) {
+      runGenerateAfterValidation();
+      return;
+    }
+
+    // Pre-flight validation
+    setValidationLoading(true);
+    try {
+      const validation = await api.validateBeforeGenerate(selectedThemeId);
+      if (validation.warnings.length > 0) {
+        setValidationWarnings(validation.warnings);
+        setShowValidationModal(true);
+        if (!validation.canProceed) {
+          // Hata var, devam edilemez
+          return;
+        }
+        // Uyarılar var ama devam edilebilir — modal'da "Devam Et" gösterilecek
+        return;
+      }
+      // Uyarı yok — direkt üret
+      runGenerateAfterValidation();
+    } catch {
+      // Validation endpoint çalışmazsa direkt üret
+      runGenerateAfterValidation();
+    } finally {
+      setValidationLoading(false);
     }
   };
 
@@ -457,6 +486,47 @@ export default function OrchestratorDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Pre-flight Validation Modal */}
+      {showValidationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold mb-4">Üretim Kontrolü</h3>
+
+            <div className="space-y-2 mb-6">
+              {validationWarnings.map((w, i) => (
+                <div
+                  key={i}
+                  className={`p-3 rounded-lg text-sm ${
+                    w.type === "error" ? "bg-red-50 text-red-700 border border-red-200" :
+                    w.type === "warning" ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                    "bg-blue-50 text-blue-700 border border-blue-200"
+                  }`}
+                >
+                  {w.type === "error" ? "❌" : w.type === "warning" ? "⚠️" : "ℹ️"} {w.message}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              {!validationWarnings.some(w => w.type === "error") && (
+                <button
+                  onClick={runGenerateAfterValidation}
+                  className="flex-1 btn-primary"
+                >
+                  Devam Et
+                </button>
+              )}
+              <button
+                onClick={() => setShowValidationModal(false)}
+                className="flex-1 btn-secondary"
+              >
+                {validationWarnings.some(w => w.type === "error") ? "Kapat" : "İptal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Progress Modal */}
       {showProgressModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -935,18 +1005,6 @@ export default function OrchestratorDashboard() {
         <h2 className="text-lg font-semibold mb-4">Hemen İçerik Üret</h2>
         <div className="flex flex-wrap gap-4 items-end">
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Ürün Tipi</label>
-            <select
-              value={selectedProductType}
-              onChange={(e) => setSelectedProductType(e.target.value as OrchestratorProductType)}
-              className="input w-48"
-            >
-              {Object.entries(PRODUCT_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="block text-sm text-gray-600 mb-1">Görsel Formatı</label>
             <select
               value={selectedAspectRatio}
@@ -962,18 +1020,27 @@ export default function OrchestratorDashboard() {
           </div>
           <button
             onClick={handleGenerateNow}
-            disabled={generating}
+            disabled={generating || validationLoading}
             className="btn-primary disabled:opacity-50"
           >
-            {generating ? "Üretiliyor..." : "🚀 Şimdi Üret"}
+            {validationLoading ? "Kontrol ediliyor..." : generating ? "Üretiliyor..." : "🚀 Şimdi Üret"}
           </button>
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isRandomMode}
+              onChange={(e) => setIsRandomMode(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            Rastgele üret
+          </label>
         </div>
 
         {/* Tema Seçici - Kartlı Görünüm */}
         {themes.length > 0 && (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tema Seçimi (Opsiyonel)
+              Tema Seçimi
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {/* Tema Yok Seçeneği */}

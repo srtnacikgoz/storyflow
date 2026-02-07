@@ -1,11 +1,18 @@
 # Claude Code Proje Konfigürasyonu
 
 > **Proje:** Instagram Paylaşım Otomasyonu (Maestro AI)
-> **Son Güncelleme:** 2026-02-04
+> **Son Güncelleme:** 2026-02-07
 
 ---
 
 ## 🚨 TEMEL İLKELER
+
+### 0. SADELİK (En Üst Öncelik)
+İşletme adı "Sade" — bu bir tesadüf değil, mimari prensip.
+- **Yeni alan/özellik ekleme yasağı**: Kullanıcı açıkça istemedikçe yeni field, dropdown, checkbox, config alanı EKLEME
+- **Tek karar noktası**: Bir karar tek bir yerde verilir. Aynı şeyi iki yerde seçtirme. Çakışma varsa biri kazanmaz — biri kaldırılır
+- **Önce kaldır, sonra ekle**: Bir şey eklemeden önce kaldırılabilecek bir şey var mı sor
+- **Otorite zinciri**: Tema → estetik/atmosfer/izinler. Senaryo → sahne/ürün uyumluluğu/el/kompozisyon. Dashboard → sadece tetikleme
 
 ### 1. Varsayımda Bulunma
 - "Muhtemelen", "Sanırım", "Büyük ihtimalle" → YASAK
@@ -64,19 +71,21 @@
 2. **Test etmeden bitirme** - `npm run build` başarılı olmalı
 3. **İşlevsiz kod yasak** - Bir özellik ya tam çalışır ya hiç olmaz
 4. **Gizli bilgi commit etme** - API key, şifre, .env yasak
-5. **Özellik silme yasak** - İşlevsiz özellik SİLİNMEZ, DÜZELTİLİR. Her özellik bir amaçla eklendi. "Kaldıralım" yerine "çalışır hale getirelim" yaklaşımı benimse
+5. **Gereksiz çoğaltma yasak** - Aynı kararı iki yerde verdirme. Çakışan alan varsa birini kaldır. İşlevsel ama tek yerde yeterli olan özelliği diğer yerlerden temizle
 
 ---
 
-## 🧠 Sistem Felsefesi
+## 🧠 Sistem Felsefesi — Otorite Zinciri
 
-Senaryo ve Tema sistemi, görsel üretiminin yaratıcı yönünü belirler. Her alan birbiriyle bağlantılıdır:
+Her karar tek bir sahibine aittir. Çakışma olursa sahip olmayan taraf kaldırılır.
 
-- **Senaryo açıklaması (description):** Sahne kompozisyonu, atmosfer ve yaratıcı yön verir → SCENE DIRECTION olarak prompt'a eklenir
-- **Kompozisyon (composition):** Kamera açısı, ürün pozisyonu, derinlik gibi teknik çerçeveyi belirler. AI, seçilen kompozisyonu baz alarak açıklamayı zenginleştirir
-- **Tema:** Genel görsel dil ve estetik yönü belirler
+| Katman | Neyi belirler | Neyi belirlemez |
+|--------|--------------|-----------------|
+| **Tema** | Estetik, atmosfer, hava, ışık, izinler (pet/aksesuar), tag tercihleri (masa/tabak/bardak) | Sahne, ürün seçimi |
+| **Senaryo** | Sahne yönü (description → SCENE DIRECTION), kompozisyon, el pozu, ürün uyumluluğu (suggestedProducts) | Estetik, atmosfer |
+| **Dashboard** | Tetikleme (üret butonu), görsel format (aspect ratio) | Ürün seçimi, senaryo seçimi, estetik |
 
-Bu alanlar birbirini tamamlar. Biri olmadan diğeri eksik kalır. Refactoring yaparken bu alanları kaldırmak yerine, her birinin pipeline'da doğru çalıştığından emin ol.
+Pipeline akışı: Tema seç → Senaryoları filtrele → Senaryo seç → Ürün tipini senaryodan al → Üret
 
 ---
 

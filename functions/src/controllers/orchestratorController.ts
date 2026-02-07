@@ -56,6 +56,7 @@ export {
   orchestratorGenerateNow,
   orchestratorResendTelegram,
   orchestratorScheduledTrigger,
+  validateBeforeGenerate,
 
   // Slot Controller
   listScheduledSlots,

@@ -268,7 +268,8 @@ export class OrchestratorScheduler {
     slotId: string,
     scheduledHour?: number,
     overrideThemeId?: string,
-    overrideAspectRatio?: "1:1" | "3:4" | "9:16"
+    overrideAspectRatio?: "1:1" | "3:4" | "9:16",
+    isRandomMode?: boolean
   ): Promise<void> {
     const orchestrator = new Orchestrator(this.config);
 
@@ -282,8 +283,10 @@ export class OrchestratorScheduler {
         updatedAt: Date.now(),
       });
 
-      // Ürün tipini belirle
-      const productType = rule.productTypes[0]; // İlk ürün tipi
+      // Ürün tipini belirle (boş dizi = auto mod, senaryodan belirlenecek)
+      const productType: ProductType | undefined = rule.productTypes.length > 0
+        ? rule.productTypes[0]
+        : undefined;
 
       // Progress callback - her aşamada slot'u güncelle
       const onProgress = async (stage: string, stageIndex: number, totalStages: number) => {
@@ -303,7 +306,9 @@ export class OrchestratorScheduler {
         slotId,
         scheduledHour,
         overrideThemeId,
-        overrideAspectRatio
+        overrideAspectRatio,
+        undefined, // isManual
+        isRandomMode
       );
 
       // Slot'u güncelle (undefined değerleri temizle)
@@ -368,17 +373,17 @@ export class OrchestratorScheduler {
   }
 
   /**
-   * Belirli bir ürün tipi için hemen içerik üret
-   * Pipeline arka planda başlatılır, hemen slotId döner
-   * Frontend polling ile progress takip eder
-   * @param productType - Ürün tipi
+   * Hemen içerik üret (Dashboard "Şimdi Üret" butonu)
+   * productType opsiyonel: verilmezse senaryodan otomatik belirlenir (auto mod)
    * @param overrideThemeId - Opsiyonel tema ID'si (senaryo filtreleme için)
    * @param overrideAspectRatio - Opsiyonel aspect ratio (Instagram formatı için)
+   * @param productType - Opsiyonel ürün tipi (verilmezse senaryodan belirlenir)
    */
   async generateNow(
-    productType: ProductType,
     overrideThemeId?: string,
-    overrideAspectRatio?: "1:1" | "3:4" | "9:16"
+    overrideAspectRatio?: "1:1" | "3:4" | "9:16",
+    productType?: ProductType,
+    isRandomMode?: boolean
   ): Promise<{
     slotId: string;
     success: boolean;
@@ -388,13 +393,13 @@ export class OrchestratorScheduler {
     const startTime = Date.now();
 
     // Varsayılan kural oluştur
-    // themeId varsa rule'a ekle (orchestrator bu themeId'yi kullanacak)
+    // productTypes boş = auto mod sinyali (senaryodan belirlenecek)
     const tempRule: TimeSlotRule = {
       id: `manual-${Date.now()}`,
       startHour: new Date().getHours(),
       endHour: new Date().getHours() + 1,
       daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-      productTypes: [productType],
+      productTypes: productType ? [productType] : [],
       isActive: true,
       priority: 0,
       themeId: overrideThemeId, // Tema override
@@ -405,7 +410,7 @@ export class OrchestratorScheduler {
     try {
       // Pipeline'ı bekleyerek çalıştır (themeId ve aspectRatio override ile)
       // NOT: await ZORUNLU - Cloud Functions HTTP request bitince instance kapanır
-      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId, overrideAspectRatio);
+      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId, overrideAspectRatio, isRandomMode);
 
       return {
         slotId: slot.id,

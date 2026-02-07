@@ -172,20 +172,22 @@ export class Orchestrator {
 
   /**
    * Tam pipeline'ı çalıştır
+   * @param productType - Ürün tipi (opsiyonel: yoksa senaryodan otomatik belirlenir)
    * @param onProgress - Her aşamada çağrılan callback (opsiyonel)
    * @param overrideThemeId - Manuel tema seçimi (Dashboard'dan "Şimdi Üret" ile)
    * @param overrideAspectRatio - Manuel aspect ratio seçimi (Instagram formatı için)
    * @param isManual - Manuel üretim mi? (Şimdi Üret butonu = true, Scheduler = false)
    */
   async runPipeline(
-    productType: ProductType,
+    productType: ProductType | undefined,
     timeSlotRule: TimeSlotRule,
     onProgress?: (stage: string, stageIndex: number, totalStages: number) => Promise<void>,
     slotId?: string,
     scheduledHour?: number,
     overrideThemeId?: string,
     overrideAspectRatio?: "1:1" | "3:4" | "9:16",
-    isManual?: boolean
+    isManual?: boolean,
+    isRandomMode?: boolean
   ): Promise<PipelineResult> {
     const TOTAL_STAGES = 6; // asset, scenario, prompt, image, quality, telegram (caption kaldırıldı)
     const startedAt = Date.now();
@@ -196,13 +198,15 @@ export class Orchestrator {
       ? `${slotId}-${startedAt}`
       : `manual-${startedAt}-${Math.random().toString(36).substring(2, 8)}`;
 
-    console.log(`[Orchestrator] Starting pipeline: ${pipelineId}`);
+    // isAutoMode: sadece "Rastgele Üret" modunda veya productType yokken + rastgele mod açıkça seçildiyse
+    const isAutoMode = isRandomMode === true;
+    console.log(`[Orchestrator] Starting pipeline: ${pipelineId}${isAutoMode ? " [RASTGELE MOD]" : " [NORMAL MOD]"}`);
 
     // Gemini'ye pipeline context'i set et (loglama için)
     this.gemini.setPipelineContext({
       pipelineId,
       slotId,
-      productType,
+      productType: productType || "auto",
     });
 
     // Pipeline durumu başlat
@@ -448,8 +452,8 @@ export class Orchestrator {
       if (isInteriorOnlyTheme) {
         console.log(`[Orchestrator] 🏠 INTERIOR-ONLY THEME DETECTED - Skipping normal asset selection`);
 
-        // Interior asset'leri yükle
-        const assets = await this.loadAvailableAssets(productType);
+        // Interior asset'leri yükle (productType olmadan da çalışır, sadece interior asset'ler kullanılacak)
+        const assets = await this.loadAvailableAssets(productType || "interior");
 
         if (!assets.interior || assets.interior.length === 0) {
           throw new Error(`İç mekan görseli bulunamadı. Assets sayfasından "interior" kategorisinde görsel ekleyin.`);
@@ -548,7 +552,7 @@ export class Orchestrator {
           tableId: null,
           handStyleId: null,
           includesPet: false,
-          productType: productType,
+          productType: (productType || "croissants") as ProductType, // Interior'da productType önemsiz
           productId: selectedInterior.id,
           plateId: null,
           cupId: null,
@@ -584,6 +588,108 @@ export class Orchestrator {
       // ══════════════════════════════════════════════════════════════════════
       // NORMAL AKIŞ - Product Shot (AI üretimi)
       // ══════════════════════════════════════════════════════════════════════
+
+      // ==========================================
+      // NORMAL MOD: productType yoksa tema senaryosundan deterministik belirle
+      // ==========================================
+      if (!isAutoMode && !productType) {
+        console.log("[Orchestrator] NORMAL MOD: productType tema senaryosundan belirlenecek");
+
+        // Tema senaryolarından interior olmayanları filtrele
+        const normalScenarios = themeFilteredScenarios.filter(s => !s.isInterior);
+
+        if (normalScenarios.length > 0) {
+          const themeScenario = normalScenarios[0];
+          const scenarioData = themeScenario as FirestoreScenario;
+          if (scenarioData.suggestedProducts && scenarioData.suggestedProducts.length > 0) {
+            productType = scenarioData.suggestedProducts[0] as ProductType;
+            console.log(`[Orchestrator] NORMAL MOD: productType from theme scenario "${themeScenario.name}": ${productType}`);
+          }
+        }
+
+        // Hala belirlenemezse fallback
+        if (!productType) {
+          const activeSlugs = await categoryService.getSubTypeSlugs("products");
+          productType = (activeSlugs[0] || "croissants") as ProductType;
+          console.log(`[Orchestrator] NORMAL MOD: fallback productType: ${productType}`);
+        }
+
+        // Pipeline context güncelle
+        this.gemini.setPipelineContext({
+          pipelineId,
+          slotId,
+          productType,
+        });
+      }
+
+      // ==========================================
+      // RASTGELE MOD: productType yoksa rastgele senaryo seç, senaryodan belirle
+      // ==========================================
+      if (isAutoMode) {
+        console.log("[Orchestrator] AUTO MODE: Senaryo seçimi önce yapılacak, productType senaryodan belirlenecek");
+
+        // Senaryo filtreleme (tema zaten yüklendi)
+        let autoScenarios = themeFilteredScenarios;
+
+        // Interior senaryoları çıkar (normal akıştayız)
+        autoScenarios = autoScenarios.filter(s => !s.isInterior);
+
+        // Bloklanmış senaryoları çıkar
+        autoScenarios = autoScenarios.filter(
+          s => !effectiveRules.blockedScenarios.includes(s.id)
+        );
+
+        // Tüm senaryolar bloklanmışsa fallback
+        if (autoScenarios.length === 0) {
+          console.log("[Orchestrator] AUTO: All scenarios blocked, using theme-filtered list");
+          autoScenarios = themeFilteredScenarios.filter(s => !s.isInterior);
+          if (autoScenarios.length === 0) {
+            autoScenarios = allScenarios.filter(s => !s.isInterior);
+          }
+        }
+
+        // Rastgele bir senaryo seç
+        const autoSelectedScenario = autoScenarios[Math.floor(Math.random() * autoScenarios.length)];
+        console.log(`[Orchestrator] AUTO: Pre-selected scenario: ${autoSelectedScenario.name}`);
+
+        // Senaryodan productType belirle
+        const scenarioData = autoSelectedScenario as FirestoreScenario;
+        if (scenarioData.suggestedProducts && scenarioData.suggestedProducts.length > 0) {
+          // suggestedProducts'dan rastgele bir productType seç
+          productType = scenarioData.suggestedProducts[
+            Math.floor(Math.random() * scenarioData.suggestedProducts.length)
+          ] as ProductType;
+          console.log(`[Orchestrator] AUTO: productType from scenario suggestedProducts: ${productType}`);
+        } else {
+          // suggestedProducts boş → aktif ürün kategorilerinden rastgele seç
+          const activeSlugs = await categoryService.getSubTypeSlugs("products");
+          if (activeSlugs.length > 0) {
+            productType = activeSlugs[Math.floor(Math.random() * activeSlugs.length)] as ProductType;
+            console.log(`[Orchestrator] AUTO: productType from active categories: ${productType}`);
+          } else {
+            // Son fallback
+            productType = "croissants" as ProductType;
+            console.log(`[Orchestrator] AUTO: fallback productType: ${productType}`);
+          }
+        }
+
+        // Pipeline context güncelle (artık productType belli)
+        this.gemini.setPipelineContext({
+          pipelineId,
+          slotId,
+          productType,
+        });
+
+        console.log(`[Orchestrator] AUTO MODE resolved: productType=${productType}`);
+      }
+
+      // Auto mod sonrası productType kesinlikle set edilmiş olmalı
+      if (!productType) {
+        throw new Error("productType belirlenemedi. Auto mod senaryodan productType çıkaramamış olabilir.");
+      }
+      // TypeScript narrowing: reassignment sonrası narrowing kaybolduğu için
+      // yeni bir const değişkene atıyoruz
+      const effectiveProductType: ProductType = productType;
 
       // ==========================================
       // STAGE 1: ASSET SELECTION
@@ -811,6 +917,30 @@ export class Orchestrator {
         }
       }
 
+      // Aksesuar artık AI tarafından üretiliyor, asset seçimi gereksiz
+      effectiveAssetSelectionRules = {
+        ...effectiveAssetSelectionRules,
+        accessory: { enabled: false },
+      };
+
+      // "Yok" tercihi: tema bu asset'i istemiyorsa devre dışı bırak
+      const themePrefTags = themeData?.setting?.preferredTags as { table?: string[]; plate?: string[]; cup?: string[] } | undefined;
+      if (themePrefTags?.table?.includes("__none__")) {
+        qualifiedAssets.tables = [];
+        effectiveAssetSelectionRules = { ...effectiveAssetSelectionRules, table: { enabled: false } };
+        console.log(`[Orchestrator] Tema tercihi: masa YOK`);
+      }
+      if (themePrefTags?.plate?.includes("__none__")) {
+        qualifiedAssets.plates = [];
+        effectiveAssetSelectionRules = { ...effectiveAssetSelectionRules, plate: { enabled: false } };
+        console.log(`[Orchestrator] Tema tercihi: tabak YOK`);
+      }
+      if (themePrefTags?.cup?.includes("__none__")) {
+        qualifiedAssets.cups = [];
+        effectiveAssetSelectionRules = { ...effectiveAssetSelectionRules, cup: { enabled: false } };
+        console.log(`[Orchestrator] Tema tercihi: fincan YOK`);
+      }
+
       // İçecek kurallarına göre bardak filtreleme
       // productType (croissants, pastas vb.) → beverageRules → tagMappings → uyumlu bardaklar
       let resolvedBeverageType: string | undefined; // Prompt'a aktarılacak
@@ -1015,7 +1145,7 @@ export class Orchestrator {
           return true;
         }
         // suggestedProducts tanımlıysa, mevcut ürün tipi listede olmalı
-        return scenario.suggestedProducts.includes(productType);
+        return scenario.suggestedProducts.includes(effectiveProductType);
       });
 
       // Eğer ürün tipine göre filtreleme sonucu en az 1 senaryo varsa kullan
@@ -1054,7 +1184,7 @@ export class Orchestrator {
         compositionId: s.compositionId,
       }));
 
-      // Kullanıcı geri bildirimlerinden ipuçları al
+      // Kullanıcı geri bildirimlerinden ipuçları al (prompt optimization'da da lazım)
       const feedbackHints = await FeedbackService.generatePromptHints();
       if (feedbackHints) {
         console.log("[Orchestrator] Feedback hints loaded for Claude");
@@ -1069,14 +1199,52 @@ export class Orchestrator {
       // Feedback ve kuralları birleştir
       const combinedHints = [feedbackHints, aiRulesHints].filter(Boolean).join("\n");
 
-      const scenarioResponse = await this.gemini.selectScenario(
-        productType,
-        timeOfDay,
-        result.assetSelection!,
-        scenariosForClaude,
-        effectiveRules, // Çeşitlilik kurallarını da gönder
-        combinedHints // Kullanıcı geri bildirimleri + AI kuralları
-      );
+      // NORMAL MOD + TEK SENARYO: Gemini'ye sormadan tema senaryosunu direkt kullan
+      // Token tasarrufu — seçim zaten deterministik
+      let scenarioResponse: { success: boolean; data?: any; cost: number; error?: string };
+
+      const nonInteriorFiltered = filteredScenarios.filter(s => !s.isInterior);
+      if (!isAutoMode && nonInteriorFiltered.length === 1) {
+        const directScenario = nonInteriorFiltered[0];
+        console.log(`[Orchestrator] NORMAL MOD: Tek senaryo "${directScenario.name}" — Gemini senaryo seçimi ATLANDI (token tasarrufu)`);
+
+        // El stili seçimi (senaryo el içeriyorsa)
+        let handStyle: string | undefined;
+        let handStyleDetails: any;
+        if (directScenario.includesHands) {
+          const selectedHandStyle = this.rulesService.selectHandStyle(
+            effectiveRules.blockedHandStyles,
+            effectiveRules.staticRules.handStyles
+          );
+          handStyle = selectedHandStyle.id;
+          handStyleDetails = selectedHandStyle;
+        }
+
+        scenarioResponse = {
+          success: true,
+          cost: 0,
+          data: {
+            scenarioId: directScenario.id,
+            scenarioName: directScenario.name,
+            scenarioDescription: directScenario.description || "",
+            compositionId: directScenario.compositionId || "default",
+            includesHands: directScenario.includesHands,
+            handStyle,
+            handStyleDetails,
+            reasoning: "Normal mod — tek senaryo, Gemini seçimi atlandı",
+          },
+        };
+      } else {
+        // Çoklu senaryo veya rastgele mod — Gemini seçsin
+        scenarioResponse = await this.gemini.selectScenario(
+          productType,
+          timeOfDay,
+          result.assetSelection!,
+          scenariosForClaude,
+          effectiveRules, // Çeşitlilik kurallarını da gönder
+          combinedHints // Kullanıcı geri bildirimleri + AI kuralları
+        );
+      }
 
       // Önce maliyeti ekle (hata olsa bile API çağrısı yapıldı)
       totalCost += scenarioResponse.cost || 0;
@@ -1247,7 +1415,8 @@ export class Orchestrator {
           },
           themeData?.description,
           themeData,
-          resolvedBeverageType // İçecek tipi: "tea", "coffee" vb.
+          resolvedBeverageType, // İçecek tipi: "tea", "coffee" vb.
+          accessoryAllowed // Tema izni: AI dekoratif aksesuar üretsin mi?
         );
 
         console.log(`[Orchestrator] Base prompt built with Gemini terminology`);
@@ -1855,7 +2024,8 @@ export class Orchestrator {
     },
     themeDescription?: string,
     themeData?: FirebaseFirestore.DocumentData,
-    beverageType?: string // İçecek tipi: "tea", "coffee" vb.
+    beverageType?: string, // İçecek tipi: "tea", "coffee" vb.
+    accessoryAllowed?: boolean // Tema izni: AI dekoratif aksesuar üretsin mi?
   ): Promise<{ mainPrompt: string; negativePrompt?: string; promptBuildingSteps?: Array<{ step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown> }> }> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
@@ -1894,7 +2064,8 @@ export class Orchestrator {
       moodDetails,
       themeDescription,
       themeData?.setting,
-      beverageType
+      beverageType,
+      accessoryAllowed
     );
   }
 
@@ -2114,7 +2285,8 @@ Cup: ${colors} ${material} (from reference)`.trim();
     },
     themeDescription?: string,
     themeSetting?: Record<string, unknown>,
-    beverageType?: string // İçecek tipi: "tea", "coffee" vb.
+    beverageType?: string, // İçecek tipi: "tea", "coffee" vb.
+    accessoryAllowed?: boolean // Tema izni: AI dekoratif aksesuar üretsin mi?
   ): Promise<{ mainPrompt: string; negativePrompt: string; promptBuildingSteps?: Array<{ step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown> }> }> {
     // Senaryo verilerinden Gemini parametrelerini çıkar
     // NOT: lightingPreset artık Senaryo'dan değil, Mood'dan geliyor
@@ -2151,9 +2323,6 @@ Cup: ${colors} ${material} (from reference)`.trim();
       if (selectedAssets?.cup?.tags?.length) {
         assetTags.cup = selectedAssets.cup.tags;
       }
-      if (selectedAssets?.accessory?.tags?.length) {
-        assetTags.accessory = selectedAssets.accessory.tags;
-      }
       if (selectedAssets?.napkin?.tags?.length) {
         assetTags.napkin = selectedAssets.napkin.tags;
       }
@@ -2177,6 +2346,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
         scenarioDescription, // Senaryo açıklaması - creative direction olarak kullanılır
         themeSetting: themeSetting as any, // Tema sahne ayarları (hava, ışık, atmosfer)
         beverageType, // İçecek tipi: "tea", "coffee" vb. (beverageRules'dan)
+        accessoryAllowed, // Tema izni: AI dekoratif aksesuar üretsin mi?
       });
 
       // Prompt builder kararlarını al
@@ -2330,11 +2500,6 @@ Cup: ${colors} ${material} (from reference)`.trim();
         console.log(`[Orchestrator] 🧶 NAPKIN ASSET detected: ${selectedAssets.napkin.filename} - enforcing fidelity`);
         const napkinDesc = selectedAssets.napkin.visualProperties?.dominantColors?.join(", ") || "specific";
         prompt += `\n\nASSET RULE: Use the provided NAPKIN reference image exactly. Do not apply generic 'linen' or 'rustic' texture if it contradicts the reference. Keep the ${napkinDesc} color/style of the reference napkin.`;
-      }
-
-      // Aksesuar koruması
-      if (selectedAssets?.accessory) {
-        prompt += `\n\nASSET RULE: Use the provided ACCESSORY reference image exactly.`;
       }
 
       // 3. eatingMethod Constraint (Fiziksel Mantık)

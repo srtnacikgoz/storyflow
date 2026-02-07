@@ -8,6 +8,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageTour } from "../components/PageTour";
 import type { TourStep } from "../components/PageTour";
 import type { DynamicCategory } from "../types";
+import { slugify } from "../utils/stringUtils";
 
 // Scenarios sayfası tour adımları
 const SCENARIOS_TOUR_STEPS: TourStep[] = [
@@ -366,7 +367,7 @@ export default function Scenarios() {
     setSaving(true);
     try {
       const payload = {
-        id: editingId || form.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+        id: editingId || slugify(form.name),
         name: form.name.trim(),
         description: form.description.trim(),
         includesHands: form.includesHands,
@@ -375,7 +376,7 @@ export default function Scenarios() {
         interiorType: form.isInterior ? form.interiorType : undefined,
         handPose: form.includesHands ? form.handPose || undefined : undefined,
         compositionEntry: form.includesHands ? form.compositionEntry || undefined : undefined,
-        suggestedProducts: form.suggestedProducts.length > 0 ? form.suggestedProducts : undefined,
+        suggestedProducts: form.suggestedProducts,
       };
 
       if (editingId) {
@@ -787,7 +788,7 @@ export default function Scenarios() {
                                 scenarioName: form.name,
                                 includesHands: form.includesHands,
                                 handPose: form.handPose || undefined,
-                                compositionId: form.compositionId,
+                                compositions: [form.compositionId],
                                 compositionEntry: form.compositionEntry || undefined,
                               });
                               setForm(prev => ({ ...prev, description: result.description }));

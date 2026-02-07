@@ -570,6 +570,9 @@ export interface Scenario {
   isInterior?: boolean; // true ise AI görsel üretimi ATLANIR
   interiorType?: InteriorType; // Hangi interior kategorisinden asset seçilecek
 
+  // === ÜRÜN UYUMLULUĞU ===
+  suggestedProducts?: ProductType[]; // Bu senaryo için önerilen ürün tipleri
+
   // === META ===
   isActive?: boolean;
   sortOrder?: number; // Sıralama (UI'da liste için)
@@ -1298,7 +1301,6 @@ export interface IssueFeedback {
  */
 export interface FirestoreScenario extends Scenario {
   // Ek detaylar (opsiyonel - Admin panelden yönetilebilir)
-  suggestedProducts?: ProductType[]; // Bu senaryo için önerilen ürün tipleri
 }
 
 /**

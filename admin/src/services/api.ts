@@ -794,14 +794,14 @@ class ApiService {
 
   /**
    * Hemen içerik üret (pipeline tamamlanana kadar bekler)
-   * @param productType Ürün tipi
+   * productType kaldırıldı — senaryodan otomatik belirlenir (auto mod)
    * @param themeId Opsiyonel tema ID'si - senaryoları filtreler
    * @param aspectRatio Görsel formatı (1:1, 3:4, 9:16)
    */
   async orchestratorGenerateNow(
-    productType: string,
     themeId?: string,
-    aspectRatio?: "1:1" | "3:4" | "9:16"
+    aspectRatio?: "1:1" | "3:4" | "9:16",
+    isRandomMode?: boolean
   ): Promise<{
     success: boolean;
     message: string;
@@ -809,12 +809,15 @@ class ApiService {
     duration?: number;
     error?: string;
   }> {
-    const body: { productType: string; themeId?: string; aspectRatio?: string } = { productType };
+    const body: { themeId?: string; aspectRatio?: string; isRandomMode?: boolean } = {};
     if (themeId) {
       body.themeId = themeId;
     }
     if (aspectRatio) {
       body.aspectRatio = aspectRatio;
+    }
+    if (isRandomMode) {
+      body.isRandomMode = true;
     }
 
     const response = await this.fetch<{
@@ -828,6 +831,26 @@ class ApiService {
       body: JSON.stringify(body),
     });
     return response;
+  }
+
+  /**
+   * Pre-flight validation — pipeline öncesi kontroller
+   * Tema + senaryo + ürün uyumluluğu kontrol eder
+   */
+  async validateBeforeGenerate(themeId?: string): Promise<{
+    warnings: Array<{ type: "info" | "warning" | "error"; message: string }>;
+    canProceed: boolean;
+  }> {
+    const params = themeId ? `?themeId=${themeId}` : "";
+    const response = await this.fetch<{
+      success: boolean;
+      warnings: Array<{ type: "info" | "warning" | "error"; message: string }>;
+      canProceed: boolean;
+    }>(`validateBeforeGenerate${params}`);
+    return {
+      warnings: response.warnings,
+      canProceed: response.canProceed,
+    };
   }
 
   /**
@@ -1940,7 +1963,7 @@ class ApiService {
     scenarioName: string;
     includesHands: boolean;
     handPose?: string;
-    compositionId: string;
+    compositions: string[];
     compositionEntry?: string;
   }): Promise<{ description: string; cost: number }> {
     const response = await this.fetch<{
