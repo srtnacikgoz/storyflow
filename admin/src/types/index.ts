@@ -635,7 +635,8 @@ export interface Theme {
   scenarios: string[];
   // v3.0: mood alanı kaldırıldı - atmosfer bilgisi artık Scenario içinde
   petAllowed: boolean;
-  accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
+  accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi?
+  accessoryOptions?: string[]; // Kullanıcının seçtiği aksesuar listesi (ör: ["kitap", "telefon"])
   setting?: ThemeSetting; // v3.1: Sahne ayarları
   createdAt: number;
   updatedAt: number;
@@ -805,6 +806,40 @@ export interface OrchestratorDashboardStats {
     totalCalls: number;
     geminiCalls: number;
     claudeCalls: number;
+  };
+}
+
+// ==========================================
+// Pre-flight Validation Types
+// ==========================================
+
+export interface PreFlightData {
+  theme: {
+    name: string;
+    preferredTags?: { table?: string[]; plate?: string[]; cup?: string[] };
+    presets: { weather?: string; lighting?: string; atmosphere?: string };
+    petAllowed: boolean;
+    accessoryAllowed: boolean;
+  };
+  scenario: {
+    name: string;
+    description: string;
+    suggestedProducts: string[];
+    compositionId?: string;
+    includesHands: boolean;
+    handPose?: string;
+  };
+  scenarioCount: number;
+  assets: {
+    products: { total: number };
+    tables: { total: number; preferred: number };
+    plates: { total: number; preferred: number };
+    cups: { total: number; preferred: number };
+  };
+  beverage?: {
+    productType: string;
+    defaultBeverage: string;
+    alternateBeverage?: string;
   };
 }
 

@@ -1004,6 +1004,9 @@ export class Orchestrator {
 
       // 6. Gemini Selection (Optimization from qualified candidates)
       // Gemini'ye sadece qualified asset'leri gönderiyoruz
+      // preferredTags bilgisini Gemini'ye aktar — kullanıcının açık tercihi
+      const preferredTagsForGemini = themeData?.setting?.preferredTags as { table?: string[]; plate?: string[]; cup?: string[] } | undefined;
+
       const assetResponse = await this.gemini.selectAssets(
         productType,
         qualifiedAssets, // PRE-FILTERED & SCORED List
@@ -1011,7 +1014,8 @@ export class Orchestrator {
         mood,
         effectiveRules,
         fixedAssets,
-        effectiveAssetSelectionRules // plateRequired kontrolü sonrası güncellenmiş kurallar
+        effectiveAssetSelectionRules, // plateRequired kontrolü sonrası güncellenmiş kurallar
+        preferredTagsForGemini
       );
 
       // 7. Post-Validation (Safety Check)
@@ -1162,14 +1166,19 @@ export class Orchestrator {
       }
 
       // Bloklanmış senaryoları çıkar (son N üretimde kullanılanlar)
-      filteredScenarios = filteredScenarios.filter(
-        s => !effectiveRules.blockedScenarios.includes(s.id)
-      );
+      // KRİTİK: Tema seçiliyken senaryo diversity uygulanmaz — kullanıcının bilinçli tercihi
+      if (effectiveThemeId) {
+        console.log(`[Orchestrator] Tema seçili ("${themeData?.name}") — senaryo diversity devre dışı (kullanıcı tercihi)`);
+      } else {
+        filteredScenarios = filteredScenarios.filter(
+          s => !effectiveRules.blockedScenarios.includes(s.id)
+        );
 
-      // Eğer tüm senaryolar bloklanmışsa, tema filtrelemesinden sonraki listeyi kullan
-      if (filteredScenarios.length === 0) {
-        console.log("[Orchestrator] All scenarios blocked, using theme-filtered list");
-        filteredScenarios = themeFilteredScenarios.length > 0 ? themeFilteredScenarios : allScenarios;
+        // Eğer tüm senaryolar bloklanmışsa, tema filtrelemesinden sonraki listeyi kullan
+        if (filteredScenarios.length === 0) {
+          console.log("[Orchestrator] All scenarios blocked, using theme-filtered list");
+          filteredScenarios = themeFilteredScenarios.length > 0 ? themeFilteredScenarios : allScenarios;
+        }
       }
 
       // Gemini için basitleştirilmiş senaryo listesi
@@ -1416,7 +1425,8 @@ export class Orchestrator {
           themeData?.description,
           themeData,
           resolvedBeverageType, // İçecek tipi: "tea", "coffee" vb.
-          accessoryAllowed // Tema izni: AI dekoratif aksesuar üretsin mi?
+          accessoryAllowed, // Tema izni: AI dekoratif aksesuar üretsin mi?
+          themeData?.accessoryOptions as string[] | undefined // Kullanıcının seçtiği aksesuar listesi
         );
 
         console.log(`[Orchestrator] Base prompt built with Gemini terminology`);
@@ -2025,7 +2035,8 @@ export class Orchestrator {
     themeDescription?: string,
     themeData?: FirebaseFirestore.DocumentData,
     beverageType?: string, // İçecek tipi: "tea", "coffee" vb.
-    accessoryAllowed?: boolean // Tema izni: AI dekoratif aksesuar üretsin mi?
+    accessoryAllowed?: boolean, // Tema izni: AI dekoratif aksesuar üretsin mi?
+    accessoryOptions?: string[] // Kullanıcının seçtiği aksesuar listesi
   ): Promise<{ mainPrompt: string; negativePrompt?: string; promptBuildingSteps?: Array<{ step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown> }> }> {
     // Firestore'dan prompt şablonunu çek
     const promptDoc = await this.db.collection("scenario-prompts").doc(scenarioId).get();
@@ -2065,7 +2076,8 @@ export class Orchestrator {
       themeDescription,
       themeData?.setting,
       beverageType,
-      accessoryAllowed
+      accessoryAllowed,
+      accessoryOptions
     );
   }
 
@@ -2286,7 +2298,8 @@ Cup: ${colors} ${material} (from reference)`.trim();
     themeDescription?: string,
     themeSetting?: Record<string, unknown>,
     beverageType?: string, // İçecek tipi: "tea", "coffee" vb.
-    accessoryAllowed?: boolean // Tema izni: AI dekoratif aksesuar üretsin mi?
+    accessoryAllowed?: boolean, // Tema izni: AI dekoratif aksesuar üretsin mi?
+    accessoryOptions?: string[] // Kullanıcının seçtiği aksesuar listesi
   ): Promise<{ mainPrompt: string; negativePrompt: string; promptBuildingSteps?: Array<{ step: string; input: string | null; matched: boolean; result: string | null; fallback: boolean; details?: Record<string, unknown> }> }> {
     // Senaryo verilerinden Gemini parametrelerini çıkar
     // NOT: lightingPreset artık Senaryo'dan değil, Mood'dan geliyor
@@ -2302,6 +2315,9 @@ Cup: ${colors} ${material} (from reference)`.trim();
 
     try {
       // Asset etiketlerini topla (Gemini'ye constraint olarak gönderilecek)
+      // preferredTags varsa → kullanıcı tercihi asset'in kendi tag'lerini override eder
+      const themePrefTagsForPrompt = themeSetting?.preferredTags as { table?: string[]; plate?: string[]; cup?: string[] } | undefined;
+
       const assetTags: {
         product?: string[];
         plate?: string[];
@@ -2315,13 +2331,20 @@ Cup: ${colors} ${material} (from reference)`.trim();
         assetTags.product = selectedAssets.product.tags;
       }
       if (selectedAssets?.plate?.tags?.length) {
-        assetTags.plate = selectedAssets.plate.tags;
+        // preferredTags override: kullanıcı tercihi varsa onu kullan
+        assetTags.plate = (themePrefTagsForPrompt?.plate?.length && !themePrefTagsForPrompt.plate.includes("__none__"))
+          ? themePrefTagsForPrompt.plate
+          : selectedAssets.plate.tags;
       }
       if (selectedAssets?.table?.tags?.length) {
-        assetTags.table = selectedAssets.table.tags;
+        assetTags.table = (themePrefTagsForPrompt?.table?.length && !themePrefTagsForPrompt.table.includes("__none__"))
+          ? themePrefTagsForPrompt.table
+          : selectedAssets.table.tags;
       }
       if (selectedAssets?.cup?.tags?.length) {
-        assetTags.cup = selectedAssets.cup.tags;
+        assetTags.cup = (themePrefTagsForPrompt?.cup?.length && !themePrefTagsForPrompt.cup.includes("__none__"))
+          ? themePrefTagsForPrompt.cup
+          : selectedAssets.cup.tags;
       }
       if (selectedAssets?.napkin?.tags?.length) {
         assetTags.napkin = selectedAssets.napkin.tags;
@@ -2347,6 +2370,7 @@ Cup: ${colors} ${material} (from reference)`.trim();
         themeSetting: themeSetting as any, // Tema sahne ayarları (hava, ışık, atmosfer)
         beverageType, // İçecek tipi: "tea", "coffee" vb. (beverageRules'dan)
         accessoryAllowed, // Tema izni: AI dekoratif aksesuar üretsin mi?
+        accessoryOptions, // Kullanıcının seçtiği aksesuar listesi
       });
 
       // Prompt builder kararlarını al

@@ -621,7 +621,8 @@ SCENE:
       accessory: { enabled: boolean };
       napkin: { enabled: boolean };
       cutlery: { enabled: boolean };
-    }
+    },
+    preferredTags?: { table?: string[]; plate?: string[]; cup?: string[] }
   ): Promise<{ success: boolean; data?: any; error?: string; cost: number; tokensUsed: number }> {
     const moodGuidelines: Record<string, string> = {
       energetic: "PARLAK ve CANLI renkler seç. Mermer masalar, metal çatallar tercih et.",
@@ -657,11 +658,29 @@ SCENE:
       ? `2. ZORUNLU SEÇİMLER (null OLAMAZ):\n${requiredFields.map(f => `   - ${f}: Bu kategoriden MUTLAKA bir seçim yap`).join("\n")}`
       : "2. Hiçbir kategori zorunlu değil - ihtiyaca göre seç.";
 
+    // preferredTags → Gemini'ye kullanıcı tercihi olarak aktar
+    const preferredTagLines: string[] = [];
+    if (preferredTags) {
+      if (preferredTags.table && preferredTags.table.length > 0 && !preferredTags.table.includes("__none__")) {
+        preferredTagLines.push(`   - MASA: Şu etiketlerden birini içeren masayı SEÇ → [${preferredTags.table.join(", ")}]`);
+      }
+      if (preferredTags.plate && preferredTags.plate.length > 0 && !preferredTags.plate.includes("__none__")) {
+        preferredTagLines.push(`   - TABAK: Şu etiketlerden birini içeren tabağı SEÇ → [${preferredTags.plate.join(", ")}]`);
+      }
+      if (preferredTags.cup && preferredTags.cup.length > 0 && !preferredTags.cup.includes("__none__")) {
+        preferredTagLines.push(`   - BARDAK/FİNCAN: Şu etiketlerden birini içeren fincanı SEÇ → [${preferredTags.cup.join(", ")}]`);
+      }
+    }
+
+    const preferredTagsBlock = preferredTagLines.length > 0
+      ? `\n🔴 KULLANICI TERCİHLERİ (EN YÜKSEK ÖNCELİK — DİĞER TÜM KURALLARI OVERRIDE EDER):\n${preferredTagLines.join("\n")}\n   Bu etiketlere uyan asset VARSA, onu SEÇ. Mood veya stil kuralı bunu geçersiz KILAMAZ.\n`
+      : "";
+
     // System prompt
     const systemPrompt = `Sen profesyonel bir food styling uzmanısın. Pastane ürünleri için en uygun asset kombinasyonunu seç.
 MOOD: ${mood.toUpperCase()} - ${moodRule}
-${effectiveRules?.shouldIncludePet ? "⭐ KÖPEK DAHİL ET" : "Köpek dahil etme"}
-
+${effectiveRules?.shouldIncludePet ? "⭐ KÖPEK DAHİL ET: Pet listesinden bir köpek MUTLAKA seç" : "Köpek dahil etme"}
+${preferredTagsBlock}
 ÖNEMLİ KURALLAR:
 1. usageCount düşük olan asset'lere öncelik ver (çeşitlilik için). tags bilgisini mood ve ürün uyumu için kullan.
 
@@ -671,6 +690,7 @@ ${requiredRulesText}
    - Ürün bir "Pasta" ise ahşap masa + katlanmış peçete tercih et
    - İçecek ise mermer/cam masa + düz peçete tercih et
    - Mood'a uygun renk tonları seç
+   - ⚠️ Kullanıcı tercihi (yukarıdaki 🔴 blok) varsa, bu eşleşme kurallarını GEÇERSİZ KILAR
 
 KULLANILABİLİR LİSTELER AŞAĞIDADIR.`;
 

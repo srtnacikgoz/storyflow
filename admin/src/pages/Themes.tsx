@@ -78,6 +78,7 @@ const emptyTheme = {
   scenario: "", // Tekil senaryo seçimi
   petAllowed: false,
   accessoryAllowed: false,
+  accessoryOptions: [] as string[],
   // Sahne ayarları
   setting: {
     preferredTableTags: [] as string[],
@@ -281,6 +282,7 @@ export default function Themes() {
         scenario: theme.scenarios?.[0] || "", // İlk senaryoyu al (tekil seçim)
         petAllowed: theme.petAllowed,
         accessoryAllowed: theme.accessoryAllowed ?? false,
+        accessoryOptions: theme.accessoryOptions || [],
         setting: {
           preferredTableTags: theme.setting?.preferredTags?.table || [],
           preferredPlateTags: theme.setting?.preferredTags?.plate || [],
@@ -338,6 +340,7 @@ export default function Themes() {
           scenarios: scenariosArray,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
+          accessoryOptions: form.accessoryOptions.length > 0 ? form.accessoryOptions : undefined,
           setting,
         });
       } else {
@@ -349,6 +352,7 @@ export default function Themes() {
           scenarios: scenariosArray,
           petAllowed: form.petAllowed,
           accessoryAllowed: form.accessoryAllowed,
+          accessoryOptions: form.accessoryOptions.length > 0 ? form.accessoryOptions : undefined,
           setting,
         });
       }
@@ -549,8 +553,8 @@ export default function Themes() {
                       </span>
                     )}
                     {theme.accessoryAllowed && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                        Aksesuar izinli
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded" title={theme.accessoryOptions?.join(", ")}>
+                        Aksesuar{theme.accessoryOptions?.length ? ` (${theme.accessoryOptions.length})` : ""}
                       </span>
                     )}
                     {theme.setting?.weatherPreset && (
@@ -943,9 +947,56 @@ export default function Themes() {
                         Aksesuar dahil edilebilir
                       </span>
                     </label>
-                    <p className="text-xs text-stone-500 mt-1 ml-8">
-                      Telefon, çanta, anahtar, kitap gibi gerçekçi pastane detayları
-                    </p>
+                    {form.accessoryAllowed && (
+                      <div className="mt-2 ml-8">
+                        <label className="text-xs font-medium text-stone-600 mb-1 block">
+                          Aksesuar Seçenekleri
+                        </label>
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {form.accessoryOptions.map((opt, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+                              {opt}
+                              <button
+                                type="button"
+                                onClick={() => setForm({
+                                  ...form,
+                                  accessoryOptions: form.accessoryOptions.filter((_, i) => i !== idx),
+                                })}
+                                className="hover:text-red-500"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Aksesuar ekle (Enter ile)"
+                          className="w-full border border-stone-300 rounded px-2 py-1 text-xs"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const val = (e.target as HTMLInputElement).value.trim();
+                              if (val && !form.accessoryOptions.includes(val)) {
+                                setForm({
+                                  ...form,
+                                  accessoryOptions: [...form.accessoryOptions, val],
+                                });
+                                (e.target as HTMLInputElement).value = "";
+                              }
+                            }
+                          }}
+                        />
+                        <p className="text-xs text-stone-400 mt-0.5">
+                          Ör: kitap, telefon, anahtarlık, defter
+                        </p>
+                      </div>
+                    )}
+                    {!form.accessoryAllowed && (
+                      <p className="text-xs text-stone-500 mt-1 ml-8">
+                        Aksesuar devre dışı
+                      </p>
+                    )}
                   </div>
 
                   {/* Senaryo */}

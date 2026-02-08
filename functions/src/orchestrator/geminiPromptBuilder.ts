@@ -805,6 +805,8 @@ export async function buildGeminiPrompt(params: {
   beverageType?: string;
   // Tema izni: AI dekoratif aksesuar üretsin mi?
   accessoryAllowed?: boolean;
+  // Kullanıcının seçtiği aksesuar listesi
+  accessoryOptions?: string[];
 }): Promise<{
   mainPrompt: string;
   negativePrompt: string;
@@ -1062,15 +1064,15 @@ export async function buildGeminiPrompt(params: {
   if (lighting) {
     promptParts.push(`LIGHTING:`);
     promptParts.push(`- ${lighting.geminiPrompt}`);
-    promptParts.push(`- Color temperature: ${lighting.temperature}`);
-    promptParts.push(`- Shallow depth of field (f/2.0)`);
+    promptParts.push(`- Color temperature: ${lighting.temperature}, warm hues creating an appetizing glow`);
+    promptParts.push(`- Macro lens style, shallow depth of field (f/1.8), sharp focus on front texture details with creamy bokeh background`);
     promptParts.push("");
     lightingSource = "preset";
   } else if (mood && mood.lighting) {
     // Lighting preset yoksa MOOD lighting kullan
     promptParts.push(`LIGHTING:`);
     promptParts.push(`- ${mood.lighting}`);
-    promptParts.push(`- Shallow depth of field (f/2.0)`);
+    promptParts.push(`- Warm appetizing tones, macro lens style, shallow depth of field (f/1.8) with creamy bokeh background`);
     promptParts.push("");
     lightingSource = "mood-fallback";
   }
@@ -1101,10 +1103,11 @@ export async function buildGeminiPrompt(params: {
     promptParts.push("");
   }
 
-  // 5. Ürün dokusu
+  // 5. Ürün dokusu + intimate close-up
   if (textureProfile) {
     promptParts.push(`PRODUCT TEXTURE:`);
     promptParts.push(`- ${textureProfile.geminiPrompt}`);
+    promptParts.push(`- Intimate close-up capturing crumbs, glaze reflections, and natural textural imperfections`);
     promptParts.push("");
   }
 
@@ -1168,20 +1171,21 @@ export async function buildGeminiPrompt(params: {
     }
   }
 
-  // 5.6a Aksesuar Yönlendirmesi (AI tarafından üretilecek)
-  if (params.accessoryAllowed) {
+  // 5.6a Aksesuar Yönlendirmesi (kullanıcının seçtiği listeden)
+  if (params.accessoryAllowed && params.accessoryOptions && params.accessoryOptions.length > 0) {
+    const accessoryList = params.accessoryOptions.join(", ");
     promptParts.push(`ACCESSORY DIRECTION:`);
-    promptParts.push(`Add ONE small decorative accessory to the scene — a closed book, a smartphone, a keychain, reading glasses, or a small notebook.`);
+    promptParts.push(`Add ONE small decorative accessory to the scene — choose from: ${accessoryList}.`);
     promptParts.push(`The accessory should look natural and not compete with the hero product. Place it at the edge of the composition.`);
     promptParts.push(``);
 
     decisions.push({
       step: "accessory-direction",
-      input: "accessoryAllowed: true",
+      input: `accessoryOptions: [${accessoryList}]`,
       matched: true,
-      result: "AI-generated accessory instruction added",
+      result: `User-defined accessory list: ${accessoryList}`,
       fallback: false,
-      details: { source: "theme.accessoryAllowed" },
+      details: { source: "theme.accessoryOptions", options: params.accessoryOptions },
     });
   }
 
@@ -1211,8 +1215,10 @@ export async function buildGeminiPrompt(params: {
   // 5.7 Senaryo Yönlendirmesi (Creative Direction)
   // Senaryo açıklaması prompt'a eklenir ama referans görseller her zaman önceliklidir.
   // Bu bölüm sahne kompozisyonu ve atmosfer için yaratıcı yön verir.
+  // Kompozisyon kuralları: Rule of Thirds + negative space (Story'de yazı alanı için)
   if (params.scenarioDescription) {
     promptParts.push(`SCENE DIRECTION (creative guidance - reference images always take precedence):`);
+    promptParts.push(`COMPOSITION: Position the hero product on a rule-of-thirds intersection, not dead center. Leave clean negative space in the top third of the vertical frame for typography.`);
     promptParts.push(params.scenarioDescription);
     promptParts.push(`NOTE: This describes the desired scene composition. Always prioritize visual evidence from reference images over this description.`);
     promptParts.push("");
@@ -1229,11 +1235,15 @@ export async function buildGeminiPrompt(params: {
       },
     });
   } else {
+    // Senaryo açıklaması olmasa bile kompozisyon kuralını ekle
+    promptParts.push(`COMPOSITION: Position the hero product on a rule-of-thirds intersection, not dead center. Leave clean negative space in the top third of the vertical frame for typography.`);
+    promptParts.push("");
+
     decisions.push({
       step: "scenario-description",
       input: null,
       matched: false,
-      result: "Senaryo açıklaması yok",
+      result: "Senaryo açıklaması yok, sadece kompozisyon kuralı eklendi",
       fallback: false,
       details: {},
     });

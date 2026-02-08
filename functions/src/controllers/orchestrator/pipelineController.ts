@@ -5,7 +5,13 @@
 
 import { functions, db, getCors, REGION, claudeApiKey, getOrchestratorConfig, errorResponse } from "./shared";
 import { OrchestratorScheduler } from "../../orchestrator/scheduler";
-import { ProductType } from "../../orchestrator/types";
+import {
+  ProductType,
+  WEATHER_PRESETS,
+  LIGHTING_PRESETS,
+  ATMOSPHERE_PRESETS,
+  BeverageRule,
+} from "../../orchestrator/types";
 
 const TIMEZONE = "Europe/Istanbul";
 
@@ -212,7 +218,6 @@ export const validateBeforeGenerate = functions
         }
 
         const themeData = themeDoc.data()!;
-        warnings.push({ type: "info", message: `Tema: ${themeData.name}` });
 
         // 2. Senaryoyu bul
         const scenarioIds: string[] = themeData.scenarios || [];
@@ -234,7 +239,6 @@ export const validateBeforeGenerate = functions
         );
 
         if (themeScenarios.length === 0) {
-          // Belki sadece interior senaryoları var
           const interiorScenarios = allScenarios.filter(
             (s: any) => scenarioIds.includes(s.id) && s.isInterior
           );
@@ -249,66 +253,123 @@ export const validateBeforeGenerate = functions
         }
 
         const primaryScenario = themeScenarios[0] as any;
-        warnings.push({ type: "info", message: `Senaryo: ${primaryScenario.name}` });
 
         // 3. suggestedProducts kontrolü → productType belirlenebilir mi?
         let determinedProductType: string | null = null;
         if (primaryScenario.suggestedProducts && primaryScenario.suggestedProducts.length > 0) {
           determinedProductType = primaryScenario.suggestedProducts[0];
-          warnings.push({ type: "info", message: `Ürün tipi: ${determinedProductType}` });
         } else {
           warnings.push({ type: "warning", message: "Senaryo'da önerilen ürün tipi tanımlı değil — ilk aktif kategoriden seçilecek" });
         }
 
         // 4. O productType için ürün asset'i var mı?
+        let productCount = 0;
         if (determinedProductType) {
           const productAssets = await db.collection("assets")
             .where("category", "==", "products")
             .where("subType", "==", determinedProductType)
             .where("isActive", "==", true)
-            .limit(1)
+            .limit(50)
             .get();
-
+          productCount = productAssets.size;
           if (productAssets.empty) {
             warnings.push({ type: "error", message: `"${determinedProductType}" için aktif ürün görseli yok — Assets sayfasından ekleyin` });
           }
         }
 
-        // 5. preferredTags kontrolü (masa, tabak, fincan)
-        // Gerçek Firestore yapısı: masalar = furniture/tables, tabaklar = props/plates, fincanlar = props/cups
+        // 5. Asset sayıları ve preferredTags kontrolü
         const preferredTags = themeData.setting?.preferredTags as { table?: string[]; plate?: string[]; cup?: string[] } | undefined;
-        if (preferredTags) {
-          const checkPreferred = async (
-            tagList: string[] | undefined,
-            category: string,
-            subType: string,
-            label: string
-          ) => {
-            if (!tagList || tagList.length === 0 || tagList.includes("__none__")) return;
-            const assetsQuery = await db.collection("assets")
-              .where("category", "==", category)
-              .where("subType", "==", subType)
-              .where("isActive", "==", true)
-              .limit(50)
-              .get();
-            const matchingAssets = assetsQuery.docs.filter(doc => {
-              const tags: string[] = doc.data().tags || [];
-              return tags.some(t => tagList.some(pt => t.toLowerCase().includes(pt.toLowerCase())));
-            });
-            if (matchingAssets.length === 0) {
-              warnings.push({ type: "warning", message: `Tema'da ${label} tercihi "${tagList.join(", ")}" ama eşleşen asset yok` });
-            }
-          };
-          await checkPreferred(preferredTags.table, "furniture", "tables", "masa");
-          await checkPreferred(preferredTags.plate, "props", "plates", "tabak");
-          await checkPreferred(preferredTags.cup, "props", "cups", "fincan");
+
+        const countAssetsWithPreferred = async (
+          category: string,
+          subType: string,
+          tagList?: string[],
+          label?: string
+        ): Promise<{ total: number; preferred: number }> => {
+          const assetsQuery = await db.collection("assets")
+            .where("category", "==", category)
+            .where("subType", "==", subType)
+            .where("isActive", "==", true)
+            .limit(100)
+            .get();
+          const total = assetsQuery.size;
+          if (!tagList || tagList.length === 0 || tagList.includes("__none__")) {
+            return { total, preferred: 0 };
+          }
+          const preferred = assetsQuery.docs.filter(doc => {
+            const tags: string[] = doc.data().tags || [];
+            return tags.some(t => tagList.some(pt => t.toLowerCase().includes(pt.toLowerCase())));
+          }).length;
+          if (preferred === 0 && label) {
+            warnings.push({ type: "warning", message: `Tema'da ${label} tercihi "${tagList.join(", ")}" ama eşleşen asset yok` });
+          }
+          return { total, preferred };
+        };
+
+        const [tableStats, plateStats, cupStats] = await Promise.all([
+          countAssetsWithPreferred("furniture", "tables", preferredTags?.table, "masa"),
+          countAssetsWithPreferred("props", "plates", preferredTags?.plate, "tabak"),
+          countAssetsWithPreferred("props", "cups", preferredTags?.cup, "fincan"),
+        ]);
+
+        // 6. Beverage rule bilgisi
+        let bevRule: BeverageRule | undefined;
+        if (determinedProductType) {
+          const { getBeverageRulesConfig } = await import("../../services/configService");
+          const beverageConfig = await getBeverageRulesConfig();
+          bevRule = beverageConfig.rules[determinedProductType];
         }
+
+        // 7. Preset label'larını çöz
+        const resolvePreset = <T extends { id: string; labelTr: string }>(
+          presets: readonly T[],
+          id?: string
+        ): string | undefined => {
+          if (!id) return undefined;
+          return presets.find(p => p.id === id)?.labelTr;
+        };
+
+        // PreFlightData oluştur
+        const preFlightData = {
+          theme: {
+            name: themeData.name,
+            preferredTags: preferredTags || undefined,
+            presets: {
+              weather: resolvePreset(WEATHER_PRESETS, themeData.setting?.weatherPreset),
+              lighting: resolvePreset(LIGHTING_PRESETS, themeData.setting?.lightingPreset),
+              atmosphere: resolvePreset(ATMOSPHERE_PRESETS, themeData.setting?.atmospherePreset),
+            },
+            petAllowed: themeData.petAllowed || false,
+            accessoryAllowed: themeData.accessoryAllowed || false,
+          },
+          scenario: {
+            name: primaryScenario.name,
+            description: primaryScenario.description || "",
+            suggestedProducts: primaryScenario.suggestedProducts || [],
+            compositionId: primaryScenario.compositionId,
+            includesHands: primaryScenario.includesHands ?? true,
+            handPose: primaryScenario.handPose,
+          },
+          scenarioCount: themeScenarios.length,
+          assets: {
+            products: { total: productCount },
+            tables: tableStats,
+            plates: plateStats,
+            cups: cupStats,
+          },
+          beverage: bevRule ? {
+            productType: determinedProductType!,
+            defaultBeverage: bevRule.default,
+            alternateBeverage: bevRule.alternate,
+          } : undefined,
+        };
 
         const hasError = warnings.some(w => w.type === "error");
         response.json({
           success: true,
           warnings,
           canProceed: !hasError,
+          preFlightData,
         });
       } catch (error) {
         errorResponse(response, error, "validateBeforeGenerate");

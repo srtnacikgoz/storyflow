@@ -840,16 +840,19 @@ class ApiService {
   async validateBeforeGenerate(themeId?: string): Promise<{
     warnings: Array<{ type: "info" | "warning" | "error"; message: string }>;
     canProceed: boolean;
+    preFlightData?: import("../types").PreFlightData;
   }> {
     const params = themeId ? `?themeId=${themeId}` : "";
     const response = await this.fetch<{
       success: boolean;
       warnings: Array<{ type: "info" | "warning" | "error"; message: string }>;
       canProceed: boolean;
+      preFlightData?: import("../types").PreFlightData;
     }>(`validateBeforeGenerate${params}`);
     return {
       warnings: response.warnings,
       canProceed: response.canProceed,
+      preFlightData: response.preFlightData,
     };
   }
 
@@ -1372,6 +1375,7 @@ class ApiService {
     scenarios: string[];
     petAllowed: boolean;
     accessoryAllowed: boolean;
+    accessoryOptions?: string[];
     setting?: ThemeSetting;
   }): Promise<Theme> {
     const response = await this.fetch<{
@@ -1394,6 +1398,7 @@ class ApiService {
     scenarios: string[];
     petAllowed: boolean;
     accessoryAllowed: boolean;
+    accessoryOptions: string[];
     setting: ThemeSetting;
   }>): Promise<Theme> {
     const response = await this.fetch<{

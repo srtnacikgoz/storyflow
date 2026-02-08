@@ -53,39 +53,12 @@
 
 ---
 
-## 🎯 1. Temel Felsefe (Pragmatik SDUI)
-
-### Kademeli SDUI
-İlk aşamada sadece ana sayfa ve kampanya alanları gibi sık değişen yerler SDUI ile yönetilir. Karmaşık iş mantığı içeren ekranlar geleneksel yapıda kalır.
-
-**DO ✅**
-- Ana sayfa banner/slider yönetimi için SDUI
-- Kampanya kartları için config-driven yaklaşım
-- Sık değişen içerikler için backend-controlled UI
-
-**DON'T ❌**
-- Karmaşık checkout akışını SDUI ile yönetme
-- Kritik iş mantığını config dosyalarına taşıma
+## 🎯 1. Temel Felsefe
 
 ### Configuration-First
-Bir özellik kodlanmadan önce şeması planlanır. Ancak karmaşıklık, ekip ölçeğiyle doğru orantılı tutulur.
+Bir özellik kodlanmadan önce şeması planlanır. Config-driven yaklaşım tercih edilir.
 
-### BFF (Backend-for-Frontend)
-İstemciye ham veri yerine, render edilmeye hazır "View Model" gönderilir.
-
-**Örnek:**
-```typescript
-// ❌ Ham veri
-{ productId: 123, price: 100, currency: "TRY" }
-
-// ✅ View Model
-{
-  displayPrice: "100 ₺",
-  formattedName: "Tablet Çikolata (70%)",
-  imageUrl: "https://...",
-  isAvailable: true
-}
-```
+> **NOT:** SDUI ve BFF kavramları gelecekte değerlendirilecektir. Şu an proje bu ölçekte değil.
 
 ---
 
@@ -93,19 +66,18 @@ Bir özellik kodlanmadan önce şeması planlanır. Ancak karmaşıklık, ekip �
 
 ### Team Structure
 - **Claude:** Uygulama geliştirme
-- **Gemini:** Denetim & Strateji
-- **n8n:** Otomasyon (şimdilik kullanılmıyor)
+- **Gemini:** İkinci görüş (opsiyonel, kullanıcı istediğinde)
 
 ### Context Management
 - Max 5 dosya/prompt
 - Büyük işler "chunk"lara bölünür
 - Her session başında ilgili dökümanlar okunur
 
-### ⚠️ KRİTİK KURAL: Plan Dışına Çıkma Yasağı
-**Claude, planlanan dışında herhangi bir şeyi kendi kararıyla uygulayamaz.**
-- Plan dosyasında belirtilen model, API veya yaklaşım değiştirilemez
-- Eğer plandaki bir şey mümkün görünmüyorsa, ÖNCE kullanıcıya danışılmalı
-- "Bu çalışmıyor, ben şunu kullanayım" gibi kararlar YASAKTIR
+### ⚠️ KRİTİK KURAL: Plan Dışına Çıkmadan Önce Danış
+**Claude, planlanan dışında bir yaklaşım keşfederse önce kullanıcıya danışır.**
+- Plan dosyasında belirtilen model, API veya yaklaşım değiştirilecekse ÖNCE kullanıcıya sor
+- Daha iyi bir yol bulduğunda: "Plan X diyor ama Y daha iyi çünkü [sebep]. Değiştirelim mi?" formatında danış
+- "Bu çalışmıyor, ben şunu kullanayım" gibi sessiz kararlar YASAKTIR
 - Herhangi bir belirsizlik durumunda kullanıcıya sorulmalı
 
 ### Hafıza Yönetimi
@@ -117,67 +89,39 @@ Her session başında şu dosyalar kontrol edilir:
 
 ---
 
-## ⚠️ 3. Kritik İş Akışı ve Test Standartları
+## ⚠️ 3. Kritik İş Akışı
 
 ### Geliştirme Süreci
-1. **Fikir & Plan:** AI Mentor ile mimari ve FSD katmanlaması netleştirilir
-2. **Test-Driven Development (TDD):** Kritik iş mantığı Vitest ile, UI bileşenleri Storybook ile izole şekilde geliştirilir
-3. **Görsel Regresyon:** 1px hassasiyetiyle görsel snapshot testleri yapılır
-4. **Onay & Uygula:** AI denetiminden geçen kod, başarı kriterleri sağlandığında merge edilir
+1. **Fikir & Plan:** Mimari netleştirilir
+2. **Build Kontrolü:** Her değişiklik sonrası `npm run build` başarılı olmalı
+3. **Deploy & Doğrula:** Deploy sonrası gerçek çalışma kontrol edilir
 
-### Test Piramidi
-```
-        /\
-       /E2E\          (Az sayıda, kritik akışlar)
-      /──────\
-     /Integration\    (Orta sayıda, özellik testleri)
-    /────────────\
-   /  Unit Tests  \   (Çok sayıda, iş mantığı)
-  /────────────────\
-```
+> **NOT:** Test altyapısı (TDD, Vitest, Storybook, görsel regresyon) henüz kurulmamıştır. Gelecek hedeflerden biridir.
 
 ---
 
-## 🛠 4. Teknik Mimari (FSD & Migration)
+## 🛠 4. Teknik Mimari
 
-### Feature-Sliced Design (FSD)
-Katmanlar (aşağıdan yukarıya):
-1. **shared/** - Ortak UI bileşenleri, utils, hooks
-2. **entities/** - İş varlıkları (Product, User, Order)
-3. **features/** - Kullanıcı aksiyonları (AddToCart, Login)
-4. **widgets/** - Kompozit bileşenler (Header, ProductCard)
-5. **pages/** - Sayfa bileşenleri
+### Mevcut Yapı
+```
+functions/src/     → Firebase Cloud Functions (TypeScript)
+  ├── controllers/ → API endpoint'leri (modüler)
+  ├── services/    → İş mantığı servisleri
+  ├── orchestrator/→ AI görsel üretim pipeline'ı
+  └── types/       → TypeScript tipleri
 
-### Migration Path
-Mevcut kodlar "Tombstoning" yöntemiyle kademeli olarak FSD'ye taşınır:
-
-**Adımlar:**
-1. Yeni özellikler FSD yapısında yazılır
-2. Eski kodlar `@deprecated` ile işaretlenir
-3. Kritik refactor ihtiyaçları FEEDBACK.md'ye eklenir
-4. Kademeli migration yapılır
+admin/src/         → Admin Panel (React + Vite + Tailwind)
+  ├── pages/       → Sayfa componentleri
+  ├── components/  → Paylaşılan componentler
+  ├── services/    → API çağrıları
+  └── types/       → TypeScript tipleri
+```
 
 ### Dosya Limitleri
 - **200-500 satır** kuralı esastır
 - 500+ satır aşan kodlar hook veya atomik parçalara ayrılır
-- Component logic ve UI ayrı dosyalarda tutulur
 
-**Örnek:**
-```
-ProductDetail.tsx (350 satır) ✅
-  ├── useProductData.ts (100 satır)
-  ├── ProductInfo.tsx (80 satır)
-  └── ProductActions.tsx (120 satır)
-```
-
-### Z-Index Standartları
-| Katman | Z-Index | Kullanım |
-|--------|---------|----------|
-| Sticky | 100 | Sticky header, navigation |
-| Overlay | 500 | Modal backdrop, overlay |
-| Modal | 1000 | Dialog, modal |
-| Popover | 1500 | Dropdown, tooltip |
-| Toast | 2000 | Notification, snackbar |
+> **NOT:** FSD (Feature-Sliced Design) mimarisi şu an uygulanmamaktadır. Proje büyüdüğünde değerlendirilecektir.
 
 ---
 
@@ -187,16 +131,7 @@ ProductDetail.tsx (350 satır) ✅
 Renk ve boşluklar Figma'dan JSON olarak beslenir (Generated Code).
 
 ### Accessibility (a11y)
-- **WCAG 2.1** standartları zorunlu
-- CI/CD'de otomatik a11y testleri
-- Keyboard navigation desteği şart
-- Screen reader uyumluluğu
-
-**Checklist:**
-- [ ] Tüm butonlar keyboard ile erişilebilir
-- [ ] ARIA labels tanımlı
-- [ ] Renk kontrastı minimum 4.5:1
-- [ ] Focus indicators görünür
+> **NOT:** WCAG 2.1 standartları gelecek hedeflerden biridir. Şu an admin paneli tek kullanıcılıdır.
 
 ### Modern Köşeler (Rounded Corners)
 - **Ana elementler:** `rounded-[32px]`
@@ -217,31 +152,19 @@ Renk ve boşluklar Figma'dan JSON olarak beslenir (Generated Code).
 
 ---
 
-## 🔒 6. Güvenlik ve İzlenebilirlik
-
-### Edge & Security
-- A/B testleri Edge seviyesinde çözülür
-- Tüm SDUI verileri sanitize edilerek XSS önlenir
-- User input her zaman validate edilir
-- Sensitive data loglanmaz
-
-### Observability
-- **Sentry:** Hata izleme ve raporlama
-- **Session Replay:** Kullanıcı deneyimi analizi
-- **Performance Monitoring:** Core Web Vitals takibi
+## 🔒 6. Güvenlik
 
 ### Güvenlik Kuralları
 **DO ✅**
 - Her user input'u validate et
-- Sensitive data encrypt et
-- HTTPS zorunlu
 - Environment variables kullan
+- HTTPS zorunlu
 
 **DON'T ❌**
 - API key'leri kodda bırakma
 - Console.log ile sensitive data logla
-- SQL injection'a açık sorgular
-- XSS'e açık HTML rendering
+
+> **NOT:** Sentry, Session Replay, A/B testleri henüz kurulmamıştır.
 
 ---
 
@@ -345,22 +268,9 @@ const filtered = products.filter(p => !p.isExpired);
 ## 🔄 8. Git & Versiyon Kontrol
 
 ### Branch Stratejisi
-```
-main              → Production branch (korumalı)
-  ├── develop     → Development branch
-  │    ├── feature/user-auth
-  │    ├── feature/payment-gateway
-  │    ├── fix/checkout-bug
-  │    └── refactor/admin-panel
-```
+Şu an tek branch (`main`) kullanılmaktadır. Doğrudan main'e commit yapılır ve deploy edilir.
 
-### Branch İsimlendirme
-```bash
-feature/kısa-açıklama    # Yeni özellik
-fix/bug-açıklaması       # Bug fix
-refactor/alan-adı        # Refactoring
-chore/task-açıklama      # Teknik iş
-```
+> **NOT:** Proje büyüdüğünde develop/feature branch stratejisi değerlendirilecektir.
 
 ### Commit Mesaj Formatı
 ```
@@ -439,6 +349,14 @@ Closes #42
 ---
 
 ## 📜 10. Güncelleme Günlüğü (Changelog)
+
+### [v1.4] - 2026-02-08
+**"Gerçekçilik"** güncellemesi
+- Ölü kurallar temizlendi (FSD, TDD, SDUI, Sentry, A/B, WCAG — henüz uygulanmamış)
+- Branch stratejisi gerçek duruma güncellendi (sadece main)
+- "Plan Dışına Çıkma Yasağı" → "Önce Danış" olarak yumuşatıldı
+- AI Team güncellendi (n8n kaldırıldı, Gemini opsiyonel)
+- Mevcut teknik mimari doğru şekilde belgelendi
 
 ### [v1.3] - 2026-01-03
 **"Pragmatik Uygulama"** güncellemesi

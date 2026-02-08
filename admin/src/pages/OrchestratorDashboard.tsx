@@ -7,6 +7,7 @@ import type {
   ScheduledSlotStatus,
   Theme,
   IssueCategoryId,
+  PreFlightData,
 } from "../types";
 import { ISSUE_CATEGORIES } from "../types";
 import VisualCriticModal from "../components/VisualCriticModal";
@@ -46,11 +47,7 @@ const STAGE_LABELS: Record<string, string> = {
 // gs:// URL'yi public URL'ye çevir
 function convertStorageUrl(url: string | undefined): string | null {
   if (!url) return null;
-
-  // Zaten public URL ise olduğu gibi döndür
   if (url.startsWith("https://")) return url;
-
-  // gs:// formatını public URL'ye çevir
   if (url.startsWith("gs://")) {
     const match = url.match(/gs:\/\/([^/]+)\/(.+)/);
     if (match) {
@@ -58,7 +55,6 @@ function convertStorageUrl(url: string | undefined): string | null {
       return `https://storage.googleapis.com/${bucket}/${path}`;
     }
   }
-
   return null;
 }
 
@@ -95,6 +91,7 @@ export default function OrchestratorDashboard() {
   const [validationWarnings, setValidationWarnings] = useState<Array<{ type: "info" | "warning" | "error"; message: string }>>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationLoading, setValidationLoading] = useState(false);
+  const [preFlightData, setPreFlightData] = useState<PreFlightData | null>(null);
 
   // Tema seçimi
   const [themes, setThemes] = useState<Theme[]>([]);
@@ -142,14 +139,11 @@ export default function OrchestratorDashboard() {
       startLoading("load-data", "Veriler yükleniyor...");
     }
     try {
-      // Tek API çağrısı ile tüm verileri yükle (3 ayrı çağrı yerine)
-      // Bu, cold start süresini %60-70 azaltır
       const { stats: statsData, slots: slotsData, themes: themesData, aiStats, aiStatsMonthly, loadTimeMs } =
-        await api.loadDashboardData(50);
+        await api.loadDashboardData(10);
 
       console.log(`[Dashboard] Veriler ${loadTimeMs}ms'de yüklendi`);
 
-      // AI stats'ları stats objesine ekle
       setStats({
         ...statsData,
         aiStats,
@@ -158,12 +152,11 @@ export default function OrchestratorDashboard() {
       setSlots(slotsData);
       setThemes(themesData);
     } catch (err) {
-      // Fallback: Yeni endpoint çalışmazsa eski yönteme dön
       console.warn("[Dashboard] loadDashboardData başarısız, fallback deneniyor...", err);
       try {
         const [statsData, slotsData, themesData] = await Promise.all([
           api.getOrchestratorDashboardStats(),
-          api.listScheduledSlots({ limit: 50 }),
+          api.listScheduledSlots({ limit: 10 }),
           api.listThemes().catch(() => []),
         ]);
         setStats(statsData);
@@ -236,7 +229,6 @@ export default function OrchestratorDashboard() {
     setShowValidationModal(false);
 
     try {
-      // themeId, aspectRatio ve isRandomMode ile üret
       const result = await api.orchestratorGenerateNow(
         selectedThemeId || undefined,
         selectedAspectRatio,
@@ -245,15 +237,12 @@ export default function OrchestratorDashboard() {
       setCurrentSlotId(result.slotId);
 
       if (result.success) {
-        // Pipeline arka planda başladı, polling ile takip edilecek
-        // "completed" DEĞİL, başlangıç durumu set ediyoruz
         setProgressInfo({
           stage: "asset-selection",
           stageIndex: 1,
           totalStages: 7,
           status: "generating",
         });
-        // loadData() burada çağrılmaz - polling tamamlandığında çağrılacak
       } else {
         setProgressInfo({
           stage: "failed",
@@ -278,30 +267,18 @@ export default function OrchestratorDashboard() {
 
   // Hemen üret (pre-flight validation ile)
   const handleGenerateNow = async () => {
-    // Rastgele modda veya tema seçilmemişse direkt üret
     if (isRandomMode || !selectedThemeId) {
       runGenerateAfterValidation();
       return;
     }
 
-    // Pre-flight validation
     setValidationLoading(true);
     try {
       const validation = await api.validateBeforeGenerate(selectedThemeId);
-      if (validation.warnings.length > 0) {
-        setValidationWarnings(validation.warnings);
-        setShowValidationModal(true);
-        if (!validation.canProceed) {
-          // Hata var, devam edilemez
-          return;
-        }
-        // Uyarılar var ama devam edilebilir — modal'da "Devam Et" gösterilecek
-        return;
-      }
-      // Uyarı yok — direkt üret
-      runGenerateAfterValidation();
+      setValidationWarnings(validation.warnings);
+      setPreFlightData(validation.preFlightData || null);
+      setShowValidationModal(true);
     } catch {
-      // Validation endpoint çalışmazsa direkt üret
       runGenerateAfterValidation();
     } finally {
       setValidationLoading(false);
@@ -328,7 +305,6 @@ export default function OrchestratorDashboard() {
     }
   };
 
-  // Slot işlemleri
   const handleDeleteSlot = async (slotId: string) => {
     if (!confirm("Bu slot silinecek. Emin misiniz?")) return;
     setActionLoading(slotId);
@@ -407,7 +383,6 @@ export default function OrchestratorDashboard() {
     }
   };
 
-  // Detay modal'ını aç
   const openDetailModal = async (slot: ScheduledSlot) => {
     try {
       const fullSlot = await api.getSlotDetail(slot.id);
@@ -418,14 +393,12 @@ export default function OrchestratorDashboard() {
     }
   };
 
-  // Sorun bildir
   const handleReportIssue = async () => {
     if (!selectedSlot) return;
 
     setReportLoading(true);
     startLoading("report-issue", "Geri bildirim gönderiliyor...");
     try {
-      // Bağlam bilgilerini topla
       const pipelineResult = selectedSlot.pipelineResult;
 
       await api.createFeedback({
@@ -486,31 +459,170 @@ export default function OrchestratorDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* ==================== MODALS ==================== */}
+
       {/* Pre-flight Validation Modal */}
       {showValidationModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto py-8">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl mx-4 shadow-xl">
             <h3 className="text-lg font-semibold mb-4">Üretim Kontrolü</h3>
 
-            <div className="space-y-2 mb-6">
-              {validationWarnings.map((w, i) => (
-                <div
-                  key={i}
-                  className={`p-3 rounded-lg text-sm ${
-                    w.type === "error" ? "bg-red-50 text-red-700 border border-red-200" :
-                    w.type === "warning" ? "bg-amber-50 text-amber-700 border border-amber-200" :
-                    "bg-blue-50 text-blue-700 border border-blue-200"
-                  }`}
-                >
-                  {w.type === "error" ? "❌" : w.type === "warning" ? "⚠️" : "ℹ️"} {w.message}
+            {preFlightData ? (
+              <div className="space-y-4 mb-6">
+                {/* Tema & Senaryo */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-purple-50 rounded-lg p-3">
+                    <div className="text-xs font-medium text-purple-600 mb-1">Tema</div>
+                    <div className="font-semibold text-gray-800">{preFlightData.theme.name}</div>
+                    <div className="flex gap-1 mt-1">
+                      {preFlightData.theme.petAllowed && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Pet</span>}
+                      {preFlightData.theme.accessoryAllowed && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Aksesuar</span>}
+                    </div>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3">
+                    <div className="text-xs font-medium text-blue-600 mb-1">
+                      Senaryo {preFlightData.scenarioCount > 1 && <span className="text-blue-400">({preFlightData.scenarioCount} aday)</span>}
+                    </div>
+                    <div className="font-semibold text-gray-800">{preFlightData.scenario.name}</div>
+                    {preFlightData.scenario.description && (
+                      <div className="text-xs text-gray-500 mt-1 line-clamp-2">{preFlightData.scenario.description}</div>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Pipeline Özeti */}
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs font-medium text-gray-500 mb-2">Pipeline Özeti</div>
+                  <div className="flex flex-wrap gap-2">
+                    {preFlightData.scenario.suggestedProducts.length > 0 && (
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">
+                        {preFlightData.scenario.suggestedProducts.join(", ")}
+                      </span>
+                    )}
+                    {preFlightData.scenario.compositionId && (
+                      <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+                        {preFlightData.scenario.compositionId}
+                      </span>
+                    )}
+                    {preFlightData.scenario.includesHands && preFlightData.scenario.handPose && (
+                      <span className="text-xs bg-pink-100 text-pink-800 px-2 py-1 rounded-full">
+                        {preFlightData.scenario.handPose}
+                      </span>
+                    )}
+                    {!preFlightData.scenario.includesHands && (
+                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">El yok</span>
+                    )}
+                    {preFlightData.beverage && !(preFlightData.theme.preferredTags?.cup?.includes("__none__")) && (
+                      <span className="text-xs bg-cyan-100 text-cyan-800 px-2 py-1 rounded-full">
+                        {preFlightData.beverage.defaultBeverage}
+                        {preFlightData.beverage.alternateBeverage && ` / ${preFlightData.beverage.alternateBeverage}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Asset Durumu */}
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs font-medium text-gray-500 mb-2">Asset Durumu</div>
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    {([
+                      { label: "Ürün", total: preFlightData.assets.products.total, preferred: undefined, tags: preFlightData.scenario.suggestedProducts.length > 0 ? preFlightData.scenario.suggestedProducts : undefined },
+                      { label: "Masa", total: preFlightData.assets.tables.total, preferred: preFlightData.assets.tables.preferred, tags: preFlightData.theme.preferredTags?.table },
+                      { label: "Tabak", total: preFlightData.assets.plates.total, preferred: preFlightData.assets.plates.preferred, tags: preFlightData.theme.preferredTags?.plate },
+                      { label: "Fincan", total: preFlightData.assets.cups.total, preferred: preFlightData.assets.cups.preferred, tags: preFlightData.theme.preferredTags?.cup },
+                    ] as const).map((item) => {
+                      const isNone = item.tags?.includes("__none__");
+                      const activeTags = item.tags?.filter(t => t !== "__none__") || [];
+                      return (
+                        <div key={item.label} className={`bg-white rounded-lg p-2 border ${isNone ? "opacity-50" : ""}`}>
+                          <div className="text-xs text-gray-500">{item.label}</div>
+                          {isNone ? (
+                            <div className="text-sm font-medium text-gray-400 mt-1">Yok</div>
+                          ) : (
+                            <>
+                              <div className={`text-lg font-bold ${item.total === 0 ? "text-red-500" : "text-gray-800"}`}>
+                                {item.total}
+                              </div>
+                              {item.preferred !== undefined && activeTags.length > 0 && (
+                                <div className={`text-xs ${item.preferred > 0 ? "text-green-600" : "text-amber-600"}`}>
+                                  {item.preferred} tercih
+                                </div>
+                              )}
+                              {activeTags.length > 0 && (
+                                <div className="text-[10px] text-gray-400 truncate" title={activeTags.join(", ")}>
+                                  {activeTags.join(", ")}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Atmosfer Preset'leri */}
+                {(preFlightData.theme.presets.weather || preFlightData.theme.presets.lighting || preFlightData.theme.presets.atmosphere) && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-xs font-medium text-gray-500 mb-2">Atmosfer</div>
+                    <div className="flex flex-wrap gap-2">
+                      {preFlightData.theme.presets.weather && (
+                        <span className="text-xs bg-sky-100 text-sky-800 px-2 py-1 rounded-full">
+                          {preFlightData.theme.presets.weather}
+                        </span>
+                      )}
+                      {preFlightData.theme.presets.lighting && (
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                          {preFlightData.theme.presets.lighting}
+                        </span>
+                      )}
+                      {preFlightData.theme.presets.atmosphere && (
+                        <span className="text-xs bg-violet-100 text-violet-800 px-2 py-1 rounded-full">
+                          {preFlightData.theme.presets.atmosphere}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Uyarılar */}
+                {validationWarnings.filter(w => w.type !== "info").length > 0 && (
+                  <div className="space-y-2">
+                    {validationWarnings.filter(w => w.type !== "info").map((w, i) => (
+                      <div
+                        key={i}
+                        className={`p-3 rounded-lg text-sm ${
+                          w.type === "error" ? "bg-red-50 text-red-700 border border-red-200" :
+                          "bg-amber-50 text-amber-700 border border-amber-200"
+                        }`}
+                      >
+                        {w.type === "error" ? "❌" : "⚠️"} {w.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2 mb-6">
+                {validationWarnings.map((w, i) => (
+                  <div
+                    key={i}
+                    className={`p-3 rounded-lg text-sm ${
+                      w.type === "error" ? "bg-red-50 text-red-700 border border-red-200" :
+                      w.type === "warning" ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                      "bg-blue-50 text-blue-700 border border-blue-200"
+                    }`}
+                  >
+                    {w.type === "error" ? "❌" : w.type === "warning" ? "⚠️" : "ℹ️"} {w.message}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex gap-3">
               {!validationWarnings.some(w => w.type === "error") && (
                 <button
-                  onClick={runGenerateAfterValidation}
+                  onClick={() => { setShowValidationModal(false); runGenerateAfterValidation(); }}
                   className="flex-1 btn-primary"
                 >
                   Devam Et
@@ -531,198 +643,181 @@ export default function OrchestratorDashboard() {
       {showProgressModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold mb-4">
-              {progressInfo?.status === "failed" ? "❌ Üretim Başarısız" :
-                progressInfo?.status === "awaiting_approval" ? "✅ Üretim Tamamlandı!" :
-                  "⚙️ İçerik Üretiliyor..."}
-            </h3>
+            <h3 className="text-lg font-semibold mb-4">Üretim Durumu</h3>
 
-            {/* Progress Bar */}
-            <div className="mb-4">
-              <div className="flex justify-between text-sm text-gray-600 mb-1">
-                <span>{progressInfo ? STAGE_LABELS[progressInfo.stage] || progressInfo.stage : "Başlatılıyor..."}</span>
-                <span>{progressInfo ? `${progressInfo.stageIndex}/${progressInfo.totalStages}` : "0/7"}</span>
+            {progressInfo ? (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-3xl font-mono font-bold text-gray-700">{formatElapsedTime(elapsedTime)}</p>
+                </div>
+
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div
+                    className="bg-brand-blue h-2.5 rounded-full transition-all duration-500"
+                    style={{ width: `${((progressInfo.stageIndex) / progressInfo.totalStages) * 100}%` }}
+                  />
+                </div>
+
+                <p className="text-center text-sm text-gray-600">
+                  {STAGE_LABELS[progressInfo.stage] || progressInfo.stage}
+                  <span className="text-gray-400 ml-2">({progressInfo.stageIndex}/{progressInfo.totalStages})</span>
+                </p>
+
+                {progressInfo.error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    {progressInfo.error}
+                  </div>
+                )}
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className={`h-3 rounded-full transition-all duration-500 ${progressInfo?.status === "failed" ? "bg-red-500" :
-                    progressInfo?.status === "awaiting_approval" ? "bg-green-500" :
-                      "bg-brand-blue"
-                    }`}
-                  style={{ width: `${progressInfo ? (progressInfo.stageIndex / progressInfo.totalStages) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Time Info */}
-            <div className="text-sm text-gray-500 border-t pt-3">
-              Geçen süre: {formatElapsedTime(elapsedTime)}
-            </div>
-
-            {/* Error */}
-            {progressInfo?.error && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-700">{progressInfo.error}</p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            {generating && progressInfo?.status !== "failed" && progressInfo?.status !== "awaiting_approval" ? (
-              <button
-                onClick={handleCancelPipeline}
-                className="mt-4 w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-              >
-                🛑 İptal Et
-              </button>
             ) : (
-              <button
-                onClick={() => { setShowProgressModal(false); setCurrentSlotId(null); }}
-                className="mt-4 w-full btn-primary"
-              >
-                Kapat
-              </button>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-3xl font-mono font-bold text-gray-700">{formatElapsedTime(elapsedTime)}</p>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                  <div className="bg-brand-blue h-2.5 rounded-full w-1/3 animate-[indeterminate_1.5s_ease-in-out_infinite]" />
+                </div>
+                <p className="text-center text-sm text-gray-500">Pipeline başlatılıyor...</p>
+              </div>
             )}
+
+            <div className="flex gap-3 mt-6">
+              {progressInfo?.status === "awaiting_approval" || progressInfo?.status === "failed" ? (
+                <button
+                  onClick={() => { setShowProgressModal(false); setCurrentSlotId(null); }}
+                  className="flex-1 btn-primary"
+                >
+                  Tamam
+                </button>
+              ) : (
+                <button
+                  onClick={handleCancelPipeline}
+                  className="flex-1 btn-secondary text-red-600"
+                >
+                  İptal Et
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* Detail Modal */}
       {showDetailModal && selectedSlot && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-xl max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Slot Detayları</h3>
-              <button onClick={() => setShowDetailModal(false)} className="text-gray-500 hover:text-gray-700">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto py-8">
+          <div className="bg-white rounded-2xl w-full max-w-4xl mx-4 shadow-xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Üretim Detayı</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{formatDate(selectedSlot.createdAt)}</p>
+              </div>
+              <button onClick={() => setShowDetailModal(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
               {/* Sol: Görsel */}
-              <div>
+              <div className="bg-gray-50 flex items-center justify-center p-6 min-h-[300px]">
                 {(() => {
-                  const modalStorageUrl = convertStorageUrl(selectedSlot.pipelineResult?.generatedImage?.storageUrl);
-                  const modalBase64Url = selectedSlot.pipelineResult?.generatedImage?.imageBase64
+                  const storageUrl = convertStorageUrl(selectedSlot.pipelineResult?.generatedImage?.storageUrl);
+                  const base64Url = selectedSlot.pipelineResult?.generatedImage?.imageBase64
                     ? `data:${selectedSlot.pipelineResult.generatedImage.mimeType};base64,${selectedSlot.pipelineResult.generatedImage.imageBase64}`
                     : null;
-                  const modalImageUrl = modalStorageUrl || modalBase64Url;
+                  const imageUrl = storageUrl || base64Url;
+                  return imageUrl ? (
+                    <img src={imageUrl} alt="Üretilen Görsel" className="max-h-[500px] w-auto rounded-xl shadow-lg object-contain" />
+                  ) : (
+                    <div className="text-gray-400 text-center">
+                      <div className="text-4xl mb-2">🎬</div>
+                      <p className="text-sm">Görsel henüz üretilmedi</p>
+                    </div>
+                  );
+                })()}
+              </div>
 
-                  if (modalImageUrl) {
-                    return (
-                      <img
-                        src={modalImageUrl}
-                        alt="Üretilen görsel"
-                        className="w-full rounded-xl shadow-lg"
-                      />
-                    );
-                  }
+              {/* Sağ: Detaylar */}
+              <div className="p-5 space-y-4 overflow-y-auto max-h-[600px]">
+                {/* Durum */}
+                {(() => {
+                  const config = STATUS_CONFIG[selectedSlot.status] || STATUS_CONFIG.pending;
                   return (
-                    <div className="w-full aspect-[4/5] bg-gray-100 rounded-xl flex items-center justify-center">
-                      <span className="text-gray-400">Görsel yok</span>
+                    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${config.bg} ${config.text}`}>
+                      {config.icon} {config.label}
                     </div>
                   );
                 })()}
 
                 {/* Kalite Skoru */}
                 {selectedSlot.pipelineResult?.qualityControl && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-xl">
-                    <h4 className="font-medium mb-2">Kalite Skoru</h4>
-                    <div className="text-3xl font-bold text-brand-blue">
-                      {selectedSlot.pipelineResult.qualityControl.score}/10
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-gray-700">Kalite Skoru</span>
+                      <span className={`text-xl font-bold ${
+                        (selectedSlot.pipelineResult.qualityControl.score || 0) >= 7 ? "text-green-600" :
+                        (selectedSlot.pipelineResult.qualityControl.score || 0) >= 5 ? "text-amber-600" : "text-red-600"
+                      }`}>
+                        {selectedSlot.pipelineResult.qualityControl.score}/10
+                      </span>
                     </div>
-                    <div className="mt-2 space-y-1 text-sm">
+                    <div className="grid grid-cols-5 gap-2">
                       {Object.entries(selectedSlot.pipelineResult.qualityControl.evaluation || {}).map(([key, val]) => (
-                        <div key={key} className="flex justify-between">
-                          <span className="text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
-                          <span className="font-medium">{val}/10</span>
+                        <div key={key} className="text-center">
+                          <div className="text-xs text-gray-500 truncate">{key}</div>
+                          <div className="text-sm font-semibold">{val as number}/10</div>
                         </div>
                       ))}
                     </div>
+                    {selectedSlot.pipelineResult.qualityControl.feedback && (
+                      <p className="text-xs text-gray-600 mt-3 bg-white p-2 rounded-lg">{selectedSlot.pipelineResult.qualityControl.feedback}</p>
+                    )}
                   </div>
                 )}
 
-                {/* Görsel Formatı */}
-                {selectedSlot.pipelineResult?.optimizedPrompt?.aspectRatio && (
-                  <div className="mt-3 p-3 bg-blue-50 rounded-xl flex items-center justify-between">
-                    <span className="text-sm text-blue-800">📐 Görsel Formatı</span>
-                    <span className="font-medium text-blue-900">
-                      {selectedSlot.pipelineResult.optimizedPrompt.aspectRatio === "1:1" && "Kare (1:1)"}
-                      {selectedSlot.pipelineResult.optimizedPrompt.aspectRatio === "3:4" && "Portre (3:4)"}
-                      {selectedSlot.pipelineResult.optimizedPrompt.aspectRatio === "9:16" && "Dikey (9:16)"}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Sağ: Detaylar */}
-              <div className="space-y-4">
-                {/* Durum */}
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_CONFIG[selectedSlot.status]?.bg} ${STATUS_CONFIG[selectedSlot.status]?.text}`}>
-                    {STATUS_CONFIG[selectedSlot.status]?.icon} {STATUS_CONFIG[selectedSlot.status]?.label}
-                  </span>
-                  <span className="text-sm text-gray-500">
-                    {formatDate(selectedSlot.createdAt)}
-                  </span>
-                </div>
-
-                {/* Senaryo & Kompozisyon */}
+                {/* Senaryo */}
                 {selectedSlot.pipelineResult?.scenarioSelection && (
-                  <div className="p-4 bg-purple-50 rounded-xl">
-                    <h4 className="font-medium mb-2 text-purple-800">🎬 Senaryo & Kompozisyon</h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      {/* Tema bilgisi - varsa en üstte göster */}
-                      {selectedSlot.pipelineResult.scenarioSelection.themeName && (
-                        <div className="col-span-2 pb-2 mb-2 border-b border-purple-200">
-                          <span className="text-gray-500">Tema:</span>
-                          <p className="font-medium text-purple-700">🎨 {selectedSlot.pipelineResult.scenarioSelection.themeName}</p>
-                        </div>
-                      )}
-                      <div>
-                        <span className="text-gray-500">Senaryo:</span>
-                        <p className="font-medium">{selectedSlot.pipelineResult.scenarioSelection.scenarioName || selectedSlot.pipelineResult.scenarioSelection.scenarioId}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Kompozisyon:</span>
-                        <p className="font-medium">{selectedSlot.pipelineResult.scenarioSelection.composition || selectedSlot.pipelineResult.scenarioSelection.compositionId}</p>
-                      </div>
-                      {selectedSlot.pipelineResult.scenarioSelection.handStyle && (
-                        <div>
-                          <span className="text-gray-500">El Stili:</span>
-                          <p className="font-medium">{selectedSlot.pipelineResult.scenarioSelection.handStyleDetails?.name || selectedSlot.pipelineResult.scenarioSelection.handStyle}</p>
-                        </div>
-                      )}
-                      {selectedSlot.pipelineResult.scenarioSelection.includesHands !== undefined && (
-                        <div>
-                          <span className="text-gray-500">El İçeriyor:</span>
-                          <p className="font-medium">{selectedSlot.pipelineResult.scenarioSelection.includesHands ? "✅ Evet" : "❌ Hayır"}</p>
-                        </div>
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Senaryo</h4>
+                    <p className="font-semibold text-gray-900">{selectedSlot.pipelineResult.scenarioSelection.scenarioName}</p>
+                    {selectedSlot.pipelineResult.scenarioSelection.themeName && (
+                      <p className="text-xs text-purple-600 mt-1">Tema: {selectedSlot.pipelineResult.scenarioSelection.themeName}</p>
+                    )}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <span className="text-xs bg-white px-2 py-0.5 rounded border">{selectedSlot.pipelineResult.scenarioSelection.composition}</span>
+                      {selectedSlot.pipelineResult.scenarioSelection.includesHands && (
+                        <span className="text-xs bg-pink-50 text-pink-700 px-2 py-0.5 rounded border border-pink-200">
+                          {selectedSlot.pipelineResult.scenarioSelection.handStyleDetails?.name || selectedSlot.pipelineResult.scenarioSelection.handStyle || "El var"}
+                        </span>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Kullanılan Asset'ler */}
+                {/* Asset Seçimi */}
                 {selectedSlot.pipelineResult?.assetSelection && (
-                  <div className="p-4 bg-gray-50 rounded-xl">
-                    <h4 className="font-medium mb-3">🖼️ Kullanılan Asset'ler</h4>
-                    <div className="space-y-3">
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Seçilen Görseller</h4>
+                    <div className="space-y-2">
                       {/* Ürün */}
-                      {selectedSlot.pipelineResult.assetSelection.product && (
+                      <div className="flex items-center gap-3">
+                        {selectedSlot.pipelineResult.assetSelection.product.storageUrl && (
+                          <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.product.storageUrl) || ""} alt="Ürün" className="w-10 h-10 object-cover rounded-lg" />
+                        )}
+                        <div>
+                          <p className="text-xs font-medium">Ürün</p>
+                          <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.product.subType} - {selectedSlot.pipelineResult.assetSelection.product.filename}</p>
+                        </div>
+                      </div>
+                      {/* Masa */}
+                      {selectedSlot.pipelineResult.assetSelection.table && (
                         <div className="flex items-center gap-3">
-                          {selectedSlot.pipelineResult.assetSelection.product.storageUrl && (
-                            <img
-                              src={selectedSlot.pipelineResult.assetSelection.product.storageUrl}
-                              alt="Ürün"
-                              className="w-12 h-12 object-cover rounded-lg"
-                            />
+                          {selectedSlot.pipelineResult.assetSelection.table.storageUrl && (
+                            <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.table.storageUrl) || ""} alt="Masa" className="w-10 h-10 object-cover rounded-lg" />
                           )}
                           <div>
-                            <p className="text-sm font-medium">🥐 Ürün</p>
-                            <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.product.filename}</p>
+                            <p className="text-xs font-medium">Masa</p>
+                            <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.table.filename}</p>
                           </div>
                         </div>
                       )}
@@ -730,14 +825,10 @@ export default function OrchestratorDashboard() {
                       {selectedSlot.pipelineResult.assetSelection.plate && (
                         <div className="flex items-center gap-3">
                           {selectedSlot.pipelineResult.assetSelection.plate.storageUrl && (
-                            <img
-                              src={selectedSlot.pipelineResult.assetSelection.plate.storageUrl}
-                              alt="Tabak"
-                              className="w-12 h-12 object-cover rounded-lg"
-                            />
+                            <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.plate.storageUrl) || ""} alt="Tabak" className="w-10 h-10 object-cover rounded-lg" />
                           )}
                           <div>
-                            <p className="text-sm font-medium">🍽️ Tabak</p>
+                            <p className="text-xs font-medium">Tabak</p>
                             <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.plate.filename}</p>
                           </div>
                         </div>
@@ -746,14 +837,10 @@ export default function OrchestratorDashboard() {
                       {selectedSlot.pipelineResult.assetSelection.cup && (
                         <div className="flex items-center gap-3">
                           {selectedSlot.pipelineResult.assetSelection.cup.storageUrl && (
-                            <img
-                              src={selectedSlot.pipelineResult.assetSelection.cup.storageUrl}
-                              alt="Fincan"
-                              className="w-12 h-12 object-cover rounded-lg"
-                            />
+                            <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.cup.storageUrl) || ""} alt="Fincan" className="w-10 h-10 object-cover rounded-lg" />
                           )}
                           <div>
-                            <p className="text-sm font-medium">☕ Fincan</p>
+                            <p className="text-xs font-medium">Fincan</p>
                             <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.cup.filename}</p>
                           </div>
                         </div>
@@ -762,30 +849,22 @@ export default function OrchestratorDashboard() {
                       {selectedSlot.pipelineResult.assetSelection.pet && (
                         <div className="flex items-center gap-3">
                           {selectedSlot.pipelineResult.assetSelection.pet.storageUrl && (
-                            <img
-                              src={selectedSlot.pipelineResult.assetSelection.pet.storageUrl}
-                              alt="Pet"
-                              className="w-12 h-12 object-cover rounded-lg"
-                            />
+                            <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.pet.storageUrl) || ""} alt="Pet" className="w-10 h-10 object-cover rounded-lg" />
                           )}
                           <div>
-                            <p className="text-sm font-medium">🐕 Evcil Hayvan</p>
+                            <p className="text-xs font-medium">Evcil Hayvan</p>
                             <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.pet.filename}</p>
                           </div>
                         </div>
                       )}
-                      {/* Accessory */}
+                      {/* Aksesuar */}
                       {selectedSlot.pipelineResult.assetSelection.accessory && (
                         <div className="flex items-center gap-3">
                           {selectedSlot.pipelineResult.assetSelection.accessory.storageUrl && (
-                            <img
-                              src={selectedSlot.pipelineResult.assetSelection.accessory.storageUrl}
-                              alt="Aksesuar"
-                              className="w-12 h-12 object-cover rounded-lg"
-                            />
+                            <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.accessory.storageUrl) || ""} alt="Aksesuar" className="w-10 h-10 object-cover rounded-lg" />
                           )}
                           <div>
-                            <p className="text-sm font-medium">✨ Aksesuar</p>
+                            <p className="text-xs font-medium">Aksesuar</p>
                             <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.accessory.subType} - {selectedSlot.pipelineResult.assetSelection.accessory.filename}</p>
                           </div>
                         </div>
@@ -797,7 +876,7 @@ export default function OrchestratorDashboard() {
                 {/* Maliyet */}
                 {selectedSlot.pipelineResult?.totalCost !== undefined && (
                   <div className="p-3 bg-amber-50 rounded-xl flex items-center justify-between">
-                    <span className="text-sm text-amber-800">💰 Üretim Maliyeti</span>
+                    <span className="text-sm text-amber-800">Üretim Maliyeti</span>
                     <span className="font-bold text-amber-900">${selectedSlot.pipelineResult.totalCost.toFixed(4)}</span>
                   </div>
                 )}
@@ -813,22 +892,22 @@ export default function OrchestratorDashboard() {
                 )}
 
                 {/* Aksiyonlar */}
-                <div className="pt-4 border-t space-y-3">
+                <div className="pt-4 border-t space-y-2">
                   {selectedSlot.status === "awaiting_approval" && (
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
                       <button
                         onClick={() => handleApproveSlot(selectedSlot.id)}
                         disabled={actionLoading === selectedSlot.id}
-                        className="flex-1 btn-primary bg-green-600 hover:bg-green-700"
+                        className="flex-1 py-2 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-xl disabled:opacity-50"
                       >
-                        {actionLoading === selectedSlot.id ? "..." : "✅ Onayla ve Yayınla"}
+                        {actionLoading === selectedSlot.id ? "..." : "Onayla ve Yayınla"}
                       </button>
                       <button
                         onClick={() => handleRejectSlot(selectedSlot.id)}
                         disabled={actionLoading === selectedSlot.id}
-                        className="flex-1 btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+                        className="flex-1 py-2 text-sm font-medium border border-red-200 text-red-600 rounded-xl hover:bg-red-50 disabled:opacity-50"
                       >
-                        ❌ Reddet
+                        Reddet
                       </button>
                     </div>
                   )}
@@ -837,9 +916,9 @@ export default function OrchestratorDashboard() {
                     <button
                       onClick={() => handleResendTelegram(selectedSlot.id)}
                       disabled={actionLoading === selectedSlot.id}
-                      className="w-full btn-secondary"
+                      className="w-full py-2 text-sm font-medium border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 disabled:opacity-50"
                     >
-                      📤 Telegram'a Tekrar Gönder
+                      Telegram'a Tekrar Gönder
                     </button>
                   )}
 
@@ -847,15 +926,12 @@ export default function OrchestratorDashboard() {
                     <button
                       onClick={() => handleRetrySlot(selectedSlot.id)}
                       disabled={actionLoading === selectedSlot.id}
-                      className="w-full btn-primary"
+                      className="w-full py-2 text-sm font-medium bg-brand-blue text-white rounded-xl hover:opacity-90 disabled:opacity-50"
                     >
-                      🔄 Yeniden Dene
+                      Yeniden Dene
                     </button>
                   )}
 
-
-
-                  {/* Analiz Et (Visual Critic) */}
                   {selectedSlot.pipelineResult?.generatedImage && (
                     <button
                       onClick={() => {
@@ -868,28 +944,27 @@ export default function OrchestratorDashboard() {
                         });
                         setShowCriticModal(true);
                       }}
-                      className="w-full btn-secondary text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                      className="w-full py-2 text-sm font-medium border border-indigo-200 text-indigo-600 rounded-xl hover:bg-indigo-50"
                     >
-                      👁️ Analiz Et (Visual Critic)
+                      Analiz Et (Visual Critic)
                     </button>
                   )}
 
-                  {/* Sorun Bildir butonu - sadece görsel üretilmişse göster */}
                   {selectedSlot.pipelineResult?.generatedImage && (
                     <button
                       onClick={() => setShowReportModal(true)}
-                      className="w-full btn-secondary text-amber-600 border-amber-200 hover:bg-amber-50"
+                      className="w-full py-2 text-sm font-medium border border-amber-200 text-amber-600 rounded-xl hover:bg-amber-50"
                     >
-                      ⚠️ Sorun Bildir
+                      Sorun Bildir
                     </button>
                   )}
 
                   <button
                     onClick={() => handleDeleteSlot(selectedSlot.id)}
                     disabled={actionLoading === selectedSlot.id}
-                    className="w-full btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+                    className="w-full py-2 text-sm font-medium border border-red-200 text-red-600 rounded-xl hover:bg-red-50 disabled:opacity-50"
                   >
-                    🗑️ Sil
+                    Sil
                   </button>
                 </div>
               </div>
@@ -907,11 +982,8 @@ export default function OrchestratorDashboard() {
               Bu geri bildirim, AI'ın bir sonraki üretimde daha iyi sonuçlar vermesine yardımcı olacak.
             </p>
 
-            {/* Kategori Seçimi */}
             <div className="space-y-2 mb-4">
-              <label className="block text-sm font-medium text-gray-700">
-                Sorun Türü
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Sorun Türü</label>
               <select
                 value={reportCategory}
                 onChange={(e) => setReportCategory(e.target.value as IssueCategoryId)}
@@ -925,11 +997,8 @@ export default function OrchestratorDashboard() {
               </select>
             </div>
 
-            {/* Özel Not */}
             <div className="space-y-2 mb-6">
-              <label className="block text-sm font-medium text-gray-700">
-                Ek Açıklama (opsiyonel)
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Ek Açıklama (opsiyonel)</label>
               <textarea
                 value={reportNote}
                 onChange={(e) => setReportNote(e.target.value)}
@@ -939,7 +1008,6 @@ export default function OrchestratorDashboard() {
               />
             </div>
 
-            {/* Butonlar */}
             <div className="flex gap-3">
               <button
                 onClick={handleReportIssue}
@@ -971,349 +1039,347 @@ export default function OrchestratorDashboard() {
         />
       )}
 
+      {/* ==================== MAIN CONTENT ==================== */}
+
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Orchestrator Dashboard</h1>
-          <p className="text-gray-500 mt-1">AI destekli otomatik içerik üretimi</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Maestro AI</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Otomatik içerik üretim pipeline'ı</p>
         </div>
-        <button onClick={() => loadData(true)} className="btn-secondary">
-          Yenile
-        </button>
+        <div className="flex items-center gap-3">
+          {stats && (
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                {stats.assets.total} asset
+              </span>
+              <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                {stats.pipeline.totalRuns} üretim
+              </span>
+              <span className="px-2.5 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full">
+                ${stats.pipeline.totalCost || "0.00"}
+              </span>
+            </div>
+          )}
+          <button
+            onClick={() => loadData(true)}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Yenile"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Asset Uyarısı */}
       {stats?.assets.total === 0 && (
-        <div className="card bg-yellow-50 border-2 border-yellow-300">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
           <div className="flex items-start gap-3">
             <span className="text-2xl">⚠️</span>
             <div>
-              <p className="font-semibold text-yellow-800">Henüz Görsel Yok!</p>
-              <p className="text-yellow-700 text-sm mt-1">
+              <p className="font-semibold text-amber-800">Henüz Görsel Yok!</p>
+              <p className="text-amber-700 text-sm mt-1">
                 İçerik üretmek için önce ürün görselleri yüklemeniz gerekiyor.
               </p>
-              <a href="/assets" className="inline-block mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-medium hover:bg-yellow-700">
-                Görseller Sayfasına Git →
+              <a href="/assets" className="inline-block mt-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700">
+                Görseller Sayfasına Git
               </a>
             </div>
           </div>
         </div>
       )}
 
-      {/* Hızlı Üretim */}
-      <div className="card bg-gradient-to-br from-brand-blue/10 to-brand-blue/5">
-        <h2 className="text-lg font-semibold mb-4">Hemen İçerik Üret</h2>
-        <div className="flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Görsel Formatı</label>
-            <select
-              value={selectedAspectRatio}
-              onChange={(e) => setSelectedAspectRatio(e.target.value as InstagramAspectRatio)}
-              className="input w-56"
-            >
-              {Object.entries(ASPECT_RATIO_OPTIONS).map(([value, option]) => (
-                <option key={value} value={value}>
-                  {option.label} ({value}) - {option.usage}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={handleGenerateNow}
-            disabled={generating || validationLoading}
-            className="btn-primary disabled:opacity-50"
-          >
-            {validationLoading ? "Kontrol ediliyor..." : generating ? "Üretiliyor..." : "🚀 Şimdi Üret"}
-          </button>
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isRandomMode}
-              onChange={(e) => setIsRandomMode(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            Rastgele üret
-          </label>
-        </div>
+      {/* ==================== TWO COLUMN LAYOUT ==================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        {/* Tema Seçici - Kartlı Görünüm */}
-        {themes.length > 0 && (
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tema Seçimi
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {/* Tema Yok Seçeneği */}
-              <button
-                onClick={() => setSelectedThemeId("")}
-                className={`p-3 rounded-xl border-2 text-left transition-all ${selectedThemeId === ""
-                  ? "border-gray-400 bg-gray-50"
-                  : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🎲</span>
-                  <span className="font-medium text-gray-700">Rastgele</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Tema belirtme, sistem otomatik seçsin
-                </p>
-              </button>
+        {/* LEFT PANEL - Kontroller */}
+        <div className="lg:col-span-4 space-y-5">
 
-              {/* Tema Kartları */}
-              {themes.map((theme) => (
+          {/* Tema + Üretim Kartı */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden lg:sticky lg:top-4">
+            {/* Tema başlık */}
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-800">Tema Seçimi</h2>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isRandomMode}
+                  onChange={(e) => setIsRandomMode(e.target.checked)}
+                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue h-3.5 w-3.5"
+                />
+                Rastgele
+              </label>
+            </div>
+
+            {/* Tema kartları */}
+            {themes.length > 0 && (
+              <div className="p-2 space-y-1.5 max-h-[380px] overflow-y-auto">
+                {/* Tema Yok */}
                 <button
-                  key={theme.id}
-                  onClick={() => setSelectedThemeId(theme.id)}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${selectedThemeId === theme.id
-                    ? "border-purple-500 bg-purple-50 shadow-md"
-                    : "border-gray-200 hover:border-purple-300 bg-white"
-                    }`}
+                  onClick={() => setSelectedThemeId("")}
+                  className={`w-full p-2.5 rounded-xl border text-left transition-all ${
+                    selectedThemeId === ""
+                      ? "border-gray-400 bg-gray-50 shadow-sm"
+                      : "border-transparent hover:bg-gray-50"
+                  }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-800">{theme.name}</span>
-                    {theme.petAllowed && <span className="text-xs">🐕</span>}
-                  </div>
-                  {theme.description && (
-                    <p className="text-xs text-gray-600 mt-1 line-clamp-2">
-                      {theme.description}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {theme.scenarios.slice(0, 3).map((scenario) => (
-                      <span
-                        key={scenario}
-                        className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded"
-                      >
-                        {scenario}
-                      </span>
-                    ))}
-                    {theme.scenarios.length > 3 && (
-                      <span className="text-xs text-gray-500">
-                        +{theme.scenarios.length - 3}
-                      </span>
-                    )}
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-sm flex-shrink-0">🎲</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-700">Rastgele</p>
+                      <p className="text-[11px] text-gray-400 truncate">Sistem otomatik seçsin</p>
+                    </div>
                   </div>
                 </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
 
-      {/* İstatistikler */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Toplam Görsel" value={stats?.assets.total || 0} icon="🖼️" color="bg-blue-50" />
-        <StatCard label="Aktif Kurallar" value={stats?.rules.total || 0} icon="⏰" color="bg-green-50" />
-        <StatCard label="Pipeline Çalışmaları" value={stats?.pipeline.totalRuns || 0} icon="⚙️" color="bg-amber-50" />
-        <StatCard label="Toplam Maliyet" value={`$${stats?.pipeline.totalCost || "0.00"}`} icon="💰" color="bg-orange-50" isText />
-      </div>
-
-      {/* AI Maliyet Paneli */}
-      {(stats?.aiStats || stats?.aiStatsMonthly) && (
-        <div className="card bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200">
-          <h3 className="text-lg font-semibold text-emerald-800 mb-4">💰 AI Harcamaları</h3>
-
-          {/* Aylık Toplam */}
-          {stats?.aiStatsMonthly && (
-            <div className="mb-4 p-4 bg-white/60 rounded-xl">
-              <p className="text-sm text-gray-600">Son 30 Gün Toplam</p>
-              <p className="text-3xl font-bold text-emerald-700">
-                ${stats.aiStatsMonthly.totalCost?.toFixed(2) || "0.00"}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {stats.aiStatsMonthly.geminiCalls || 0} Gemini çağrısı
-              </p>
-            </div>
-          )}
-
-          {/* Son 24 Saat Detay */}
-          {stats?.aiStats && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-white/40 rounded-lg">
-                <p className="text-xl font-bold text-blue-600">${stats.aiStats.totalCost?.toFixed(4) || "0"}</p>
-                <p className="text-xs text-gray-500">Bugün (24s)</p>
-              </div>
-              <div className="p-3 bg-white/40 rounded-lg">
-                <p className="text-xl font-bold text-green-600">{stats.aiStats.successRate?.toFixed(0) || 0}%</p>
-                <p className="text-xs text-gray-500">Başarı</p>
-              </div>
-              <div className="p-3 bg-white/40 rounded-lg">
-                <p className="text-xl font-bold text-purple-600">{stats.aiStats.geminiCalls || 0}</p>
-                <p className="text-xs text-gray-500">Çağrı</p>
-              </div>
-              <div className="p-3 bg-white/40 rounded-lg">
-                <p className="text-xl font-bold text-amber-600">{((stats.aiStats.avgDurationMs || 0) / 1000).toFixed(1)}s</p>
-                <p className="text-xs text-gray-500">Ort. Süre</p>
-              </div>
-            </div>
-          )}
-
-          {/* Tutarsızlık Uyarısı */}
-          {stats?.pipeline?.totalCostFromLogs !== undefined &&
-            Math.abs(parseFloat(stats.pipeline.totalCost || "0") - stats.pipeline.totalCostFromLogs) > 0.1 && (
-              <div className="mt-3 p-2 bg-amber-100 border border-amber-300 rounded-lg text-xs text-amber-800">
-                ⚠️ Pipeline kayıtları (${stats.pipeline.totalCost}) ile AI logları
-                (${stats.pipeline.totalCostFromLogs?.toFixed(2)}) arasında fark var.
+                {/* Tema Kartları */}
+                {themes.map((theme) => (
+                  <button
+                    key={theme.id}
+                    onClick={() => setSelectedThemeId(theme.id)}
+                    className={`w-full p-2.5 rounded-xl border text-left transition-all ${
+                      selectedThemeId === theme.id
+                        ? "border-brand-blue bg-brand-blue/5 shadow-sm"
+                        : "border-transparent hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-sm font-medium text-gray-800 truncate">{theme.name}</span>
+                      <div className="flex gap-0.5 flex-shrink-0 ml-2">
+                        {theme.petAllowed && <span className="text-[10px]">🐕</span>}
+                        {theme.accessoryAllowed && <span className="text-[10px]">✨</span>}
+                      </div>
+                    </div>
+                    {theme.description && (
+                      <p className="text-[11px] text-gray-500 line-clamp-1 mb-1">{theme.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {theme.scenarios.slice(0, 2).map((scenario) => (
+                        <span key={scenario} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
+                          {scenario}
+                        </span>
+                      ))}
+                      {theme.scenarios.length > 2 && (
+                        <span className="text-[10px] text-gray-400">+{theme.scenarios.length - 2}</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
-        </div>
-      )}
 
-      {/* Slot Durumları (Quick Stats) */}
-      {stats?.slots.byStatus && Object.keys(stats.slots.byStatus).length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(stats.slots.byStatus).map(([status, count]) => {
-            const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-            return (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status as ScheduledSlotStatus)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${statusFilter === status ? "ring-2 ring-offset-2 ring-brand-blue" : ""
-                  } ${config.bg} ${config.text}`}
+            {/* Üret bölümü */}
+            <div className="p-3 border-t border-gray-100 bg-gray-50/50 space-y-2.5">
+              <select
+                value={selectedAspectRatio}
+                onChange={(e) => setSelectedAspectRatio(e.target.value as InstagramAspectRatio)}
+                className="w-full text-sm p-2 border border-gray-200 rounded-lg bg-white focus:ring-1 focus:ring-brand-blue focus:border-brand-blue"
               >
-                {config.icon} {config.label}: {count}
+                {Object.entries(ASPECT_RATIO_OPTIONS).map(([value, option]) => (
+                  <option key={value} value={value}>
+                    {option.label} ({value}) - {option.usage}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleGenerateNow}
+                disabled={generating || validationLoading}
+                className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {validationLoading ? "Kontrol ediliyor..." : generating ? "Üretiliyor..." : "Şimdi Üret"}
               </button>
-            );
-          })}
-          {statusFilter !== "all" && (
-            <button
-              onClick={() => setStatusFilter("all")}
-              className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-200 text-gray-700"
-            >
-              ✕ Filtreyi Temizle
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Slot Listesi */}
-      <div className="card">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">
-            İşlemler {filteredSlots.length > 0 && `(${filteredSlots.length})`}
-          </h2>
-
-          {/* View Toggle */}
-          <div className="flex bg-gray-100 p-1 rounded-lg">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`p-2 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
-              title="Grid Görünüm"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`p-2 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow text-brand-blue" : "text-gray-500 hover:text-gray-700"}`}
-              title="Liste Görünüm"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {filteredSlots.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">Henüz işlem yok</p>
-        ) : viewMode === "grid" ? (
-          <div className={`grid ${GRID_CONFIG[gridSize].cols} gap-4`}>
-            {filteredSlots.map((slot) => (
-              <SlotCard
-                key={slot.id}
-                slot={slot}
-                aspectRatio={GRID_CONFIG[gridSize].aspectRatio}
-                compact={gridSize === "compact"}
-                onView={() => openDetailModal(slot)}
-                onDelete={() => handleDeleteSlot(slot.id)}
-                onRetry={() => handleRetrySlot(slot.id)}
-                onApprove={() => handleApproveSlot(slot.id)}
-                onReject={() => handleRejectSlot(slot.id)}
-                loading={actionLoading === slot.id}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Görsel</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum/Aşama</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredSlots.map((slot) => {
-                    const statusConfig = STATUS_CONFIG[slot.status] || STATUS_CONFIG.pending;
-                    return (
-                      <tr key={slot.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {(() => {
-                            const storageUrl = convertStorageUrl(slot.pipelineResult?.generatedImage?.storageUrl);
-                            const imageUrl = storageUrl || (slot.pipelineResult?.generatedImage?.imageBase64 ? `data:image/jpeg;base64,${slot.pipelineResult?.generatedImage?.imageBase64}` : null);
-                            return imageUrl ? (
-                              <img src={imageUrl} alt="Slot" className="h-12 w-12 rounded bg-gray-100 object-cover cursor-pointer" onClick={() => openDetailModal(slot)} />
-                            ) : (
-                              <div className="h-12 w-12 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-400">Yok</div>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatDate(slot.createdAt)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
-                            {statusConfig.icon} {statusConfig.label}
-                          </span>
-                          {slot.currentStage && slot.status !== "published" && slot.status !== "failed" && slot.status !== "awaiting_approval" && (
-                            <div className="text-xs text-gray-400 mt-1">{STAGE_LABELS[slot.currentStage] || slot.currentStage}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {slot.pipelineResult?.assetSelection?.product?.subType || "-"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button onClick={() => openDetailModal(slot)} className="text-brand-blue hover:text-blue-900 mr-3">Detay</button>
-                          {slot.status === "awaiting_approval" && (
-                            <button onClick={() => handleApproveSlot(slot.id)} className="text-green-600 hover:text-green-900 mr-3">Onayla</button>
-                          )}
-                          <button onClick={() => handleDeleteSlot(slot.id)} className="text-red-600 hover:text-red-900">Sil</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
-// Stat Card
-function StatCard({ label, value, icon, color, isText = false }: {
-  label: string;
-  value: number | string;
-  icon: string;
-  color: string;
-  isText?: boolean;
-}) {
-  return (
-    <div className={`card ${color}`}>
-      <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-        <span>{icon}</span>
-        <span>{label}</span>
+          {/* AI Harcamaları */}
+          {(stats?.aiStats || stats?.aiStatsMonthly) && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">AI Harcamaları</h3>
+
+              {stats?.aiStatsMonthly && (
+                <div className="mb-3">
+                  <p className="text-2xl font-bold text-gray-900">${stats.aiStatsMonthly.totalCost?.toFixed(2) || "0.00"}</p>
+                  <p className="text-xs text-gray-500">Son 30 gün · {stats.aiStatsMonthly.geminiCalls || 0} çağrı</p>
+                </div>
+              )}
+
+              {stats?.aiStats && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gray-50 rounded-lg p-2.5">
+                    <p className="text-sm font-semibold text-gray-800">${stats.aiStats.totalCost?.toFixed(4) || "0"}</p>
+                    <p className="text-[10px] text-gray-500">Bugün</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-2.5">
+                    <p className="text-sm font-semibold text-gray-800">{stats.aiStats.successRate?.toFixed(0) || 0}%</p>
+                    <p className="text-[10px] text-gray-500">Başarı</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-2.5">
+                    <p className="text-sm font-semibold text-gray-800">{stats.aiStats.geminiCalls || 0}</p>
+                    <p className="text-[10px] text-gray-500">Çağrı</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-2.5">
+                    <p className="text-sm font-semibold text-gray-800">{((stats.aiStats.avgDurationMs || 0) / 1000).toFixed(1)}s</p>
+                    <p className="text-[10px] text-gray-500">Ort. Süre</p>
+                  </div>
+                </div>
+              )}
+
+              {stats?.pipeline?.totalCostFromLogs !== undefined &&
+                Math.abs(parseFloat(stats.pipeline.totalCost || "0") - stats.pipeline.totalCostFromLogs) > 0.1 && (
+                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-700">
+                    Pipeline (${stats.pipeline.totalCost}) ile AI logları
+                    (${stats.pipeline.totalCostFromLogs?.toFixed(2)}) arasında fark var.
+                  </div>
+                )}
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT PANEL - Sonuçlar */}
+        <div className="lg:col-span-8 space-y-4">
+
+          {/* Filtre Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-1.5">
+              {stats?.slots.byStatus && Object.keys(stats.slots.byStatus).length > 0 && (
+                <>
+                  {Object.entries(stats.slots.byStatus).map(([status, count]) => {
+                    const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+                    return (
+                      <button
+                        key={status}
+                        onClick={() => setStatusFilter(status as ScheduledSlotStatus)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          statusFilter === status ? "ring-2 ring-brand-blue ring-offset-1" : ""
+                        } ${config.bg} ${config.text}`}
+                      >
+                        {config.icon} {config.label}: {count}
+                      </button>
+                    );
+                  })}
+                  {statusFilter !== "all" && (
+                    <button
+                      onClick={() => setStatusFilter("all")}
+                      className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    >
+                      Temizle
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">{filteredSlots.length} sonuç</span>
+              <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow-sm text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                  title="Grid"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`p-1.5 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow-sm text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                  title="Liste"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Slot İçeriği */}
+          {filteredSlots.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-200 p-16 text-center">
+              <div className="text-gray-300 text-5xl mb-3">🎬</div>
+              <p className="text-gray-500 text-sm">Henüz üretim yok</p>
+              <p className="text-gray-400 text-xs mt-1">Soldan bir tema seçip "Şimdi Üret" butonuna basın</p>
+            </div>
+          ) : viewMode === "grid" ? (
+            <div className={`grid ${GRID_CONFIG[gridSize].cols} gap-3`}>
+              {filteredSlots.map((slot) => (
+                <SlotCard
+                  key={slot.id}
+                  slot={slot}
+                  aspectRatio={GRID_CONFIG[gridSize].aspectRatio}
+                  compact={gridSize === "compact"}
+                  onView={() => openDetailModal(slot)}
+                  onDelete={() => handleDeleteSlot(slot.id)}
+                  onRetry={() => handleRetrySlot(slot.id)}
+                  onApprove={() => handleApproveSlot(slot.id)}
+                  onReject={() => handleRejectSlot(slot.id)}
+                  loading={actionLoading === slot.id}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr className="bg-gray-50/80">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Görsel</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Tarih</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Durum</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Ürün</th>
+                      <th className="px-4 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredSlots.map((slot) => {
+                      const statusConfig = STATUS_CONFIG[slot.status] || STATUS_CONFIG.pending;
+                      return (
+                        <tr key={slot.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-3">
+                            {(() => {
+                              const storageUrl = convertStorageUrl(slot.pipelineResult?.generatedImage?.storageUrl);
+                              const imageUrl = storageUrl || (slot.pipelineResult?.generatedImage?.imageBase64 ? `data:image/jpeg;base64,${slot.pipelineResult?.generatedImage?.imageBase64}` : null);
+                              return imageUrl ? (
+                                <img src={imageUrl} alt="Slot" className="h-10 w-10 rounded-lg bg-gray-100 object-cover cursor-pointer" onClick={() => openDetailModal(slot)} />
+                              ) : (
+                                <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] text-gray-400">Yok</div>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {formatDate(slot.createdAt)}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-medium rounded-lg ${statusConfig.bg} ${statusConfig.text}`}>
+                              {statusConfig.icon} {statusConfig.label}
+                            </span>
+                            {slot.currentStage && slot.status !== "published" && slot.status !== "failed" && slot.status !== "awaiting_approval" && (
+                              <div className="text-[10px] text-gray-400 mt-0.5">{STAGE_LABELS[slot.currentStage] || slot.currentStage}</div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {slot.pipelineResult?.assetSelection?.product?.subType || "-"}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
+                            <button onClick={() => openDetailModal(slot)} className="text-brand-blue hover:text-blue-800 mr-2 font-medium">Detay</button>
+                            {slot.status === "awaiting_approval" && (
+                              <button onClick={() => handleApproveSlot(slot.id)} className="text-green-600 hover:text-green-800 mr-2 font-medium">Onayla</button>
+                            )}
+                            <button onClick={() => handleDeleteSlot(slot.id)} className="text-red-500 hover:text-red-700 font-medium">Sil</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      <p className={`${isText ? "text-xl" : "text-2xl"} font-bold text-gray-900`}>{value}</p>
     </div>
   );
 }
@@ -1332,7 +1398,6 @@ function SlotCard({ slot, aspectRatio, compact, onView, onDelete, onRetry, onApp
 }) {
   const config = STATUS_CONFIG[slot.status] || STATUS_CONFIG.pending;
 
-  // URL'yi çevir - önce storageUrl, yoksa base64
   const storageUrl = convertStorageUrl(slot.pipelineResult?.generatedImage?.storageUrl);
   const base64Url = slot.pipelineResult?.generatedImage?.imageBase64
     ? `data:${slot.pipelineResult.generatedImage.mimeType};base64,${slot.pipelineResult.generatedImage.imageBase64}`
@@ -1340,66 +1405,61 @@ function SlotCard({ slot, aspectRatio, compact, onView, onDelete, onRetry, onApp
   const imageUrl = storageUrl || base64Url;
 
   return (
-    <div className="border rounded-xl overflow-hidden hover:shadow-lg transition-shadow bg-white">
+    <div className="group border border-gray-200 rounded-2xl overflow-hidden hover:shadow-md transition-all bg-white">
       {/* Görsel */}
-      <div
-        onClick={onView}
-        className={`${aspectRatio} bg-gray-100 relative cursor-pointer group`}
-      >
+      <div onClick={onView} className={`${aspectRatio} bg-gray-50 relative cursor-pointer`}>
         {imageUrl ? (
           <img src={imageUrl} alt="Üretilen" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <div className="w-full h-full flex items-center justify-center text-gray-300">
             {slot.status === "generating" ? (
               <div className="text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue mx-auto mb-1"></div>
-                {!compact && <span className="text-xs">{STAGE_LABELS[slot.currentStage || ""] || "Üretiliyor..."}</span>}
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-blue mx-auto mb-1"></div>
+                {!compact && <span className="text-[10px] text-gray-400">{STAGE_LABELS[slot.currentStage || ""] || "Üretiliyor..."}</span>}
               </div>
             ) : (
-              <span className="text-xs">Görsel yok</span>
+              <span className="text-xs text-gray-400">Görsel yok</span>
             )}
           </div>
         )}
 
         {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <span className="text-white font-medium text-sm">Detayları Gör</span>
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <span className="text-white text-xs font-medium bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">Detay</span>
         </div>
 
         {/* Status badge */}
-        <div className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${config.bg} ${config.text}`}>
+        <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded-lg text-[10px] font-medium backdrop-blur-sm ${config.bg} ${config.text}`}>
           {config.icon} {!compact && config.label}
         </div>
       </div>
 
-      {/* Info - Compact modda gizle */}
+      {/* Bilgi */}
       {!compact && (
-        <div className="p-3">
-          {/* Meta */}
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+        <div className="p-2.5">
+          <div className="flex items-center justify-between text-[11px] text-gray-400 mb-2">
             <span>{new Date(slot.createdAt).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
             {slot.pipelineResult?.qualityControl?.score && (
               <span className="font-medium text-brand-blue">Skor: {slot.pipelineResult.qualityControl.score}/10</span>
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {slot.status === "awaiting_approval" && (
               <>
                 <button
                   onClick={(e) => { e.stopPropagation(); onApprove(); }}
                   disabled={loading}
-                  className="flex-1 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-50"
+                  className="flex-1 py-1.5 text-[11px] font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-50"
                 >
-                  ✅ Onayla
+                  Onayla
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onReject(); }}
                   disabled={loading}
-                  className="flex-1 py-1.5 text-xs font-medium bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50"
+                  className="flex-1 py-1.5 text-[11px] font-medium bg-red-50 text-red-700 rounded-lg hover:bg-red-100 disabled:opacity-50"
                 >
-                  ❌ Reddet
+                  Reddet
                 </button>
               </>
             )}
@@ -1408,16 +1468,16 @@ function SlotCard({ slot, aspectRatio, compact, onView, onDelete, onRetry, onApp
               <button
                 onClick={(e) => { e.stopPropagation(); onRetry(); }}
                 disabled={loading}
-                className="flex-1 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50"
+                className="flex-1 py-1.5 text-[11px] font-medium bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50"
               >
-                🔄 Tekrar Dene
+                Tekrar Dene
               </button>
             )}
 
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               disabled={loading}
-              className="py-1.5 px-2 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+              className="py-1.5 px-2 text-[11px] font-medium bg-gray-50 text-gray-500 rounded-lg hover:bg-gray-100 disabled:opacity-50"
               title="Sil"
             >
               🗑️

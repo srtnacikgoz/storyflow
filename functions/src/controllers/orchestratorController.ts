@@ -12,21 +12,18 @@
  * - pipelineController.ts   → Pipeline triggers & scheduler
  * - slotController.ts       → Scheduled slot operations
  * - dashboardController.ts  → Dashboard statistics
- * - configController.ts     → Variation config & seed
+ * - configController.ts     → Variation config
  * - feedbackController.ts   → Feedback operations
  * - aiRulesController.ts    → AI Rules CRUD
  */
 
 export {
-  // Visual Critic
-
-
   // Asset Controller
   listAssets,
   createAsset,
   updateAsset,
   deleteAsset,
-  uploadAssetToCloudinary, // Cloudinary upload endpoint
+  uploadAssetToCloudinary,
 
   // TimeSlot Controller
   listTimeSlotRules,
@@ -70,6 +67,7 @@ export {
   updateSlotStatus,
   batchUpdateSlotStatus,
   updateSlotCaption,
+  cancelSlotPipeline,
 
   // Dashboard Controller
   getOrchestratorDashboardStats,
@@ -81,8 +79,6 @@ export {
   updateVariationConfig,
   getProductionHistory,
   getPetUsageStats,
-  seedOrchestratorConfig,
-  seedGeminiTerminology,
   getGeminiPresets,
   getTimeoutsConfig,
   updateTimeoutsConfig,
@@ -90,24 +86,15 @@ export {
   updateSystemSettingsConfig,
   getFixedAssetsConfig,
   updateFixedAssetsConfig,
-  // Business Context
   getBusinessContextConfig,
   updateBusinessContextConfig,
-  // Asset Selection Config
   getAssetSelectionConfigEndpoint,
   updateAssetSelectionConfigEndpoint,
-  // Prompt Studio
-  // getPromptStudioConfig,
-  // getPromptTemplateById,
-  // updatePromptTemplateEndpoint,
-  // revertPromptTemplateEndpoint,
-  // clearPromptStudioCacheEndpoint,
 
   // Feedback Controller
   createFeedback,
   getFeedbackBySlot,
   getFeedbackStats,
-  debugFeedbackHints,
 
   // AI Rules Controller
   listAIRules,
@@ -128,21 +115,15 @@ export {
   activateSubType,
   deleteSubType,
   reorderSubTypes,
-  seedCategories,
   clearCategoriesCache,
   getCategoryDisplayName,
-  // Main Category Controller (v2)
   addMainCategory,
   updateMainCategory,
   deleteMainCategory,
-  // ID-based endpoints (v2)
   getSubTypeById,
   getSubTypeIds,
   getSubTypeIdBySlug,
   validateSubTypeId,
-  // Migration endpoints
-  migrateTimeSlotRulesToIdBased,
-  runFullMigration,
 
   // Rule Engine Endpoints
   getRuleEngineConfigEndpoint,
@@ -157,16 +138,10 @@ export {
   getQueueStats,
   getUsageStats,
 
-  // Migration Controller (Cloudinary)
-  getMigrationStatus,
-  runCloudinaryMigration,
-  migrateSingleAsset,
-  resetMigration,
-
   // Beverage Rules Controller
   getBeverageRulesConfigEndpoint,
   updateBeverageRulesConfigEndpoint,
 } from "./orchestrator";
 
-// Direct export for Visual Critic (to avoid export issues)
+// Visual Critic
 export { analyzeImage } from "../orchestrator/visualCriticController";

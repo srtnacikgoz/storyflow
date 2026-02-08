@@ -3,7 +3,7 @@
 **Bu dosya Claude Code tarafından otomatik okunur ve her oturumda uygulanır.**
 
 > **UYARI:** Bu belgeyi TAMAMEN oku. Her kural bir sebepten var.
-> Son Güncelleme: 2026-01-20
+> Son Güncelleme: 2026-02-08
 
 ---
 
@@ -40,7 +40,7 @@
 
 ### Kural #4: İstenen İşi Yap
 - Ne fazla, ne eksik
-- İstenmeyen özellik ekleme
+- İstenmeyen özellik ekleme (ama faydalı önerileri engelleme — önce danış, onay al)
 - İstenmeyen dokümantasyon oluşturma
 - Belirsizlikte SOR
 
@@ -228,6 +228,7 @@ Her önemli değişiklik sonrası:
 
 | Versiyon | Tarih | Değişiklik |
 |----------|-------|------------|
+| 1.2 | 2026-02-08 | Kural #4: "İstenmeyen özellik" kuralına esneklik eklendi — faydalı öneriler danışılarak yapılabilir |
 | 1.1 | 2026-01-21 | Kural #4.1 eklendi: Kod değişikliği öncesi onay zorunluluğu |
 | 1.0 | 2026-01-20 | Bu projeye özel versiyon oluşturuldu |
 | - | - | Orijinal Iron Rules'dan adapte edildi |

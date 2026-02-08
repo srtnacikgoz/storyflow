@@ -1109,7 +1109,8 @@ export interface Theme {
   description?: string; // "Enerjik sabah paylaşımları için"
   scenarios: string[]; // ["cam-kenari", "zarif-tutma", "ilk-dilim"]
   petAllowed: boolean; // Köpek dahil edilebilir mi?
-  accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi? (telefon, çanta, kitap vb.)
+  accessoryAllowed: boolean; // Aksesuar dahil edilebilir mi?
+  accessoryOptions?: string[]; // Kullanıcının seçtiği aksesuar listesi (ör: ["kitap", "telefon"])
 
   // Sahne ayarları (v3.1)
   setting?: ThemeSetting;
