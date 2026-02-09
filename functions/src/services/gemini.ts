@@ -297,54 +297,33 @@ export class GeminiService {
     });
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // RADİKAL SADELEŞTİRME v2.0 - Gemini Prompt Insights'a göre
-    // Hedef: 75-150 kelime, [1][2][3] tagging, --no format
+    // REFERANS SADAKATİ v3.0 - İki bölümlü yapı
+    // SECTION 1: Referans nesneleri (birebir kopyala)
+    // SECTION 2: Sahne & atmosfer (yaratıcı yön)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Reference tagging ile basit edit prefix
-    let editPrefix = `Compose a scene using attached reference images:
-[1] MAIN PRODUCT (first image) - use exactly as shown
+    // SECTION 1: Reference Objects — Gemini'ye referans görsellerin listesi
+    let editPrefix = `SECTION 1 — REFERENCE OBJECTS (preserve exactly):
+[1] MAIN PRODUCT — use exactly as shown
 `;
 
-    // Add reference image instructions with [N] tagging
+    // Referans görsellere [N] tagging ile label ekle
     if (options.referenceImages && options.referenceImages.length > 0) {
       let refIndex = 2;
       for (const ref of options.referenceImages) {
-        const desc = ref.description ? `: ${ref.description}` : "";
+        const desc = ref.description ? ` — ${ref.description}` : "";
         editPrefix += `[${refIndex}] ${ref.label.toUpperCase()}${desc}
 `;
         refIndex++;
       }
     }
 
-    // Core constraint - ZERO HALLUCINATION POLİCY (Güçlendirilmiş v2.1)
+    // Kısa ve kesin fidelity kuralı (25 satır → 3 satır)
     editPrefix += `
+Match each reference object exactly. Do not replace, recolor, or add objects not shown in references.
+The scene should contain ONLY the referenced objects arranged in the composition described below.
 
-=== MANDATORY REFERENCE FIDELITY (ZERO HALLUCINATION) ===
-CRITICAL RULES - VIOLATION IS UNACCEPTABLE:
-
-1. [TABLE REFERENCE] - EXACT MATCH REQUIRED:
-   - Use the EXACT table/surface from reference image [N] (TABLE)
-   - Copy its EXACT texture, color, material, grain pattern
-   - DO NOT replace with different table (no marble if wood shown, no dark if light shown)
-   - DO NOT add window views, backgrounds, or environments not in reference
-   - The table edge and surface must match reference EXACTLY
-
-2. [ALL REFERENCES] - STRICT FIDELITY:
-   - Every reference [1][2][3][4]... must appear EXACTLY as shown
-   - NO color changes, NO material substitution, NO style alterations
-   - If plate is white ceramic, keep white ceramic (not cream, not porcelain)
-   - If cup contains tea, show tea (amber liquid, not water, not empty)
-
-3. [ZERO ADDITIONS] - NO HALLUCINATION:
-   - Add NOTHING that is not in reference images
-   - NO extra napkins, NO cutlery, NO flowers, NO decorations unless referenced
-   - NO background scenery (windows, walls, plants) unless explicitly referenced
-   - Scene should contain ONLY referenced objects + specified composition
-
-VIOLATION = REGENERATION REQUIRED
-
-SCENE:
+SECTION 2 — SCENE & ATMOSPHERE (creative direction):
 `;
 
     // Full prompt oluştur - editPrefix + Claude's optimized prompt

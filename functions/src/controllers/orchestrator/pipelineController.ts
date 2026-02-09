@@ -227,10 +227,10 @@ export const validateBeforeGenerate = functions
           return;
         }
 
-        // Global config'den senaryoları al
+        // Global config'den senaryoları al (forceRefresh: kullanıcı az önce güncellemiş olabilir)
         const { getGlobalConfig, ensureConfigInitialized } = await import("../../services/configService");
         await ensureConfigInitialized();
-        const globalConfig = await getGlobalConfig();
+        const globalConfig = await getGlobalConfig(true);
         const allScenarios = globalConfig.scenarios || [];
 
         // Tema senaryolarını filtrele (interior olmayanlar)
@@ -262,8 +262,31 @@ export const validateBeforeGenerate = functions
           warnings.push({ type: "warning", message: "Senaryo'da önerilen ürün tipi tanımlı değil — ilk aktif kategoriden seçilecek" });
         }
 
+        // Asset preview tipi
+        interface AssetPreviewInfo {
+          id: string;
+          filename: string;
+          url: string;
+          tags: string[];
+        }
+
+        // En düşük usageCount'lu asset'i seç
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pickPreview = (docs: Array<{ id: string; data: () => any }>): AssetPreviewInfo | undefined => {
+          if (docs.length === 0) return undefined;
+          const sorted = [...docs].sort((a, b) => (a.data().usageCount || 0) - (b.data().usageCount || 0));
+          const d = sorted[0].data();
+          return {
+            id: sorted[0].id,
+            filename: d.filename || d.originalFilename || "",
+            url: d.cloudinaryUrl || d.storageUrl || d.thumbnailUrl || "",
+            tags: d.tags || [],
+          };
+        };
+
         // 4. O productType için ürün asset'i var mı?
         let productCount = 0;
+        let productPreview: AssetPreviewInfo | undefined;
         if (determinedProductType) {
           const productAssets = await db.collection("assets")
             .where("category", "==", "products")
@@ -272,6 +295,7 @@ export const validateBeforeGenerate = functions
             .limit(50)
             .get();
           productCount = productAssets.size;
+          productPreview = pickPreview(productAssets.docs);
           if (productAssets.empty) {
             warnings.push({ type: "error", message: `"${determinedProductType}" için aktif ürün görseli yok — Assets sayfasından ekleyin` });
           }
@@ -285,7 +309,7 @@ export const validateBeforeGenerate = functions
           subType: string,
           tagList?: string[],
           label?: string
-        ): Promise<{ total: number; preferred: number }> => {
+        ): Promise<{ total: number; preferred: number; preview?: AssetPreviewInfo }> => {
           const assetsQuery = await db.collection("assets")
             .where("category", "==", category)
             .where("subType", "==", subType)
@@ -294,16 +318,18 @@ export const validateBeforeGenerate = functions
             .get();
           const total = assetsQuery.size;
           if (!tagList || tagList.length === 0 || tagList.includes("__none__")) {
-            return { total, preferred: 0 };
+            return { total, preferred: 0, preview: pickPreview(assetsQuery.docs) };
           }
-          const preferred = assetsQuery.docs.filter(doc => {
+          const preferredDocs = assetsQuery.docs.filter(doc => {
             const tags: string[] = doc.data().tags || [];
             return tags.some(t => tagList.some(pt => t.toLowerCase().includes(pt.toLowerCase())));
-          }).length;
-          if (preferred === 0 && label) {
+          });
+          if (preferredDocs.length === 0 && label) {
             warnings.push({ type: "warning", message: `Tema'da ${label} tercihi "${tagList.join(", ")}" ama eşleşen asset yok` });
           }
-          return { total, preferred };
+          // Preview: tercihli varsa tercihli'den, yoksa tümünden
+          const preview = pickPreview(preferredDocs.length > 0 ? preferredDocs : assetsQuery.docs);
+          return { total, preferred: preferredDocs.length, preview };
         };
 
         const [tableStats, plateStats, cupStats] = await Promise.all([
@@ -352,7 +378,7 @@ export const validateBeforeGenerate = functions
           },
           scenarioCount: themeScenarios.length,
           assets: {
-            products: { total: productCount },
+            products: { total: productCount, preview: productPreview },
             tables: tableStats,
             plates: plateStats,
             cups: cupStats,

@@ -623,57 +623,176 @@ export class Orchestrator {
       }
 
       // ==========================================
-      // RASTGELE MOD: productType yoksa rastgele senaryo seç, senaryodan belirle
+      // RASTGELE MOD: Akıllı senaryo seçim algoritması
+      // Math.random() yerine puanlama bazlı seçim
       // ==========================================
+      // AUTO modda seçilen senaryo — Stage 2'de Gemini yerine bu kullanılır
+      let autoSelectedScenarioResult: FirestoreScenario | null = null;
+
       if (isAutoMode) {
-        console.log("[Orchestrator] AUTO MODE: Senaryo seçimi önce yapılacak, productType senaryodan belirlenecek");
+        console.log("[Orchestrator] AUTO MODE: Akıllı senaryo seçimi başlatılıyor");
 
-        // Senaryo filtreleme (tema zaten yüklendi)
-        let autoScenarios = themeFilteredScenarios;
-
-        // Interior senaryoları çıkar (normal akıştayız)
-        autoScenarios = autoScenarios.filter(s => !s.isInterior);
+        // 1. Aday senaryoları hazırla
+        let autoScenarios = themeFilteredScenarios.filter(s => !s.isInterior);
 
         // Bloklanmış senaryoları çıkar
-        autoScenarios = autoScenarios.filter(
+        const unblockedScenarios = autoScenarios.filter(
           s => !effectiveRules.blockedScenarios.includes(s.id)
         );
 
         // Tüm senaryolar bloklanmışsa fallback
-        if (autoScenarios.length === 0) {
-          console.log("[Orchestrator] AUTO: All scenarios blocked, using theme-filtered list");
-          autoScenarios = themeFilteredScenarios.filter(s => !s.isInterior);
+        if (unblockedScenarios.length > 0) {
+          autoScenarios = unblockedScenarios;
+        } else {
+          console.log("[Orchestrator] AUTO: Tüm senaryolar bloklu, fallback kullanılıyor");
           if (autoScenarios.length === 0) {
             autoScenarios = allScenarios.filter(s => !s.isInterior);
           }
         }
 
-        // Rastgele bir senaryo seç
-        const autoSelectedScenario = autoScenarios[Math.floor(Math.random() * autoScenarios.length)];
-        console.log(`[Orchestrator] AUTO: Pre-selected scenario: ${autoSelectedScenario.name}`);
+        // 2. Aktif ürün stokunu al (senaryo puanlaması için)
+        const activeSlugs = await categoryService.getSubTypeSlugs("products");
+        const activeProductSet = new Set(activeSlugs);
 
-        // Senaryodan productType belirle
-        const scenarioData = autoSelectedScenario as FirestoreScenario;
-        if (scenarioData.suggestedProducts && scenarioData.suggestedProducts.length > 0) {
-          // suggestedProducts'dan rastgele bir productType seç
-          productType = scenarioData.suggestedProducts[
-            Math.floor(Math.random() * scenarioData.suggestedProducts.length)
-          ] as ProductType;
-          console.log(`[Orchestrator] AUTO: productType from scenario suggestedProducts: ${productType}`);
-        } else {
-          // suggestedProducts boş → aktif ürün kategorilerinden rastgele seç
-          const activeSlugs = await categoryService.getSubTypeSlugs("products");
-          if (activeSlugs.length > 0) {
-            productType = activeSlugs[Math.floor(Math.random() * activeSlugs.length)] as ProductType;
-            console.log(`[Orchestrator] AUTO: productType from active categories: ${productType}`);
+        // 3. Zaman bilgisi (senaryo-zaman uyumu için)
+        const currentTimeOfDay = getTimeOfDay();
+
+        // 4. Üretim geçmişi (çeşitlilik puanlaması için)
+        const recentHistory = effectiveRules.recentHistory?.entries || [];
+
+        // Senaryo kullanım sayıları (son 15 üretimde)
+        const scenarioUsageCounts = new Map<string, number>();
+        recentHistory.forEach(entry => {
+          scenarioUsageCounts.set(
+            entry.scenarioId,
+            (scenarioUsageCounts.get(entry.scenarioId) || 0) + 1
+          );
+        });
+
+        // Son kullanım sırası (0 = en son, büyük = çok önce)
+        const scenarioLastUsedIndex = new Map<string, number>();
+        recentHistory.forEach((entry, index) => {
+          if (!scenarioLastUsedIndex.has(entry.scenarioId)) {
+            scenarioLastUsedIndex.set(entry.scenarioId, index);
+          }
+        });
+
+        // 5. Her senaryoya puan ver
+        const scoredScenarios = autoScenarios.map(scenario => {
+          let score = 0;
+          const reasons: string[] = [];
+          const scenarioData = scenario as FirestoreScenario;
+
+          // --- A. Ürün Stok Uyumu (0-30 puan) ---
+          // Senaryonun suggestedProducts'ı aktif stokla ne kadar eşleşiyor?
+          if (scenarioData.suggestedProducts && scenarioData.suggestedProducts.length > 0) {
+            const matchingProducts = scenarioData.suggestedProducts.filter(p => activeProductSet.has(p));
+            const stockRatio = matchingProducts.length / scenarioData.suggestedProducts.length;
+            const stockScore = Math.round(stockRatio * 30);
+            score += stockScore;
+            if (stockScore > 0) reasons.push(`stok:+${stockScore} (${matchingProducts.length}/${scenarioData.suggestedProducts.length})`);
           } else {
-            // Son fallback
+            // suggestedProducts boş = her ürünle uyumlu → tam puan
+            score += 30;
+            reasons.push("stok:+30 (universal)");
+          }
+
+          // --- B. Zaman Uyumu (0-20 puan) ---
+          // Senaryonun adı/açıklaması zamana uygun mu?
+          const timeScoreMap: Record<string, Record<string, number>> = {
+            morning: { "kahve": 20, "sabah": 20, "taze": 15, "kruvasan": 15, "tutma": 10 },
+            noon: { "paylasim": 15, "paket": 15, "dilim": 15, "mermer": 10 },
+            afternoon: { "cam": 15, "kenari": 15, "zarafet": 15, "hediye": 10 },
+            evening: { "cam": 20, "kenari": 20, "samimi": 15, "kose": 15, "yarim": 10 },
+            night: { "kose": 20, "yarim": 15, "samimi": 15 },
+          };
+          const timeKeywords = timeScoreMap[currentTimeOfDay] || {};
+          const scenarioSearchText = `${scenario.name} ${scenario.description || ""}`.toLowerCase();
+          let timeScore = 0;
+          for (const [keyword, points] of Object.entries(timeKeywords)) {
+            if (scenarioSearchText.includes(keyword)) {
+              timeScore = Math.max(timeScore, points); // En yüksek eşleşmeyi al
+            }
+          }
+          // Eşleşme yoksa nötr puan (cezalandırma yok)
+          if (timeScore === 0) timeScore = 10;
+          score += timeScore;
+          reasons.push(`zaman(${currentTimeOfDay}):+${timeScore}`);
+
+          // --- C. Çeşitlilik Puanı (0-30 puan) ---
+          // Ne kadar uzun süredir kullanılmadıysa o kadar yüksek puan
+          const lastUsedIdx = scenarioLastUsedIndex.get(scenario.id);
+          if (lastUsedIdx === undefined) {
+            // Hiç kullanılmamış → en yüksek çeşitlilik puanı
+            score += 30;
+            reasons.push("çeşitlilik:+30 (hiç kullanılmamış)");
+          } else {
+            // 0 = az önce kullanıldı, 14 = çok önce kullanıldı
+            const diversityScore = Math.min(Math.round((lastUsedIdx / 14) * 30), 30);
+            score += diversityScore;
+            reasons.push(`çeşitlilik:+${diversityScore} (son:${lastUsedIdx})`);
+          }
+
+          // --- D. Kullanım Sıklığı Dengesi (0-20 puan) ---
+          // Az kullanılmış senaryolara bonus
+          const usageCount = scenarioUsageCounts.get(scenario.id) || 0;
+          const maxUsage = Math.max(...Array.from(scenarioUsageCounts.values()), 1);
+          const usageScore = Math.round((1 - usageCount / maxUsage) * 20);
+          score += usageScore;
+          reasons.push(`sıklık:+${usageScore} (${usageCount}x)`);
+
+          return { scenario, score, reasons };
+        });
+
+        // 6. Skorlara göre sırala
+        scoredScenarios.sort((a, b) => b.score - a.score);
+
+        // Log: Tüm puanları göster
+        console.log(`[Orchestrator] AUTO: Senaryo puanlaması (${scoredScenarios.length} aday):`);
+        scoredScenarios.forEach((s, i) => {
+          console.log(`  ${i + 1}. ${s.scenario.name}: ${s.score} puan [${s.reasons.join(", ")}]`);
+        });
+
+        // 7. En yüksek puanlı senaryoyu seç
+        // Beraberlik varsa, ilk 2 arasından rastgele (minimal rastgelelik)
+        let autoSelectedScenario: FirestoreScenario;
+        if (scoredScenarios.length >= 2 && scoredScenarios[0].score === scoredScenarios[1].score) {
+          const tieBreaker = Math.random() < 0.5 ? 0 : 1;
+          autoSelectedScenario = scoredScenarios[tieBreaker].scenario as FirestoreScenario;
+          console.log(`[Orchestrator] AUTO: Beraberlik → zar atıldı: ${autoSelectedScenario.name}`);
+        } else {
+          autoSelectedScenario = scoredScenarios[0].scenario as FirestoreScenario;
+        }
+        console.log(`[Orchestrator] AUTO: Seçilen senaryo: "${autoSelectedScenario.name}" (${scoredScenarios[0].score} puan)`);
+
+        // Seçilen senaryoyu dış scope'a aktar (Stage 2'de Gemini yerine kullanılacak)
+        autoSelectedScenarioResult = autoSelectedScenario;
+
+        // 8. Senaryodan productType belirle (stokta olan ürünlerden)
+        if (autoSelectedScenario.suggestedProducts && autoSelectedScenario.suggestedProducts.length > 0) {
+          // Stokta olan ürünleri tercih et
+          const inStockProducts = autoSelectedScenario.suggestedProducts.filter(p => activeProductSet.has(p));
+          const productPool = inStockProducts.length > 0 ? inStockProducts : autoSelectedScenario.suggestedProducts;
+
+          // Son üretimlerde az kullanılan ürün tipini seç
+          const recentProductTypes = recentHistory.slice(0, 5).map(e => e.productType);
+          const freshProduct = productPool.find(p => !recentProductTypes.includes(p as ProductType));
+          productType = (freshProduct || productPool[0]) as ProductType;
+          console.log(`[Orchestrator] AUTO: productType=${productType} (stok:${inStockProducts.length}, taze:${!!freshProduct})`);
+        } else {
+          // suggestedProducts boş → aktif kategorilerden en az kullanılanı seç
+          if (activeSlugs.length > 0) {
+            const recentProductTypes = recentHistory.slice(0, 5).map(e => e.productType);
+            const freshSlug = activeSlugs.find(s => !recentProductTypes.includes(s as ProductType));
+            productType = (freshSlug || activeSlugs[0]) as ProductType;
+            console.log(`[Orchestrator] AUTO: productType=${productType} (aktif kategoriden, taze:${!!freshSlug})`);
+          } else {
             productType = "croissants" as ProductType;
             console.log(`[Orchestrator] AUTO: fallback productType: ${productType}`);
           }
         }
 
-        // Pipeline context güncelle (artık productType belli)
+        // Pipeline context güncelle
         this.gemini.setPipelineContext({
           pipelineId,
           slotId,
@@ -1213,7 +1332,39 @@ export class Orchestrator {
       let scenarioResponse: { success: boolean; data?: any; cost: number; error?: string };
 
       const nonInteriorFiltered = filteredScenarios.filter(s => !s.isInterior);
-      if (!isAutoMode && nonInteriorFiltered.length === 1) {
+
+      // AUTO MOD: Puanlama algoritması zaten seçti — Gemini'ye sormadan kullan
+      if (isAutoMode && autoSelectedScenarioResult) {
+        const directScenario = autoSelectedScenarioResult;
+        console.log(`[Orchestrator] AUTO MOD: Senaryo "${directScenario.name}" puanlama algoritmasından alındı — Gemini senaryo seçimi ATLANDI`);
+
+        // El stili seçimi (senaryo el içeriyorsa)
+        let handStyle: string | undefined;
+        let handStyleDetails: any;
+        if (directScenario.includesHands) {
+          const selectedHandStyle = this.rulesService.selectHandStyle(
+            effectiveRules.blockedHandStyles,
+            effectiveRules.staticRules.handStyles
+          );
+          handStyle = selectedHandStyle.id;
+          handStyleDetails = selectedHandStyle;
+        }
+
+        scenarioResponse = {
+          success: true,
+          cost: 0,
+          data: {
+            scenarioId: directScenario.id,
+            scenarioName: directScenario.name,
+            scenarioDescription: directScenario.description || "",
+            compositionId: directScenario.compositionId || "default",
+            includesHands: directScenario.includesHands,
+            handStyle,
+            handStyleDetails,
+            reasoning: `AUTO mod — puanlama algoritması seçti`,
+          },
+        };
+      } else if (!isAutoMode && nonInteriorFiltered.length === 1) {
         const directScenario = nonInteriorFiltered[0];
         console.log(`[Orchestrator] NORMAL MOD: Tek senaryo "${directScenario.name}" — Gemini senaryo seçimi ATLANDI (token tasarrufu)`);
 
@@ -1540,10 +1691,23 @@ export class Orchestrator {
               console.log(`[Orchestrator] Loading cup: ${cupAsset.filename}`);
               const cupBase64 = await loadImageAsBase64(cupAsset, this.storage);
 
-              // Cup için kısa açıklama (RADİKAL SADELEŞTİRME v2.0)
+              // Cup description: materyal + beverage tipi (v3.0)
+              // Beverage bilgisi artık burada ekleniyor (prompt'ta ayrı blok yerine)
               const cupColors = cupAsset.visualProperties?.dominantColors?.join(", ") || "";
               const cupMaterial = cupAsset.visualProperties?.material || "ceramic";
-              const cupDescription = `${cupColors} ${cupMaterial}`.trim();
+              let cupDescription = `${cupColors} ${cupMaterial}`.trim();
+
+              // Beverage tipi varsa cup description'a ekle
+              if (resolvedBeverageType && resolvedBeverageType !== "none") {
+                const beverageDescriptions: Record<string, string> = {
+                  tea: "contains amber/golden tea",
+                  coffee: "contains dark brown coffee",
+                  "fruit-juice": "contains colorful fruit juice",
+                  lemonade: "contains pale yellow lemonade",
+                };
+                const beverageDesc = beverageDescriptions[resolvedBeverageType] || `contains ${resolvedBeverageType}`;
+                cupDescription = cupDescription ? `${cupDescription}, ${beverageDesc}` : beverageDesc;
+              }
 
               referenceImages.push({
                 base64: cupBase64,
@@ -3027,8 +3191,11 @@ LIGHTING: Soft natural side light, ${currentMood.temperature}, warm tones.
    * Pipeline sonucunu kaydet
    */
   private async savePipelineResult(result: PipelineResult): Promise<void> {
-    // Undefined değerleri temizle (Firestore uyumluluğu için)
+    // Undefined değerleri temizle + imageBase64 strip (zaten Storage'da, Firestore 1MB limitini aşar)
     const cleanedResult = removeUndefined(result);
+    if (cleanedResult.generatedImage) {
+      cleanedResult.generatedImage = { ...cleanedResult.generatedImage, imageBase64: "" };
+    }
     await this.db.collection("pipeline-results").add({
       ...cleanedResult,
       savedAt: Date.now(),

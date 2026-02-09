@@ -311,10 +311,14 @@ export class OrchestratorScheduler {
         isRandomMode
       );
 
-      // Slot'u güncelle (undefined değerleri temizle)
+      // Slot'u güncelle (imageBase64 strip — zaten Storage'da, Firestore 1MB limitini aşar)
+      const cleanedResult = removeUndefined(result);
+      if (cleanedResult.generatedImage) {
+        cleanedResult.generatedImage = { ...cleanedResult.generatedImage, imageBase64: "" };
+      }
       await this.db.collection("scheduled-slots").doc(slotId).update({
         status: "awaiting_approval",
-        pipelineResult: removeUndefined(result),
+        pipelineResult: cleanedResult,
         currentStage: "completed",
         stageIndex: 7,
         totalStages: 7,

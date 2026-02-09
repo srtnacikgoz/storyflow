@@ -1059,20 +1059,14 @@ export async function buildGeminiPrompt(params: {
     promptParts.push("");
   }
 
-  // 3. Işık
+  // 3. Işık — sadeleştirildi (v3.0): 1 satır talimat + color temp
   let lightingSource = "none";
   if (lighting) {
-    promptParts.push(`LIGHTING:`);
-    promptParts.push(`- ${lighting.geminiPrompt}`);
-    promptParts.push(`- Color temperature: ${lighting.temperature}, warm hues creating an appetizing glow`);
-    promptParts.push(`- Macro lens style, shallow depth of field (f/1.8), sharp focus on front texture details with creamy bokeh background`);
+    promptParts.push(`LIGHTING: ${lighting.geminiPrompt}, ${lighting.temperature} tones.`);
     promptParts.push("");
     lightingSource = "preset";
   } else if (mood && mood.lighting) {
-    // Lighting preset yoksa MOOD lighting kullan
-    promptParts.push(`LIGHTING:`);
-    promptParts.push(`- ${mood.lighting}`);
-    promptParts.push(`- Warm appetizing tones, macro lens style, shallow depth of field (f/1.8) with creamy bokeh background`);
+    promptParts.push(`LIGHTING: ${mood.lighting}`);
     promptParts.push("");
     lightingSource = "mood-fallback";
   }
@@ -1103,93 +1097,57 @@ export async function buildGeminiPrompt(params: {
     promptParts.push("");
   }
 
-  // 5. Ürün dokusu + intimate close-up
-  if (textureProfile) {
-    promptParts.push(`PRODUCT TEXTURE:`);
-    promptParts.push(`- ${textureProfile.geminiPrompt}`);
-    promptParts.push(`- Intimate close-up capturing crumbs, glaze reflections, and natural textural imperfections`);
-    promptParts.push("");
-  }
+  // 5. Ürün dokusu — KALDIRILDI (v3.0)
+  // Ürün zaten [1] referans görsel olarak gidiyor.
+  // Metin ile doku tarif etmek referans görselle çelişki yaratıyordu.
 
   // 5.5 Atmospheric Color Grading (Sıcaklık/Renk Uyumu Ayarlamaları)
-  // Eğer mood-ürün arasında renk sıcaklığı çelişkisi varsa, Gemini'ye hint ver
-  if (atmosphericAnalysis && atmosphericAnalysis.promptAdjustments.length > 0) {
-    promptParts.push(`COLOR GRADING (IMPORTANT):`);
+  // Sadece ciddi renk çelişkisi varsa color grading ekle (v3.0)
+  // Hafif çelişkilerde Gemini'nin kendi dengesine güven
+  if (atmosphericAnalysis && atmosphericAnalysis.temperatureConflict.severity === "severe") {
+    promptParts.push(`COLOR GRADING: Ensure product colors remain appetizing despite cool atmosphere.`);
     atmosphericAnalysis.promptAdjustments.forEach(adj => {
       promptParts.push(`- ${adj}`);
     });
     promptParts.push("");
-
-    // Severe conflict durumunda ek uyarı
-    if (atmosphericAnalysis.temperatureConflict.severity === "severe") {
-      promptParts.push(`⚠️ WARNING: Temperature mismatch detected. Ensure product colors remain appetizing.`);
-      promptParts.push("");
-    }
   }
 
-  // 5.6 Asset Etiketleri (Gemini önerileri ile - constraint olarak sunuluyor)
+  // 5.6 Asset Etiketleri — KALDIRILDI (v3.0)
+  // Asset'ler zaten referans görseller olarak [2][3][4]... şeklinde gönderiliyor.
+  // Metin ile "PLATE: renkli tabak" demek, referans görselle çelişki yaratıyordu.
+  // Decision log'a asset tag bilgisi yine kaydedilsin (debugging için)
   if (params.assetTags) {
-    const tagLines: string[] = [];
-
-    // Her asset tipi için rol tanımlayarak ekle
-    if (params.assetTags.plate?.length) {
-      tagLines.push(`- PLATE (serving surface): ${params.assetTags.plate.join(", ")}`);
-    }
-    if (params.assetTags.cup?.length) {
-      tagLines.push(`- CUP/MUG (beverage container): ${params.assetTags.cup.join(", ")}`);
-    }
-    if (params.assetTags.table?.length) {
-      tagLines.push(`- TABLE (background surface): ${params.assetTags.table.join(", ")}`);
-    }
-    if (params.assetTags.accessory?.length) {
-      tagLines.push(`- ACCESSORY (decorative element): ${params.assetTags.accessory.join(", ")}`);
-    }
-    if (params.assetTags.napkin?.length) {
-      tagLines.push(`- NAPKIN (textile element): ${params.assetTags.napkin.join(", ")}`);
-    }
-    // Ürün etiketleri de eklenebilir
-    if (params.assetTags.product?.length) {
-      tagLines.push(`- PRODUCT: ${params.assetTags.product.join(", ")}`);
-    }
-
-    if (tagLines.length > 0) {
-      promptParts.push(`ASSET CONSTRAINTS (FOLLOW THESE):`);
-      promptParts.push(`Use reference images exactly as described below:`);
-      promptParts.push(...tagLines);
-      promptParts.push("");
-      promptParts.push(`NOTE: If tags conflict with visual evidence in reference images, prioritize visual evidence.`);
-      promptParts.push("");
-
+    const tagCount = Object.values(params.assetTags).filter(v => v && v.length > 0).length;
+    if (tagCount > 0) {
       decisions.push({
         step: "asset-tags",
         input: JSON.stringify(params.assetTags),
         matched: true,
-        result: `${tagLines.length} asset tipi için constraint eklendi`,
+        result: `${tagCount} asset tipi için referans görseller mevcut (prompt'a metin eklenmedi — v3.0)`,
         fallback: false,
-        details: { tagCount: tagLines.length, tags: params.assetTags },
+        details: { tagCount, tags: params.assetTags, note: "Tags only used for asset selection, not in prompt text" },
       });
     }
   }
 
-  // 5.6a Aksesuar Yönlendirmesi (kullanıcının seçtiği listeden)
+  // 5.6a Aksesuar Yönlendirmesi — KALDIRILDI (v3.0)
+  // Aksesuar referans görsel olarak gönderiliyorsa metin talimatı gereksiz.
+  // "Add ONE accessory" ile "Use ONLY references" çelişiyordu.
   if (params.accessoryAllowed && params.accessoryOptions && params.accessoryOptions.length > 0) {
-    const accessoryList = params.accessoryOptions.join(", ");
-    promptParts.push(`ACCESSORY DIRECTION:`);
-    promptParts.push(`Add ONE small decorative accessory to the scene — choose from: ${accessoryList}.`);
-    promptParts.push(`The accessory should look natural and not compete with the hero product. Place it at the edge of the composition.`);
-    promptParts.push(``);
-
     decisions.push({
       step: "accessory-direction",
-      input: `accessoryOptions: [${accessoryList}]`,
+      input: `accessoryOptions: [${params.accessoryOptions.join(", ")}]`,
       matched: true,
-      result: `User-defined accessory list: ${accessoryList}`,
+      result: `Aksesuar referans görsel olarak gönderildi (prompt'a metin eklenmedi — v3.0)`,
       fallback: false,
-      details: { source: "theme.accessoryOptions", options: params.accessoryOptions },
+      details: { source: "theme.accessoryOptions", options: params.accessoryOptions, note: "Accessory sent as reference image, no text instruction needed" },
     });
   }
 
-  // 5.6b İçecek Tipi Constraint (beverageRules'dan)
+  // 5.6b İçecek Tipi — PROMPT'TAN KALDIRILDI (v3.0)
+  // Beverage bilgisi artık cup referans görselin description'ına ekleniyor
+  // (orchestrator.ts'de: "ceramic, contains dark brown coffee")
+  // Böylece ayrı bir "MANDATORY" blok yerine referansla birlikte gidiyor
   if (params.beverageType) {
     const beverageLabels: Record<string, string> = {
       tea: "TEA (amber/golden liquid)",
@@ -1198,30 +1156,24 @@ export async function buildGeminiPrompt(params: {
       lemonade: "LEMONADE (pale yellow liquid)",
     };
     const label = beverageLabels[params.beverageType] || params.beverageType.toUpperCase();
-    promptParts.push(`BEVERAGE RULE (MANDATORY):`);
-    promptParts.push(`The cup/mug MUST contain ${label}. Do NOT fill with any other beverage.`);
-    promptParts.push("");
 
     decisions.push({
       step: "beverage-type",
       input: params.beverageType,
       matched: true,
-      result: `İçecek tipi: ${label}`,
+      result: `İçecek tipi: ${label} (cup referans description'ına eklendi, ayrı blok yok — v3.0)`,
       fallback: false,
-      details: { beverageType: params.beverageType, label },
+      details: { beverageType: params.beverageType, label, note: "Beverage info added to cup reference description in orchestrator.ts" },
     });
   }
 
-  // 5.7 Senaryo Yönlendirmesi (Creative Direction)
-  // Senaryo açıklaması prompt'a eklenir ama referans görseller her zaman önceliklidir.
-  // Bu bölüm sahne kompozisyonu ve atmosfer için yaratıcı yön verir.
-  // Kompozisyon kuralları: Rule of Thirds + negative space (Story'de yazı alanı için)
+  // 5.7 Sahne Yönlendirmesi — v3.0: Senaryo + Tema birleşik, prompt ana gövdesi
+  // Kompozisyon her zaman eklenir, senaryo ve tema açıklamaları varsa birleştirilir
+  promptParts.push(`SCENE DIRECTION:`);
+  promptParts.push(`Composition: Rule-of-thirds placement, negative space in top third for typography.`);
+
   if (params.scenarioDescription) {
-    promptParts.push(`SCENE DIRECTION (creative guidance - reference images always take precedence):`);
-    promptParts.push(`COMPOSITION: Position the hero product on a rule-of-thirds intersection, not dead center. Leave clean negative space in the top third of the vertical frame for typography.`);
     promptParts.push(params.scenarioDescription);
-    promptParts.push(`NOTE: This describes the desired scene composition. Always prioritize visual evidence from reference images over this description.`);
-    promptParts.push("");
 
     decisions.push({
       step: "scenario-description",
@@ -1231,14 +1183,10 @@ export async function buildGeminiPrompt(params: {
       fallback: false,
       details: {
         content: params.scenarioDescription.substring(0, 100),
-        approach: "creative-guidance-with-reference-priority",
+        approach: "unified-scene-direction-v3",
       },
     });
   } else {
-    // Senaryo açıklaması olmasa bile kompozisyon kuralını ekle
-    promptParts.push(`COMPOSITION: Position the hero product on a rule-of-thirds intersection, not dead center. Leave clean negative space in the top third of the vertical frame for typography.`);
-    promptParts.push("");
-
     decisions.push({
       step: "scenario-description",
       input: null,
@@ -1249,18 +1197,23 @@ export async function buildGeminiPrompt(params: {
     });
   }
 
-  // 5.8 Tema Sahne Ayarları (Scene Setting)
-  // Tema'nın weatherPreset, customLighting, atmosphere alanlarından oluşur
+  // Tema sahne ayarlarını senaryo açıklamasıyla birleştir (ayrı blok değil)
   if (params.themeSetting) {
     const sceneSettingLines = buildSceneSettingFromTheme(params.themeSetting);
     if (sceneSettingLines.length > 0) {
-      promptParts.push(...sceneSettingLines);
+      // "SCENE SETTING:" header'ı atla, sadece içerik satırlarını ekle
+      const contentLines = sceneSettingLines.filter(line =>
+        !line.startsWith("SCENE SETTING:") && line.trim() !== ""
+      );
+      if (contentLines.length > 0) {
+        promptParts.push(...contentLines);
+      }
 
       decisions.push({
         step: "theme-scene-setting",
         input: JSON.stringify(params.themeSetting),
         matched: true,
-        result: `Scene setting eklendi (${sceneSettingLines.length - 2} satır)`,
+        result: `Scene setting birleştirildi (${contentLines.length} satır)`,
         fallback: false,
         details: {
           weatherPreset: params.themeSetting.weatherPreset || null,
@@ -1270,6 +1223,8 @@ export async function buildGeminiPrompt(params: {
       });
     }
   }
+
+  promptParts.push("");
 
   // 6. İşletme Bağlamı - Sadece negatif kısıtlamalar eklenir (ortam tarifi YASAK)
   // Referans görselleri override eden tarifler yerine, sadece "yapma" kuralları eklenir.

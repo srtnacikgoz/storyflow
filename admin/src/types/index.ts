@@ -813,6 +813,13 @@ export interface OrchestratorDashboardStats {
 // Pre-flight Validation Types
 // ==========================================
 
+export interface AssetPreview {
+  id: string;
+  filename: string;
+  url: string;
+  tags: string[];
+}
+
 export interface PreFlightData {
   theme: {
     name: string;
@@ -831,10 +838,10 @@ export interface PreFlightData {
   };
   scenarioCount: number;
   assets: {
-    products: { total: number };
-    tables: { total: number; preferred: number };
-    plates: { total: number; preferred: number };
-    cups: { total: number; preferred: number };
+    products: { total: number; preview?: AssetPreview };
+    tables: { total: number; preferred: number; preview?: AssetPreview };
+    plates: { total: number; preferred: number; preview?: AssetPreview };
+    cups: { total: number; preferred: number; preview?: AssetPreview };
   };
   beverage?: {
     productType: string;

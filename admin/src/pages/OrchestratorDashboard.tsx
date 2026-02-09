@@ -521,25 +521,52 @@ export default function OrchestratorDashboard() {
                   </div>
                 </div>
 
-                {/* Asset Durumu */}
+                {/* Asset Havuzu */}
                 <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-2">Asset Durumu</div>
-                  <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="text-xs font-medium text-gray-500 mb-2">Asset Havuzu <span className="font-normal text-gray-400">— AI bu adaylardan seçecek</span></div>
+                  <div className="grid grid-cols-4 gap-2">
                     {([
-                      { label: "Ürün", total: preFlightData.assets.products.total, preferred: undefined, tags: preFlightData.scenario.suggestedProducts.length > 0 ? preFlightData.scenario.suggestedProducts : undefined },
-                      { label: "Masa", total: preFlightData.assets.tables.total, preferred: preFlightData.assets.tables.preferred, tags: preFlightData.theme.preferredTags?.table },
-                      { label: "Tabak", total: preFlightData.assets.plates.total, preferred: preFlightData.assets.plates.preferred, tags: preFlightData.theme.preferredTags?.plate },
-                      { label: "Fincan", total: preFlightData.assets.cups.total, preferred: preFlightData.assets.cups.preferred, tags: preFlightData.theme.preferredTags?.cup },
-                    ] as const).map((item) => {
+                      { label: "Ürün", total: preFlightData.assets.products.total, preferred: undefined, tags: preFlightData.scenario.suggestedProducts.length > 0 ? preFlightData.scenario.suggestedProducts : undefined, preview: preFlightData.assets.products.preview },
+                      { label: "Masa", total: preFlightData.assets.tables.total, preferred: preFlightData.assets.tables.preferred, tags: preFlightData.theme.preferredTags?.table, preview: preFlightData.assets.tables.preview },
+                      { label: "Tabak", total: preFlightData.assets.plates.total, preferred: preFlightData.assets.plates.preferred, tags: preFlightData.theme.preferredTags?.plate, preview: preFlightData.assets.plates.preview },
+                      { label: "Fincan", total: preFlightData.assets.cups.total, preferred: preFlightData.assets.cups.preferred, tags: preFlightData.theme.preferredTags?.cup, preview: preFlightData.assets.cups.preview },
+                    ] as Array<{ label: string; total: number; preferred: number | undefined; tags: string[] | undefined; preview: { id: string; filename: string; url: string; tags: string[] } | undefined }>).map((item) => {
                       const isNone = item.tags?.includes("__none__");
                       const activeTags = item.tags?.filter(t => t !== "__none__") || [];
                       return (
-                        <div key={item.label} className={`bg-white rounded-lg p-2 border ${isNone ? "opacity-50" : ""}`}>
-                          <div className="text-xs text-gray-500">{item.label}</div>
+                        <div key={item.label} className={`bg-white rounded-lg p-2 border ${isNone ? "opacity-50 bg-gray-50" : ""}`}>
+                          <div className="text-xs font-medium text-gray-500 mb-1">{item.label}</div>
                           {isNone ? (
-                            <div className="text-sm font-medium text-gray-400 mt-1">Yok</div>
+                            <div className="flex flex-col items-center py-2">
+                              <div className="w-14 h-14 rounded-lg bg-gray-200 flex items-center justify-center text-gray-400 text-lg">—</div>
+                              <div className="text-xs text-gray-400 mt-1">Yok</div>
+                            </div>
+                          ) : item.preview?.url ? (
+                            <div className="flex flex-col items-center">
+                              <img
+                                src={item.preview.url}
+                                alt={item.preview.filename}
+                                className="w-14 h-14 rounded-lg object-cover border border-gray-200"
+                              />
+                              <div className="text-[10px] text-gray-600 mt-1 truncate w-full text-center" title={item.preview.filename}>
+                                {item.preview.filename.length > 12 ? item.preview.filename.slice(0, 12) + "…" : item.preview.filename}
+                              </div>
+                              <div className="text-[10px] text-gray-400">
+                                {item.preferred !== undefined && activeTags.length > 0
+                                  ? `${item.preferred}/${item.total} tercihli`
+                                  : `${item.total} aday`
+                                }
+                              </div>
+                              {activeTags.length > 0 && (
+                                <div className="flex flex-wrap gap-0.5 mt-0.5 justify-center">
+                                  {activeTags.slice(0, 2).map(t => (
+                                    <span key={t} className="text-[9px] bg-gray-100 text-gray-500 px-1 py-px rounded">{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <>
+                            <div className="flex flex-col items-center">
                               <div className={`text-lg font-bold ${item.total === 0 ? "text-red-500" : "text-gray-800"}`}>
                                 {item.total}
                               </div>
@@ -548,12 +575,7 @@ export default function OrchestratorDashboard() {
                                   {item.preferred} tercih
                                 </div>
                               )}
-                              {activeTags.length > 0 && (
-                                <div className="text-[10px] text-gray-400 truncate" title={activeTags.join(", ")}>
-                                  {activeTags.join(", ")}
-                                </div>
-                              )}
-                            </>
+                            </div>
                           )}
                         </div>
                       );
