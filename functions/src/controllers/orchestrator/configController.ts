@@ -31,6 +31,8 @@ import {
   clearPromptStudioCache,
   getBeverageRulesConfig,
   updateBeverageRulesConfig,
+  getProductSlotDefaults,
+  updateProductSlotDefaults,
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
 
@@ -1409,6 +1411,69 @@ export const updateAssetSelectionConfigEndpoint = functions
         });
       } catch (error) {
         errorResponse(response, error, "updateAssetSelectionConfig");
+      }
+    });
+  });
+
+// ==========================================
+// PRODUCT SLOT DEFAULTS
+// ==========================================
+
+/**
+ * Ürün tipine göre slot varsayılanlarını getir
+ * GET /getProductSlotDefaults
+ */
+export const getProductSlotDefaultsEndpoint = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const config = await getProductSlotDefaults();
+        response.json({ success: true, data: config });
+      } catch (error) {
+        errorResponse(response, error, "getProductSlotDefaults");
+      }
+    });
+  });
+
+/**
+ * Ürün tipine göre slot varsayılanlarını güncelle
+ * POST /updateProductSlotDefaults
+ * Body: { defaults: Record<string, Record<string, boolean>> }
+ */
+export const updateProductSlotDefaultsEndpoint = functions
+  .region(REGION)
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST" && request.method !== "PUT") {
+          response.status(405).json({ success: false, error: "Use POST or PUT" });
+          return;
+        }
+
+        const { defaults } = request.body;
+
+        if (!defaults || typeof defaults !== "object") {
+          response.status(400).json({ success: false, error: "defaults alanı gerekli" });
+          return;
+        }
+
+        // _default key zorunlu
+        if (!defaults._default) {
+          response.status(400).json({ success: false, error: "_default key zorunlu" });
+          return;
+        }
+
+        await updateProductSlotDefaults(defaults);
+
+        response.json({
+          success: true,
+          message: "Product slot defaults updated",
+        });
+      } catch (error) {
+        errorResponse(response, error, "updateProductSlotDefaults");
       }
     });
   });

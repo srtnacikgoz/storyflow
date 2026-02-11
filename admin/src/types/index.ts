@@ -1400,4 +1400,56 @@ export interface VisualCriticResponse {
   refined_prompt?: string;
 }
 
+// ==========================================
+// Composition System (Dinamik Slot Sistemi)
+// ==========================================
+
+export type SlotState = "disabled" | "manual" | "random";
+
+export interface SlotDefinition {
+  key: string;
+  label: string;
+  description?: string;
+  isRequired: boolean;
+  assetCategory: string;
+  assetSubType?: string;
+  order: number;
+  isActive: boolean;
+}
+
+export interface SlotDefinitionsConfig {
+  slots: SlotDefinition[];
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+export interface SlotConfig {
+  state: SlotState;
+  assetId?: string;
+  filterTags?: string[];
+}
+
+export interface CompositionTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  themeId?: string;
+  scenarioId?: string;
+  slots: Record<string, SlotConfig>;
+  type: "system" | "tenant";
+  tenantId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Kompozisyon Konfigürasyonu — Pipeline'ın TEK GİRDİSİ
+ * Template'ten yüklenir, kullanıcı override'ları uygulanır, pipeline'a gönderilir
+ */
+export interface CompositionConfig {
+  slots: Record<string, SlotConfig & { source?: "template" | "override" | "manual" }>;
+  sourceTemplateId?: string;
+  sourcePresetId?: string;
+}
+
 

@@ -94,6 +94,9 @@ export {
   // Asset Selection Config
   getAssetSelectionConfigEndpoint,
   updateAssetSelectionConfigEndpoint,
+  // Product Slot Defaults
+  getProductSlotDefaultsEndpoint,
+  updateProductSlotDefaultsEndpoint,
   // Prompt Studio
   // getPromptStudioConfig,
   // getPromptTemplateById,
@@ -181,3 +184,14 @@ export {
   getBeverageRulesConfigEndpoint,
   updateBeverageRulesConfigEndpoint,
 } from "./beverageRulesController";
+
+// Composition Controller (Dinamik Slot Sistemi)
+export {
+  getSlotDefinitionsEndpoint,
+  updateSlotDefinitionsEndpoint,
+  listCompositionTemplates,
+  getCompositionTemplateById,
+  createCompositionTemplateEndpoint,
+  updateCompositionTemplateEndpoint,
+  deleteCompositionTemplateEndpoint,
+} from "./compositionController";

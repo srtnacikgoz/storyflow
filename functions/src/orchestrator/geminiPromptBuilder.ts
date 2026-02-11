@@ -1250,25 +1250,30 @@ export async function buildGeminiPrompt(params: {
       };
 
       const constraints = floorConstraints[businessContext.floorLevel] || [];
-      if (constraints.length > 0) {
-        // Kısıtlamaları RULES bölümünden önce ekle (aşağıda birleşecek)
+      if (constraints.length > 0 || businessContext.promptContext) {
         promptParts.push(`ENVIRONMENT CONSTRAINTS:`);
         constraints.forEach(c => promptParts.push(`- ${c}`));
-        promptParts.push("");
 
-        console.log(`[GeminiPromptBuilder] Business context: floorLevel=${businessContext.floorLevel}, ${constraints.length} constraints added`);
+        // promptContext: kullanıcının serbest metin kısıtlamaları
+        if (businessContext.promptContext && businessContext.promptContext.trim()) {
+          promptParts.push(`- ${businessContext.promptContext.trim()}`);
+          console.log(`[GeminiPromptBuilder] Business context: promptContext injected (${businessContext.promptContext.length} chars)`);
+        }
+
+        promptParts.push("");
+        console.log(`[GeminiPromptBuilder] Business context: floorLevel=${businessContext.floorLevel}, ${constraints.length} floor constraints + promptContext`);
       }
 
       decisions.push({
         step: "business-context",
-        input: businessContext.businessName,
+        input: businessContext.floorLevel,
         matched: true,
-        result: `Floor constraints eklendi: ${businessContext.floorLevel} (${constraints.length} kural)`,
+        result: `Floor constraints eklendi: ${businessContext.floorLevel} (${constraints.length} kural)${businessContext.promptContext ? " + promptContext" : ""}`,
         fallback: false,
         details: {
-          businessName: businessContext.businessName,
           floorLevel: businessContext.floorLevel,
           isEnabled: businessContext.isEnabled,
+          hasPromptContext: !!businessContext.promptContext,
           approach: "negative-constraints-only",
           constraints,
         },

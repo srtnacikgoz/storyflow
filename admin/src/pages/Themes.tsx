@@ -25,12 +25,7 @@ const THEMES_TOUR_STEPS: TourStep[] = [
     content: "Buradan yeni tema oluşturabilirsiniz. Her tema belirli senaryoları ve ayarları içerir.",
     position: "left",
   },
-  {
-    target: "[data-tour='variation-rules']",
-    title: "Çeşitlilik Kuralları",
-    content: "Bu ayarlar AI'ın aynı öğeleri ne sıklıkta tekrar kullanabileceğini belirler. Monotonluğu önler.",
-    position: "top",
-  },
+  // Çeşitlilik kuralları Ayarlar sayfasına taşındı (Faz 3.4),
 ];
 
 // Senaryo tipi (API'den gelen)
@@ -41,25 +36,7 @@ interface Scenario {
   isInterior: boolean;
 }
 
-// Çeşitlilik kuralları tipi
-interface VariationRules {
-  scenarioGap: number;
-  tableGap: number;
-  handStyleGap: number;
-  compositionGap: number;
-  petFrequency: number;
-  similarityThreshold: number;
-}
-
-// Varsayılan değerler
-const DEFAULT_VARIATION_RULES: VariationRules = {
-  scenarioGap: 3,
-  tableGap: 2,
-  handStyleGap: 4,
-  compositionGap: 2,
-  petFrequency: 15,
-  similarityThreshold: 50,
-};
+// Çeşitlilik kuralları Ayarlar sayfasına taşındı (Faz 3.4)
 
 // Hava durumu → ışık + atmosfer otomatik eşleşme
 const WEATHER_AUTO_MAP: Record<string, { lighting: string; atmosphere: string }> = {
@@ -128,14 +105,11 @@ export default function Themes() {
   // AI Description Loading State
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
 
-  // Çeşitlilik kuralları state
-  const [variationRules, setVariationRules] = useState<VariationRules>(DEFAULT_VARIATION_RULES);
-  const [savingRules, setSavingRules] = useState(false);
+  // Çeşitlilik kuralları Ayarlar sayfasına taşındı (Faz 3.4)
 
   useEffect(() => {
     loadThemes();
     loadScenarios();
-    loadVariationRules();
     loadTableTags();
     loadPropTags();
   }, []);
@@ -243,33 +217,6 @@ export default function Themes() {
     }
   };
 
-  // Çeşitlilik kurallarını yükle
-  const loadVariationRules = async () => {
-    try {
-      const data = await api.getOrchestratorConfig();
-      if (data?.variationRules) {
-        setVariationRules({
-          ...DEFAULT_VARIATION_RULES,
-          ...data.variationRules,
-        });
-      }
-    } catch (err) {
-      console.error("Çeşitlilik kuralları yüklenemedi:", err);
-    }
-  };
-
-  // Çeşitlilik kurallarını kaydet
-  const handleSaveRules = async () => {
-    setSavingRules(true);
-    try {
-      await api.updateOrchestratorConfig({ variationRules });
-      alert("Kurallar kaydedildi");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Kayıt başarısız");
-    } finally {
-      setSavingRules(false);
-    }
-  };
 
   // Modal aç (yeni veya düzenleme)
   const openModal = (theme?: Theme) => {
@@ -635,155 +582,6 @@ export default function Themes() {
           </>
         )}
 
-        {/* Çeşitlilik Kuralları Bölümü */}
-        <div className="bg-white rounded-xl border border-stone-200 p-6" data-tour="variation-rules">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-semibold text-stone-900">Çeşitlilik Kuralları</h2>
-              <p className="text-sm text-stone-500 mt-1">
-                İçerik üretiminde tekrarı önlemek için kuralları ayarlayın
-              </p>
-            </div>
-            <button
-              onClick={handleSaveRules}
-              disabled={savingRules}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
-            >
-              {savingRules ? "Kaydediliyor..." : "Kuralları Kaydet"}
-            </button>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {/* Senaryo Aralığı */}
-            <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-2">
-                Senaryo Aralığı: {variationRules.scenarioGap}
-                <Tooltip
-                  content="Örn: 3 = aynı senaryo en az 3 üretim sonra tekrar kullanılabilir"
-                  position="top"
-                />
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={variationRules.scenarioGap}
-                onChange={(e) =>
-                  setVariationRules({ ...variationRules, scenarioGap: parseInt(e.target.value) })
-                }
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-              />
-              <p className="text-xs text-stone-500 mt-1">
-                Aynı senaryo kaç üretim sonra tekrarlanabilir
-              </p>
-            </div>
-
-            {/* Masa Aralığı */}
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
-                Masa Aralığı: {variationRules.tableGap}
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={variationRules.tableGap}
-                onChange={(e) =>
-                  setVariationRules({ ...variationRules, tableGap: parseInt(e.target.value) })
-                }
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-              />
-              <p className="text-xs text-stone-500 mt-1">
-                Aynı masa/yüzey kaç üretim sonra tekrarlanabilir
-              </p>
-            </div>
-
-            {/* El Stili Aralığı */}
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
-                El Stili Aralığı: {variationRules.handStyleGap}
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={variationRules.handStyleGap}
-                onChange={(e) =>
-                  setVariationRules({ ...variationRules, handStyleGap: parseInt(e.target.value) })
-                }
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-              />
-              <p className="text-xs text-stone-500 mt-1">
-                Aynı el stili kaç üretim sonra tekrarlanabilir
-              </p>
-            </div>
-
-            {/* Kompozisyon Aralığı */}
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
-                Kompozisyon Aralığı: {variationRules.compositionGap}
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={variationRules.compositionGap}
-                onChange={(e) =>
-                  setVariationRules({ ...variationRules, compositionGap: parseInt(e.target.value) })
-                }
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-              />
-              <p className="text-xs text-stone-500 mt-1">
-                Aynı kompozisyon kaç üretim sonra tekrarlanabilir
-              </p>
-            </div>
-
-            {/* Köpek Frekansı */}
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
-                Köpek Frekansı: Her {variationRules.petFrequency} üretimde 1
-              </label>
-              <input
-                type="range"
-                min="5"
-                max="30"
-                value={variationRules.petFrequency}
-                onChange={(e) =>
-                  setVariationRules({ ...variationRules, petFrequency: parseInt(e.target.value) })
-                }
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-              />
-              <p className="text-xs text-stone-500 mt-1">
-                Köpek ne sıklıkla dahil edilsin (teması izin veriyorsa)
-              </p>
-            </div>
-
-            {/* Benzerlik Eşiği */}
-            <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-stone-700 mb-2">
-                Benzerlik Eşiği: %{variationRules.similarityThreshold}
-                <Tooltip
-                  content="Yüksek değer = daha farklı görseller. Düşük değer = benzer görsellere izin."
-                  position="top"
-                />
-              </label>
-              <input
-                type="range"
-                min="30"
-                max="80"
-                value={variationRules.similarityThreshold}
-                onChange={(e) =>
-                  setVariationRules({ ...variationRules, similarityThreshold: parseInt(e.target.value) })
-                }
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-              />
-              <p className="text-xs text-stone-500 mt-1">
-                Bu oranın üzerindeki benzerlikler engellenir
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -927,7 +725,7 @@ export default function Themes() {
                       <span className="flex items-center gap-1.5 text-sm font-medium text-stone-700">
                         Köpek dahil edilebilir
                         <Tooltip
-                          content="İzin verilirse köpek 'Çeşitlilik Kuralları'ndaki frekansa göre görsellere eklenir."
+                          content="İzin verilirse köpek Ayarlar sayfasındaki frekansa göre görsellere eklenir."
                           position="right"
                         />
                       </span>

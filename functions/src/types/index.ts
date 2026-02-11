@@ -38,16 +38,7 @@ export type AILogStatus = "success" | "error" | "blocked";
 export interface ConfigSnapshot {
   themeId?: string;
   themeName?: string;
-  themeColors?: string[];
-  moodId?: string;
   moodName?: string;
-  moodKeywords?: string[];
-  moodWeather?: string;
-  moodLightingPrompt?: string;
-  moodColorGradePrompt?: string;
-  styleId?: string;
-  styleName?: string;
-  styleDefinition?: string;
   timeOfDay?: string;
   aspectRatio?: string;
   scheduledHour?: number;
@@ -903,27 +894,6 @@ export interface HandPose {
   skinDetails: string[]; // ["subsurface scattering", "visible pores", "natural nails"]
   avoidTerms: string[]; // ["deformed hands", "extra fingers"]
   bestFor: ProductCategory[]; // Hangi ürün kategorileri için uygun
-  isActive: boolean;
-  sortOrder: number;
-}
-
-/**
- * Kompozisyon Şablonu
- * Ürün yerleşimi ve frame yapısı
- */
-export interface CompositionTemplate {
-  id: string;
-  name: string; // "Köşeden Giriş" (TR)
-  nameEn: string; // "Corner Entry" (EN)
-  entryPoint: EntryPoint;
-  angleDescription: string; // "45-degree angle, fingers pointing upper-left"
-  productPlacement: string; // "center-left, slightly elevated"
-  propsPlacement: string; // "cup bottom-right, plate centered"
-  negativeSpace: string; // "30% top, 20% sides"
-  geminiTerms: string[]; // ["rule of thirds", "leading lines", "negative space"]
-  geminiPrompt: string; // Tam Gemini-ready açıklama
-  aspectRatio: "9:16" | "4:5" | "1:1";
-  bestFor: string[]; // ["lifestyle", "story", "product-focus"]
   isActive: boolean;
   sortOrder: number;
 }

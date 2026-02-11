@@ -14,7 +14,6 @@
 import {
   LightingPreset,
   HandPose,
-  CompositionTemplate,
   MoodDefinition,
   ProductTextureProfile,
   NegativePromptSet,
@@ -281,7 +280,8 @@ export const HAND_POSES: Omit<HandPose, "id">[] = [
 // KOMPOZİSYON ŞABLONLARI
 // ==========================================
 
-export const COMPOSITION_TEMPLATES: Omit<CompositionTemplate, "id">[] = [
+// Eski kompozisyon seed data — ölü type kaldırıldı, inline type kullanılıyor
+export const COMPOSITION_TEMPLATES: Record<string, unknown>[] = [
   // ========== EL GİRİŞ NOKTALARI ==========
   {
     name: "Sağ Alt Köşe Girişi",
@@ -1389,7 +1389,7 @@ export function getGeminiTerminologySeedData() {
       ...p,
     })),
     compositionTemplates: COMPOSITION_TEMPLATES.map((t) => ({
-      id: createSlug(t.nameEn),
+      id: createSlug(t.nameEn as string),
       ...t,
     })),
     moodDefinitions: MOOD_DEFINITIONS.map((m) => ({

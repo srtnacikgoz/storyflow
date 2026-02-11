@@ -12,6 +12,7 @@ import {
   OrchestratorConfig,
   ScheduledSlot,
   ProductionHistoryEntry,
+  CompositionConfig,
 } from "./types";
 // NOT: FieldValue artık kullanılmıyor - asset usage increment orchestrator.ts içinde
 // saveProductionHistory kaldırıldı ama getRecentHistory/getPetUsageStats hala burada
@@ -269,7 +270,8 @@ export class OrchestratorScheduler {
     scheduledHour?: number,
     overrideThemeId?: string,
     overrideAspectRatio?: "1:1" | "3:4" | "9:16",
-    isRandomMode?: boolean
+    isRandomMode?: boolean,
+    compositionConfig?: CompositionConfig
   ): Promise<void> {
     const orchestrator = new Orchestrator(this.config);
 
@@ -279,13 +281,13 @@ export class OrchestratorScheduler {
         status: "generating",
         currentStage: "initializing",
         stageIndex: 0,
-        totalStages: 7,
+        totalStages: 6,
         updatedAt: Date.now(),
       });
 
-      // Ürün tipini belirle (boş dizi = auto mod, senaryodan belirlenecek)
-      const productType: ProductType | undefined = rule.productTypes.length > 0
-        ? rule.productTypes[0]
+      // Ürün tipini belirle (boş/undefined = auto mod, senaryodan belirlenecek)
+      const productType: ProductType | undefined = (rule.productTypes?.length ?? 0) > 0
+        ? rule.productTypes![0]
         : undefined;
 
       // Progress callback - her aşamada slot'u güncelle
@@ -308,7 +310,8 @@ export class OrchestratorScheduler {
         overrideThemeId,
         overrideAspectRatio,
         undefined, // isManual
-        isRandomMode
+        isRandomMode,
+        compositionConfig
       );
 
       // Slot'u güncelle (imageBase64 strip — zaten Storage'da, Firestore 1MB limitini aşar)
@@ -320,8 +323,8 @@ export class OrchestratorScheduler {
         status: "awaiting_approval",
         pipelineResult: cleanedResult,
         currentStage: "completed",
-        stageIndex: 7,
-        totalStages: 7,
+        stageIndex: 6,
+        totalStages: 6,
         updatedAt: Date.now(),
       });
 
@@ -387,7 +390,8 @@ export class OrchestratorScheduler {
     overrideThemeId?: string,
     overrideAspectRatio?: "1:1" | "3:4" | "9:16",
     productType?: ProductType,
-    isRandomMode?: boolean
+    isRandomMode?: boolean,
+    compositionConfig?: CompositionConfig
   ): Promise<{
     slotId: string;
     success: boolean;
@@ -414,7 +418,7 @@ export class OrchestratorScheduler {
     try {
       // Pipeline'ı bekleyerek çalıştır (themeId ve aspectRatio override ile)
       // NOT: await ZORUNLU - Cloud Functions HTTP request bitince instance kapanır
-      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId, overrideAspectRatio, isRandomMode);
+      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId, overrideAspectRatio, isRandomMode, compositionConfig);
 
       return {
         slotId: slot.id,

@@ -143,16 +143,7 @@ export class AILogService {
     configSnapshot: {
       themeId?: string;
       themeName?: string;
-      themeColors?: string[];
-      moodId?: string;
       moodName?: string;
-      moodKeywords?: string[];
-      moodWeather?: string;
-      moodLightingPrompt?: string;
-      moodColorGradePrompt?: string;
-      styleId?: string;
-      styleName?: string;
-      styleDefinition?: string;
       timeOfDay?: string;
       aspectRatio?: string;
       scheduledHour?: number;
@@ -162,7 +153,7 @@ export class AILogService {
       provider: "gemini",
       stage: "config-snapshot",
       model: "system",
-      userPrompt: `Config Snapshot: Theme=${data.configSnapshot.themeName || "default"}, Mood=${data.configSnapshot.moodName || "default"}, Style=${data.configSnapshot.styleName || "default"}`,
+      userPrompt: `Config Snapshot: Theme=${data.configSnapshot.themeName || "default"}, Mood=${data.configSnapshot.moodName || "default"}`,
       status: "success",
       durationMs: 0,
       pipelineId: data.pipelineId,

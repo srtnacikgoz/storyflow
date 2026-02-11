@@ -35,6 +35,9 @@ import {
   FirestoreAssetSelectionConfig,
   FirestoreRuleEngineConfig,
   BeverageRule,
+  SlotDefinition,
+  FirestoreSlotDefinitionsConfig,
+  CompositionTemplate,
 } from "../orchestrator/types";
 import { getCategories as getCategoriesFromService } from "./categoryService";
 import {
@@ -50,6 +53,7 @@ import {
   DEFAULT_BEVERAGE_RULES,
   DEFAULT_BEVERAGE_TAG_MAPPINGS,
 } from "../orchestrator/seed/defaultData";
+import { DEFAULT_SLOT_DEFINITIONS, ProductSlotDefaults, DEFAULT_PRODUCT_SLOT_DEFAULTS } from "../orchestrator/types";
 
 // PROMPT STUDIO FONKSIYONLARI
 /**
@@ -732,7 +736,9 @@ export function clearConfigCache(): void {
   systemSettingsCacheTimestamp = 0;
   promptStudioCache = null;
   promptStudioCacheTimestamp = 0;
-  console.log("[ConfigService] Cache cleared (including system settings + prompt studio)");
+  slotDefinitionsCache = null;
+  slotDefinitionsCacheTimestamp = 0;
+  console.log("[ConfigService] Cache cleared (including system settings + prompt studio + slot definitions)");
 }
 
 // ==========================================
@@ -1128,6 +1134,307 @@ export async function updateAssetSelectionConfig(
 
   clearConfigCache();
   console.log("[ConfigService] Asset selection config updated:", Object.keys(updates));
+}
+
+// ==========================================
+// COMPOSITION SYSTEM (Dinamik Slot Sistemi)
+// ==========================================
+
+// Slot Definitions Cache
+let slotDefinitionsCache: FirestoreSlotDefinitionsConfig | null = null;
+let slotDefinitionsCacheTimestamp = 0;
+
+/**
+ * Slot tanımlarını getirir (CACHE'Lİ)
+ * Document: global/config/settings/slot-definitions
+ *
+ * Firestore'da yoksa DEFAULT_SLOT_DEFINITIONS kullanılır.
+ */
+export async function getSlotDefinitions(): Promise<FirestoreSlotDefinitionsConfig> {
+  const now = Date.now();
+
+  if (slotDefinitionsCache && now - slotDefinitionsCacheTimestamp < CACHE_TTL) {
+    return slotDefinitionsCache;
+  }
+
+  const doc = await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("slot-definitions")
+    .get();
+
+  if (!doc.exists) {
+    const defaultConfig: FirestoreSlotDefinitionsConfig = {
+      slots: DEFAULT_SLOT_DEFINITIONS,
+      updatedAt: Date.now(),
+    };
+    slotDefinitionsCache = defaultConfig;
+    slotDefinitionsCacheTimestamp = now;
+    return defaultConfig;
+  }
+
+  slotDefinitionsCache = doc.data() as FirestoreSlotDefinitionsConfig;
+  slotDefinitionsCacheTimestamp = now;
+  return slotDefinitionsCache;
+}
+
+/**
+ * Slot tanımlarını günceller
+ * Tenant yeni slot ekleyebilir veya mevcut slot'u düzenleyebilir
+ */
+export async function updateSlotDefinitions(
+  slots: SlotDefinition[],
+  updatedBy?: string
+): Promise<FirestoreSlotDefinitionsConfig> {
+  const config: FirestoreSlotDefinitionsConfig = {
+    slots,
+    updatedAt: Date.now(),
+    updatedBy,
+  };
+
+  await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("slot-definitions")
+    .set(config);
+
+  // Cache temizle
+  slotDefinitionsCache = null;
+  slotDefinitionsCacheTimestamp = 0;
+
+  console.log(`[ConfigService] Slot definitions updated: ${slots.length} slots`);
+  return config;
+}
+
+// --- Product Slot Defaults ---
+
+/**
+ * Ürün tipine göre slot varsayılanlarını getirir
+ * Document: global/config/settings/product-slot-defaults
+ *
+ * Her productType için hangi slot'ların auto-default'ta açık olacağını belirler.
+ */
+export async function getProductSlotDefaults(): Promise<ProductSlotDefaults> {
+  const doc = await getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("product-slot-defaults")
+    .get();
+
+  if (!doc.exists) {
+    return {
+      defaults: DEFAULT_PRODUCT_SLOT_DEFAULTS,
+      updatedAt: Date.now(),
+    };
+  }
+
+  return doc.data() as ProductSlotDefaults;
+}
+
+/**
+ * Ürün tipine göre slot varsayılanlarını günceller
+ * Tüm defaults map'i birden yazılır (her kayıtta full state gönderilir)
+ */
+export async function updateProductSlotDefaults(
+  defaults: Record<string, Record<string, boolean>>,
+  updatedBy?: string
+): Promise<void> {
+  const docRef = getDb()
+    .collection("global")
+    .doc("config")
+    .collection("settings")
+    .doc("product-slot-defaults");
+
+  const data: Record<string, unknown> = {
+    defaults,
+    updatedAt: Date.now(),
+  };
+  if (updatedBy) data.updatedBy = updatedBy;
+
+  await docRef.set(data);
+
+  clearConfigCache();
+  console.log(`[ConfigService] Product slot defaults updated: ${Object.keys(defaults).length} product types`);
+}
+
+// --- Composition Template CRUD ---
+
+/**
+ * System template'lerini getirir
+ * Collection: global/compositionTemplates/{id}
+ */
+export async function getSystemTemplates(): Promise<CompositionTemplate[]> {
+  const snapshot = await getDb()
+    .collection("global")
+    .doc("compositionTemplates")
+    .collection("items")
+    .orderBy("updatedAt", "desc")
+    .get();
+
+  return snapshot.docs.map((doc) => ({
+    ...doc.data(),
+    id: doc.id,
+  })) as CompositionTemplate[];
+}
+
+/**
+ * Tenant preset'lerini getirir
+ * Collection: tenants/{tenantId}/presets/{id}
+ */
+export async function getTenantPresets(tenantId: string): Promise<CompositionTemplate[]> {
+  const snapshot = await getDb()
+    .collection("tenants")
+    .doc(tenantId)
+    .collection("presets")
+    .orderBy("updatedAt", "desc")
+    .get();
+
+  return snapshot.docs.map((doc) => ({
+    ...doc.data(),
+    id: doc.id,
+  })) as CompositionTemplate[];
+}
+
+/**
+ * Tek bir template/preset getirir (ID ile)
+ * type'a göre doğru collection'dan okur
+ */
+export async function getCompositionTemplate(
+  id: string,
+  type: "system" | "tenant",
+  tenantId?: string
+): Promise<CompositionTemplate | null> {
+  let doc;
+
+  if (type === "system") {
+    doc = await getDb()
+      .collection("global")
+      .doc("compositionTemplates")
+      .collection("items")
+      .doc(id)
+      .get();
+  } else {
+    if (!tenantId) throw new Error("tenantId gerekli (tenant preset için)");
+    doc = await getDb()
+      .collection("tenants")
+      .doc(tenantId)
+      .collection("presets")
+      .doc(id)
+      .get();
+  }
+
+  if (!doc.exists) return null;
+
+  return { ...doc.data(), id: doc.id } as CompositionTemplate;
+}
+
+/**
+ * Yeni composition template oluşturur
+ */
+export async function createCompositionTemplate(
+  data: Omit<CompositionTemplate, "id" | "createdAt" | "updatedAt">
+): Promise<CompositionTemplate> {
+  const now = Date.now();
+  // undefined alanları Firestore'a göndermemek için temizle
+  const cleanData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) cleanData[key] = value;
+  }
+  const templateData = {
+    ...cleanData,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  let docRef;
+
+  if (data.type === "system") {
+    docRef = await getDb()
+      .collection("global")
+      .doc("compositionTemplates")
+      .collection("items")
+      .add(templateData);
+  } else {
+    if (!data.tenantId) throw new Error("tenantId gerekli (tenant preset için)");
+    docRef = await getDb()
+      .collection("tenants")
+      .doc(data.tenantId)
+      .collection("presets")
+      .add(templateData);
+  }
+
+  console.log(`[ConfigService] Composition template created: ${docRef.id} (${data.type})`);
+  return { ...templateData, id: docRef.id } as CompositionTemplate;
+}
+
+/**
+ * Composition template günceller
+ */
+export async function updateCompositionTemplate(
+  id: string,
+  type: "system" | "tenant",
+  updates: Partial<Omit<CompositionTemplate, "id" | "type" | "createdAt">>,
+  tenantId?: string
+): Promise<void> {
+  // undefined alanları Firestore'a göndermemek için temizle
+  const cleanUpdates: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) cleanUpdates[key] = value;
+  }
+  const updateData = {
+    ...cleanUpdates,
+    updatedAt: Date.now(),
+  };
+
+  if (type === "system") {
+    await getDb()
+      .collection("global")
+      .doc("compositionTemplates")
+      .collection("items")
+      .doc(id)
+      .update(updateData);
+  } else {
+    if (!tenantId) throw new Error("tenantId gerekli (tenant preset için)");
+    await getDb()
+      .collection("tenants")
+      .doc(tenantId)
+      .collection("presets")
+      .doc(id)
+      .update(updateData);
+  }
+
+  console.log(`[ConfigService] Composition template updated: ${id} (${type})`);
+}
+
+/**
+ * Composition template siler
+ */
+export async function deleteCompositionTemplate(
+  id: string,
+  type: "system" | "tenant",
+  tenantId?: string
+): Promise<void> {
+  if (type === "system") {
+    await getDb()
+      .collection("global")
+      .doc("compositionTemplates")
+      .collection("items")
+      .doc(id)
+      .delete();
+  } else {
+    if (!tenantId) throw new Error("tenantId gerekli (tenant preset için)");
+    await getDb()
+      .collection("tenants")
+      .doc(tenantId)
+      .collection("presets")
+      .doc(id)
+      .delete();
+  }
+
+  console.log(`[ConfigService] Composition template deleted: ${id} (${type})`);
 }
 
 // ==========================================

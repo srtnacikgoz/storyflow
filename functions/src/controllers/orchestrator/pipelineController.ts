@@ -7,6 +7,7 @@ import { functions, db, getCors, REGION, claudeApiKey, getOrchestratorConfig, er
 import { OrchestratorScheduler } from "../../orchestrator/scheduler";
 import {
   ProductType,
+  CompositionConfig,
   WEATHER_PRESETS,
   LIGHTING_PRESETS,
   ATMOSPHERE_PRESETS,
@@ -91,18 +92,19 @@ export const orchestratorGenerateNow = functions
           return;
         }
 
-        const { productType, themeId, aspectRatio, isRandomMode } = request.body as {
+        const { productType, themeId, aspectRatio, isRandomMode, compositionConfig } = request.body as {
           productType?: ProductType;
           themeId?: string;
           aspectRatio?: "1:1" | "3:4" | "9:16";
           isRandomMode?: boolean;
+          compositionConfig?: CompositionConfig;
         };
 
         const config = await getOrchestratorConfig();
         const scheduler = new OrchestratorScheduler(config);
 
         // Pipeline tamamlanana kadar bekle (productType opsiyonel — auto mod)
-        const result = await scheduler.generateNow(themeId, aspectRatio, productType, isRandomMode);
+        const result = await scheduler.generateNow(themeId, aspectRatio, productType, isRandomMode, compositionConfig);
 
         if (result.success) {
           response.json({

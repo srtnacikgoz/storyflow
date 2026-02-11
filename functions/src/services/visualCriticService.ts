@@ -89,9 +89,7 @@ export class VisualCriticService {
     `;
 
             if (ctx.configSnapshot) {
-                if (ctx.configSnapshot.styleName) assertionContext += `- Stil: ${ctx.configSnapshot.styleName}\n`;
                 if (ctx.configSnapshot.timeOfDay) assertionContext += `- Zaman: ${ctx.configSnapshot.timeOfDay}\n`;
-                if (ctx.configSnapshot.themeColors) assertionContext += `- Renk Paleti: ${ctx.configSnapshot.themeColors.join(", ")}\n`;
             }
 
             if (ctx.assetSelection && ctx.assetSelection.selectedAssets) {

@@ -362,14 +362,8 @@ export interface Asset {
   // Örn: Tiramisu kaşıkla yenir ama bardakta servis ediliyorsa elle tutulabilir
   canBeHeldByHand?: boolean;
 
-  // Tabak gerekli mi? (sadece products kategorisi için)
-  // false = "Tabaksız" - ürün elde tutulur, tabak seçilmez (Örn: tablet çikolata, bar)
-  // true (varsayılan) = Ürün etiketine göre uygun tabak seçilir
-  plateRequired?: boolean;
-
-  // İçecek eşleşmesi (sadece products kategorisi için)
-  // Ürünün yanında hangi içecek sunulacağını belirler
-  // Bardak seçimi bu alan + bardak etiketleri ile otomatik eşleşir
+  // plateRequired kaldırıldı (Faz 4) — composition mode'da kullanıcı tabak slot'unu kontrol eder
+  // beverageMatch kaldırıldı (Faz 4) — composition mode'da kullanıcı bardak slot'unu kontrol eder
   defaultBeverage?: BeverageType;
 
   // Alternatif içecek (çeşitlilik için)
@@ -416,17 +410,13 @@ export interface TimeSlotRule {
   // Hangi günler
   daysOfWeek: number[]; // [1,2,3,4,5] = Hafta içi
 
-  // Kategori
-  productTypes: ProductType[]; // ["croissants"]
+  // Kategori (opsiyonel — boş/undefined ise senaryodan belirlenir)
+  productTypes?: ProductType[]; // ["croissants"] veya boş = auto
   allowPairing?: boolean; // Kahve + pasta gibi kombinasyon
   pairingWith?: ProductType[]; // ["coffees"]
 
-  // Tema tercihi (yeni sistem)
+  // Tema tercihi
   themeId?: string; // "morning-energy" - Temalar sayfasından seçilir
-
-  // Senaryo tercihi (eski sistem, geriye dönük uyumluluk)
-  // @deprecated - themeId kullanın
-  scenarioPreference?: string[]; // ["zarif-tutma", "kahve-ani"]
 
   // Aktiflik
   isActive: boolean;
@@ -2064,4 +2054,245 @@ export interface Style {
   updatedAt: number;
 }
 
+// ==========================================
+// COMPOSITION SYSTEM (Dinamik Slot Sistemi)
+// ==========================================
+// Kullanıcı seçer, AI üretir. Seçilmeyen slot pipeline'a girmez.
+// Tüm slot'lar dinamik — Firestore config'den okunur.
+// Referans: .claude/references/KOMPOZISYON-SISTEMI-FINAL-PLAN.md
 
+/**
+ * Slot durumları
+ * disabled: Bu slot görselde yok — pipeline'a girmez
+ * manual:   Kullanıcı belirli bir asset seçti
+ * random:   Filtrelenmiş havuzdan rastgele seçim (AI karar vermez)
+ */
+export type SlotState = "disabled" | "manual" | "random";
+
+/**
+ * Slot tanımı
+ * Firestore: global/config/settings/slot-definitions
+ *
+ * Her slot bir asset kategorisine bağlıdır.
+ * Tenant yeni slot ekleyebilir — kod değişikliği gerekmez.
+ */
+export interface SlotDefinition {
+  /** Unique anahtar — "surface", "dish", "drinkware" vb. */
+  key: string;
+
+  /** UI'da gösterilecek ad (Türkçe) */
+  label: string;
+
+  /** Açıklama */
+  description?: string;
+
+  /** Bu slot varsayılan olarak zorunlu mu? (ör. surface genelde zorunlu) */
+  isRequired: boolean;
+
+  /**
+   * Assets koleksiyonunda hangi category'ye karşılık gelir
+   * Örn: "furniture" (masalar), "props" (tabak/bardak)
+   */
+  assetCategory: string;
+
+  /**
+   * Assets koleksiyonunda hangi subType'a karşılık gelir
+   * Örn: "tables", "plates", "cups", "napkins"
+   * Boşsa tüm alt kategoriler geçerli
+   */
+  assetSubType?: string;
+
+  /** UI sıralaması */
+  order: number;
+
+  /** Tenant bu slot'u kullanıyor mu */
+  isActive: boolean;
+}
+
+/**
+ * Firestore'da saklanan slot tanımları
+ * Document: global/config/settings/slot-definitions
+ */
+export interface FirestoreSlotDefinitionsConfig {
+  slots: SlotDefinition[];
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/**
+ * Tek bir slot'un template/preset içindeki konfigürasyonu
+ * Template veya preset kaydedilirken her slot için bu bilgi saklanır
+ */
+export interface SlotConfig {
+  /** Slot durumu */
+  state: SlotState;
+
+  /** manual ise: seçilen asset ID */
+  assetId?: string;
+
+  /** random ise: filtreleme tag'leri */
+  filterTags?: string[];
+}
+
+/**
+ * Runtime'da slot seçim bilgisi
+ * Pipeline'a giren compositionConfig içinde kullanılır
+ * Override takibi: slot nereden geldi?
+ */
+export interface SlotSelection {
+  /** Hangi slot */
+  slotKey: string;
+
+  /** Durum */
+  state: SlotState;
+
+  /** manual ise: seçilen asset ID */
+  assetId?: string;
+
+  /** random ise: filtreleme tag'leri */
+  filterTags?: string[];
+
+  /** Bu seçim nereden geldi? (debug/audit için) */
+  source: "template" | "override" | "manual";
+}
+
+/**
+ * Kompozisyon Template / Preset
+ * Firestore:
+ *   System: global/compositionTemplates/{id}
+ *   Tenant: tenants/{tenantId}/presets/{id}
+ *
+ * Template ve preset aynı şemayı paylaşır.
+ * Template = sistem/admin tanımlı, Preset = kullanıcı kaydettiği
+ */
+export interface CompositionTemplate {
+  id: string;
+
+  /** Template adı — "Minimalist Çikolata", "Servis Sunumu" */
+  name: string;
+
+  /** Açıklama */
+  description?: string;
+
+  /** Bağlı tema (opsiyonel — zorunlu bağ yok) */
+  themeId?: string;
+
+  /** Bağlı senaryo (opsiyonel — zorunlu bağ yok) */
+  scenarioId?: string;
+
+  /** Slot konfigürasyonu — her slot key'i için state + asset bilgisi */
+  slots: Record<string, SlotConfig>;
+
+  /** Sahiplik tipi */
+  type: "system" | "tenant";
+
+  /** Sadece tenant preset'leri için */
+  tenantId?: string;
+
+  /** Meta */
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Kompozisyon Konfigürasyonu — Pipeline'ın TEK GİRDİSİ
+ *
+ * Akış:
+ *   loadTemplate(templateId) → applyOverrides(userChanges) → compositionConfig
+ *
+ * Pipeline bu objeyi alır ve SADECE buradaki slot'larla çalışır.
+ * disabled slot = yok. manual slot = doğrudan asset. random slot = havuzdan seç.
+ */
+export interface CompositionConfig {
+  /** Slot seçimleri — kullanıcının son kararları */
+  slots: Record<string, SlotSelection>;
+
+  /** Hangi template'ten yüklendi (audit için) */
+  sourceTemplateId?: string;
+
+  /** Hangi preset'ten yüklendi (audit için) */
+  sourcePresetId?: string;
+}
+
+/**
+ * Varsayılan seed slot tanımları
+ * İlk kurulumda Firestore'a yazılır
+ */
+export const DEFAULT_SLOT_DEFINITIONS: SlotDefinition[] = [
+  {
+    key: "surface",
+    label: "Yüzey / Masa",
+    description: "Ürünün üzerinde durduğu zemin",
+    isRequired: true,
+    assetCategory: "furniture",
+    assetSubType: "tables",
+    order: 1,
+    isActive: true,
+  },
+  {
+    key: "dish",
+    label: "Tabak / Servis",
+    description: "Ürünün sunulduğu kap",
+    isRequired: false,
+    assetCategory: "props",
+    assetSubType: "plates",
+    order: 2,
+    isActive: true,
+  },
+  {
+    key: "drinkware",
+    label: "Bardak / İçecek",
+    description: "İçecek kabı",
+    isRequired: false,
+    assetCategory: "props",
+    assetSubType: "cups",
+    order: 3,
+    isActive: true,
+  },
+  {
+    key: "textile",
+    label: "Peçete / Tekstil",
+    description: "Kumaş veya kağıt peçete, örtü",
+    isRequired: false,
+    assetCategory: "props",
+    assetSubType: "napkins",
+    order: 4,
+    isActive: true,
+  },
+  {
+    key: "decor",
+    label: "Aksesuar / Dekor",
+    description: "Çatal-bıçak, çiçek, mum ve dekoratif objeler",
+    isRequired: false,
+    assetCategory: "accessories",
+    order: 5,
+    isActive: true,
+  },
+  // hands slot kaldırıldı — senaryo includesHands tek sahip (Faz 2.2)
+];
+
+// ==========================================
+// PRODUCT SLOT DEFAULTS
+// ==========================================
+
+/**
+ * Ürün tipine göre hangi slot'ların auto-default'ta açık olacağını belirler.
+ * Firestore: global/config/settings/product-slot-defaults
+ *
+ * Örnek: chocolates → dish kapalı (kutulu ürün tabağa konmaz)
+ */
+export interface ProductSlotDefaults {
+  /** Her productType için slotKey → enabled mapping'i */
+  defaults: Record<string, Record<string, boolean>>;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/** Seed verisi: İlk kurulumda kullanılır */
+export const DEFAULT_PRODUCT_SLOT_DEFAULTS: Record<string, Record<string, boolean>> = {
+  chocolates: { surface: true, dish: false, drinkware: true, textile: false, decor: false },
+  coffees:    { surface: true, dish: false, drinkware: true, textile: false, decor: false },
+  croissants: { surface: true, dish: true,  drinkware: true, textile: true,  decor: false },
+  pastas:     { surface: true, dish: true,  drinkware: true, textile: true,  decor: false },
+  _default:   { surface: true, dish: true,  drinkware: true, textile: true,  decor: false },
+};

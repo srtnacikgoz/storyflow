@@ -90,6 +90,8 @@ export {
   updateBusinessContextConfig,
   getAssetSelectionConfigEndpoint,
   updateAssetSelectionConfigEndpoint,
+  getProductSlotDefaultsEndpoint,
+  updateProductSlotDefaultsEndpoint,
 
   // Feedback Controller
   createFeedback,
@@ -141,6 +143,15 @@ export {
   // Beverage Rules Controller
   getBeverageRulesConfigEndpoint,
   updateBeverageRulesConfigEndpoint,
+
+  // Composition Controller (Dinamik Slot Sistemi)
+  getSlotDefinitionsEndpoint,
+  updateSlotDefinitionsEndpoint,
+  listCompositionTemplates,
+  getCompositionTemplateById,
+  createCompositionTemplateEndpoint,
+  updateCompositionTemplateEndpoint,
+  deleteCompositionTemplateEndpoint,
 } from "./orchestrator";
 
 // Visual Critic

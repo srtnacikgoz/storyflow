@@ -52,6 +52,10 @@ import type {
   // Rule Engine
   FirestoreRuleEngineConfig,
   PatronRule,
+  // Composition System
+  SlotDefinitionsConfig,
+  CompositionTemplate,
+  CompositionConfig,
 } from "../types";
 
 // Firebase Functions base URL
@@ -801,7 +805,8 @@ class ApiService {
   async orchestratorGenerateNow(
     themeId?: string,
     aspectRatio?: "1:1" | "3:4" | "9:16",
-    isRandomMode?: boolean
+    isRandomMode?: boolean,
+    compositionConfig?: CompositionConfig
   ): Promise<{
     success: boolean;
     message: string;
@@ -809,7 +814,12 @@ class ApiService {
     duration?: number;
     error?: string;
   }> {
-    const body: { themeId?: string; aspectRatio?: string; isRandomMode?: boolean } = {};
+    const body: {
+      themeId?: string;
+      aspectRatio?: string;
+      isRandomMode?: boolean;
+      compositionConfig?: CompositionConfig;
+    } = {};
     if (themeId) {
       body.themeId = themeId;
     }
@@ -818,6 +828,9 @@ class ApiService {
     }
     if (isRandomMode) {
       body.isRandomMode = true;
+    }
+    if (compositionConfig) {
+      body.compositionConfig = compositionConfig;
     }
 
     const response = await this.fetch<{
@@ -2243,6 +2256,39 @@ class ApiService {
     });
   }
 
+  // ==========================================
+  // PRODUCT SLOT DEFAULTS
+  // ==========================================
+
+  /**
+   * Ürün tipine göre slot varsayılanlarını getir
+   */
+  async getProductSlotDefaults(): Promise<{
+    defaults: Record<string, Record<string, boolean>>;
+    updatedAt: number;
+    updatedBy?: string;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        defaults: Record<string, Record<string, boolean>>;
+        updatedAt: number;
+        updatedBy?: string;
+      };
+    }>("getProductSlotDefaultsEndpoint");
+    return response.data;
+  }
+
+  /**
+   * Ürün tipine göre slot varsayılanlarını güncelle
+   */
+  async updateProductSlotDefaults(defaults: Record<string, Record<string, boolean>>): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateProductSlotDefaultsEndpoint", {
+      method: "POST",
+      body: JSON.stringify({ defaults }),
+    });
+  }
+
   /**
    * AI Tema Açıklaması Üret
    */
@@ -2365,6 +2411,101 @@ class ApiService {
   // Tag Schema (Dinamik Tag Yönetimi)
   // ==========================================
 
+  // ==========================================
+  // Composition System (Dinamik Slot Sistemi)
+  // ==========================================
+
+  /**
+   * Slot tanımlarını getir
+   */
+  async getSlotDefinitions(): Promise<SlotDefinitionsConfig> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: SlotDefinitionsConfig;
+    }>("getSlotDefinitionsEndpoint");
+    return response.data;
+  }
+
+  /**
+   * Slot tanımlarını güncelle
+   */
+  async updateSlotDefinitions(slots: SlotDefinitionsConfig["slots"]): Promise<SlotDefinitionsConfig> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: SlotDefinitionsConfig;
+    }>("updateSlotDefinitionsEndpoint", {
+      method: "POST",
+      body: JSON.stringify({ slots }),
+    });
+    return response.data;
+  }
+
+  /**
+   * Composition template'lerini listele
+   */
+  async listCompositionTemplates(type: "system" | "tenant" = "system", tenantId?: string): Promise<CompositionTemplate[]> {
+    const params = new URLSearchParams({ type });
+    if (tenantId) params.set("tenantId", tenantId);
+
+    const response = await this.fetch<{
+      success: boolean;
+      data: CompositionTemplate[];
+      count: number;
+    }>(`listCompositionTemplates?${params.toString()}`);
+    return response.data;
+  }
+
+  /**
+   * Tek bir template getir
+   */
+  async getCompositionTemplate(id: string, type: "system" | "tenant", tenantId?: string): Promise<CompositionTemplate> {
+    const params = new URLSearchParams({ id, type });
+    if (tenantId) params.set("tenantId", tenantId);
+
+    const response = await this.fetch<{
+      success: boolean;
+      data: CompositionTemplate;
+    }>(`getCompositionTemplateById?${params.toString()}`);
+    return response.data;
+  }
+
+  /**
+   * Yeni template oluştur
+   */
+  async createCompositionTemplate(data: Omit<CompositionTemplate, "id" | "createdAt" | "updatedAt">): Promise<CompositionTemplate> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: CompositionTemplate;
+    }>("createCompositionTemplateEndpoint", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return response.data;
+  }
+
+  /**
+   * Template güncelle
+   */
+  async updateCompositionTemplate(id: string, type: "system" | "tenant", updates: Partial<CompositionTemplate>, tenantId?: string): Promise<CompositionTemplate> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: CompositionTemplate;
+    }>("updateCompositionTemplateEndpoint", {
+      method: "PUT",
+      body: JSON.stringify({ id, type, tenantId, ...updates }),
+    });
+    return response.data;
+  }
+
+  /**
+   * Template sil
+   */
+  async deleteCompositionTemplate(id: string, type: "system" | "tenant", tenantId?: string): Promise<void> {
+    await this.fetch("deleteCompositionTemplateEndpoint", {
+      method: "POST",
+      body: JSON.stringify({ id, type, tenantId }),
+    });
+  }
 
 }
 

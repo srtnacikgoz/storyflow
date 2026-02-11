@@ -8,6 +8,8 @@ import type {
   Theme,
   IssueCategoryId,
   PreFlightData,
+  CompositionTemplate,
+  CompositionConfig,
 } from "../types";
 import { ISSUE_CATEGORIES } from "../types";
 import VisualCriticModal from "../components/VisualCriticModal";
@@ -97,6 +99,10 @@ export default function OrchestratorDashboard() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<string>("");
 
+  // Template seçimi (Kompozisyon Sistemi)
+  const [compositionTemplates, setCompositionTemplates] = useState<CompositionTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+
   // Progress Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [currentSlotId, setCurrentSlotId] = useState<string | null>(null);
@@ -151,6 +157,9 @@ export default function OrchestratorDashboard() {
       });
       setSlots(slotsData);
       setThemes(themesData);
+
+      // Kompozisyon template'lerini paralel yükle (hata tolere edilir)
+      api.listCompositionTemplates("system").then(setCompositionTemplates).catch(() => {});
     } catch (err) {
       console.warn("[Dashboard] loadDashboardData başarısız, fallback deneniyor...", err);
       try {
@@ -220,6 +229,24 @@ export default function OrchestratorDashboard() {
     return true;
   });
 
+  // Template'ten compositionConfig oluştur
+  const buildCompositionConfig = (): CompositionConfig | undefined => {
+    if (!selectedTemplateId) return undefined;
+    const template = compositionTemplates.find(t => t.id === selectedTemplateId);
+    if (!template) return undefined;
+
+    // Template slot'larından compositionConfig oluştur
+    const slots: CompositionConfig["slots"] = {};
+    for (const [key, config] of Object.entries(template.slots)) {
+      slots[key] = { ...config, source: "template" as const };
+    }
+
+    return {
+      slots,
+      sourceTemplateId: template.id,
+    };
+  };
+
   // Pre-flight validation çalıştır ve sonra üret
   const runGenerateAfterValidation = async () => {
     setGenerating(true);
@@ -228,11 +255,14 @@ export default function OrchestratorDashboard() {
     setShowProgressModal(true);
     setShowValidationModal(false);
 
+    const compositionConfig = buildCompositionConfig();
+
     try {
       const result = await api.orchestratorGenerateNow(
         selectedThemeId || undefined,
         selectedAspectRatio,
-        isRandomMode || undefined
+        isRandomMode || undefined,
+        compositionConfig
       );
       setCurrentSlotId(result.slotId);
 
@@ -1194,6 +1224,43 @@ export default function OrchestratorDashboard() {
 
             {/* Üret bölümü */}
             <div className="p-3 border-t border-gray-100 bg-gray-50/50 space-y-2.5">
+              {/* Kompozisyon Template seçimi */}
+              {compositionTemplates.length > 0 && (
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  className="w-full text-sm p-2 border border-gray-200 rounded-lg bg-white focus:ring-1 focus:ring-brand-blue focus:border-brand-blue"
+                >
+                  <option value="">Serbest (template yok)</option>
+                  {compositionTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}{t.description ? ` — ${t.description}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {/* Seçili template bilgisi */}
+              {selectedTemplateId && (() => {
+                const t = compositionTemplates.find(ct => ct.id === selectedTemplateId);
+                if (!t) return null;
+                const activeSlots = Object.entries(t.slots).filter(([, c]) => c.state !== "disabled");
+                return (
+                  <div className="px-2 py-1.5 bg-brand-blue/5 border border-brand-blue/20 rounded-lg">
+                    <p className="text-[11px] text-brand-blue font-medium">{activeSlots.length} aktif slot</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {activeSlots.map(([key, config]) => (
+                        <span key={key} className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          config.state === "manual" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                        }`}>
+                          {key}: {config.state === "manual" ? "Seçili" : "Rastgele"}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <select
                 value={selectedAspectRatio}
                 onChange={(e) => setSelectedAspectRatio(e.target.value as InstagramAspectRatio)}
@@ -1210,7 +1277,7 @@ export default function OrchestratorDashboard() {
                 disabled={generating || validationLoading}
                 className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {validationLoading ? "Kontrol ediliyor..." : generating ? "Üretiliyor..." : "Şimdi Üret"}
+                {validationLoading ? "Kontrol ediliyor..." : generating ? "Üretiliyor..." : selectedTemplateId ? "Template ile Üret" : "Şimdi Üret"}
               </button>
             </div>
           </div>
