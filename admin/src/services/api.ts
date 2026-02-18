@@ -55,7 +55,6 @@ import type {
   // Composition System
   SlotDefinitionsConfig,
   CompositionTemplate,
-  CompositionConfig,
 } from "../types";
 
 // Firebase Functions base URL
@@ -676,6 +675,7 @@ class ApiService {
       method: "POST",
       body: JSON.stringify(asset),
     });
+    this.clearCache("assets_");
     return response.data;
   }
 
@@ -687,6 +687,7 @@ class ApiService {
       method: "POST",
       body: JSON.stringify(updates),
     });
+    this.clearCache("assets_");
   }
 
   /**
@@ -696,6 +697,7 @@ class ApiService {
     await this.fetch(`deleteAsset?id=${id}`, {
       method: "POST",
     });
+    this.clearCache("assets_");
   }
 
   /**
@@ -799,14 +801,14 @@ class ApiService {
   /**
    * Hemen içerik üret (pipeline tamamlanana kadar bekler)
    * productType kaldırıldı — senaryodan otomatik belirlenir (auto mod)
-   * @param themeId Opsiyonel tema ID'si - senaryoları filtreler
+   * @param scenarioId Opsiyonel senaryo ID'si - doğrudan senaryo seçimi
    * @param aspectRatio Görsel formatı (1:1, 3:4, 9:16)
    */
   async orchestratorGenerateNow(
-    themeId?: string,
+    scenarioId?: string,
     aspectRatio?: "1:1" | "3:4" | "9:16",
     isRandomMode?: boolean,
-    compositionConfig?: CompositionConfig
+    assetOverrides?: Record<string, { id: string; filename: string; url: string }>
   ): Promise<{
     success: boolean;
     message: string;
@@ -815,13 +817,13 @@ class ApiService {
     error?: string;
   }> {
     const body: {
-      themeId?: string;
+      scenarioId?: string;
       aspectRatio?: string;
       isRandomMode?: boolean;
-      compositionConfig?: CompositionConfig;
+      compositionConfig?: { slots: Record<string, { state: string; assetId: string; source: string }> };
     } = {};
-    if (themeId) {
-      body.themeId = themeId;
+    if (scenarioId) {
+      body.scenarioId = scenarioId;
     }
     if (aspectRatio) {
       body.aspectRatio = aspectRatio;
@@ -829,8 +831,13 @@ class ApiService {
     if (isRandomMode) {
       body.isRandomMode = true;
     }
-    if (compositionConfig) {
-      body.compositionConfig = compositionConfig;
+    // Asset override'larını compositionConfig formatına çevir
+    if (assetOverrides && Object.keys(assetOverrides).length > 0) {
+      const slots: Record<string, { state: string; assetId: string; source: string }> = {};
+      for (const [key, override] of Object.entries(assetOverrides)) {
+        slots[key] = { state: "manual", assetId: override.id, source: "override" };
+      }
+      body.compositionConfig = { slots };
     }
 
     const response = await this.fetch<{
@@ -848,14 +855,14 @@ class ApiService {
 
   /**
    * Pre-flight validation — pipeline öncesi kontroller
-   * Tema + senaryo + ürün uyumluluğu kontrol eder
+   * Senaryo + ürün uyumluluğu kontrol eder
    */
-  async validateBeforeGenerate(themeId?: string): Promise<{
+  async validateBeforeGenerate(scenarioId?: string): Promise<{
     warnings: Array<{ type: "info" | "warning" | "error"; message: string }>;
     canProceed: boolean;
     preFlightData?: import("../types").PreFlightData;
   }> {
-    const params = themeId ? `?themeId=${themeId}` : "";
+    const params = scenarioId ? `?scenarioId=${scenarioId}` : "";
     const response = await this.fetch<{
       success: boolean;
       warnings: Array<{ type: "info" | "warning" | "error"; message: string }>;
@@ -993,7 +1000,6 @@ class ApiService {
       totalCost: number;
       totalCalls: number;
       geminiCalls: number;
-      claudeCalls: number;
     };
     loadTimeMs: number;
   }> {
@@ -1007,7 +1013,6 @@ class ApiService {
         totalCost: number;
         totalCalls: number;
         geminiCalls: number;
-        claudeCalls: number;
       };
       loadTimeMs: number;
     }>(`loadDashboardData?slotsLimit=${slotsLimit}`);
@@ -1108,7 +1113,8 @@ class ApiService {
     variationRules: {
       scenarioGap: number;
       tableGap: number;
-      handStyleGap: number;
+      // @deprecated — el desteği kaldırıldı
+      handStyleGap?: number;
       compositionGap: number;
       petFrequency: number;
       similarityThreshold: number;
@@ -1129,7 +1135,8 @@ class ApiService {
         variationRules: {
           scenarioGap: number;
           tableGap: number;
-          handStyleGap: number;
+          // @deprecated — el desteği kaldırıldı
+          handStyleGap?: number;
           compositionGap: number;
           petFrequency: number;
           similarityThreshold: number;
@@ -1155,6 +1162,7 @@ class ApiService {
     variationRules?: {
       scenarioGap?: number;
       tableGap?: number;
+      // @deprecated — el desteği kaldırıldı
       handStyleGap?: number;
       compositionGap?: number;
       petFrequency?: number;
@@ -1185,6 +1193,7 @@ class ApiService {
     scenarioId: string;
     compositionId: string;
     tableId?: string;
+    // @deprecated — el desteği kaldırıldı
     handStyleId?: string;
     includesPet: boolean;
     productType: string;
@@ -1197,6 +1206,7 @@ class ApiService {
         scenarioId: string;
         compositionId: string;
         tableId?: string;
+        // @deprecated — el desteği kaldırıldı
         handStyleId?: string;
         includesPet: boolean;
         productType: string;
@@ -1274,8 +1284,9 @@ class ApiService {
    * Tüm senaryoları listele
    */
   async listScenarios(): Promise<{
-    all: Array<{ id: string; name: string; includesHands?: boolean; isInterior?: boolean }>;
+    all: Array<{ id: string; name: string; /** @deprecated — el desteği kaldırıldı */ includesHands?: boolean; isInterior?: boolean }>;
     byCategory: {
+      /** @deprecated — el desteği kaldırıldı */
       withHands: Array<{ id: string; name: string }>;
       withoutHands: Array<{ id: string; name: string }>;
       interior: Array<{ id: string; name: string }>;
@@ -1285,8 +1296,9 @@ class ApiService {
     const response = await this.fetch<{
       success: boolean;
       data: {
-        all: Array<{ id: string; name: string; includesHands?: boolean; isInterior?: boolean }>;
+        all: Array<{ id: string; name: string; /** @deprecated — el desteği kaldırıldı */ includesHands?: boolean; isInterior?: boolean }>;
         byCategory: {
+          /** @deprecated — el desteği kaldırıldı */
           withHands: Array<{ id: string; name: string }>;
           withoutHands: Array<{ id: string; name: string }>;
           interior: Array<{ id: string; name: string }>;
@@ -1311,13 +1323,15 @@ class ApiService {
       bestFor: string[];
       sortOrder: number;
     }>;
-    handPoses: Array<{
+    // @deprecated — el desteği kaldırıldı
+    handPoses?: Array<{
       id: string;
       name: string;
       nameEn: string;
       gripType: string;
       entryPoint: string;
       geminiPrompt: string;
+      skinDetails?: string[];
       bestFor: string[];
       sortOrder: number;
     }>;
@@ -1326,8 +1340,37 @@ class ApiService {
       name: string;
       nameEn: string;
       geminiPrompt: string;
+      direction?: string;
+      quality?: string;
+      temperature?: string;
       bestFor: string[];
       sortOrder: number;
+    }>;
+    moods: Array<{
+      id: string;
+      name: string;
+      nameEn: string;
+      style: string;
+      geminiAtmosphere: string;
+      temperature: string;
+      colorPalette: string[];
+      bestTimeOfDay: string[];
+      sortOrder: number;
+    }>;
+    productTextures: Array<{
+      id: string;
+      category: string;
+      heroFeature: string;
+      geminiPrompt: string;
+      surfaceType: string;
+      criticalTerms: string[];
+    }>;
+    negativePrompts: Array<{
+      id: string;
+      name: string;
+      category: string;
+      terms: string[];
+      geminiFormat: string;
     }>;
   }> {
     const response = await this.fetch<{
@@ -1343,13 +1386,15 @@ class ApiService {
           bestFor: string[];
           sortOrder: number;
         }>;
-        handPoses: Array<{
+        // @deprecated — el desteği kaldırıldı
+        handPoses?: Array<{
           id: string;
           name: string;
           nameEn: string;
           gripType: string;
           entryPoint: string;
           geminiPrompt: string;
+          skinDetails?: string[];
           bestFor: string[];
           sortOrder: number;
         }>;
@@ -1358,11 +1403,69 @@ class ApiService {
           name: string;
           nameEn: string;
           geminiPrompt: string;
+          direction?: string;
+          quality?: string;
+          temperature?: string;
           bestFor: string[];
           sortOrder: number;
         }>;
+        moods: Array<{
+          id: string;
+          name: string;
+          nameEn: string;
+          style: string;
+          geminiAtmosphere: string;
+          temperature: string;
+          colorPalette: string[];
+          bestTimeOfDay: string[];
+          sortOrder: number;
+        }>;
+        productTextures: Array<{
+          id: string;
+          category: string;
+          heroFeature: string;
+          geminiPrompt: string;
+          surfaceType: string;
+          criticalTerms: string[];
+        }>;
+        negativePrompts: Array<{
+          id: string;
+          name: string;
+          category: string;
+          terms: string[];
+          geminiFormat: string;
+        }>;
       };
     }>("getGeminiPresets");
+    return response.data;
+  }
+
+  /**
+   * Gemini terminoloji preset'lerini yeniden seed et
+   */
+  async seedGeminiTerminology(): Promise<{
+    lightingPresets: number;
+    // @deprecated — el desteği kaldırıldı
+    handPoses?: number;
+    compositions: number;
+    moods: number;
+    textures: number;
+    negativePrompts: number;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        lightingPresets: number;
+        // @deprecated — el desteği kaldırıldı
+        handPoses?: number;
+        compositions: number;
+        moods: number;
+        textures: number;
+        negativePrompts: number;
+      };
+    }>("seedGeminiTerminology", {
+      method: "POST",
+    });
     return response.data;
   }
 
@@ -1531,6 +1634,7 @@ class ApiService {
     scenarioId?: string;
     productType?: string;
     productId?: string;
+    // @deprecated — el desteği kaldırıldı
     handStyleId?: string;
     compositionId?: string;
   }): Promise<string> {
@@ -1872,6 +1976,7 @@ class ApiService {
     displayName: string;
     icon: string;
     description?: string;
+    linkedSlotKey?: string;
   }): Promise<void> {
     await this.fetch<{ success: boolean }>("addMainCategory", {
       method: "POST",
@@ -1888,6 +1993,7 @@ class ApiService {
       displayName?: string;
       icon?: string;
       description?: string;
+      linkedSlotKey?: string | null;
     }
   ): Promise<void> {
     await this.fetch<{ success: boolean }>("updateMainCategory", {
@@ -1975,11 +2081,13 @@ class ApiService {
   }
 
   /**
-   * AI ile Senaryo açıklaması üret (Claude)
+   * AI ile Senaryo açıklaması üret (Gemini)
    */
   async generateScenarioDescription(params: {
     scenarioName: string;
-    includesHands: boolean;
+    // @deprecated — el desteği kaldırıldı
+    includesHands?: boolean;
+    // @deprecated — el desteği kaldırıldı
     handPose?: string;
     compositions: string[];
     compositionEntry?: string;
@@ -2060,13 +2168,13 @@ class ApiService {
    */
   async getSystemSettings(): Promise<{
     schedulerEnabled: boolean;
-    claudeInputCostPer1K: number;
-    claudeOutputCostPer1K: number;
     geminiDefaultFaithfulness: number;
     maxFeedbackForPrompt: number;
     stuckWarningMinutes: number;
     maxLogsPerQuery: number;
     cacheTTLMinutes: number;
+    textModel?: string;
+    imageModel: string;
     updatedAt: number;
     updatedBy?: string;
   }> {
@@ -2074,13 +2182,13 @@ class ApiService {
       success: boolean;
       data: {
         schedulerEnabled: boolean;
-        claudeInputCostPer1K: number;
-        claudeOutputCostPer1K: number;
         geminiDefaultFaithfulness: number;
         maxFeedbackForPrompt: number;
         stuckWarningMinutes: number;
         maxLogsPerQuery: number;
         cacheTTLMinutes: number;
+        textModel: string;
+        imageModel: string;
         updatedAt: number;
         updatedBy?: string;
       };
@@ -2093,13 +2201,13 @@ class ApiService {
    */
   async updateSystemSettings(updates: {
     schedulerEnabled?: boolean;
-    claudeInputCostPer1K?: number;
-    claudeOutputCostPer1K?: number;
     geminiDefaultFaithfulness?: number;
     maxFeedbackForPrompt?: number;
     stuckWarningMinutes?: number;
     maxLogsPerQuery?: number;
     cacheTTLMinutes?: number;
+    textModel?: string;
+    imageModel?: string;
   }): Promise<void> {
     await this.fetch<{ success: boolean }>("updateSystemSettingsConfig", {
       method: "POST",

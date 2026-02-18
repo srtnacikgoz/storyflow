@@ -29,8 +29,6 @@ import {
   updatePromptTemplate as updatePromptTemplateService,
   revertPromptTemplate as revertPromptTemplateService,
   clearPromptStudioCache,
-  getBeverageRulesConfig,
-  updateBeverageRulesConfig,
   getProductSlotDefaults,
   updateProductSlotDefaults,
 } from "../../services/configService";
@@ -424,7 +422,6 @@ export const updateTimeoutsConfig = functions
  * GET /getSystemSettingsConfig
  *
  * Hardcoded değerlerin config'e taşınmış hali:
- * - AI maliyetleri (Claude input/output)
  * - Gemini faithfulness
  * - Max feedback for prompt
  * - Stuck warning timeout
@@ -455,8 +452,6 @@ export const getSystemSettingsConfig = functions
  * PUT/POST /updateSystemSettingsConfig
  *
  * Body: {
- *   claudeInputCostPer1K?: number,      // 0.001 - 0.1
- *   claudeOutputCostPer1K?: number,     // 0.001 - 0.5
  *   geminiDefaultFaithfulness?: number, // 0.0 - 1.0
  *   maxFeedbackForPrompt?: number,      // 1 - 50
  *   stuckWarningMinutes?: number,       // 5 - 60
@@ -488,31 +483,6 @@ export const updateSystemSettingsConfig = functions
           }
         }
 
-        // Validasyon: claudeInputCostPer1K (0.001 - 0.1)
-        if (updates.claudeInputCostPer1K !== undefined) {
-          const value = Number(updates.claudeInputCostPer1K);
-          if (isNaN(value) || value < 0.001 || value > 0.1) {
-            response.status(400).json({
-              success: false,
-              error: "claudeInputCostPer1K must be between 0.001 and 0.1",
-            });
-            return;
-          }
-          updates.claudeInputCostPer1K = value;
-        }
-
-        // Validasyon: claudeOutputCostPer1K (0.001 - 0.5)
-        if (updates.claudeOutputCostPer1K !== undefined) {
-          const value = Number(updates.claudeOutputCostPer1K);
-          if (isNaN(value) || value < 0.001 || value > 0.5) {
-            response.status(400).json({
-              success: false,
-              error: "claudeOutputCostPer1K must be between 0.001 and 0.5",
-            });
-            return;
-          }
-          updates.claudeOutputCostPer1K = value;
-        }
 
         // Validasyon: geminiDefaultFaithfulness (0.0 - 1.0)
         if (updates.geminiDefaultFaithfulness !== undefined) {
@@ -579,6 +549,23 @@ export const updateSystemSettingsConfig = functions
           updates.cacheTTLMinutes = value;
         }
 
+        // textModel kaldırıldı — pipeline'da sadece image model var
+        if (updates.textModel !== undefined) {
+          delete updates.textModel; // Eski admin panel'den gelebilir, sessizce ignore et
+        }
+
+        // Validasyon: imageModel (izin verilen modeller)
+        if (updates.imageModel !== undefined) {
+          const allowedImageModels = ["gemini-3-pro-image-preview"];
+          if (typeof updates.imageModel !== "string" || !allowedImageModels.includes(updates.imageModel)) {
+            response.status(400).json({
+              success: false,
+              error: `imageModel must be one of: ${allowedImageModels.join(", ")}`,
+            });
+            return;
+          }
+        }
+
         // Güncelle
         await updateSystemSettings(updates);
 
@@ -643,12 +630,6 @@ export const seedGeminiTerminology = functions
           batch.set(presetsRef.doc("lighting-presets").collection("items").doc(preset.id), preset);
         }
 
-        // El pozları
-        console.log(`[seedGeminiTerminology] Seeding ${geminiData.handPoses.length} hand poses...`);
-        for (const pose of geminiData.handPoses) {
-          batch.set(presetsRef.doc("hand-poses").collection("items").doc(pose.id), pose);
-        }
-
         // Kompozisyon şablonları
         console.log(`[seedGeminiTerminology] Seeding ${geminiData.compositionTemplates.length} composition templates...`);
         for (const template of geminiData.compositionTemplates) {
@@ -675,16 +656,100 @@ export const seedGeminiTerminology = functions
 
         await batch.commit();
 
+        // === EL TEMİZLİĞİ: Eski hand-poses ve lifestyle-hand verilerini sil ===
+        const cleanupResults: string[] = [];
+
+        // 1. Eski hand-poses koleksiyonunu sil
+        const handPosesSnap = await presetsRef.doc("hand-poses").collection("items").get();
+        if (!handPosesSnap.empty) {
+          const cleanupBatch = db.batch();
+          handPosesSnap.docs.forEach(doc => cleanupBatch.delete(doc.ref));
+          await cleanupBatch.commit();
+          cleanupResults.push(`${handPosesSnap.size} eski el pozu silindi`);
+        }
+
+        // 2. Eski lifestyle-hand kompozisyon şablonunu sil
+        const oldLifestyleHand = await presetsRef.doc("composition-templates").collection("items").doc("lifestyle-hand").get();
+        if (oldLifestyleHand.exists) {
+          await oldLifestyleHand.ref.delete();
+          cleanupResults.push("lifestyle-hand kompozisyon şablonu silindi");
+        }
+
+        // 3. Eski hand-anatomy negatif prompt setini sil
+        const oldHandAnatomy = await presetsRef.doc("negative-prompts").collection("items").doc("hand-anatomy").get();
+        if (oldHandAnatomy.exists) {
+          await oldHandAnatomy.ref.delete();
+          cleanupResults.push("hand-anatomy negatif prompt seti silindi");
+        }
+
+        // 4. Senaryolarda compositionId: "lifestyle-hand" → "lifestyle" güncelle
+        const scenariosSnap = await db.collection("global").doc("config").collection("scenarios").get();
+        let updatedScenarios = 0;
+        for (const doc of scenariosSnap.docs) {
+          const data = doc.data();
+          if (data.compositionId === "lifestyle-hand") {
+            await doc.ref.update({ compositionId: "lifestyle" });
+            updatedScenarios++;
+          }
+        }
+        if (updatedScenarios > 0) {
+          cleanupResults.push(`${updatedScenarios} senaryoda compositionId: lifestyle-hand → lifestyle güncellendi`);
+        }
+
+        // 5. Firestore'daki model ayarlarını güncelle (textModel kaldırıldı, sadece imageModel)
+        const settingsRef = db.collection("global").doc("config").collection("system-settings").doc("models");
+        const settingsDoc = await settingsRef.get();
+        if (settingsDoc.exists) {
+          const modelData = settingsDoc.data() || {};
+          const modelUpdates: Record<string, any> = {};
+          const validImageModels = ["gemini-3-pro-image-preview"];
+          // textModel varsa kaldır
+          if (modelData.textModel) {
+            const { FieldValue: FV } = await import("firebase-admin/firestore");
+            modelUpdates.textModel = FV.delete();
+          }
+          if (modelData.imageModel && !validImageModels.includes(modelData.imageModel)) {
+            modelUpdates.imageModel = "gemini-3-pro-image-preview";
+          }
+          if (Object.keys(modelUpdates).length > 0) {
+            await settingsRef.update(modelUpdates);
+            cleanupResults.push(`Model ayarları güncellendi: ${JSON.stringify(modelUpdates)}`);
+          }
+        }
+
+        // 6. Senaryoların description'larından el referanslarını temizle
+        for (const doc of scenariosSnap.docs) {
+          const data = doc.data();
+          const desc = data.description || "";
+          if (/\b(hand|hands|finger|nails|ring.*hand|hand.*ring|held.*hand|cradle|slender\s+hand)\b/i.test(desc)) {
+            const cleanDesc = desc
+              .replace(/\b(being\s+)?held\s+(elegantly\s+)?by\s+(a\s+)?(slender\s+|elegant\s+)?hand[^.]*\./gi, "")
+              .replace(/\b(a\s+)?(slender\s+|elegant\s+)?hand\s+(with\s+|gently\s+|cradles?\s+|supports?\s+)[^.]*\./gi, "")
+              .replace(/\bThe\s+hand\s+[^.]*\./gi, "")
+              .replace(/,?\s*by\s+(a\s+)?(slender\s+|elegant\s+)?hand\s+with[^,.]*/gi, "")
+              .replace(/\s{2,}/g, " ")
+              .trim();
+            if (cleanDesc !== desc) {
+              await doc.ref.update({ description: cleanDesc, includesHands: false });
+              cleanupResults.push(`Senaryo "${data.name || doc.id}" description'ından el referansları temizlendi`);
+            }
+          }
+        }
+
+        if (cleanupResults.length > 0) {
+          console.log("[seedGeminiTerminology] Temizlik tamamlandı:", cleanupResults);
+        }
+
         // Cache temizle
         clearConfigCache();
 
         const summary = {
           lightingPresets: geminiData.lightingPresets.length,
-          handPoses: geminiData.handPoses.length,
           compositionTemplates: geminiData.compositionTemplates.length,
           moodDefinitions: geminiData.moodDefinitions.length,
           productTextureProfiles: geminiData.productTextureProfiles.length,
           negativePromptSets: geminiData.negativePromptSets.length,
+          cleanup: cleanupResults,
         };
 
         console.log("[seedGeminiTerminology] Seed completed:", summary);
@@ -706,7 +771,6 @@ export const seedGeminiTerminology = functions
  *
  * Döndürülen veri:
  * - lightingPresets: Işıklandırma preset'leri
- * - handPoses: El pozları
  * - compositions: Kompozisyon şablonları
  * - moods: Mood tanımları
  * - productTextures: Ürün doku profilleri
@@ -723,14 +787,12 @@ export const getGeminiPresets = functions
         // Tüm preset koleksiyonlarını paralel olarak yükle
         const [
           lightingSnap,
-          handPosesSnap,
           compositionsSnap,
           moodsSnap,
           texturesSnap,
           negativeSnap,
         ] = await Promise.all([
           presetsRef.doc("lighting-presets").collection("items").where("isActive", "==", true).get(),
-          presetsRef.doc("hand-poses").collection("items").where("isActive", "==", true).get(),
           presetsRef.doc("composition-templates").collection("items").where("isActive", "==", true).get(),
           presetsRef.doc("mood-definitions").collection("items").where("isActive", "==", true).get(),
           presetsRef.doc("product-textures").collection("items").get(),
@@ -742,7 +804,6 @@ export const getGeminiPresets = functions
         const sortByOrder = (a: PresetDoc, b: PresetDoc) => (a.sortOrder || 0) - (b.sortOrder || 0);
 
         const lightingPresets: PresetDoc[] = lightingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const handPoses: PresetDoc[] = handPosesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const compositions: PresetDoc[] = compositionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const moods: PresetDoc[] = moodsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const productTextures = texturesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -752,7 +813,6 @@ export const getGeminiPresets = functions
           success: true,
           data: {
             lightingPresets: lightingPresets.sort(sortByOrder),
-            handPoses: handPoses.sort(sortByOrder),
             compositions: compositions.sort(sortByOrder),
             moods: moods.sort(sortByOrder),
             productTextures,

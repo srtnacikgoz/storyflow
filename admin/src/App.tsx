@@ -13,7 +13,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const OrchestratorDashboard = lazy(() => import("./pages/OrchestratorDashboard"));
 const Assets = lazy(() => import("./pages/Assets"));
 const TimeSlots = lazy(() => import("./pages/TimeSlots"));
-const Themes = lazy(() => import("./pages/Themes"));
+// Themes sayfası kaldırıldı — tüm ayarlar Senaryolar'a taşındı
 const AIMonitor = lazy(() => import("./pages/AIMonitor"));
 const AIRules = lazy(() => import("./pages/AIRules"));
 const Scenarios = lazy(() => import("./pages/Scenarios"));
@@ -21,7 +21,8 @@ const Categories = lazy(() => import("./pages/Categories"));
 const Styles = lazy(() => import("./pages/Styles"));
 const PromptStudio = lazy(() => import("./pages/PromptStudio"));
 const RuleEngine = lazy(() => import("./pages/RuleEngine"));
-const CompositionTemplates = lazy(() => import("./pages/CompositionTemplates"));
+const AITerminology = lazy(() => import("./pages/AITerminology"));
+// CompositionTemplates kaldırıldı — slot konfigürasyonu Senaryolar'a taşındı
 
 // Loading fallback component
 function PageLoader() {
@@ -47,7 +48,7 @@ function App() {
             <Route path="orchestrator" element={<Suspense fallback={<PageLoader />}><OrchestratorDashboard /></Suspense>} />
             <Route path="assets" element={<Suspense fallback={<PageLoader />}><Assets /></Suspense>} />
             <Route path="time-slots" element={<Suspense fallback={<PageLoader />}><TimeSlots /></Suspense>} />
-            <Route path="themes" element={<Suspense fallback={<PageLoader />}><Themes /></Suspense>} />
+            {/* themes route kaldırıldı — tüm ayarlar Senaryolar'a taşındı */}
             <Route path="ai-monitor" element={<Suspense fallback={<PageLoader />}><AIMonitor /></Suspense>} />
             <Route path="ai-rules" element={<Suspense fallback={<PageLoader />}><AIRules /></Suspense>} />
             <Route path="scenarios" element={<Suspense fallback={<PageLoader />}><Scenarios /></Suspense>} />
@@ -55,7 +56,8 @@ function App() {
             <Route path="styles" element={<Suspense fallback={<PageLoader />}><Styles /></Suspense>} />
             <Route path="prompt-studio" element={<Suspense fallback={<PageLoader />}><PromptStudio /></Suspense>} />
             <Route path="rule-engine" element={<Suspense fallback={<PageLoader />}><RuleEngine /></Suspense>} />
-            <Route path="composition-templates" element={<Suspense fallback={<PageLoader />}><CompositionTemplates /></Suspense>} />
+            <Route path="ai-terminology" element={<Suspense fallback={<PageLoader />}><AITerminology /></Suspense>} />
+            {/* composition-templates route kaldırıldı — slot konfigürasyonu Senaryolar'a taşındı */}
           </Route>
         </Routes>
         {/* Global loading indicator */}

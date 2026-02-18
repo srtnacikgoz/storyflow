@@ -70,7 +70,7 @@ export const createTheme = functions
           return;
         }
 
-        const { id, name, description, scenarios, petAllowed, accessoryAllowed, setting } = request.body;
+        const { id, name, description, scenarios, petAllowed, accessoryAllowed, accessoryOptions, setting } = request.body;
 
         if (!id || !name || !scenarios || scenarios.length === 0) {
           response.status(400).json({
@@ -98,6 +98,7 @@ export const createTheme = functions
           scenarios,
           petAllowed: petAllowed || false,
           accessoryAllowed: accessoryAllowed || false,
+          ...(accessoryOptions?.length ? { accessoryOptions } : {}),
           ...(setting ? { setting } : {}),
           createdAt: now,
           updatedAt: now,
@@ -128,7 +129,7 @@ export const updateTheme = functions
           return;
         }
 
-        const { id, name, description, scenarios, petAllowed, accessoryAllowed, setting } = request.body;
+        const { id, name, description, scenarios, petAllowed, accessoryAllowed, accessoryOptions, setting } = request.body;
 
         if (!id) {
           response.status(400).json({ success: false, error: "id is required" });
@@ -152,6 +153,7 @@ export const updateTheme = functions
         if (scenarios !== undefined) updateData.scenarios = scenarios;
         if (petAllowed !== undefined) updateData.petAllowed = petAllowed;
         if (accessoryAllowed !== undefined) updateData.accessoryAllowed = accessoryAllowed;
+        if (accessoryOptions !== undefined) updateData.accessoryOptions = accessoryOptions;
         if (setting !== undefined) updateData.setting = setting;
 
         await docRef.update(updateData);

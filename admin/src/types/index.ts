@@ -542,7 +542,7 @@ export interface OrchestratorAsset {
   };
   // Yeme şekli (sadece products için)
   eatingMethod?: EatingMethod;
-  // Elle tutulabilir mi? (sadece products için - el senaryoları için)
+  // @deprecated — el desteği kaldırıldı
   canBeHeldByHand?: boolean;
   // Tabak gerekli mi? (sadece products için)
   // false = "Tabaksız" - elde tutulur, tabak seçilmez
@@ -571,9 +571,11 @@ export interface TimeSlotRule {
   productTypes: string[];  // Dinamik kategori slug'ları - örn: "croissants", "pastas"
   allowPairing?: boolean;
   pairingWith?: string[];  // Dinamik kategori slug'ları
-  // Tema tercihi (yeni sistem)
+  // Senaryo tercihi
+  scenarioId?: string;
+  // Deprecated: eski tema referansı (geriye uyumluluk)
   themeId?: string;
-  // Senaryo tercihi (eski sistem, geriye dönük uyumluluk)
+  // Deprecated: eski senaryo tercihi
   scenarioPreference?: string[];
   isActive: boolean;
   priority: number;
@@ -714,6 +716,8 @@ export interface PipelineResult {
   status: PipelineStatus;
   assetSelection?: {
     product: OrchestratorAsset;
+    slots?: Record<string, OrchestratorAsset>;
+    // DEPRECATED named fields (eski veri uyumluluğu)
     plate?: OrchestratorAsset;
     cup?: OrchestratorAsset;
     table?: OrchestratorAsset;
@@ -725,13 +729,14 @@ export interface PipelineResult {
     scenarioId: string;
     scenarioName: string;
     reasoning: string;
-    includesHands: boolean;
+    // @deprecated — el desteği kaldırıldı
+    includesHands?: boolean;
+    // @deprecated — el desteği kaldırıldı
     handStyle?: string;
+    // @deprecated — el desteği kaldırıldı
     handStyleDetails?: { name: string; description: string };
     compositionId?: string;
     composition: string;
-    themeId?: string;
-    themeName?: string;
   };
   optimizedPrompt?: {
     mainPrompt: string;
@@ -805,7 +810,6 @@ export interface OrchestratorDashboardStats {
     totalCost: number;
     totalCalls: number;
     geminiCalls: number;
-    claudeCalls: number;
   };
 }
 
@@ -820,8 +824,28 @@ export interface AssetPreview {
   tags: string[];
 }
 
+export interface SlotMatchDetails {
+  bestScore: string;         // "3/4" formatı
+  matchedTags: string[];     // Eşleşen etiketler
+  missedTags: string[];      // Eşleşmeyen etiketler
+  bestAsset?: AssetPreview;  // En iyi eşleşen asset
+}
+
+export interface SlotAssetStats {
+  total: number;
+  preferred: number;
+  label: string;
+  disabled?: boolean;
+  order: number;
+  category?: string;
+  subType?: string;
+  preview?: AssetPreview;
+  matchDetails?: SlotMatchDetails;
+}
+
 export interface PreFlightData {
-  theme: {
+  // Eski format (geriye uyumluluk)
+  theme?: {
     name: string;
     preferredTags?: { table?: string[]; plate?: string[]; cup?: string[] };
     presets: { weather?: string; lighting?: string; atmosphere?: string };
@@ -833,15 +857,25 @@ export interface PreFlightData {
     description: string;
     suggestedProducts: string[];
     compositionId?: string;
-    includesHands: boolean;
+    // @deprecated — el desteği kaldırıldı
+    includesHands?: boolean;
+    // @deprecated — el desteği kaldırıldı
     handPose?: string;
+    // Yeni: Senaryo'dan gelen sahne ayarları
+    preferredTags?: { table?: string[]; plate?: string[]; cup?: string[] };
+    presets?: { weather?: string; lighting?: string; atmosphere?: string };
+    petAllowed?: boolean;
+    accessoryAllowed?: boolean;
   };
-  scenarioCount: number;
+  scenarioCount?: number;
   assets: {
     products: { total: number; preview?: AssetPreview };
-    tables: { total: number; preferred: number; preview?: AssetPreview };
-    plates: { total: number; preferred: number; preview?: AssetPreview };
-    cups: { total: number; preferred: number; preview?: AssetPreview };
+    // Eski sabit alanlar (geriye uyumluluk)
+    tables?: { total: number; preferred: number; preview?: AssetPreview; matchDetails?: SlotMatchDetails };
+    plates?: { total: number; preferred: number; preview?: AssetPreview; matchDetails?: SlotMatchDetails };
+    cups?: { total: number; preferred: number; preview?: AssetPreview; matchDetails?: SlotMatchDetails };
+    // Dinamik slot istatistikleri
+    slots?: Record<string, SlotAssetStats>;
   };
   beverage?: {
     productType: string;
@@ -855,7 +889,7 @@ export interface PreFlightData {
 // ==========================================
 
 // AI Provider tipi
-export type AIProvider = "claude" | "gemini";
+export type AIProvider = "gemini";
 
 // AI Log aşaması (orchestrator pipeline aşamaları)
 export type AILogStage =
@@ -875,9 +909,8 @@ export type AILogStatus = "success" | "error" | "blocked";
 
 // Config Snapshot tipi
 export interface ConfigSnapshot {
-  themeId?: string;
-  themeName?: string;
-  themeColors?: string[];
+  scenarioId?: string;
+  scenarioName?: string;
   moodId?: string;
   moodName?: string;
   styleId?: string;
@@ -923,7 +956,9 @@ export interface DecisionDetails {
     id: string;
     name: string;
     description?: string;
+    // @deprecated — el desteği kaldırıldı
     includesHands?: boolean;
+    // @deprecated — el desteği kaldırıldı
     handStyle?: string;
     compositionId?: string;
     reason?: string;
@@ -1029,7 +1064,7 @@ export interface AILog {
   productType?: string;     // Ürün tipi
 
   // Prompt bilgileri
-  systemPrompt?: string;    // Claude için system prompt
+  systemPrompt?: string;    // System prompt
   userPrompt: string;       // Ana prompt
   negativePrompt?: string;  // Gemini negative prompt
 
@@ -1042,7 +1077,7 @@ export interface AILog {
   error?: string;           // Hata mesajı
 
   // Metrikler
-  tokensUsed?: number;      // Token kullanımı (Claude)
+  tokensUsed?: number;      // Token kullanımı
   cost?: number;            // Maliyet (USD)
   durationMs: number;       // İşlem süresi (ms)
 
@@ -1063,7 +1098,6 @@ export interface AILog {
 // AI Stats (istatistikler)
 export interface AIStats {
   totalCalls: number;
-  claudeCalls: number;
   geminiCalls: number;
   successRate: number;
   totalCost: number;
@@ -1138,6 +1172,7 @@ export interface IssueFeedback {
   scenarioId?: string;
   productType?: string;
   productId?: string;
+  // @deprecated — el desteği kaldırıldı
   handStyleId?: string;
   compositionId?: string;
   createdAt: number;
@@ -1248,6 +1283,7 @@ export interface DynamicCategory {
   description?: string;
   order: number;
   subTypes: CategorySubType[];
+  linkedSlotKey?: string; // Bu kategori hangi kompozisyon slotunu besliyor?
   isSystem: boolean;
   isDeleted: boolean;
   createdAt: number;
@@ -1413,6 +1449,7 @@ export interface SlotDefinition {
   isRequired: boolean;
   assetCategory: string;
   assetSubType?: string;
+  assetFieldName: string;
   order: number;
   isActive: boolean;
 }
@@ -1433,7 +1470,6 @@ export interface CompositionTemplate {
   id: string;
   name: string;
   description?: string;
-  themeId?: string;
   scenarioId?: string;
   slots: Record<string, SlotConfig>;
   type: "system" | "tenant";

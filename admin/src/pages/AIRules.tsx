@@ -196,7 +196,7 @@ export default function AIRules() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">AI Kuralları</h1>
           <p className="text-gray-500 mt-1">
-            Claude'a öğrettiğin yapılacak ve yapılmayacak kurallar
+            AI'ın öğrendiği yapılacak ve yapılmayacak kurallar
           </p>
         </div>
         <button
@@ -386,7 +386,7 @@ export default function AIRules() {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Claude'un anlayacağı şekilde detaylı açıklama..."
+                placeholder="AI'ın anlayacağı şekilde detaylı açıklama..."
                 rows={3}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
               />
@@ -415,7 +415,7 @@ export default function AIRules() {
                   onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                   className="rounded"
                 />
-                <span className="text-sm text-gray-700">Aktif (Claude bu kuralı uygulasın)</span>
+                <span className="text-sm text-gray-700">Aktif (AI bu kuralı uygulasın)</span>
               </label>
             </div>
 
@@ -457,9 +457,8 @@ function RuleCard({
 
   return (
     <div
-      className={`bg-white rounded-lg border p-4 ${
-        rule.isActive ? "border-gray-200" : "border-gray-100 opacity-60"
-      }`}
+      className={`bg-white rounded-lg border p-4 ${rule.isActive ? "border-gray-200" : "border-gray-100 opacity-60"
+        }`}
     >
       {/* Header */}
       <div className="flex justify-between items-start mb-2">
@@ -477,9 +476,8 @@ function RuleCard({
         <div className="flex gap-1">
           <button
             onClick={onToggleActive}
-            className={`p-1.5 rounded hover:bg-gray-100 ${
-              rule.isActive ? "text-green-600" : "text-gray-400"
-            }`}
+            className={`p-1.5 rounded hover:bg-gray-100 ${rule.isActive ? "text-green-600" : "text-gray-400"
+              }`}
             title={rule.isActive ? "Pasif yap" : "Aktif yap"}
           >
             {rule.isActive ? "✓" : "○"}

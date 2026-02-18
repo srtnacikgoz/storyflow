@@ -5,7 +5,6 @@
  * Bu dosya Firestore'a ilk yükleme için kullanılır.
  * Global collection yapısı:
  * - global/scenarios/{scenarioId}
- * - global/hand-styles/{styleId}
  * - global/asset-personalities/{assetId}
  * - global/config/diversity-rules
  * - global/config/time-mood
@@ -16,7 +15,7 @@
 
 import {
   FirestoreScenario,
-  FirestoreHandStyle,
+
   FirestoreAssetPersonality,
   FirestoreDiversityRules,
   FirestoreTimeMoodConfig,
@@ -31,7 +30,6 @@ import {
   FirestorePromptStudioConfig,
   PromptTemplate,
   FirestoreRuleEngineConfig,
-  BeverageRule,
 } from "../types";
 
 // ==========================================
@@ -51,47 +49,8 @@ export const DEFAULT_RULE_ENGINE_CONFIG: Omit<FirestoreRuleEngineConfig, "update
   },
 };
 
-// ==========================================
-// İÇECEK KURALLARI
-// ==========================================
-
-/**
- * Varsayılan içecek kuralları
- * Ürün kategorisine göre hangi içeceğin sunulacağını belirler
- */
-export const DEFAULT_BEVERAGE_RULES: Record<string, BeverageRule> = {
-  // Kruvasanlar → Çay (her 3'te 1 meyve suyu)
-  croissants: {
-    default: "tea",
-    alternate: "fruit-juice",
-    alternateFrequency: 3,
-  },
-  // Pastalar → Kahve
-  pastas: {
-    default: "coffee",
-  },
-  // Çikolatalar → Kahve (her 5'te 1 çay)
-  chocolates: {
-    default: "coffee",
-    alternate: "tea",
-    alternateFrequency: 5,
-  },
-  // Kahveler → İçecek yok (zaten kahve)
-  coffees: {
-    default: "none",
-  },
-};
-
-/**
- * İçecek türü → etiket eşleştirmesi
- * Bardak seçiminde kullanılır: beverageType → bu etiketlerden biri olan bardak
- */
-export const DEFAULT_BEVERAGE_TAG_MAPPINGS: Record<string, string[]> = {
-  tea: ["çay", "bitki çayı", "yeşil çay", "siyah çay", "tea", "chai"],
-  coffee: ["kahve", "espresso", "latte", "americano", "cappuccino", "filtre kahve", "türk kahvesi", "coffee"],
-  "fruit-juice": ["meyve suyu", "portakal suyu", "elma suyu", "taze sıkım", "juice", "smoothie"],
-  lemonade: ["limonata", "lemonade", "limon"],
-};
+// İçecek kuralları (DEFAULT_BEVERAGE_RULES, DEFAULT_BEVERAGE_TAG_MAPPINGS) kaldırıldı
+// İçecek seçimi artık etiket bazlı — orchestrator.ts beverageKeywords
 
 // ==========================================
 // SENARYOLAR
@@ -103,43 +62,43 @@ export const DEFAULT_BEVERAGE_TAG_MAPPINGS: Record<string, string[]> = {
  */
 export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt">[] = [
   // =====================
-  // EL İÇEREN SENARYOLAR
+  // ÜRÜN SENARYOLARI
   // =====================
   {
     id: "zarif-tutma",
-    name: "Zarif Tutma",
-    description: "Bakımlı el ürün tutuyor. Premium, şık görünüm.",
-    includesHands: true,
+    name: "Zarif Sunum",
+    description: "Premium tabak üzerinde şık sunum. Sofistike görünüm.",
+    includesHands: false,
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
   },
   {
     id: "kahve-ani",
     name: "Kahve Anı",
-    description: "Eller fincan tutuyor, ürün ön planda. Sosyal, paylaşım odaklı.",
-    includesHands: true,
+    description: "Fincan ve ürün yan yana, sosyal sahne. Paylaşım odaklı.",
+    includesHands: false,
     isActive: true,
     suggestedProducts: ["croissants", "pastas"],
   },
   {
     id: "hediye-acilisi",
     name: "Hediye Açılışı",
-    description: "El kutu açıyor. Sürpriz, heyecan anı.",
-    includesHands: true,
+    description: "Açılmış kutu, sürpriz anı. Heyecan ve keşif.",
+    includesHands: false,
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
   },
   {
     id: "ilk-dilim",
     name: "İlk Dilim",
-    description: "El çatalla pasta alıyor. İştah açıcı, davetkar.",
-    includesHands: true,
+    description: "Dilimlenmiş pasta, iştah açıcı kesit. Davetkar sunum.",
+    includesHands: false,
     isActive: true,
     suggestedProducts: ["pastas"],
   },
 
   // =====================
-  // EL İÇERMEYEN SENARYOLAR
+  // SAHNE SENARYOLARI
   // =====================
   {
     id: "cam-kenari",
@@ -205,7 +164,7 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     id: "yolda-atistirma",
     name: "Yolda Atıştırma",
     description: "Kraft çanta, hareket halinde tüketim. Gündelik, pratik.",
-    includesHands: true,
+    includesHands: false,
     isActive: true,
     suggestedProducts: ["croissants", "chocolates"],
   },
@@ -213,7 +172,7 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     id: "kutu-acilis",
     name: "Kutu Açılışı",
     description: "Çikolata/pasta kutusu açılış anı. Sürpriz, keşif.",
-    includesHands: true,
+    includesHands: false,
     isActive: true,
     suggestedProducts: ["chocolates", "pastas"],
   },
@@ -265,68 +224,6 @@ export const DEFAULT_SCENARIOS: Omit<FirestoreScenario, "createdAt" | "updatedAt
     isActive: true,
     isInterior: true,
     interiorType: "dekorasyon",
-  },
-];
-
-// ==========================================
-// EL STİLLERİ
-// ==========================================
-
-export const DEFAULT_HAND_STYLES: Omit<FirestoreHandStyle, "createdAt" | "updatedAt">[] = [
-  {
-    id: "elegant",
-    name: "Elegant",
-    description: "Şık, minimal. Premium görünüm.",
-    nailPolish: "Nude/soft pink",
-    accessories: "Silver midi ring, thin bracelet",
-    tattoo: "Minimalist (ay, yıldız)",
-    isActive: true,
-    compatibleScenarios: ["zarif-tutma", "hediye-acilisi", "ilk-dilim"],
-    targetDemographic: "25-45 yaş, profesyonel kadın",
-  },
-  {
-    id: "bohemian",
-    name: "Bohemian",
-    description: "Bohem, doğal. Sanatsal ruh.",
-    nailPolish: "Earth-tone/terracotta",
-    accessories: "Stacked rings, beaded bracelet",
-    tattoo: "Çiçek, yaprak motifleri",
-    isActive: true,
-    compatibleScenarios: ["kahve-ani", "kahve-kosesi", "yarim-kaldi"],
-    targetDemographic: "20-35 yaş, yaratıcı",
-  },
-  {
-    id: "minimal",
-    name: "Minimal",
-    description: "Sade, temiz. Herkes için uygun.",
-    nailPolish: "Yok veya şeffaf",
-    accessories: "Single thin gold ring",
-    tattoo: "Yok",
-    isActive: true,
-    compatibleScenarios: ["zarif-tutma", "ilk-dilim", "kutu-acilis"],
-    targetDemographic: "Tüm yaşlar",
-  },
-  {
-    id: "trendy",
-    name: "Trendy",
-    description: "Trend, modern. Genç, dinamik.",
-    nailPolish: "French tip",
-    accessories: "Chunky gold ring, chain bracelet",
-    tattoo: "Geometric, fine line",
-    isActive: true,
-    compatibleScenarios: ["kahve-ani", "yolda-atistirma"],
-    targetDemographic: "18-30 yaş, trend takipçisi",
-  },
-  {
-    id: "sporty",
-    name: "Sporty",
-    description: "Sportif, aktif. Dinamik yaşam.",
-    nailPolish: "Yok",
-    accessories: "Fitness watch, simple band",
-    tattoo: "Yok",
-    isActive: true,
-    compatibleScenarios: ["yolda-atistirma", "paket-servis"],
-    targetDemographic: "25-40 yaş, aktif yaşam",
   },
 ];
 
@@ -396,7 +293,7 @@ export const DEFAULT_DIVERSITY_RULES: Omit<FirestoreDiversityRules, "updatedAt">
   // Minimum aralıklar
   scenarioGap: 3, // Aynı senaryo min 3 üretim sonra
   tableGap: 2, // Aynı masa min 2 üretim sonra
-  handStyleGap: 4, // Aynı el stili min 4 üretim sonra
+  handStyleGap: 0, // Kullanılmıyor (el özelliği kaldırıldı)
   compositionGap: 5, // Aynı kompozisyon min 5 üretim sonra
   productGap: 3, // Aynı ürün min 3 üretim sonra
   plateGap: 2, // Aynı tabak min 2 üretim sonra
@@ -442,17 +339,17 @@ export const DEFAULT_SYSTEM_SETTINGS_CONFIG: Omit<FirestoreSystemSettingsConfig,
   // true = scheduler her 15 dk çalışır, false = tüm otomatik üretimler durur
   schedulerEnabled: true,
 
-  // AI Maliyetleri (USD per 1K token)
-  // Claude Sonnet 4 fiyatlandırması (yaklaşık)
-  claudeInputCostPer1K: 0.003,
-  claudeOutputCostPer1K: 0.015,
+  // Claude maliyet alanları kaldırıldı — sadece Gemini kullanılıyor
 
   // AI Ayarları
   // Gemini img2img için varsayılan faithfulness değeri (0.0-1.0)
   geminiDefaultFaithfulness: 0.7,
 
+  // AI Model Seçimi (textModel kaldırıldı — sadece image model)
+  imageModel: "gemini-3-pro-image-preview",
+
   // Feedback
-  // Claude prompt'una dahil edilecek maksimum geri bildirim sayısı
+  // Prompt'a dahil edilecek maksimum geri bildirim sayısı
   maxFeedbackForPrompt: 10,
 
   // Sistem
@@ -627,7 +524,7 @@ JSON formatında yanıt ver.`,
     name: "Senaryo Seçimi",
     description: "En uygun görsel senaryosunu ve kompozisyonu seçer",
     stage: "selectScenario",
-    variables: ["petInstruction", "holdingInstruction", "blockedHandStylesRule", "blockedCompositionsRule", "feedbackHints"],
+    variables: ["petInstruction", "blockedCompositionsRule", "feedbackHints"],
     systemPrompt: `Sen bir içerik stratejistisin. Instagram için en etkili senaryoyu seçiyorsun.
 
 Seçim kriterleri:
@@ -638,10 +535,8 @@ Seçim kriterleri:
 5. ETKİLEŞİM: Yüksek etkileşim potansiyeli olan senaryolar öncelikli
 6. IŞIK KARAKTERİSTİĞİ: Seçtiğin senaryonun duygusal tonuyla eşleşen ışık karakteristiği öner (enerjik → parlak doğal ışık, samimi → sıcak yumuşak ışık, lüks → dramatik yan ışık, ev sıcaklığı → cozy amber tonlar)
 7. KÖPEK: {{petInstruction}}
-8. TUTMA ŞEKLİ: {{holdingInstruction}}
 
 ÖNEMLİ ÇEŞİTLİLİK KURALLARI:
-- {{blockedHandStylesRule}}
 - {{blockedCompositionsRule}}
 {{feedbackHints}}
 
@@ -666,7 +561,6 @@ Değerlendirme kriterleri (her biri 1-10):
 🔬 FİZİKSEL TUTARLILIK KONTROLÜ:
 - GÖLGE TUTARLILIĞI: Tüm objelerin gölgesi aynı yöne mi düşüyor?
 - YÜZEY TEMASI: Objeler masada "yüzüyor" mu yoksa ağırlıklarını hissettiriyorlar mı? (Contact shadows olmalı)
-- EL ANATOMİSİ: Eğer el varsa; parmak sayısı (5), eklem açısı ve bilek pozisyonu doğal mı?
 
 Fiziksel tutarsızlık tespit edilirse: ilgili kriterin (GERÇEKÇİLİK veya KOMPOZİSYON) skorunu düşür.
 
@@ -739,14 +633,6 @@ JSON formatında yanıt ver.`,
 - 5000K: Nötr gün ışığı
 - 5500K: Parlak sabah ışığı
 
-### EL TERİMLERİ (Gemini anlıyor):
-- "cupping" - kavrama, koruyucu tutma
-- "pinching" - iki parmakla tutma
-- "cradling" - avuçta taşıma
-- "presenting" - açık avuçla sunma
-- "breaking" - kırma, ayırma hareketi
-- "dipping" - batırma hareketi
-
 ### DOKU TERİMLERİ (Ürün bazlı):
 - Pasta: "golden-brown laminated layers", "honeycomb crumb structure"
 - Çikolata: "glossy tempered surface", "mirror-like sheen"
@@ -762,11 +648,11 @@ JSON formatında yanıt ver.`,
 3. Masa/tabak için tarif uydurma, referans görsele güven
 4. Atmosfer için Gemini ışık terminolojisi kullan
 5. Tekil tabak, üst üste değil
+6. MARKA ADI YASAK: "Samsung", "iPhone", "LEGO", "Starbucks" gibi tescilli marka adları kullanma. Jenerik tanım yaz (ör: "foldable phone", "building block", "paper coffee cup")
 
 ## PROMPT YAPISI (Mekansal Betimleme)
 - Scene Setup: [Ürün] merkezde, [Tabak] üzerinde. [Masa] dokusu net.
 - Spatial Relations: Objelerin birbirine göre pozisyonlarını belirt (left-third, centered, right edge, foreground/background)
-- Interaction: [El Terimi] eylemi, ürünle temas halinde (varsa)
 - Atmosphere: [Kelvin] renk sıcaklığı, [Işık Terimi]. Sonuç odaklı betimle: "Focus on the texture of the croissant layers, let the background blur into soft bokeh" gibi
 - Camera: 45 derecelik üst-yan açı, makro detaylar ön planda
 - Constraint: 100% fidelity to references
@@ -947,7 +833,6 @@ export const DEFAULT_ORCHESTRATOR_INSTRUCTIONS: Omit<FirestoreOrchestratorInstru
     "Referans bildirimi ile başla: 'Using uploaded image(s) as reference...'",
     "MUTLAK KURALLARI ekle: 'ONLY ONE product, ONLY ONE cup...'",
     "Seçilen kompozisyonu belirt: Hangi varyant seçildiyse detaylandır",
-    "El stili detayları: Seçilen stil için oje, aksesuar, dövme tarifi",
     "Negative prompt: Tüm yasakları ekle",
   ],
   qualityControlInstructions: [
@@ -976,11 +861,7 @@ export function getAllSeedData() {
       createdAt: timestamp,
       updatedAt: timestamp,
     })),
-    handStyles: DEFAULT_HAND_STYLES.map((h) => ({
-      ...h,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    })),
+    handStyles: [],
     assetPersonalities: DEFAULT_ASSET_PERSONALITIES.map((a) => ({
       ...a,
       createdAt: timestamp,
@@ -1039,10 +920,6 @@ export function getAllSeedData() {
       ...DEFAULT_RULE_ENGINE_CONFIG,
       updatedAt: timestamp,
     },
-    beverageRulesConfig: {
-      rules: DEFAULT_BEVERAGE_RULES,
-      tagMappings: DEFAULT_BEVERAGE_TAG_MAPPINGS,
-      updatedAt: timestamp,
-    },
+    // beverageRulesConfig kaldırıldı — içecek seçimi artık etiket bazlı
   };
 }

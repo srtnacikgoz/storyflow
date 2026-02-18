@@ -332,21 +332,30 @@ export default function Assets() {
     return acc;
   }, {} as Record<string, OrchestratorAsset[]>);
 
-  // UI Grupları
-  const assetGroups = [
-    {
-      title: "Ana Öğeler (HERO)",
-      categories: ["products", "furniture", "pets"] as AssetCategory[]
-    },
-    {
-      title: "Servis (SUPPORT)",
-      categories: ["props"] as AssetCategory[] // Not: props teknik adı, ekranda Servis & Ambalaj
-    },
-    {
-      title: "Dekor (PROPS)",
-      categories: ["accessories", "interior", "environments"] as AssetCategory[]
+  // UI Grupları — dinamik kategorilerden oluştur
+  const assetGroups = useMemo(() => {
+    // Bilinen sistem grupları
+    const knownGroups = [
+      { title: "Ana Öğeler (HERO)", categories: ["products", "furniture", "pets"] },
+      { title: "Servis (SUPPORT)", categories: ["props"] },
+      { title: "Dekor (PROPS)", categories: ["accessories", "interior", "environments"] },
+    ];
+
+    // Bilinen kategorilerin hepsini topla
+    const knownCats = new Set(knownGroups.flatMap(g => g.categories));
+
+    // Dinamik kategorilerden bilinmeyenleri bul
+    const extraCats = dynamicCategories
+      .filter(c => !knownCats.has(c.type) && !c.isDeleted)
+      .map(c => c.type);
+
+    const groups = [...knownGroups];
+    if (extraCats.length > 0) {
+      groups.push({ title: "Diğer", categories: extraCats });
     }
-  ];
+
+    return groups;
+  }, [dynamicCategories]);
 
   return (
     <div className="space-y-6">
@@ -394,7 +403,7 @@ export default function Assets() {
                 {group.categories.map((cat) => (
                   <button
                     key={cat}
-                    onClick={() => setSelectedCategory(cat)}
+                    onClick={() => setSelectedCategory(cat as AssetCategory)}
                     className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedCategory === cat
                       ? "bg-brand-blue text-white shadow-sm"
                       : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100"
@@ -788,11 +797,6 @@ function AssetModal({
   const [eatingMethod, setEatingMethod] = useState<EatingMethod>(
     asset?.eatingMethod || asset?.holdingType || "hand"
   );
-  const [canBeHeldByHand, setCanBeHeldByHand] = useState<boolean>(
-    asset?.canBeHeldByHand !== undefined
-      ? asset.canBeHeldByHand
-      : (asset?.holdingType === "hand" || asset?.eatingMethod === "hand")
-  );
   // Tabak gerekli mi? (varsayılan: true - tabak gerekli)
   const [plateRequired, setPlateRequired] = useState<boolean>(
     asset?.plateRequired !== undefined ? asset.plateRequired : true
@@ -829,21 +833,9 @@ function AssetModal({
       tagsRef.current = assetTags;
       setTagsState(assetTags);
       setEatingMethod(asset.eatingMethod || asset.holdingType || "hand");
-      setCanBeHeldByHand(
-        asset.canBeHeldByHand !== undefined
-          ? asset.canBeHeldByHand
-          : (asset.holdingType === "hand" || asset.eatingMethod === "hand")
-      );
       setPlateRequired(asset.plateRequired !== undefined ? asset.plateRequired : true);
     }
   }, [asset]);
-
-  // Yeme şekli değişince elle tutulabilirliği otomatik ayarla
-  useEffect(() => {
-    if (eatingMethod === "hand") {
-      setCanBeHeldByHand(true);
-    }
-  }, [eatingMethod]);
 
   // useCallback ile stabil referans - upload sırasında parent re-render olsa bile callback çalışır
   const handleUploadComplete = useCallback((url: string, uploadedFilename: string) => {
@@ -891,7 +883,6 @@ function AssetModal({
         // Sadece products kategorisinde yeme/tutma/içecek özellikleri kaydedilir
         ...(category === "products" && {
           eatingMethod,
-          canBeHeldByHand,
           plateRequired,
           holdingType: eatingMethod,
         }),
@@ -1136,25 +1127,6 @@ function AssetModal({
                         <option value="none">🎂 Yenmez/Servis (bütün kek, tart)</option>
                       </select>
                     </div>
-
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-orange-200 cursor-pointer hover:bg-orange-50 transition-colors">
-                      <input
-                        type="checkbox"
-                        id="canBeHeldByHand"
-                        checked={canBeHeldByHand}
-                        onChange={(e) => setCanBeHeldByHand(e.target.checked)}
-                        disabled={eatingMethod === "hand"}
-                        className={`mt-0.5 h-5 w-5 border-gray-300 rounded focus:ring-orange-500 ${eatingMethod === "hand" ? "text-gray-400 cursor-not-allowed bg-gray-100" : "text-orange-600"}`}
-                      />
-                      <div>
-                        <span className="block text-sm font-medium text-gray-800">
-                          ✋ Elle Tutulabilir {eatingMethod === "hand" && <span className="text-xs text-orange-600 font-normal ml-1">(Otomatik)</span>}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          Bu ürün görsellerde el ile tutularak gösterilebilir mi?
-                        </span>
-                      </div>
-                    </label>
 
                     {/* Tabaksız checkbox */}
                     <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-orange-200 cursor-pointer hover:bg-orange-50 transition-colors">

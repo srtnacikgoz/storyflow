@@ -39,7 +39,7 @@ interface CritiqueResponse {
  */
 export class VisualCriticService {
     private genAI: GoogleGenerativeAI;
-    private modelName = "gemini-3-pro-preview"; // Vision yeteneği olan güncel model
+    private modelName = "gemini-3-pro-image-preview"; // Image model — text de üretebilir
 
     constructor(apiKey: string) {
         this.genAI = new GoogleGenerativeAI(apiKey);
@@ -102,15 +102,12 @@ export class VisualCriticService {
             if (ctx.scenarioSelection && ctx.scenarioSelection.selectedScenario) {
                 const scen = ctx.scenarioSelection.selectedScenario;
                 assertionContext += `- SENARYO: ${scen.name}\n`;
-                assertionContext += `- EL DURUMU: ${scen.includesHands ? "Görünmeli" : "Görünmemeli"}\n`;
-                if (scen.handStyle) assertionContext += `- EL STİLİ: ${scen.handStyle}\n`;
                 if (scen.compositionId) assertionContext += `- KOMPOZİSYON: ${scen.compositionId}\n`;
             }
 
             assertionContext += `
     GÖREVİN:
     Görselin yukarıdaki "PIPELINE CONTEXT" içindeki beklentilere uyup uymadığını kontrol et.
-    Örneğin: "El görünmeli" denmişse ve görselde el yoksa, bunu "issues" listesine ekle ve puan kır.
     Seçilen varlıklar (tabak, fincan vb.) görselde tanınabilir şekilde var mı kontrol et.
     `;
         }

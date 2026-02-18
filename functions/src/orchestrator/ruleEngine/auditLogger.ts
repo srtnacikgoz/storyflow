@@ -81,13 +81,14 @@ export class AuditLogger {
     private mapSelectionToIds(selection: AssetSelection): Record<string, string> {
         const result: Record<string, string> = {};
         if (selection.product) result.product = selection.product.id;
-        if (selection.table) result.table = selection.table.id;
-        if (selection.plate) result.plate = selection.plate.id;
-        if (selection.cup) result.cup = selection.cup.id;
-        if (selection.napkin) result.napkin = selection.napkin.id;
-        if (selection.cutlery) result.cutlery = selection.cutlery.id;
+        // Slot asset'leri — dinamik
+        if (selection.slots) {
+            for (const [key, asset] of Object.entries(selection.slots)) {
+                if (asset?.id) result[key] = asset.id;
+            }
+        }
+        // Slot dışı asset'ler
         if (selection.accessory) result.accessory = selection.accessory.id;
-        if (selection.decor) result.decor = selection.decor.id;
         if (selection.pet) result.pet = selection.pet.id;
         return result;
     }

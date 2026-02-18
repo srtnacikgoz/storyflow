@@ -5,7 +5,7 @@
  * Paylaşım istatistiklerini toplar ve hesaplar
  */
 
-import {getFirestore} from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import {
   AnalyticsSummary,
   AnalyticsDashboard,
@@ -39,8 +39,7 @@ const CATEGORY_LABELS: Record<ProductCategory, string> = {
 
 // AI Model etiketleri
 const AI_MODEL_LABELS: Record<AIModel, string> = {
-  "gemini-flash": "Gemini Flash",
-  "gemini-pro": "Gemini Pro",
+  "gemini-3-pro-image-preview": "Gemini 3 Pro",
   "none": "AI Kapalı",
 };
 
@@ -65,18 +64,18 @@ export class AnalyticsService {
   private getStartTimestamp(range: DateRange): number {
     const now = new Date();
     switch (range) {
-    case "today":
-      now.setHours(0, 0, 0, 0);
-      return now.getTime();
-    case "week":
-      now.setDate(now.getDate() - 7);
-      return now.getTime();
-    case "month":
-      now.setMonth(now.getMonth() - 1);
-      return now.getTime();
-    case "all":
-    default:
-      return 0;
+      case "today":
+        now.setHours(0, 0, 0, 0);
+        return now.getTime();
+      case "week":
+        now.setDate(now.getDate() - 7);
+        return now.getTime();
+      case "month":
+        now.setMonth(now.getMonth() - 1);
+        return now.getTime();
+      case "all":
+      default:
+        return 0;
     }
   }
 
@@ -292,7 +291,7 @@ export class AnalyticsService {
     for (const post of postsWithTemplate) {
       const id = post.captionTemplateId!;
       if (!counts[id]) {
-        counts[id] = {name: post.captionTemplateName || "Bilinmeyen", count: 0};
+        counts[id] = { name: post.captionTemplateName || "Bilinmeyen", count: 0 };
       }
       counts[id].count++;
     }
@@ -337,7 +336,7 @@ export class AnalyticsService {
         (p) => p.uploadedAt >= dayStart && p.uploadedAt < dayEnd
       ).length;
 
-      trend.push({date: dateStr, dateLabel, count});
+      trend.push({ date: dateStr, dateLabel, count });
     }
 
     return trend;

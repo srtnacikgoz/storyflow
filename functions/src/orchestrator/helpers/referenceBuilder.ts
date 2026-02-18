@@ -87,83 +87,46 @@ export async function buildReferenceImages(
 ): Promise<ReferenceImage[]> {
   const referenceImages: ReferenceImage[] = [];
 
-  // Plate
-  if (assetSelection.plate) {
-    try {
-      console.log(`[ReferenceBuilder] Loading plate: ${assetSelection.plate.filename}`);
-      const base64 = await loadAssetAsBase64(assetSelection.plate, storage);
-      referenceImages.push({
-        base64,
-        mimeType: "image/png",
-        label: "plate",
-        description: buildAssetDescription(assetSelection.plate, "plate"),
-      });
-    } catch (error) {
-      console.error(`[ReferenceBuilder] Failed to load plate:`, error);
+  // Slot referans görselleri — dinamik
+  if (assetSelection.slots && Object.keys(assetSelection.slots).length > 0) {
+    for (const [slotKey, asset] of Object.entries(assetSelection.slots)) {
+      try {
+        console.log(`[ReferenceBuilder] Loading ${slotKey}: ${asset.filename}`);
+        const base64 = await loadAssetAsBase64(asset, storage);
+        referenceImages.push({
+          base64,
+          mimeType: "image/png",
+          label: slotKey,
+          description: buildAssetDescription(asset, slotKey),
+        });
+      } catch (error) {
+        console.error(`[ReferenceBuilder] Failed to load ${slotKey}:`, error);
+      }
     }
-  }
-
-  // Table
-  if (assetSelection.table) {
-    try {
-      console.log(`[ReferenceBuilder] Loading table: ${assetSelection.table.filename}`);
-      const base64 = await loadAssetAsBase64(assetSelection.table, storage);
-      referenceImages.push({
-        base64,
-        mimeType: "image/png",
-        label: "table",
-        description: buildAssetDescription(assetSelection.table, "table"),
-      });
-    } catch (error) {
-      console.error(`[ReferenceBuilder] Failed to load table:`, error);
-    }
-  }
-
-  // Cup
-  if (assetSelection.cup) {
-    try {
-      console.log(`[ReferenceBuilder] Loading cup: ${assetSelection.cup.filename}`);
-      const base64 = await loadAssetAsBase64(assetSelection.cup, storage);
-      referenceImages.push({
-        base64,
-        mimeType: "image/png",
-        label: "cup",
-        description: buildAssetDescription(assetSelection.cup, "cup"),
-      });
-    } catch (error) {
-      console.error(`[ReferenceBuilder] Failed to load cup:`, error);
-    }
-  }
-
-  // Napkin
-  if (assetSelection.napkin) {
-    try {
-      console.log(`[ReferenceBuilder] Loading napkin: ${assetSelection.napkin.filename}`);
-      const base64 = await loadAssetAsBase64(assetSelection.napkin, storage);
-      referenceImages.push({
-        base64,
-        mimeType: "image/png",
-        label: "napkin",
-        description: buildAssetDescription(assetSelection.napkin, "napkin"),
-      });
-    } catch (error) {
-      console.error(`[ReferenceBuilder] Failed to load napkin:`, error);
-    }
-  }
-
-  // Cutlery
-  if (assetSelection.cutlery) {
-    try {
-      console.log(`[ReferenceBuilder] Loading cutlery: ${assetSelection.cutlery.filename}`);
-      const base64 = await loadAssetAsBase64(assetSelection.cutlery, storage);
-      referenceImages.push({
-        base64,
-        mimeType: "image/png",
-        label: "cutlery",
-        description: buildAssetDescription(assetSelection.cutlery, "cutlery"),
-      });
-    } catch (error) {
-      console.error(`[ReferenceBuilder] Failed to load cutlery:`, error);
+  } else {
+    // Fallback: eski veri yapısı (named fields — slots yoksa)
+    const legacySlots: Array<{ key: string; asset?: Asset }> = [
+      { key: "plate", asset: assetSelection.plate },
+      { key: "table", asset: assetSelection.table },
+      { key: "cup", asset: assetSelection.cup },
+      { key: "napkin", asset: assetSelection.napkin },
+      { key: "cutlery", asset: assetSelection.cutlery },
+    ];
+    for (const { key, asset } of legacySlots) {
+      if (asset) {
+        try {
+          console.log(`[ReferenceBuilder] Loading ${key} (legacy): ${asset.filename}`);
+          const base64 = await loadAssetAsBase64(asset, storage);
+          referenceImages.push({
+            base64,
+            mimeType: "image/png",
+            label: key,
+            description: buildAssetDescription(asset, key),
+          });
+        } catch (error) {
+          console.error(`[ReferenceBuilder] Failed to load ${key}:`, error);
+        }
+      }
     }
   }
 
@@ -182,20 +145,19 @@ export function buildReferenceImagesList(
   if (assetSelection.product) {
     list.push({ type: "product", filename: assetSelection.product.filename });
   }
-  if (assetSelection.plate) {
-    list.push({ type: "plate", filename: assetSelection.plate.filename });
-  }
-  if (assetSelection.table) {
-    list.push({ type: "table", filename: assetSelection.table.filename });
-  }
-  if (assetSelection.cup) {
-    list.push({ type: "cup", filename: assetSelection.cup.filename });
-  }
-  if (assetSelection.napkin) {
-    list.push({ type: "napkin", filename: assetSelection.napkin.filename });
-  }
-  if (assetSelection.cutlery) {
-    list.push({ type: "cutlery", filename: assetSelection.cutlery.filename });
+
+  // Slot asset'leri — dinamik
+  if (assetSelection.slots && Object.keys(assetSelection.slots).length > 0) {
+    for (const [slotKey, asset] of Object.entries(assetSelection.slots)) {
+      list.push({ type: slotKey, filename: asset.filename });
+    }
+  } else {
+    // Fallback: eski named fields
+    if (assetSelection.plate) list.push({ type: "plate", filename: assetSelection.plate.filename });
+    if (assetSelection.table) list.push({ type: "table", filename: assetSelection.table.filename });
+    if (assetSelection.cup) list.push({ type: "cup", filename: assetSelection.cup.filename });
+    if (assetSelection.napkin) list.push({ type: "napkin", filename: assetSelection.napkin.filename });
+    if (assetSelection.cutlery) list.push({ type: "cutlery", filename: assetSelection.cutlery.filename });
   }
 
   return list;

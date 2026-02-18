@@ -17,7 +17,6 @@ import {
   RecentHistory,
   VariationRules,
   Scenario,
-  HandStyle,
   ProductionHistoryEntry,
   InteriorType,
   GlobalOrchestratorConfig,
@@ -32,7 +31,7 @@ import {
 const DEFAULT_VARIATION_RULES: VariationRules = {
   scenarioGap: 3,
   tableGap: 2,
-  handStyleGap: 4,
+  handStyleGap: 0,
   compositionGap: 5,
   productGap: 3,
   plateGap: 2,
@@ -45,10 +44,10 @@ const DEFAULT_VARIATION_RULES: VariationRules = {
 
 // Varsayılan senaryolar (ORCHESTRATOR.md'den parse edilemezse fallback)
 const DEFAULT_SCENARIOS: Scenario[] = [
-  { id: "zarif-tutma", name: "Zarif Tutma", description: "Bakımlı el ürün tutuyor", includesHands: true },
-  { id: "kahve-ani", name: "Kahve Anı", description: "İki el fincan tutuyor, ürün yanında", includesHands: true },
-  { id: "hediye-acilisi", name: "Hediye Açılışı", description: "El kutu açıyor", includesHands: true },
-  { id: "ilk-dilim", name: "İlk Dilim", description: "El çatalla pasta alıyor", includesHands: true },
+  { id: "zarif-tutma", name: "Zarif Tutma", description: "Bakımlı el ürün tutuyor", includesHands: false },
+  { id: "kahve-ani", name: "Kahve Anı", description: "İki el fincan tutuyor, ürün yanında", includesHands: false },
+  { id: "hediye-acilisi", name: "Hediye Açılışı", description: "El kutu açıyor", includesHands: false },
+  { id: "ilk-dilim", name: "İlk Dilim", description: "El çatalla pasta alıyor", includesHands: false },
   { id: "cam-kenari", name: "Cam Kenarı", description: "Pencere önü, şehir manzarası", includesHands: false },
   { id: "mermer-zarafet", name: "Mermer Zarafet", description: "Mermer yüzey, altın detaylar", includesHands: false },
   { id: "kahve-kosesi", name: "Kahve Köşesi", description: "Rahat köşe, kitap yanında", includesHands: false },
@@ -66,50 +65,6 @@ const DEFAULT_SCENARIOS: Scenario[] = [
   { id: "pencere-isigi", name: "Pencere Işığı", description: "Pencere kenarı, doğal ışık görünümü", includesHands: false, isInterior: true, interiorType: "genel-mekan" as InteriorType },
   { id: "raf-zenginligi", name: "Raf Zenginliği", description: "Dolu raflar, bolluk hissi", includesHands: false, isInterior: true, interiorType: "vitrin" as InteriorType },
   { id: "detay-cekimi", name: "Detay Çekimi", description: "Fincan, peçete, aksesuar detayları", includesHands: false, isInterior: true, interiorType: "dekorasyon" as InteriorType },
-];
-
-// Varsayılan el stilleri
-const DEFAULT_HAND_STYLES: HandStyle[] = [
-  {
-    id: "elegant",
-    name: "Elegant",
-    description: "Şık, minimal",
-    nailPolish: "Nude/soft pink polish",
-    accessories: "Silver midi ring, thin chain bracelet",
-    tattoo: "Minimalist (ay, yıldız, fine lines)",
-  },
-  {
-    id: "bohemian",
-    name: "Bohemian",
-    description: "Bohem, doğal",
-    nailPolish: "Earth-tone/terracotta polish",
-    accessories: "Multiple stacked rings, beaded bracelet",
-    tattoo: "Çiçek, yaprak motifleri",
-  },
-  {
-    id: "minimal",
-    name: "Minimal",
-    description: "Sade, temiz",
-    nailPolish: "No polish or clear coat",
-    accessories: "Single thin gold ring, no bracelet",
-    tattoo: "None",
-  },
-  {
-    id: "trendy",
-    name: "Trendy",
-    description: "Trend, modern",
-    nailPolish: "French tip nails",
-    accessories: "Chunky gold ring, chain bracelet",
-    tattoo: "Geometric, fine line art",
-  },
-  {
-    id: "sporty",
-    name: "Sporty",
-    description: "Sportif, aktif",
-    nailPolish: "No polish",
-    accessories: "Fitness watch, simple rubber band",
-    tattoo: "None",
-  },
 ];
 
 /**
@@ -139,7 +94,7 @@ export class RulesService {
 
   /**
    * Statik kuralları yükle (Firestore'dan)
-   * Senaryolar, el stilleri, asset kişilikleri ve mutlak kurallar
+   * Senaryolar, asset kişilikleri ve mutlak kurallar
    */
   async loadStaticRules(): Promise<OrchestratorRules> {
     try {
@@ -155,21 +110,19 @@ export class RulesService {
         isInterior: s.isInterior,
         interiorType: s.interiorType,
         suggestedProducts: s.suggestedProducts,
-      }));
-
-      // FirestoreHandStyle'ı HandStyle'a dönüştür
-      const handStyles: HandStyle[] = config.handStyles.map((h) => ({
-        id: h.id as any, // HandStyleId
-        name: h.name,
-        description: h.description,
-        nailPolish: h.nailPolish,
-        accessories: h.accessories,
-        tattoo: h.tattoo,
+        // Sahne ayarları (Tema'dan taşındı)
+        setting: s.setting,
+        petAllowed: s.petAllowed,
+        accessoryAllowed: s.accessoryAllowed,
+        accessoryOptions: s.accessoryOptions,
+        shallowDepthOfField: s.shallowDepthOfField,
+        // Slot konfigürasyonu (CompositionTemplates'den taşındı)
+        compositionSlots: s.compositionSlots,
       }));
 
       return {
         scenarios,
-        handStyles,
+        handStyles: [],
         assetPersonalities: config.assetPersonalities,
         absoluteRules: config.absoluteRules.allRules,
         version: config.version,
@@ -180,7 +133,7 @@ export class RulesService {
       // Fallback: Varsayılan değerler
       return {
         scenarios: DEFAULT_SCENARIOS,
-        handStyles: DEFAULT_HAND_STYLES,
+        handStyles: [],
         assetPersonalities: [],
         absoluteRules: [
           "TEK ÜRÜN - Görselde yalnızca BİR ana ürün",
@@ -302,10 +255,6 @@ export class RulesService {
     // Masa diversity KALDIRILD — tema preferredTags yeterli
     const blockedTables: string[] = [];
 
-    // Bloklanmış el stilleri
-    const recentHandStyles = entries.slice(0, variationRules.handStyleGap);
-    const blockedHandStyles = [...new Set(recentHandStyles.map(e => e.handStyleId).filter(Boolean))] as string[];
-
     // Bloklanmış kompozisyonlar
     const recentCompositions = entries.slice(0, variationRules.compositionGap);
     const blockedCompositions = [...new Set(recentCompositions.map(e => e.compositionId))];
@@ -328,7 +277,6 @@ export class RulesService {
       shouldIncludePet,
       blockedScenarios,
       blockedTables,
-      blockedHandStyles,
       blockedCompositions,
       blockedProducts,
       blockedPlates,
@@ -441,21 +389,6 @@ export class RulesService {
       id: compositionId,
       description: compositionId,
     };
-  }
-
-  /**
-   * Uygun el stili seç
-   */
-  selectHandStyle(blockedHandStyles: string[], handStyles: HandStyle[]): HandStyle {
-    const availableStyles = handStyles.filter(
-      s => !blockedHandStyles.includes(s.id)
-    );
-
-    if (availableStyles.length === 0) {
-      return handStyles[Math.floor(Math.random() * handStyles.length)];
-    }
-
-    return availableStyles[Math.floor(Math.random() * availableStyles.length)];
   }
 
   /**

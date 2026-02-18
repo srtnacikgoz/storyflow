@@ -78,6 +78,7 @@ export function buildInteriorResult(
   // Asset Selection
   const assetSelection: AssetSelection = {
     product: selectedInterior, // Interior asset'i product yerine kullan (tip uyumu için)
+    slots: {}, // Interior senaryoda kompozisyon slotu yok
     interior: selectedInterior,
     isInteriorScenario: true,
     includesPet: false,
@@ -152,7 +153,6 @@ export function buildInteriorScenarioSelection(scenario: Scenario): {
   scenarioName: string;
   scenarioDescription: string;
   reasoning: string;
-  includesHands: boolean;
   compositionId: string;
   composition: string;
   isInterior: boolean;
@@ -163,7 +163,6 @@ export function buildInteriorScenarioSelection(scenario: Scenario): {
     scenarioName: scenario.name,
     scenarioDescription: scenario.description || "Interior mekan görseli",
     reasoning: `Interior senaryo seçildi: ${scenario.name} - Mevcut pastane fotoğrafı kullanılacak`,
-    includesHands: false,
     compositionId: "interior-default",
     composition: "Interior mekan görseli - AI üretimi yok",
     isInterior: true,

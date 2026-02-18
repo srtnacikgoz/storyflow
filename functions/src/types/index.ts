@@ -10,7 +10,7 @@
 /**
  * AI Service Provider
  */
-export type AIProvider = "claude" | "gemini";
+export type AIProvider = "gemini";
 
 /**
  * AI Log Stage - Orchestrator pipeline aşamaları
@@ -18,14 +18,14 @@ export type AIProvider = "claude" | "gemini";
 export type AILogStage =
   | "config-snapshot" // YENİ: Pipeline başındaki config durumu
   | "rules-applied" // YENİ: Uygulanan kurallar ve bloklamalar
-  | "asset-selection" // Asset seçimi (Claude/Gemini)
-  | "scenario-selection" // Senaryo seçimi (Claude/Gemini)
-  | "prompt-optimization" // Prompt optimizasyonu (Claude/Gemini)
-  | "prompt-building" // YENİ: Prompt oluşturma (Gemini)
+  | "asset-selection" // Asset seçimi (Gemini)
+  | "scenario-selection" // Senaryo seçimi (Gemini)
+  | "prompt-optimization" // Prompt optimizasyonu (Gemini)
+  | "prompt-building" // Prompt oluşturma (Gemini)
   | "image-generation" // Görsel üretimi (Gemini)
-  | "quality-control" // Kalite kontrolü (Claude)
-  | "visual-critic" // YENİ: Visual Critic analizi
-  | "content-generation"; // Caption üretimi (Claude)
+  | "quality-control" // Kalite kontrolü (Gemini)
+  | "visual-critic" // Visual Critic analizi (Gemini)
+  | "content-generation"; // Caption üretimi (Gemini)
 
 /**
  * AI Log Status
@@ -96,8 +96,6 @@ export interface DecisionDetails {
     id: string;
     name: string;
     description?: string;
-    includesHands: boolean;
-    handStyle?: string;
     compositionId?: string;
     compositionNotes?: string;
     reason?: string;
@@ -141,7 +139,7 @@ export interface AILog {
   productType?: string; // Ürün tipi
 
   // Prompt bilgileri
-  systemPrompt?: string; // Claude için system prompt
+  systemPrompt?: string; // AI system prompt
   userPrompt: string; // Ana prompt
   negativePrompt?: string; // Gemini negative prompt
 
@@ -154,7 +152,7 @@ export interface AILog {
   error?: string; // Hata mesajı
 
   // Metrikler
-  tokensUsed?: number; // Token kullanımı (Claude)
+  tokensUsed?: number; // Token kullanımı
   cost?: number; // Maliyet (USD)
   durationMs: number; // İşlem süresi (ms)
 
@@ -180,11 +178,10 @@ export interface AILog {
 
 /**
  * AI Model Types for Image Enhancement
- * - gemini-flash: Gemini 2.5 Flash Image (hızlı, $0.01/görsel)
- * - gemini-pro: Gemini 3 Pro Image Preview (kaliteli, $0.04/görsel)
+ * - gemini-3-pro-image-preview: Gemini 3 Pro Image Preview
  * - none: AI işleme yok
  */
-export type AIModel = "gemini-flash" | "gemini-pro" | "none";
+export type AIModel = "gemini-3-pro-image-preview" | "none";
 
 /**
  * Style Variants for Image Transformation
@@ -853,17 +850,6 @@ export interface LightingPreset {
 }
 
 /**
- * El Tutuş Tipi (Grip Type)
- */
-export type GripType =
-  | "cupping" // Avuç içinde kavrama (kahve fincanı)
-  | "pinching" // Parmak uçlarıyla tutma (çikolata, makaron)
-  | "cradling" // Nazikçe taşıma (pasta tabağı)
-  | "presenting" // Sunma pozu (ürünü gösterme)
-  | "breaking" // Kırma/bölme (kruvasan)
-  | "dipping"; // Batırma (çikolata, sos)
-
-/**
  * Kompozisyon Giriş Noktası
  */
 export type EntryPoint =
@@ -876,27 +862,6 @@ export type EntryPoint =
   | "right-side" // Sağ kenar (alias)
   | "top-down" // Yukarıdan aşağı
   | "center"; // Merkez (sadece sunum)
-
-/**
- * El Poz Şablonu
- * Admin panelde seçilebilir el stilleri
- */
-export interface HandPose {
-  id: string;
-  name: string; // "Zarif Kavrama" (TR)
-  nameEn: string; // "Elegant Grip" (EN)
-  gripType: GripType;
-  entryPoint: EntryPoint;
-  fingerPosition: string; // "fingers slightly curved, thumb supporting"
-  wristAngle: string; // "slight 15-degree tilt"
-  geminiTerms: string[]; // ["elegant feminine hand", "gentle grip", "natural skin texture"]
-  geminiPrompt: string; // Tam Gemini-ready açıklama
-  skinDetails: string[]; // ["subsurface scattering", "visible pores", "natural nails"]
-  avoidTerms: string[]; // ["deformed hands", "extra fingers"]
-  bestFor: ProductCategory[]; // Hangi ürün kategorileri için uygun
-  isActive: boolean;
-  sortOrder: number;
-}
 
 /**
  * Mood Atmosfer Stili
@@ -951,7 +916,7 @@ export interface ProductTextureProfile {
 export type NegativeCategory =
   | "technical" // blur, grain, watermark
   | "food-styling" // plastic, wax, burnt
-  | "anatomy" // deformed hands, extra fingers
+  | "anatomy" // anatomik bozukluklar
   | "composition"; // cluttered background
 
 /**
@@ -974,7 +939,6 @@ export interface NegativePromptSet {
 export interface GeminiPromptConfig {
   // Seçilen preset'ler
   lightingPresetId: string;
-  handPoseId?: string; // El varsa
   compositionTemplateId: string;
   moodDefinitionId: string;
   productTextureId: string;
@@ -999,7 +963,6 @@ export interface GeminiPromptConfig {
 export interface GeneratedGeminiPrompt {
   // Ana prompt bölümleri
   subjectMateriality: string;
-  interaction?: string; // El varsa
   lightingPhysics: string;
   atmosphereComposition: string;
   technicalSpecs: string;
@@ -1011,7 +974,6 @@ export interface GeneratedGeminiPrompt {
   // Meta bilgiler
   usedPresets: {
     lighting: string;
-    handPose?: string;
     composition: string;
     mood: string;
   };

@@ -4,7 +4,6 @@
  *
  * Firestore yapısı:
  * - global/config/gemini-presets/lighting-presets
- * - global/config/gemini-presets/hand-poses
  * - global/config/gemini-presets/composition-templates
  * - global/config/gemini-presets/mood-definitions
  * - global/config/gemini-presets/product-textures
@@ -13,7 +12,6 @@
 
 import {
   LightingPreset,
-  HandPose,
   MoodDefinition,
   ProductTextureProfile,
   NegativePromptSet,
@@ -145,228 +143,11 @@ export const LIGHTING_PRESETS: Omit<LightingPreset, "id">[] = [
 ];
 
 // ==========================================
-// EL POZ ŞABLONLARI
-// ==========================================
-
-export const HAND_POSES: Omit<HandPose, "id">[] = [
-  {
-    name: "Zarif Kavrama",
-    nameEn: "Elegant Grip",
-    gripType: "cupping",
-    entryPoint: "bottom-right",
-    fingerPosition: "fingers gently curved around the object, thumb supporting from side",
-    wristAngle: "slight 15-degree upward tilt",
-    geminiTerms: [
-      "elegant feminine hand",
-      "gentle cupping grip",
-      "natural skin texture",
-      "subsurface scattering on fingertips",
-    ],
-    geminiPrompt:
-      "Elegant feminine hand with natural skin texture gently cupping the object. Fingers curved naturally with thumb supporting. Realistic contact shadows where fingertips meet surface. Subsurface scattering on skin where light passes through.",
-    skinDetails: [
-      "natural skin texture with visible pores",
-      "subsurface scattering on fingertips",
-      "clean manicured nails",
-    ],
-    avoidTerms: ["deformed hands", "extra fingers", "plastic skin", "floating hand"],
-    bestFor: ["coffee", "viennoiserie", "small-desserts"],
-    isActive: true,
-    sortOrder: 1,
-  },
-  {
-    name: "İnce Tutma",
-    nameEn: "Delicate Pinch",
-    gripType: "pinching",
-    entryPoint: "bottom-left",
-    fingerPosition: "thumb and index finger pinching delicately, other fingers elegantly extended",
-    wristAngle: "natural horizontal position",
-    geminiTerms: [
-      "delicate pinch grip",
-      "fingertips gently gripping",
-      "precise contact point",
-      "elegant finger extension",
-    ],
-    geminiPrompt:
-      "Slender fingers delicately pinching the object between thumb and index finger. Other fingers elegantly extended. Sharp focus on contact point with realistic pressure indentation and contact shadow.",
-    skinDetails: [
-      "slender fingers",
-      "natural nails",
-      "slight skin texture",
-    ],
-    avoidTerms: ["crushing grip", "deformed fingers", "unnatural angle"],
-    bestFor: ["chocolate", "small-desserts", "profiterole"],
-    isActive: true,
-    sortOrder: 2,
-  },
-  {
-    name: "Sunum Pozu",
-    nameEn: "Presentation Pose",
-    gripType: "presenting",
-    entryPoint: "center",
-    fingerPosition: "hand flat, palm up, product resting on palm",
-    wristAngle: "slight upward tilt toward camera",
-    geminiTerms: [
-      "presenting pose",
-      "open palm",
-      "product showcase",
-      "inviting gesture",
-    ],
-    geminiPrompt:
-      "Hand in presenting pose with open palm, product resting gracefully. Fingers slightly curved inward creating a natural cradle. Inviting gesture toward viewer.",
-    skinDetails: [
-      "warm skin tone",
-      "natural texture",
-      "soft palm lines visible",
-    ],
-    avoidTerms: ["stiff pose", "unnatural positioning", "floating product"],
-    bestFor: ["chocolate", "small-desserts", "special-orders"],
-    isActive: true,
-    sortOrder: 3,
-  },
-  {
-    name: "Kırma Anı",
-    nameEn: "Breaking Moment",
-    gripType: "breaking",
-    entryPoint: "bottom-right",
-    fingerPosition: "both hands pulling apart, fingers curved around each half",
-    wristAngle: "opposing angles creating tension",
-    geminiTerms: [
-      "breaking action",
-      "dynamic tension",
-      "crumbs falling",
-      "motion blur on particles",
-    ],
-    geminiPrompt:
-      "Hands in the moment of breaking the pastry apart. Dynamic tension visible in finger positions. Flaky layers shattering, crumbs falling with slight motion blur. Action captured mid-movement.",
-    skinDetails: [
-      "natural skin under action",
-      "visible finger pressure",
-      "dynamic lighting on knuckles",
-    ],
-    avoidTerms: ["static pose", "clean break", "no debris"],
-    bestFor: ["viennoiserie", "special-orders"],
-    isActive: true,
-    sortOrder: 4,
-  },
-  {
-    name: "Tabak Tutma",
-    nameEn: "Plate Hold",
-    gripType: "cradling",
-    entryPoint: "side-left",
-    fingerPosition: "fingers supporting plate edge, thumb on top rim",
-    wristAngle: "natural carrying position",
-    geminiTerms: [
-      "plate cradling grip",
-      "stable support",
-      "natural carrying pose",
-      "contact shadow on plate edge",
-    ],
-    geminiPrompt:
-      "Hand naturally cradling ceramic plate from the side. Fingers supporting underneath, thumb resting on top rim for stability. Natural carrying pose with realistic contact shadows.",
-    skinDetails: [
-      "natural skin tone",
-      "visible knuckles",
-      "subtle vein detail",
-    ],
-    avoidTerms: ["gripping too tight", "unnatural wrist", "floating plate"],
-    bestFor: ["slice-cakes", "big-cakes", "special-orders"],
-    isActive: true,
-    sortOrder: 5,
-  },
-];
-
-// ==========================================
 // KOMPOZİSYON ŞABLONLARI
 // ==========================================
 
 // Eski kompozisyon seed data — ölü type kaldırıldı, inline type kullanılıyor
 export const COMPOSITION_TEMPLATES: Record<string, unknown>[] = [
-  // ========== EL GİRİŞ NOKTALARI ==========
-  {
-    name: "Sağ Alt Köşe Girişi",
-    nameEn: "Bottom Right Entry",
-    entryPoint: "bottom-right",
-    angleDescription: "45-degree angle entry, fingers pointing toward upper-left",
-    productPlacement: "center-left of frame, slightly elevated",
-    propsPlacement: "cup top-left corner, plate centered beneath product",
-    negativeSpace: "30% top area, 15% left side for breathing room",
-    geminiTerms: [
-      "rule of thirds",
-      "diagonal composition",
-      "leading lines from corner",
-      "negative space top",
-    ],
-    geminiPrompt:
-      "Composition following rule of thirds. Hand entering from bottom-right corner at 45-degree angle, creating diagonal leading lines. Product positioned center-left. Generous negative space in top third for Instagram text overlay.",
-    aspectRatio: "9:16",
-    bestFor: ["story", "lifestyle", "hand-interaction"],
-    isActive: true,
-    sortOrder: 1,
-  },
-  {
-    name: "Sol Alt Köşe Girişi",
-    nameEn: "Bottom Left Entry",
-    entryPoint: "bottom-left",
-    angleDescription: "45-degree angle entry, fingers pointing toward upper-right",
-    productPlacement: "center-right of frame",
-    propsPlacement: "cup top-right corner, supporting elements on right",
-    negativeSpace: "30% top area, 15% right side",
-    geminiTerms: [
-      "mirrored composition",
-      "left-hand entry",
-      "diagonal flow",
-      "balanced negative space",
-    ],
-    geminiPrompt:
-      "Mirror composition of right entry. Hand entering from bottom-left at 45-degree angle. Product positioned center-right. Diagonal flow guides eye from bottom-left to top-right.",
-    aspectRatio: "9:16",
-    bestFor: ["story", "lifestyle", "variety"],
-    isActive: true,
-    sortOrder: 2,
-  },
-  {
-    name: "Sağ Kenar Girişi",
-    nameEn: "Right Side Entry",
-    entryPoint: "right-side",
-    angleDescription: "horizontal entry from right side at mid-frame height",
-    productPlacement: "center-left of frame",
-    propsPlacement: "minimal, focus on hand-product interaction",
-    negativeSpace: "left side 25% for balance",
-    geminiTerms: [
-      "side entry",
-      "horizontal reaching",
-      "dynamic interaction",
-      "action shot",
-    ],
-    geminiPrompt:
-      "Hand reaching in horizontally from right side of frame at mid-height. Creates sense of action and interaction. Product positioned center-left. Captures moment of reaching or taking.",
-    aspectRatio: "9:16",
-    bestFor: ["action", "reaching", "dynamic"],
-    isActive: true,
-    sortOrder: 3,
-  },
-  {
-    name: "Yukarıdan Giriş",
-    nameEn: "Top Down Entry",
-    entryPoint: "top-down",
-    angleDescription: "90-degree overhead with hands visible from above",
-    productPlacement: "center of frame on flat surface",
-    propsPlacement: "arranged around product in flat-lay style",
-    negativeSpace: "even distribution around center",
-    geminiTerms: [
-      "overhead view",
-      "flat lay",
-      "bird's eye",
-      "hands from top",
-    ],
-    geminiPrompt:
-      "Overhead 90-degree view with hands entering from top of frame. Palms partially visible, holding or presenting product. Flat-lay composition with product centered. Perfect for showing both product and hands clearly.",
-    aspectRatio: "1:1",
-    bestFor: ["flat-lay", "presentation", "tutorial"],
-    isActive: true,
-    sortOrder: 4,
-  },
   // ========== FOTOĞRAF TÜRLERİ ==========
   {
     name: "Ürün Odaklı (Hero)",
@@ -391,20 +172,20 @@ export const COMPOSITION_TEMPLATES: Record<string, unknown>[] = [
   },
   {
     name: "Yaşam Tarzı (Lifestyle)",
-    nameEn: "Lifestyle Hand",
-    entryPoint: "bottom-right",
-    angleDescription: "natural hand interaction, candid feel",
+    nameEn: "Lifestyle",
+    entryPoint: "center",
+    angleDescription: "natural scene, candid feel",
     productPlacement: "slightly off-center for natural look",
     propsPlacement: "contextual items suggesting daily life (coffee, book, etc.)",
     negativeSpace: "organic, not strictly measured",
     geminiTerms: [
       "lifestyle photography",
-      "natural interaction",
+      "natural scene",
       "candid moment",
-      "human connection",
+      "warm atmosphere",
     ],
     geminiPrompt:
-      "Lifestyle composition showing natural human interaction with product. Hand holding or using product in authentic way. Warm, inviting atmosphere suggesting real moment in daily life. Connection between person and product.",
+      "Lifestyle composition showing product in natural daily life context. Warm, inviting atmosphere suggesting a real moment. Contextual props enhancing the scene narrative.",
     aspectRatio: "9:16",
     bestFor: ["social-media", "instagram", "engagement", "relatable"],
     isActive: true,
@@ -947,25 +728,6 @@ export const NEGATIVE_PROMPT_SETS: Omit<NegativePromptSet, "id">[] = [
     applicableTo: "all",
   },
   {
-    name: "El Anatomisi Hataları",
-    category: "anatomy",
-    terms: [
-      "deformed hands",
-      "extra fingers",
-      "missing fingers",
-      "fused fingers",
-      "missing limbs",
-      "bad anatomy",
-      "claw-like hands",
-      "floating hand",
-      "disconnected hand",
-    ],
-    geminiFormat:
-      "Avoid any anatomical errors: deformed hands, incorrect finger count, fused or missing fingers, unnatural poses, or disconnected/floating hands.",
-    isDefault: false,
-    applicableTo: "all",
-  },
-  {
     name: "Kompozisyon Hataları",
     category: "composition",
     terms: [
@@ -1381,10 +1143,6 @@ export function getGeminiTerminologySeedData() {
 
   return {
     lightingPresets: LIGHTING_PRESETS.map((p) => ({
-      id: createSlug(p.nameEn),
-      ...p,
-    })),
-    handPoses: HAND_POSES.map((p) => ({
       id: createSlug(p.nameEn),
       ...p,
     })),

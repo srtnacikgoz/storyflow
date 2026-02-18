@@ -150,6 +150,8 @@ export interface RuleViolation {
 
 export interface AssetSelection {
     product: ScoredAsset;
+    slots: Record<string, ScoredAsset>;
+    // DEPRECATED named fields (eski veri uyumluluğu)
     table?: ScoredAsset;
     plate?: ScoredAsset;
     cup?: ScoredAsset;
@@ -238,7 +240,6 @@ export interface EffectiveRules {
     blockedCups: string[];
     blockedScenarios: string[];
     blockedCompositions: string[];
-    blockedHandStyles: string[];
     shouldIncludePet: boolean;
     petInstruction?: string;
     patronRules: PatronRule[];

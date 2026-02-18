@@ -4,7 +4,6 @@ import { OrchestratorScheduler as SchedulerClass } from "../orchestrator/schedul
 import { OrchestratorConfig } from "../orchestrator/types";
 
 // v2 secrets - tüm hassas değerler burada tanımlanmalı
-const claudeApiKey = defineSecret("CLAUDE_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 const instagramAccountId = defineSecret("INSTAGRAM_ACCOUNT_ID");
 const instagramAccessToken = defineSecret("INSTAGRAM_ACCESS_TOKEN");
@@ -24,7 +23,7 @@ export const orchestratorScheduler = onSchedule(
         region: "europe-west1",
         retryCount: 3,
         memory: "1GiB", // Using 1GB to be safe with image processing if needed
-        secrets: [claudeApiKey, geminiApiKey, instagramAccountId, instagramAccessToken, telegramBotToken, telegramChatId],
+        secrets: [geminiApiKey, instagramAccountId, instagramAccessToken, telegramBotToken, telegramChatId],
         timeoutSeconds: 540, // 9 minutes max
     },
     async (event) => {
@@ -33,8 +32,6 @@ export const orchestratorScheduler = onSchedule(
         try {
             // 1. Prepare Configuration - v2'de doğrudan secret'lardan oku
             const orchestratorConfig: OrchestratorConfig = {
-                claudeApiKey: claudeApiKey.value(),
-                claudeModel: "claude-sonnet-4-20250514", // Hardcoded model preference
                 geminiApiKey: geminiApiKey.value(),
                 geminiModel: "gemini-3-pro-image-preview",
                 qualityThreshold: 7,

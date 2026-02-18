@@ -1,6 +1,6 @@
 /**
  * AI Log Service
- * Claude ve Gemini çağrılarını Firestore'a kaydeder
+ * Gemini çağrılarını Firestore'a kaydeder
  */
 
 import * as admin from "firebase-admin";
@@ -61,45 +61,8 @@ export class AILogService {
   }
 
   /**
-   * Claude log helper
+   * Gemini log helper
    */
-  static async logClaude(
-    stage: AILogStage,
-    data: {
-      model: string;
-      systemPrompt: string;
-      userPrompt: string;
-      response?: string;
-      responseData?: Record<string, unknown>;
-      status: AILogStatus;
-      error?: string;
-      tokensUsed?: number;
-      cost?: number;
-      durationMs: number;
-      pipelineId?: string;
-      slotId?: string;
-      productType?: string;
-    }
-  ): Promise<string> {
-    return this.createLog({
-      provider: "claude",
-      stage,
-      model: data.model,
-      systemPrompt: data.systemPrompt,
-      userPrompt: data.userPrompt,
-      response: data.response,
-      responseData: data.responseData,
-      status: data.status,
-      error: data.error,
-      tokensUsed: data.tokensUsed,
-      cost: data.cost,
-      durationMs: data.durationMs,
-      pipelineId: data.pipelineId,
-      slotId: data.slotId,
-      productType: data.productType,
-    });
-  }
-
   static async logGemini(stage: AILogStage, data: {
     model: string;
     userPrompt: string;
@@ -141,8 +104,10 @@ export class AILogService {
     slotId?: string;
     productType?: string;
     configSnapshot: {
-      themeId?: string;
-      themeName?: string;
+      scenarioId?: string;
+      scenarioName?: string;
+      themeId?: string; // Deprecated: geriye uyumluluk
+      themeName?: string; // Deprecated: geriye uyumluluk
       moodName?: string;
       timeOfDay?: string;
       aspectRatio?: string;
@@ -153,7 +118,7 @@ export class AILogService {
       provider: "gemini",
       stage: "config-snapshot",
       model: "system",
-      userPrompt: `Config Snapshot: Theme=${data.configSnapshot.themeName || "default"}, Mood=${data.configSnapshot.moodName || "default"}`,
+      userPrompt: `Config Snapshot: Scenario=${data.configSnapshot.scenarioName || data.configSnapshot.themeName || "default"}, Mood=${data.configSnapshot.moodName || "default"}`,
       status: "success",
       durationMs: 0,
       pipelineId: data.pipelineId,
@@ -395,7 +360,6 @@ export class AILogService {
    */
   static async getStats(lastHours: number = 24): Promise<{
     totalCalls: number;
-    claudeCalls: number;
     geminiCalls: number;
     successRate: number;
     totalCost: number;
@@ -414,7 +378,6 @@ export class AILogService {
 
       const logs = snapshot.docs.map((doc) => doc.data() as AILog);
 
-      const claudeCalls = logs.filter((l) => l.provider === "claude").length;
       const geminiCalls = logs.filter((l) => l.provider === "gemini").length;
       const successCount = logs.filter((l) => l.status === "success").length;
       const errorCount = logs.filter((l) => l.status === "error").length;
@@ -429,7 +392,6 @@ export class AILogService {
 
       return {
         totalCalls: logs.length,
-        claudeCalls,
         geminiCalls,
         successRate: logs.length > 0 ? (successCount / logs.length) * 100 : 0,
         totalCost,
@@ -441,7 +403,6 @@ export class AILogService {
       console.error("[AILogService] Error fetching stats:", error);
       return {
         totalCalls: 0,
-        claudeCalls: 0,
         geminiCalls: 0,
         successRate: 0,
         totalCost: 0,

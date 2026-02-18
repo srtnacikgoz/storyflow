@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { useLoading } from "../contexts/LoadingContext";
-import type { CategorySubType, DynamicCategory, DynamicCategoryType, EatingMethod } from "../types";
+import type { CategorySubType, DynamicCategory, DynamicCategoryType, EatingMethod, SlotDefinition } from "../types";
 import { PageGuide } from "../components/PageGuide"; // New Import
 
 // Yeme şekli seçenekleri
@@ -32,6 +32,9 @@ export default function Categories() {
   const [isMainCategoryModalOpen, setIsMainCategoryModalOpen] = useState(false);
   const [editingMainCategory, setEditingMainCategory] = useState<DynamicCategory | null>(null);
 
+  // Slot tanımları (slot bağlantısı dropdown için)
+  const [slotDefinitions, setSlotDefinitions] = useState<SlotDefinition[]>([]);
+
   // Alt kategori form state
   const [formData, setFormData] = useState({
     slug: "",
@@ -49,6 +52,7 @@ export default function Categories() {
     displayName: "",
     icon: "",
     description: "",
+    linkedSlotKey: "",
   });
 
   // Kategorileri yükle
@@ -75,6 +79,10 @@ export default function Categories() {
 
   useEffect(() => {
     loadCategories();
+    // Slot tanımlarını yükle (slot bağlantısı dropdown için)
+    api.getSlotDefinitions()
+      .then(data => setSlotDefinitions((data.slots || []).filter((s: SlotDefinition) => s.isActive)))
+      .catch(() => {});
   }, []);
 
   // Seçili kategoriyi bul
@@ -220,6 +228,7 @@ export default function Categories() {
         displayName: category.displayName,
         icon: category.icon,
         description: category.description || "",
+        linkedSlotKey: category.linkedSlotKey || "",
       });
     } else {
       setEditingMainCategory(null);
@@ -228,6 +237,7 @@ export default function Categories() {
         displayName: "",
         icon: "",
         description: "",
+        linkedSlotKey: "",
       });
     }
     setIsMainCategoryModalOpen(true);
@@ -246,11 +256,6 @@ export default function Categories() {
       return;
     }
 
-    if (!mainCategoryForm.icon.trim()) {
-      alert("Icon zorunludur");
-      return;
-    }
-
     try {
       if (editingMainCategory) {
         // Güncelle
@@ -258,6 +263,7 @@ export default function Categories() {
           displayName: mainCategoryForm.displayName,
           icon: mainCategoryForm.icon,
           description: mainCategoryForm.description || undefined,
+          linkedSlotKey: mainCategoryForm.linkedSlotKey || null,
         });
       } else {
         // Yeni oluştur
@@ -278,6 +284,7 @@ export default function Categories() {
           displayName: mainCategoryForm.displayName,
           icon: mainCategoryForm.icon,
           description: mainCategoryForm.description || undefined,
+          linkedSlotKey: mainCategoryForm.linkedSlotKey || undefined,
         });
       }
       closeMainCategoryModal();
@@ -385,13 +392,17 @@ export default function Categories() {
                   onClick={() => setSelectedCategory(category.type)}
                   className="flex items-center gap-3 flex-1 text-left"
                 >
-                  <span className="text-2xl">{category.icon}</span>
                   <div>
                     <div className="font-medium text-gray-900">{category.displayName}</div>
                     <div className="text-xs text-gray-500">
                       {category.type}
                       {category.isSystem && (
                         <span className="ml-1 text-amber-600">(sistem)</span>
+                      )}
+                      {category.linkedSlotKey && (
+                        <span className="ml-1 text-emerald-600">
+                          ({slotDefinitions.find(s => s.key === category.linkedSlotKey)?.label || category.linkedSlotKey})
+                        </span>
                       )}
                     </div>
                   </div>
@@ -445,7 +456,7 @@ export default function Categories() {
               <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                 <div>
                   <h2 className="font-medium text-gray-900">
-                    {currentCategory.icon} {currentCategory.displayName}
+                    {currentCategory.displayName}
                   </h2>
                   <p className="text-sm text-gray-500">{currentCategory.description}</p>
                 </div>
@@ -468,7 +479,6 @@ export default function Categories() {
                         } `}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-xl">{subType.icon || "📦"}</span>
                         <div>
                           <div className="font-medium text-gray-900">{subType.displayName}</div>
                           <div className="text-xs text-gray-500 font-mono">{subType.slug}</div>
@@ -560,26 +570,7 @@ export default function Categories() {
             </div>
 
             <div className="p-4 space-y-4">
-              {/* Slug (sadece yeni eklerken) */}
-              {!editingSubType && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Slug <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.slug}
-                    onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase() })}
-                    placeholder="ornek-slug"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Küçük harf, rakam ve tire kullanın. Değiştirilemez.
-                  </p>
-                </div>
-              )}
-
-              {/* DisplayName */}
+              {/* Görünen Ad */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Görünen Ad <span className="text-red-500">*</span>
@@ -588,30 +579,31 @@ export default function Categories() {
                   type="text"
                   value={formData.displayName}
                   onChange={(e) => {
-                    // Title Case: Her kelimenin ilk harfi büyük
                     const titleCase = e.target.value
                       .split(' ')
                       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                       .join(' ');
-                    setFormData({ ...formData, displayName: titleCase });
+                    const autoSlug = e.target.value
+                      .toLowerCase()
+                      .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+                      .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c")
+                      .replace(/[^a-z0-9\s-]/g, "")
+                      .trim()
+                      .replace(/\s+/g, "-");
+                    setFormData({
+                      ...formData,
+                      displayName: titleCase,
+                      ...(!editingSubType ? { slug: autoSlug } : {}),
+                    });
                   }}
                   placeholder="Kruvasanlar"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
                 />
-              </div>
-
-              {/* Icon */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Icon (emoji)
-                </label>
-                <input
-                  type="text"
-                  value={formData.icon}
-                  onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                  placeholder="🥐"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
-                />
+                {!editingSubType && formData.slug && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Slug: <span className="font-mono">{formData.slug}</span>
+                  </p>
+                )}
               </div>
 
               {/* Description */}
@@ -779,26 +771,7 @@ export default function Categories() {
             </div>
 
             <div className="p-4 space-y-4">
-              {/* Type ID (sadece yeni eklerken) */}
-              {!editingMainCategory && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type ID <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={mainCategoryForm.type}
-                    onChange={(e) => setMainCategoryForm({ ...mainCategoryForm, type: e.target.value.toLowerCase() })}
-                    placeholder="custom-products"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Küçük harf, rakam ve tire kullanın. Değiştirilemez.
-                  </p>
-                </div>
-              )}
-
-              {/* DisplayName */}
+              {/* Görünen Ad */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Görünen Ad <span className="text-red-500">*</span>
@@ -807,33 +780,31 @@ export default function Categories() {
                   type="text"
                   value={mainCategoryForm.displayName}
                   onChange={(e) => {
-                    // Title Case: Her kelimenin ilk harfi büyük
                     const titleCase = e.target.value
                       .split(' ')
                       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                       .join(' ');
-                    setMainCategoryForm({ ...mainCategoryForm, displayName: titleCase });
+                    const autoType = e.target.value
+                      .toLowerCase()
+                      .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+                      .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c")
+                      .replace(/[^a-z0-9\s-]/g, "")
+                      .trim()
+                      .replace(/\s+/g, "-");
+                    setMainCategoryForm({
+                      ...mainCategoryForm,
+                      displayName: titleCase,
+                      ...(!editingMainCategory ? { type: autoType } : {}),
+                    });
                   }}
                   placeholder="Özel Ürünler"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
                 />
-              </div>
-
-              {/* Icon */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Icon (emoji) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={mainCategoryForm.icon}
-                  onChange={(e) => setMainCategoryForm({ ...mainCategoryForm, icon: e.target.value })}
-                  placeholder="🎁"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Tek bir emoji girin (örn: 🎁, 🍰, ☕)
-                </p>
+                {!editingMainCategory && mainCategoryForm.type && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Slug: <span className="font-mono">{mainCategoryForm.type}</span>
+                  </p>
+                )}
               </div>
 
               {/* Description */}
@@ -849,6 +820,30 @@ export default function Categories() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
                 />
               </div>
+
+              {/* Slot bağlantısı — bu kategori hangi kompozisyon slotunu besliyor? */}
+              {slotDefinitions.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Slot Bağlantısı
+                  </label>
+                  <select
+                    value={mainCategoryForm.linkedSlotKey}
+                    onChange={(e) => setMainCategoryForm({ ...mainCategoryForm, linkedSlotKey: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500"
+                  >
+                    <option value="">Bağlantısız</option>
+                    {slotDefinitions.map((def) => (
+                      <option key={def.key} value={def.key}>
+                        {def.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Bu kategorideki asset'ler seçilen slotta kullanılır
+                  </p>
+                </div>
+              )}
 
               {/* Sistem kategorisi uyarısı */}
               {editingMainCategory?.isSystem && (

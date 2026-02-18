@@ -261,14 +261,14 @@ export class OrchestratorScheduler {
    * @param rule - Zaman kuralı
    * @param slotId - Slot ID
    * @param scheduledHour - İçeriğin hedeflediği saat (zaman dilimine göre içerik üretimi için)
-   * @param overrideThemeId - Manuel tema override (Dashboard'dan "Şimdi Üret" için)
+   * @param overrideScenarioId - Manuel senaryo override (Dashboard'dan "Şimdi Üret" için)
    * @param overrideAspectRatio - Manuel aspect ratio override (Dashboard'dan seçim için)
    */
   private async runPipelineAsync(
     rule: TimeSlotRule,
     slotId: string,
     scheduledHour?: number,
-    overrideThemeId?: string,
+    overrideScenarioId?: string,
     overrideAspectRatio?: "1:1" | "3:4" | "9:16",
     isRandomMode?: boolean,
     compositionConfig?: CompositionConfig
@@ -300,14 +300,14 @@ export class OrchestratorScheduler {
         });
       };
 
-      // Pipeline çalıştır (progress callback ile, slotId ile, scheduledHour ile, themeId ve aspectRatio ile)
+      // Pipeline çalıştır (progress callback ile, slotId ile, scheduledHour ile, scenarioId ve aspectRatio ile)
       const result = await orchestrator.runPipeline(
         productType,
         rule,
         onProgress,
         slotId,
         scheduledHour,
-        overrideThemeId,
+        overrideScenarioId,
         overrideAspectRatio,
         undefined, // isManual
         isRandomMode,
@@ -382,12 +382,12 @@ export class OrchestratorScheduler {
   /**
    * Hemen içerik üret (Dashboard "Şimdi Üret" butonu)
    * productType opsiyonel: verilmezse senaryodan otomatik belirlenir (auto mod)
-   * @param overrideThemeId - Opsiyonel tema ID'si (senaryo filtreleme için)
+   * @param overrideScenarioId - Opsiyonel senaryo ID'si (doğrudan senaryo seçimi)
    * @param overrideAspectRatio - Opsiyonel aspect ratio (Instagram formatı için)
    * @param productType - Opsiyonel ürün tipi (verilmezse senaryodan belirlenir)
    */
   async generateNow(
-    overrideThemeId?: string,
+    overrideScenarioId?: string,
     overrideAspectRatio?: "1:1" | "3:4" | "9:16",
     productType?: ProductType,
     isRandomMode?: boolean,
@@ -410,15 +410,15 @@ export class OrchestratorScheduler {
       productTypes: productType ? [productType] : [],
       isActive: true,
       priority: 0,
-      themeId: overrideThemeId, // Tema override
+      scenarioId: overrideScenarioId, // Senaryo override
     };
 
     const slot = await this.createSlot(tempRule, new Date());
 
     try {
-      // Pipeline'ı bekleyerek çalıştır (themeId ve aspectRatio override ile)
+      // Pipeline'ı bekleyerek çalıştır (scenarioId ve aspectRatio override ile)
       // NOT: await ZORUNLU - Cloud Functions HTTP request bitince instance kapanır
-      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideThemeId, overrideAspectRatio, isRandomMode, compositionConfig);
+      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideScenarioId, overrideAspectRatio, isRandomMode, compositionConfig);
 
       return {
         slotId: slot.id,

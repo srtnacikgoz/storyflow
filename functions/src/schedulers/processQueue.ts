@@ -117,11 +117,8 @@ export async function processNextItem(
         console.log("[Orchestrator] Faithfulness:", item.faithfulness);
 
         // Model seçimi: Gemini 3.0 serisine göre
-        const modelMap: Record<string, "gemini-3-flash-preview" | "gemini-3-pro-image-preview"> = {
-          "gemini-flash": "gemini-3-flash-preview",
-          "gemini-pro": "gemini-3-pro-image-preview",
-        };
-        const selectedModel = modelMap[item.aiModel] || "gemini-3-pro-image-preview";
+        // Tüm modeller artık tek image model'e yönlendiriliyor
+        const selectedModel: "gemini-3-pro-image-preview" = "gemini-3-pro-image-preview";
 
         // GeminiService'i dynamic import ile yükle (startup timeout önlemi)
         const GeminiServiceClass = await getGeminiService();
@@ -159,7 +156,7 @@ export async function processNextItem(
           console.log("[Orchestrator] Using saved orchestrator prompt for regeneration");
           console.log("[Orchestrator] Scenario:", orchestratorData.scenarioName);
           console.log("[Orchestrator] Composition:", orchestratorData.compositionId);
-          console.log("[Orchestrator] Hand Style:", orchestratorData.handStyle);
+
           prompt = orchestratorData.mainPrompt;
           negativePrompt = orchestratorData.negativePrompt || "";
         } else if (item.customPrompt) {
@@ -219,9 +216,8 @@ export async function processNextItem(
         await file.makePublic();
         finalImageUrl = `https://storage.googleapis.com/${bucket.name}/${enhancedPath}`;
 
-        // Log usage - model tipini de gönder
-        const usageModelType = item.aiModel === "gemini-pro" ? "gemini-pro" : "gemini-flash";
-        await usage.logGeminiUsage(item.id, result.cost, usageModelType);
+        // Log usage - tüm modeller artık gemini-3-pro-image-preview
+        await usage.logGeminiUsage(item.id, result.cost);
 
         isEnhanced = true;
         console.log("[Orchestrator] Gemini enhancement complete");
@@ -425,11 +421,8 @@ export async function processWithApproval(
         console.log("[Orchestrator] Starting Gemini enhancement...");
 
         // Model seçimi: Gemini 3.0 serisine göre
-        const modelMap: Record<string, "gemini-3-flash-preview" | "gemini-3-pro-image-preview"> = {
-          "gemini-flash": "gemini-3-flash-preview",
-          "gemini-pro": "gemini-3-pro-image-preview",
-        };
-        const selectedModel = modelMap[item.aiModel] || "gemini-3-pro-image-preview";
+        // Tüm modeller artık tek image model'e yönlendiriliyor
+        const selectedModel: "gemini-3-pro-image-preview" = "gemini-3-pro-image-preview";
 
         const GeminiServiceClass = await getGeminiService();
         const gemini = new GeminiServiceClass({
@@ -463,7 +456,7 @@ export async function processWithApproval(
           console.log("[Orchestrator] Using saved orchestrator prompt for regeneration");
           console.log("[Orchestrator] Scenario:", orchestratorData.scenarioName);
           console.log("[Orchestrator] Composition:", orchestratorData.compositionId);
-          console.log("[Orchestrator] Hand Style:", orchestratorData.handStyle);
+
           prompt = orchestratorData.mainPrompt;
           negativePrompt = orchestratorData.negativePrompt || "";
         } else if (item.customPrompt) {
@@ -519,8 +512,7 @@ export async function processWithApproval(
         finalImageUrl = `https://storage.googleapis.com/${bucket.name}/${enhancedPath}`;
 
         // Log usage
-        const usageModelType = item.aiModel === "gemini-pro" ? "gemini-pro" : "gemini-flash";
-        await usage.logGeminiUsage(item.id, result.cost, usageModelType);
+        await usage.logGeminiUsage(item.id, result.cost);
 
         isEnhanced = true;
         console.log("[Orchestrator] Gemini enhancement complete");

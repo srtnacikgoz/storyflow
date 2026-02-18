@@ -24,12 +24,116 @@ import {
   generateUniqueSubTypeId,
 } from "../orchestrator/types";
 
+import { getSlotDefinitions, updateSlotDefinitions } from "./configService";
+
 // Cache
 let categoriesCache: FirestoreCategoriesConfig | null = null;
 let cacheTimestamp = 0;
 
 // Collection path
 const CATEGORIES_DOC_PATH = "global/config/settings/categories";
+
+/**
+ * linkedSlotKey değiştiğinde SlotDefinition.assetCategory otomatik güncelle
+ * Böylece senaryo modalı ve orchestrator doğru kategoriyi sorgular
+ */
+async function syncSlotDefinition(categoryType: string, linkedSlotKey: string | undefined): Promise<void> {
+  if (!linkedSlotKey) return;
+
+  try {
+    const slotConfig = await getSlotDefinitions();
+    const slots = [...slotConfig.slots];
+    const slotIndex = slots.findIndex(s => s.key === linkedSlotKey);
+
+    if (slotIndex === -1) {
+      console.warn(`[CategoryService] Slot bulunamadı: ${linkedSlotKey}`);
+      return;
+    }
+
+    // SlotDefinition.assetCategory'yi güncelle, assetSubType temizle (kategori kendisi slot)
+    slots[slotIndex] = {
+      ...slots[slotIndex],
+      assetCategory: categoryType,
+      assetSubType: "", // Boş string = subType filtresi yok (undefined Firestore'da silinmez)
+    };
+
+    await updateSlotDefinitions(slots, "system-sync");
+    console.log(`[CategoryService] SlotDefinition sync: slot "${linkedSlotKey}" → kategori "${categoryType}"`);
+  } catch (error) {
+    console.error(`[CategoryService] SlotDefinition sync hatası:`, error);
+  }
+}
+
+/**
+ * Otomatik kategori-slot bağlantısı
+ * linkedSlotKey ayarlanmamış kategorilerin adını slot label'ları ile karşılaştırır.
+ * Eşleşme bulunursa linkedSlotKey set eder ve syncSlotDefinition ile slot tanımını günceller.
+ * Böylece orchestrator ve preflight doğru asset havuzunu kullanır.
+ */
+async function autoLinkUnlinkedCategories(config: FirestoreCategoriesConfig): Promise<boolean> {
+  try {
+    const slotConfig = await getSlotDefinitions();
+    const slots = slotConfig.slots.filter(s => s.isActive);
+    if (slots.length === 0) return false;
+
+    const categories = config.categories.filter(c => !c.isDeleted);
+
+    // Hangi slot'lar zaten bağlı?
+    const linkedSlotKeys = new Set(
+      categories
+        .filter(c => c.linkedSlotKey)
+        .map(c => c.linkedSlotKey!)
+    );
+
+    let anyUpdated = false;
+
+    for (const category of categories) {
+      // Zaten linkedSlotKey varsa veya sistem kategorisiyse atla
+      if (category.linkedSlotKey || category.isSystem) continue;
+
+      const catName = category.displayName.toLowerCase();
+
+      for (const slot of slots) {
+        // Bu slot zaten başka bir kategoriye bağlıysa atla
+        if (linkedSlotKeys.has(slot.key)) continue;
+
+        // Slot label'ından anahtar kelimeler çıkar
+        const keywords = slot.label
+          .toLowerCase()
+          .split(/[\s\/\-]+/)
+          .filter(w => w.length > 2);
+
+        // Kategori adı slot anahtar kelimelerinden birini içeriyorsa eşleştir
+        const isMatch = keywords.some(kw => catName.includes(kw));
+        if (isMatch) {
+          console.log(`[CategoryService] Auto-link: "${category.displayName}" (${category.type}) → slot "${slot.label}" (${slot.key})`);
+
+          // Kategoriyi güncelle
+          category.linkedSlotKey = slot.key;
+          category.updatedAt = Date.now();
+          linkedSlotKeys.add(slot.key);
+          anyUpdated = true;
+
+          // SlotDefinition'ı güncelle (assetCategory → bu kategorinin type'ı)
+          await syncSlotDefinition(category.type, slot.key);
+          break;
+        }
+      }
+    }
+
+    if (anyUpdated) {
+      config.updatedAt = Date.now();
+      await db.doc(CATEGORIES_DOC_PATH).set(config);
+      clearCategoriesCache();
+      console.log("[CategoryService] Auto-link tamamlandı, Firestore güncellendi");
+    }
+
+    return anyUpdated;
+  } catch (error) {
+    console.error("[CategoryService] Auto-link hatası:", error);
+    return false;
+  }
+}
 
 /**
  * Cache'i temizle
@@ -71,6 +175,14 @@ export async function getCategories(): Promise<FirestoreCategoriesConfig> {
     }
 
     const data = doc.data() as FirestoreCategoriesConfig;
+
+    // linkedSlotKey olmayan kategoriler varsa otomatik bağla
+    const hasUnlinked = data.categories.some(c =>
+      !c.isDeleted && !c.isSystem && !c.linkedSlotKey
+    );
+    if (hasUnlinked) {
+      await autoLinkUnlinkedCategories(data);
+    }
 
     // Cache'e kaydet
     categoriesCache = data;
@@ -421,6 +533,7 @@ export async function addMainCategory(
       icon: category.icon,
       description: category.description,
       order: maxOrder + 1,
+      linkedSlotKey: category.linkedSlotKey,
       isSystem: false, // Kullanıcı ekledi, silinebilir
       isDeleted: false,
       subTypes: category.subTypes || [],
@@ -436,6 +549,14 @@ export async function addMainCategory(
 
     // Cache'i temizle
     clearCategoriesCache();
+
+    // linkedSlotKey varsa SlotDefinition otomatik güncelle
+    if (category.linkedSlotKey) {
+      await syncSlotDefinition(category.type, category.linkedSlotKey);
+    } else {
+      // linkedSlotKey yoksa otomatik bağlantı dene
+      await autoLinkUnlinkedCategories(config);
+    }
 
     console.log(`[CategoryService] Yeni ana kategori eklendi: ${category.type}`);
     return { success: true };
@@ -489,6 +610,12 @@ export async function updateMainCategory(
 
     // Cache'i temizle
     clearCategoriesCache();
+
+    // linkedSlotKey değiştiyse SlotDefinition otomatik güncelle
+    const updatedCategory = config.categories[categoryIndex];
+    if (updatedCategory.linkedSlotKey) {
+      await syncSlotDefinition(updatedCategory.type, updatedCategory.linkedSlotKey);
+    }
 
     console.log(`[CategoryService] Ana kategori güncellendi: ${type}`);
     return { success: true };

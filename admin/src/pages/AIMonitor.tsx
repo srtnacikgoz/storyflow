@@ -471,11 +471,10 @@ export default function AIMonitor() {
                         e.stopPropagation();
                         handleCopyPipelineLogs(group);
                       }}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                        copiedPipelineId === group.pipelineId
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${copiedPipelineId === group.pipelineId
                           ? "bg-green-100 text-green-700"
                           : "bg-white text-gray-600 hover:bg-gray-200 hover:text-gray-800 border border-gray-200"
-                      }`}
+                        }`}
                     >
                       {copiedPipelineId === group.pipelineId ? (
                         <>
@@ -529,12 +528,9 @@ export default function AIMonitor() {
 
                                 {/* Provider */}
                                 <span
-                                  className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${log.provider === "claude"
-                                    ? "bg-purple-100 text-purple-800"
-                                    : "bg-green-100 text-green-800"
-                                    }`}
+                                  className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800`}
                                 >
-                                  {log.provider === "claude" ? "Claude" : "Gemini"}
+                                  Gemini
                                 </span>
                               </div>
 
@@ -641,12 +637,9 @@ export default function AIMonitor() {
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${log.provider === "claude"
-                        ? "bg-purple-100 text-purple-800"
-                        : "bg-green-100 text-green-800"
-                        }`}
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800`}
                     >
-                      {log.provider === "claude" ? "Claude" : "Gemini"}
+                      Gemini
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -702,7 +695,7 @@ export default function AIMonitor() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AI Monitor</h1>
           <p className="text-gray-600 mt-1">
-            Claude ve Gemini çağrılarını izle ve debug et
+            Gemini çağrılarını izle ve debug et
           </p>
         </div>
         <div className="flex gap-3">
@@ -732,14 +725,10 @@ export default function AIMonitor() {
 
       {/* İstatistikler */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-xl p-4 border border-gray-100">
             <p className="text-xs text-gray-500 uppercase tracking-wider">Toplam Çağrı</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalCalls}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-gray-100">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Claude</p>
-            <p className="text-2xl font-bold text-purple-600 mt-1">{stats.claudeCalls}</p>
           </div>
           <div className="bg-white rounded-xl p-4 border border-gray-100">
             <p className="text-xs text-gray-500 uppercase tracking-wider">Gemini</p>
@@ -819,7 +808,6 @@ export default function AIMonitor() {
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
             >
               <option value="">Tümü</option>
-              <option value="claude">Claude</option>
               <option value="gemini">Gemini</option>
             </select>
           </div>
@@ -978,17 +966,10 @@ export default function AIMonitor() {
                     📋 Pipeline Konfigürasyonu
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {selectedLog.configSnapshot.themeName && (
+                    {selectedLog.configSnapshot.scenarioName && (
                       <div className="bg-white rounded-lg p-3 shadow-sm">
-                        <p className="text-xs text-gray-500">Tema</p>
-                        <p className="font-medium text-gray-800">{selectedLog.configSnapshot.themeName}</p>
-                        {selectedLog.configSnapshot.themeColors && selectedLog.configSnapshot.themeColors.length > 0 && (
-                          <div className="flex gap-1 mt-1">
-                            {selectedLog.configSnapshot.themeColors.slice(0, 4).map((color, idx) => (
-                              <div key={idx} className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: color }} title={color} />
-                            ))}
-                          </div>
-                        )}
+                        <p className="text-xs text-gray-500">Senaryo</p>
+                        <p className="font-medium text-gray-800">{selectedLog.configSnapshot.scenarioName}</p>
                       </div>
                     )}
                     {selectedLog.configSnapshot.moodName && (
@@ -1101,7 +1082,7 @@ export default function AIMonitor() {
                         )}
                         <div className="flex gap-3 mt-2">
                           <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">
-                            El: {selectedLog.decisionDetails.selectedScenario.includesHands ? `Var (${selectedLog.decisionDetails.selectedScenario.handStyle || "default"})` : "Yok"}
+                            El: Kaldırıldı
                           </span>
                           {selectedLog.decisionDetails.selectedScenario.compositionId && (
                             <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">

@@ -36,7 +36,6 @@ export {
   createScenario,
   updateScenarioEndpoint,
   deleteScenarioEndpoint,
-  listHandStyles,
   generateScenarioDescription, // AI Writer
 } from "./scenarioController";
 
@@ -48,6 +47,7 @@ export {
   orchestratorResendTelegram,
   orchestratorScheduledTrigger,
   validateBeforeGenerate,
+  assetTagAudit,
 } from "./pipelineController";
 
 // Slot Controller
@@ -98,11 +98,11 @@ export {
   getProductSlotDefaultsEndpoint,
   updateProductSlotDefaultsEndpoint,
   // Prompt Studio
-  // getPromptStudioConfig,
-  // getPromptTemplateById,
-  // updatePromptTemplateEndpoint,
-  // revertPromptTemplateEndpoint,
-  // clearPromptStudioCacheEndpoint,
+  getPromptStudioConfig,
+  getPromptTemplateById,
+  updatePromptTemplateEndpoint,
+  revertPromptTemplateEndpoint,
+  clearPromptStudioCacheEndpoint,
 } from "./configController";
 
 // Feedback Controller
@@ -178,12 +178,6 @@ export {
   migrateSingleAsset,
   resetMigration,
 } from "./migrationController";
-
-// Beverage Rules Controller
-export {
-  getBeverageRulesConfigEndpoint,
-  updateBeverageRulesConfigEndpoint,
-} from "./beverageRulesController";
 
 // Composition Controller (Dinamik Slot Sistemi)
 export {

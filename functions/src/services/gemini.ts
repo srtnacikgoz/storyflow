@@ -4,9 +4,6 @@
  */
 
 import { AILogService } from "./aiLogService";
-import { AILogStage } from "../types";
-import { getPromptTemplate, interpolatePrompt } from "./configService";
-import { getCompactTrainingContext } from "../orchestrator/promptTrainingService";
 
 // Lazy load imports - Cloud Functions startup timeout'unu önler
 // @google/generative-ai ve sharp modülleri ilk kullanımda yüklenir
@@ -137,15 +134,11 @@ async function withRetry<T>(
 }
 
 /**
- * Gemini model tipleri (Ocak 2026 - Sadece Gemini 3 Serisi)
- * - gemini-3-pro-preview: Flagship Logic modeli
- * - gemini-3-flash-preview: High-speed Logic modeli
- * - gemini-3-pro-image-preview: Nano Banana Pro (Vision/Image)
+ * Gemini model tipleri (Şubat 2026 - Sadece Image Model)
+ * Pipeline'da tek AI çağrısı: görsel üretim
+ * Admin helper'lar (tema/senaryo açıklaması) için image model text de üretebilir
  */
-export type GeminiModel =
-  | "gemini-3-pro-preview"
-  | "gemini-3-flash-preview"
-  | "gemini-3-pro-image-preview";
+export type GeminiModel = "gemini-3-pro-image-preview";
 
 /**
  * Gemini config
@@ -153,7 +146,6 @@ export type GeminiModel =
 export interface GeminiConfig {
   apiKey: string;
   imageModel?: GeminiModel; // Görsel üretim modeli (varsayılan: gemini-3-pro-image-preview)
-  textModel?: GeminiModel; // Mantık/Logic modeli (varsayılan: gemini-3-pro-preview)
 }
 
 /**
@@ -207,8 +199,7 @@ export class GeminiBlockedError extends GeminiApiError {
  */
 export class GeminiService {
   private apiKey: string;
-  private imageModel: GeminiModel; // Görsel üretim modeli
-  private textModel: GeminiModel; // Mantık/Logic modeli
+  private imageModel: GeminiModel; // Tek model — görsel üretim + admin text helper
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any = null; // Lazy initialized
 
@@ -220,20 +211,15 @@ export class GeminiService {
   } = {};
 
   /**
-   * Maliyet sabitleri (USD per request - Gemini 3 Serisi)
+   * Maliyet sabitleri (USD per request)
    */
   static readonly COSTS: Record<string, number> = {
-    "gemini-3-pro-preview": 0.05,
-    "gemini-3-flash-preview": 0.01,
     "gemini-3-pro-image-preview": 0.04,
   };
 
   constructor(config: GeminiConfig) {
     this.apiKey = config.apiKey;
     this.imageModel = config.imageModel || "gemini-3-pro-image-preview";
-    // Text işlemleri için Flash model kullan (maliyet optimizasyonu: $0.05 → $0.01)
-    // Asset seçimi, senaryo seçimi, prompt optimizasyonu, QC gibi basit JSON görevler için yeterli
-    this.textModel = config.textModel || "gemini-3-flash-preview";
   }
 
   /**
@@ -383,20 +369,61 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
 
       const response = result.response;
 
+      // Blok nedenini yakala (promptFeedback + candidate finishReason)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const promptFeedback = (response as any).promptFeedback;
+      const blockReason = promptFeedback?.blockReason || null;
+      // TÜM safety rating'leri göster
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safetyRatings = promptFeedback?.safetyRatings || [];
+
       // Yanıt kontrolü
       if (!response.candidates || response.candidates.length === 0) {
+        const details: string[] = [];
+        if (blockReason) details.push(`blockReason: ${blockReason}`);
+        if (safetyRatings.length > 0) {
+          details.push(`safetyFlags: ${safetyRatings.map(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (r: any) => `${r.category}=${r.probability}${r.blocked ? " [BLOCKED]" : ""}`
+          ).join(", ")}`);
+        }
+        // promptFeedback'teki ek bilgileri de ekle
+        if (promptFeedback) {
+          const extraKeys = Object.keys(promptFeedback).filter(
+            k => k !== "blockReason" && k !== "safetyRatings"
+          );
+          for (const key of extraKeys) {
+            details.push(`${key}: ${JSON.stringify(promptFeedback[key])}`);
+          }
+        }
+        const detailStr = details.length > 0 ? ` [${details.join(" | ")}]` : "";
         throw new GeminiBlockedError(
-          "AI generated no candidates.",
+          `Görsel üretilemedi — Gemini engelledi.${detailStr}`,
           "NO_CANDIDATES"
         );
       }
 
       const candidate = response.candidates[0];
 
+      // Candidate-level blok kontrolü
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const candidateFinishReason = (candidate as any).finishReason;
+      // TÜM candidate safety rating'leri göster
+      const candidateSafetyRatings = (candidate as any).safetyRatings || [];
+
       // İçerik kontrolü
       if (!candidate.content || !candidate.content.parts) {
+        const details: string[] = [];
+        if (candidateFinishReason && candidateFinishReason !== "STOP") details.push(`finishReason: ${candidateFinishReason}`);
+        if (candidateSafetyRatings.length > 0) {
+          details.push(`safetyFlags: ${candidateSafetyRatings.map(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (r: any) => `${r.category}=${r.probability}${r.blocked ? " [BLOCKED]" : ""}`
+          ).join(", ")}`);
+        }
+        const detailStr = details.length > 0 ? ` [${details.join(" | ")}]` : "";
         throw new GeminiBlockedError(
-          "AI response has no content parts.",
+          `Görsel içerik boş döndü.${detailStr}`,
           "NO_CONTENT"
         );
       }
@@ -493,620 +520,60 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
   }
 
   /**
-   * Metin üretimi (Logic işlemleri için) - Gemini 3 Pro
+   * Admin helper için basit metin üretimi (image model text de üretebilir)
+   * Pipeline'da KULLANILMAZ — sadece admin panel'den tema/senaryo açıklaması üretmek için
    */
-  async generateText(
+  async generateTextForAdmin(
     prompt: string,
     systemInstruction?: string,
-    jsonMode: boolean = false,
-    stage: AILogStage = "image-generation"
-  ): Promise<{ text: string; data?: any; cost: number }> {
+  ): Promise<{ text: string; cost: number }> {
+    const model = this.imageModel;
     const client = await this.getClient();
     const safetySettings = await getSafetySettings();
 
-    const generationConfig: any = {
-      temperature: 0.7,
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 8192,
-    };
-
-    if (jsonMode) {
-      generationConfig.responseMimeType = "application/json";
-    }
-
     const genModel = client.getGenerativeModel({
-      model: this.textModel,
+      model,
       safetySettings,
-      generationConfig,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+      },
       systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
     });
 
     const startTime = Date.now();
 
     try {
-      console.log(`[GeminiService] Text generation with ${this.textModel} (JSON: ${jsonMode})`);
+      console.log(`[GeminiService] Admin text generation with ${model}`);
 
-      // Retry wrapper ile generateContent çağrısı (fetch hatalarına karşı koruma)
       const result = await withRetry(
         async () => genModel.generateContent(prompt),
-        { maxRetries: 3, initialDelayMs: 2000, context: `GeminiService.generateText(${this.textModel})` }
+        { maxRetries: 2, initialDelayMs: 2000, context: `GeminiService.generateTextForAdmin(${model})` }
       ) as Awaited<ReturnType<typeof genModel.generateContent>>;
       const response = result.response;
       const text = response.text();
 
-      const cost = GeminiService.COSTS[this.textModel] || 0.0001;
+      const cost = GeminiService.COSTS[model] || 0.04;
       const durationMs = Date.now() - startTime;
 
-      let data = undefined;
-      if (jsonMode) {
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          console.error("[GeminiService] JSON parse error:", e);
-        }
-      }
-
       // AI Log kaydet
-      await AILogService.logGemini(stage, {
-        model: this.textModel,
+      await AILogService.logGemini("prompt-optimization", {
+        model,
         userPrompt: prompt.substring(0, 500) + "...",
         status: "success",
         cost,
         durationMs,
-        pipelineId: this.pipelineContext.pipelineId,
-        slotId: this.pipelineContext.slotId,
-        productType: this.pipelineContext.productType,
       });
 
-      return { text, data, cost };
+      return { text, cost };
     } catch (error) {
-      const durationMs = Date.now() - startTime;
-      console.error(`[GeminiService] Text generation error (${this.textModel}):`, error);
-
-      await AILogService.logGemini(stage, {
-        model: this.textModel,
-        userPrompt: prompt.substring(0, 500),
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-        cost: 0,
-        durationMs,
-        pipelineId: this.pipelineContext.pipelineId,
-        slotId: this.pipelineContext.slotId,
-      });
-
+      console.error(`[GeminiService] Admin text generation error (${model}):`, error);
       throw error;
     }
   }
 
   /**
-   * En uygun asset kombinasyonunu seç (Gemini 3 Pro)
-   *
-   * @param assetSelectionRules - Config'den gelen zorunlu/hariç asset kuralları
-   *   enabled=true → ZORUNLU (Gemini mutlaka seçmeli)
-   *   enabled=false → HARİÇ (Gemini'ye hiç gönderilmez)
-   */
-  async selectAssets(
-    productType: string,
-    availableAssets: any,
-    timeOfDay: string,
-    mood: string,
-    effectiveRules?: any,
-    fixedAssets?: any,
-    assetSelectionRules?: {
-      plate: { enabled: boolean };
-      table: { enabled: boolean };
-      cup: { enabled: boolean };
-      accessory: { enabled: boolean };
-      napkin: { enabled: boolean };
-      cutlery: { enabled: boolean };
-    },
-    preferredTags?: { table?: string[]; plate?: string[]; cup?: string[] }
-  ): Promise<{ success: boolean; data?: any; error?: string; cost: number; tokensUsed: number }> {
-    const moodGuidelines: Record<string, string> = {
-      energetic: "PARLAK ve CANLI renkler seç. Mermer masalar, metal çatallar tercih et.",
-      social: "ÇOKLU ürün yerleşimine uygun geniş tabaklar. Paylaşım atmosferi.",
-      relaxed: "MİNİMAL seçim. Tek ürün odaklı, az aksesuar. Sakin his.",
-      warm: "SICAK TONLAR: Ahşap masalar, kahverengi/turuncu detaylar.",
-      cozy: "SAMİMİ his: Seramik fincanlar, tekstil peçete dahil et.",
-      balanced: "DENGELI ve NÖTR: Standart sunum, off-white tonlar.",
-    };
-    const moodRule = moodGuidelines[mood] || moodGuidelines.balanced;
-
-    // Varsayılan kurallar (config yoksa tümü aktif)
-    const rules = assetSelectionRules || {
-      plate: { enabled: true },
-      table: { enabled: true },
-      cup: { enabled: true },
-      accessory: { enabled: true },
-      napkin: { enabled: true },
-      cutlery: { enabled: false },
-    };
-
-    // Zorunlu alanları belirle
-    const requiredFields: string[] = [];
-    if (rules.plate.enabled) requiredFields.push("plateId");
-    if (rules.table.enabled) requiredFields.push("tableId");
-    if (rules.cup.enabled) requiredFields.push("cupId");
-    if (rules.accessory.enabled) requiredFields.push("accessoryId");
-    if (rules.napkin.enabled) requiredFields.push("napkinId");
-    if (rules.cutlery.enabled) requiredFields.push("cutleryId");
-
-    // Zorunlu seçim kurallarını oluştur
-    const requiredRulesText = requiredFields.length > 0
-      ? `2. ZORUNLU SEÇİMLER (null OLAMAZ):\n${requiredFields.map(f => `   - ${f}: Bu kategoriden MUTLAKA bir seçim yap`).join("\n")}`
-      : "2. Hiçbir kategori zorunlu değil - ihtiyaca göre seç.";
-
-    // preferredTags → Gemini'ye kullanıcı tercihi olarak aktar
-    const preferredTagLines: string[] = [];
-    if (preferredTags) {
-      if (preferredTags.table && preferredTags.table.length > 0 && !preferredTags.table.includes("__none__")) {
-        preferredTagLines.push(`   - MASA: Şu etiketlerden birini içeren masayı SEÇ → [${preferredTags.table.join(", ")}]`);
-      }
-      if (preferredTags.plate && preferredTags.plate.length > 0 && !preferredTags.plate.includes("__none__")) {
-        preferredTagLines.push(`   - TABAK: Şu etiketlerden birini içeren tabağı SEÇ → [${preferredTags.plate.join(", ")}]`);
-      }
-      if (preferredTags.cup && preferredTags.cup.length > 0 && !preferredTags.cup.includes("__none__")) {
-        preferredTagLines.push(`   - BARDAK/FİNCAN: Şu etiketlerden birini içeren fincanı SEÇ → [${preferredTags.cup.join(", ")}]`);
-      }
-    }
-
-    const preferredTagsBlock = preferredTagLines.length > 0
-      ? `\n🔴 KULLANICI TERCİHLERİ (EN YÜKSEK ÖNCELİK — DİĞER TÜM KURALLARI OVERRIDE EDER):\n${preferredTagLines.join("\n")}\n   Bu etiketlere uyan asset VARSA, onu SEÇ. Mood veya stil kuralı bunu geçersiz KILAMAZ.\n`
-      : "";
-
-    // System prompt
-    const systemPrompt = `Sen profesyonel bir food styling uzmanısın. Pastane ürünleri için en uygun asset kombinasyonunu seç.
-MOOD: ${mood.toUpperCase()} - ${moodRule}
-${effectiveRules?.shouldIncludePet ? "⭐ KÖPEK DAHİL ET: Pet listesinden bir köpek MUTLAKA seç" : "Köpek dahil etme"}
-${preferredTagsBlock}
-ÖNEMLİ KURALLAR:
-1. usageCount düşük olan asset'lere öncelik ver (çeşitlilik için). tags bilgisini mood ve ürün uyumu için kullan.
-
-${requiredRulesText}
-
-3. Eşleşme Mantığı:
-   - Ürün bir "Pasta" ise ahşap masa + katlanmış peçete tercih et
-   - İçecek ise mermer/cam masa + düz peçete tercih et
-   - Mood'a uygun renk tonları seç
-   - ⚠️ Kullanıcı tercihi (yukarıdaki 🔴 blok) varsa, bu eşleşme kurallarını GEÇERSİZ KILAR
-
-KULLANILABİLİR LİSTELER AŞAĞIDADIR.`;
-
-    // User prompt - sadece enabled kategorileri gönder
-    const userPromptParts = [
-      `Ürün tipi: ${productType}`,
-      `Zaman: ${timeOfDay}`,
-      `Mood: ${mood}`,
-      "",
-      `ÜRÜNLER: ${JSON.stringify(availableAssets.products?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`,
-    ];
-
-    // Sadece enabled kategorileri ekle
-    if (rules.plate.enabled) {
-      userPromptParts.push(`TABAKLAR: ${JSON.stringify(availableAssets.plates?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
-    }
-    if (rules.table.enabled) {
-      userPromptParts.push(`MASALAR: ${JSON.stringify(availableAssets.tables?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
-    }
-    if (rules.cup.enabled) {
-      userPromptParts.push(`FİNCANLAR: ${JSON.stringify(availableAssets.cups?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
-    }
-    if (rules.accessory.enabled) {
-      userPromptParts.push(`DEKORLAR/AKSESUARLAR: ${JSON.stringify([
-        ...(availableAssets.props || []),
-        ...(availableAssets.accessories || []),
-        ...(availableAssets.decor || [])
-      ].map((a: any) => ({
-        id: a.id,
-        filename: a.filename,
-        subType: a.subType || "generic",
-        category: a.category,
-        tags: a.tags || [],
-        usageCount: a.usageCount || 0
-      })) || [], null, 2)}`);
-    }
-    if (rules.napkin.enabled) {
-      userPromptParts.push(`PEÇETELER: ${JSON.stringify(availableAssets.napkins?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
-    }
-    if (rules.cutlery.enabled) {
-      userPromptParts.push(`ÇATAL-BIÇAKLAR: ${JSON.stringify(availableAssets.cutlery?.map((a: any) => ({ id: a.id, filename: a.filename, tags: a.tags || [], usageCount: a.usageCount || 0 })) || [], null, 2)}`);
-    }
-
-    // JSON yanıt formatı - sadece enabled alanlar
-    const jsonFields: string[] = ['"productId": "seçilen ürün id (ZORUNLU)"'];
-    if (rules.plate.enabled) jsonFields.push('"plateId": "seçilen tabak id (ZORUNLU)"');
-    if (rules.table.enabled) jsonFields.push('"tableId": "seçilen masa id (ZORUNLU)"');
-    if (rules.cup.enabled) jsonFields.push('"cupId": "seçilen fincan id (ZORUNLU)"');
-    if (rules.accessory.enabled) jsonFields.push('"accessoryId": "seçilen dekor/aksesuar id (ZORUNLU)"');
-    if (rules.napkin.enabled) jsonFields.push('"napkinId": "seçilen peçete id (ZORUNLU)"');
-    if (rules.cutlery.enabled) jsonFields.push('"cutleryId": "seçilen çatal-bıçak id (ZORUNLU)"');
-    jsonFields.push('"reasoning": "seçim gerekçesi"');
-
-    userPromptParts.push("");
-    userPromptParts.push("Yanıt formatı (sadece JSON):");
-    userPromptParts.push("{");
-    userPromptParts.push("  " + jsonFields.join(",\n  "));
-    userPromptParts.push("}");
-
-    const userPrompt = userPromptParts.join("\n");
-
-    console.log(`[Gemini] selectAssets kuralları: plate=${rules.plate.enabled}, table=${rules.table.enabled}, cup=${rules.cup.enabled}, accessory=${rules.accessory.enabled}, napkin=${rules.napkin.enabled}, cutlery=${rules.cutlery.enabled}`);
-
-    try {
-      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true, "asset-selection");
-
-      if (!data || !data.productId) {
-        return { success: false, error: "Geçersiz Gemini yanıtı - productId bulunamadı", cost, tokensUsed: 0 };
-      }
-
-      const product = availableAssets.products?.find((a: any) => a.id === data.productId) || availableAssets.products?.[0];
-
-      // Plate - sadece enabled ise
-      let plate = undefined;
-      if (rules.plate.enabled) {
-        plate = data.plateId ? availableAssets.plates?.find((a: any) => a.id === data.plateId) : undefined;
-        if (!plate && availableAssets.plates?.length > 0) {
-          plate = availableAssets.plates[0];
-          console.warn("[Gemini] plateId zorunlu ama seçilmedi, fallback kullanıldı:", plate.id);
-        }
-      }
-
-      // Cup - sadece enabled ise
-      let cup = undefined;
-      if (rules.cup.enabled) {
-        cup = data.cupId ? availableAssets.cups?.find((a: any) => a.id === data.cupId) : undefined;
-        if (!cup && availableAssets.cups?.length > 0) {
-          cup = availableAssets.cups[0];
-          console.warn("[Gemini] cupId zorunlu ama seçilmedi, fallback kullanıldı:", cup.id);
-        }
-      }
-
-      // Table - sadece enabled ise
-      let table = undefined;
-      if (rules.table.enabled) {
-        table = data.tableId ? availableAssets.tables?.find((a: any) => a.id === data.tableId) : undefined;
-        if (!table && availableAssets.tables?.length > 0) {
-          table = availableAssets.tables[0];
-          console.warn("[Gemini] tableId zorunlu ama seçilmedi, fallback kullanıldı:", table.id);
-        }
-      }
-
-      // Accessory - sadece enabled ise
-      let accessory = undefined;
-      if (rules.accessory.enabled) {
-        const allProps = [...(availableAssets.props || []), ...(availableAssets.accessories || [])];
-        if (data.accessoryId) {
-          accessory = allProps.find((a: any) => a.id === data.accessoryId);
-        }
-        if (!accessory && allProps.length > 0) {
-          accessory = allProps[0];
-          console.warn("[Gemini] accessoryId zorunlu ama seçilmedi, fallback kullanıldı:", accessory.id);
-        }
-      }
-
-      // Napkin - sadece enabled ise
-      let napkin = undefined;
-      if (rules.napkin.enabled) {
-        napkin = data.napkinId ? availableAssets.napkins?.find((a: any) => a.id === data.napkinId) : undefined;
-        if (!napkin && availableAssets.napkins?.length > 0) {
-          napkin = availableAssets.napkins[0];
-          console.warn("[Gemini] napkinId zorunlu ama seçilmedi, fallback kullanıldı:", napkin.id);
-        }
-      }
-
-      // Cutlery - sadece enabled ise
-      let cutlery = undefined;
-      if (rules.cutlery.enabled) {
-        cutlery = data.cutleryId ? availableAssets.cutlery?.find((a: any) => a.id === data.cutleryId) : undefined;
-        if (!cutlery && availableAssets.cutlery?.length > 0) {
-          cutlery = availableAssets.cutlery[0];
-          console.warn("[Gemini] cutleryId zorunlu ama seçilmedi, fallback kullanıldı:", cutlery.id);
-        }
-      }
-
-      if (!product) {
-        return { success: false, error: "Ürün bulunamadı", cost, tokensUsed: 0 };
-      }
-
-      console.log(`[Gemini] selectAssets sonuç: plate=${!!plate}, table=${!!table}, cup=${!!cup}, accessory=${!!accessory}, napkin=${!!napkin}, cutlery=${!!cutlery}`);
-
-      return {
-        success: true,
-        data: {
-          product,
-          plate,
-          cup,
-          table,
-          accessory,
-          napkin,
-          cutlery,
-          selectionReasoning: data.reasoning,
-          includesPet: effectiveRules?.shouldIncludePet || false,
-        },
-        cost,
-        tokensUsed: 0
-      };
-    } catch (error) {
-      return { success: false, error: String(error), cost: 0, tokensUsed: 0 };
-    }
-  }
-
-  /**
-   * En uygun senaryoyu seç (Gemini 3 Pro)
-   */
-  async selectScenario(
-    productType: string | undefined,
-    timeOfDay: string,
-    selectedAssets: any,
-    availableScenarios: any[],
-    effectiveRules?: any,
-    feedbackHints?: string
-  ): Promise<{ success: boolean; data?: any; error?: string; cost: number; tokensUsed: number }> {
-    const systemPrompt = `Sen profesyonel bir içerik yöneticisisin. Pastane ürünleri için en uygun senaryo ve kompozisyonu seç.
-${selectedAssets?.includesPet ? "⭐ KÖPEK SEÇİLDİ - Köpek uyumlu senaryo seç!" : ""}
-${feedbackHints || ""}`;
-
-    const userPrompt = `
-${productType ? `Ürün: ${productType}` : ""}
-Zaman: ${timeOfDay}
-Seçilen Asset'ler:
-- Ürün: ${selectedAssets?.product?.filename || "bilinmiyor"}
-- Masa: ${selectedAssets?.table?.filename || "yok"}
-
-MEVCUT SENARYOLAR:
-${JSON.stringify(availableScenarios, null, 2)}
-
-Yanıt formatı (sadece JSON):
-{
-  "scenarioId": "seçilen senaryo id",
-  "reasoning": "neden bu senaryo",
-  "compositionId": "kompozisyon tipi (bottom-right, center-hold, vb.)"
-}`;
-
-    try {
-      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true, "scenario-selection");
-
-      if (!data || !data.scenarioId) {
-        return { success: false, error: "Geçersiz senaryo yanıtı", cost, tokensUsed: 0 };
-      }
-
-      const scenario = availableScenarios.find(s => s.id === data.scenarioId) || availableScenarios[0];
-
-      return {
-        success: true,
-        data: {
-          scenarioId: scenario.id,
-          scenarioName: scenario.name,
-          scenarioDescription: scenario.description,
-          reasoning: data.reasoning,
-          includesHands: scenario.includesHands || false,
-          compositionId: data.compositionId || "default",
-        },
-        cost,
-        tokensUsed: 0
-      };
-    } catch (error) {
-      return { success: false, error: String(error), cost: 0, tokensUsed: 0 };
-    }
-  }
-
-  /**
-   * Görsel için prompt'u optimize et (Gemini 3 Pro)
-   *
-   * @param assetSelectionRules - Ayarlar'dan gelen asset seçim kuralları (config-driven)
-   */
-  async optimizePrompt(
-    basePrompt: string,
-    scenario: any,
-    assets: any,
-    hints?: string,
-    eatingMethod?: string,
-    assetSelectionRules?: {
-      plate: { enabled: boolean };
-      table: { enabled: boolean };
-      cup: { enabled: boolean };
-      accessory: { enabled: boolean };
-      napkin: { enabled: boolean };
-      cutlery: { enabled: boolean };
-    }
-  ): Promise<{ success: boolean; data?: { optimizedPrompt: string; negativePrompt: string; customizations: string[] }; error?: string; cost: number }> {
-    // ═══════════════════════════════════════════════════════════════════════════
-    // PROMPT STUDIO ENTEGRASYONU
-    // Config'den system prompt template'ini al (Prompt Studio'dan düzenlenebilir)
-    // ═══════════════════════════════════════════════════════════════════════════
-    const optimizationTemplate = await getPromptTemplate("prompt-optimization");
-    const trainingContext = getCompactTrainingContext();
-
-    // Kullanıcı kurallarını (AI Rules) güçlü bir başlıkla ekle
-    const userRulesSection = hints
-      ? `\n\n## ⚠️ ZORUNLU KULLANICI KURALLARI (İHLAL ETME!)\nAşağıdaki kurallar kullanıcı tarafından tanımlanmıştır ve MUTLAKA uygulanmalıdır:\n${hints}`
-      : "";
-
-    // Template'i değişkenlerle doldur
-    const systemPrompt = interpolatePrompt(optimizationTemplate.systemPrompt, {
-      trainingContext,
-      userRulesSection,
-    });
-
-    // eatingMethod'a göre fiziksel kısıtlama oluştur
-    let physicalConstraint = "";
-    if (eatingMethod === "hand") {
-      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün ELLE yenir. Prompt'ta kesinlikle çatal, bıçak veya kaşık OLMAMALI. Negative prompt'a fork, knife, spoon, cutlery, utensil ekle.";
-    } else if (eatingMethod === "fork-knife") {
-      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün ÇATAL VE BIÇAKLA yenir. Sahneye ZORUNLU OLARAK hem çatal hem bıçak ekle. (Must include both fork and knife).";
-    } else if (eatingMethod === "fork") {
-      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün sadece çatalla yenir (bıçak gereksiz). Sahnede sadece çatal olsun.";
-    } else if (eatingMethod === "spoon") {
-      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün kaşıkla yenir. Sahnede kaşık görünebilir.";
-    } else if (eatingMethod === "none") {
-      physicalConstraint = "\n\nFİZİKSEL KISITLAMA: Bu ürün yiyecek değil (içecek vb.). Yeme aletleri gerekmez.";
-    }
-
-    // Asset tipi → Türkçe etiket ve özel talimat mapping (config-driven)
-    const ASSET_CONFIG: Record<string, { label: string; instruction: string }> = {
-      product: {
-        label: "ANA ÜRÜN",
-        instruction: "Bu ürünü referans görselinden BİREBİR kullan."
-      },
-      plate: {
-        label: "TABAK",
-        instruction: "Bu tabağı AYNEN kullan, farklı tabak üretme."
-      },
-      table: {
-        label: "MASA/ZEMİN",
-        instruction: "KRİTİK: Bu masa/zemini BİREBİR kullan. Malzemeyi değiştirme (ahşap ise ahşap, mermer ise mermer)."
-      },
-      cup: {
-        label: "FİNCAN/BARDAK",
-        instruction: "Bu bardağı KESİNLİKLE kullan. Tag'lere göre içeriği doldur (tea, coffee, juice vb.)."
-      },
-      accessory: {
-        label: "AKSESUAR",
-        instruction: "Bu aksesuarı sahnede göster."
-      },
-      napkin: {
-        label: "PEÇETE",
-        instruction: "Bu peçeteyi AYNEN kullan, farklı peçete üretme."
-      },
-      cutlery: {
-        label: "ÇATAL-BIÇAK",
-        instruction: "Bu çatal-bıçağı kullan."
-      }
-    };
-
-    // Seçilen assetleri config'e göre dinamik olarak formatla
-    const assetDetails: string[] = [];
-
-    for (const [assetKey, config] of Object.entries(ASSET_CONFIG)) {
-      const asset = assets?.[assetKey];
-      if (!asset?.filename) continue;
-
-      // product her zaman eklenir, diğerleri assetSelectionRules'a bağlı
-      if (assetKey !== "product" && assetSelectionRules) {
-        const rule = assetSelectionRules[assetKey as keyof typeof assetSelectionRules];
-        if (!rule?.enabled) continue;
-      }
-
-      const tags = asset.tags?.join(", ") || "";
-      const tagInfo = tags ? ` Detaylar: ${tags}.` : "";
-      assetDetails.push(`- ${config.label}: ${asset.filename}.${tagInfo} ${config.instruction}`);
-    }
-
-    const assetSection = assetDetails.length > 0
-      ? `\n\nSEÇİLEN ASSETLER (Prompt'ta mutlaka kullan - ZERO HALLUCINATION):\n${assetDetails.join("\n")}`
-      : "";
-
-    // Kullanıcı kuralları varsa hatırlat (system prompt'ta detaylı)
-    const rulesReminder = hints
-      ? "\n\n⚠️ HATIRLATMA: Yukarıdaki ZORUNLU KULLANICI KURALLARI'na mutlaka uy!"
-      : "";
-
-    const userPrompt = `
-Ana Prompt: ${basePrompt}
-Senaryo: ${scenario?.scenarioName || "bilinmiyor"}
-Yeme Şekli: ${eatingMethod || "bilinmiyor"}${assetSection}${physicalConstraint}${rulesReminder}
-
-ÖNEMLİ (ZERO HALLUCINATION POLICY): 
-1. Optimize edilmiş prompt'ta yukarıdaki seçilen assetlerin HEPSİ açıkça belirtilmeli.
-2. EĞER aksesuar seçilmediyse, prompt'a ASLA 'napkin', 'flower', 'cutlery' gibi dekoratif objeler ekleme. Sahne temiz kalsın.
-3. Bardak içeriği için girilen tagleri (orange juice, latte vb.) mutlaka dikkate al.
-4. Çatal/Bıçak kısıtlamasına ("FİZİKSEL KISITLAMA") kesinlikle uy.
-
-Yanıt formatı (sadece JSON):
-{
-  "optimizedPrompt": "optimize edilmiş prompt",
-  "negativePrompt": "kaçınılacak öğeler (hallucinated objects, wrong cutlery vb.)",
-  "customizations": ["özel ayar 1", "özel ayar 2"]
-}`;
-
-    try {
-      const { data, cost } = await this.generateText(userPrompt, systemPrompt, true, "prompt-optimization");
-
-      return {
-        success: true,
-        data: {
-          optimizedPrompt: data?.optimizedPrompt || basePrompt,
-          negativePrompt: data?.negativePrompt || "",
-          customizations: data?.customizations || [],
-        },
-        cost
-      };
-    } catch (error) {
-      return { success: false, error: String(error), cost: 0 };
-    }
-  }
-
-  /**
-   * Görseli değerlendir (Gemini 3 Pro Vision)
-   */
-  async evaluateImage(
-    imageBase64: string,
-    mimeType: string,
-    scenario: any,
-    product: any
-  ): Promise<{ success: boolean; data?: any; error?: string; cost: number }> {
-    const client = await this.getClient();
-    const safetySettings = await getSafetySettings();
-
-    const genModel = client.getGenerativeModel({
-      model: this.textModel, // Gemini 3 Pro Vision yeteneği var
-      safetySettings,
-      generationConfig: { responseMimeType: "application/json" }
-    });
-
-    const prompt = `
-Sen bir kalite kontrol uzmanısın. Üretilen görselin ürün doğruluğunu ve estetik kalitesini değerlendir.
-
-Senaryo: ${scenario?.scenarioName || "bilinmiyor"}
-Ürün: ${product?.filename || "bilinmiyor"}
-
-Görseli analiz et ve şu kriterlere göre puanla:
-1. Ürün doğruluğu (1-10)
-2. Kompozisyon (1-10)
-3. Işık (1-10)
-4. Gerçekçilik (1-10)
-5. Instagram uygunluğu (1-10)
-
-Yanıt formatı (sadece JSON):
-{
-  "passed": true veya false (ortalama 7 üzeriyse true),
-  "score": ortalama puan (0-10),
-  "evaluation": { "productAccuracy": 0, "composition": 0, "lighting": 0, "realism": 0, "instagramReadiness": 0 },
-  "feedback": "kısa geri bildirim",
-  "shouldRegenerate": false
-}`;
-
-    try {
-      console.log(`[GeminiService] Evaluating image with ${this.textModel}`);
-
-      // Retry wrapper ile generateContent çağrısı
-      const result = await withRetry(
-        async () => genModel.generateContent([
-          { inlineData: { data: imageBase64, mimeType } },
-          { text: prompt }
-        ]),
-        { maxRetries: 2, initialDelayMs: 2000, context: `GeminiService.evaluateImage` }
-      ) as Awaited<ReturnType<typeof genModel.generateContent>>;
-      const text = result.response.text();
-      const feedback = JSON.parse(text);
-
-      const cost = GeminiService.COSTS[this.textModel] || 0.0002;
-
-      return {
-        success: true,
-        data: feedback,
-        cost
-      };
-    } catch (e) {
-      console.error("[GeminiService] Evaluation error:", e);
-      return { success: false, error: String(e), cost: 0 };
-    }
-  }
-
-  /**
-   * Tema Açıklaması Üret (AI Theme Writer)
-   * Gemini 3 Pro kullanarak, orkestratöre uygun İngilizce açıklama üretir.
+   * Tema Açıklaması Üret (Admin panel)
    */
   async generateThemeDescription(themeName: string, keywords?: string): Promise<{ text: string; cost: number }> {
     const systemPrompt = `You are an expert AI Prompt Engineer for a high-end food photography automation system.
@@ -1129,7 +596,7 @@ Return ONLY the description text. No quotes, no "Here is the description:".`;
     const userPrompt = `Write the theme description for: "${themeName}".`;
 
     try {
-      const { text, cost } = await this.generateText(userPrompt, systemPrompt, false, "theme-description-generation" as AILogStage);
+      const { text, cost } = await this.generateTextForAdmin(userPrompt, systemPrompt);
       return { text: text.trim(), cost };
     } catch (error) {
       console.error("[GeminiService] Theme description generation failed:", error);
@@ -1138,8 +605,7 @@ Return ONLY the description text. No quotes, no "Here is the description:".`;
   }
 
   /**
-   * Mood Açıklaması Üret (AI Mood Writer)
-   * Gemini 3 Pro kullanarak, sinemasal atmosfer açıklaması üretir.
+   * Mood Açıklaması Üret (Admin panel)
    */
   async generateMoodDescription(
     moodName: string,
@@ -1172,7 +638,7 @@ ${keywords ? `Additional Keywords: ${keywords}` : ""}
 Write the atmospheric description:`;
 
     try {
-      const { text, cost } = await this.generateText(userPrompt, systemPrompt, false, "prompt-optimization");
+      const { text, cost } = await this.generateTextForAdmin(userPrompt, systemPrompt);
       return { text: text.trim(), cost };
     } catch (error) {
       console.error("[GeminiService] Mood description generation failed:", error);
@@ -1181,34 +647,18 @@ Write the atmospheric description:`;
   }
 
   /**
-   * Senaryo Açıklaması Üret (AI Scenario Writer)
-   * Gemini 3 Pro kullanarak, sahne/senaryo açıklaması üretir.
+   * Senaryo Açıklaması Üret (Admin panel)
    */
   async generateScenarioDescription(params: {
     scenarioName: string;
     includesHands: boolean;
-    handPose?: string;
     compositions: string[];
     compositionEntry?: string;
   }): Promise<{ text: string; cost: number }> {
-    const { scenarioName, includesHands, handPose, compositions, compositionEntry } = params;
-
-    // El pozu açıklamaları
-    const handPoseDescriptions: Record<string, string> = {
-      "cupping": "cupping pose (hands wrapped around the cup)",
-      "pinching": "pinching pose (holding delicately with fingertips)",
-      "lifting": "lifting pose (raising the item elegantly)",
-      "breaking": "breaking pose (breaking apart the product)",
-      "spreading": "spreading pose (applying spread/sauce)",
-      "dipping": "dipping pose (dipping into sauce/drink)",
-      "pouring": "pouring pose (pouring liquid gracefully)",
-      "holding-plate": "holding plate pose (presenting on a plate)",
-    };
+    const { scenarioName, includesHands, compositions, compositionEntry } = params;
 
     const handInfo = includesHands
-      ? `\nHand Style: Yes, includes hands
-Hand Pose: ${handPose ? handPoseDescriptions[handPose] || handPose : "Not specified"}
-${compositionEntry ? `Entry Point: ${compositionEntry}` : ""}`
+      ? `\nHand Style: Yes, includes hands${compositionEntry ? `\nEntry Point: ${compositionEntry}` : ""}`
       : "\nHand Style: No hands in scene";
 
     const systemPrompt = `You are an expert Food Photography Director for a high-end pastry/cafe brand.
@@ -1230,12 +680,22 @@ RULES:
    - Describe hands as: elegant, feminine, well-manicured nails, natural skin tone
    - Focus on the ACTION the hands are performing
 6. PRODUCT REFERENCE RULE (CRITICAL):
-   - DO NOT describe the product's appearance (color, texture, shape, specific type)
-   - Simply refer to it as "the product", "the pastry", or "the item"
-   - The AI image generator will use the reference image for exact product details
-   - WRONG: "A golden, flaky croissant is captured..."
-   - CORRECT: "The pastry is captured..." or "The product is elegantly presented..."
-7. OUTPUT: Return ONLY the description. No quotes, no prefixes like "Here is:".`;
+ - DO NOT describe the product's appearance (color, texture, shape, specific type)
+ - Simply refer to it as "the product", "the pastry", or "the item"
+ - The AI image generator will use the reference image for exact product details
+ - WRONG: "A golden, flaky croissant is captured..."
+ - CORRECT: "The pastry is captured..." or "The product is elegantly presented..."
+7. PROP & SURFACE RULE (CRITICAL):
+ - DO NOT specify materials, colors, or styles for surfaces, tableware, or accessories
+ - DO NOT write "rustic wooden table", "marble counter", "ceramic plate", "linen napkin", etc.
+ - Use GENERIC references: "the table", "a plate", "a cup", "a napkin", "a small vase"
+ - The pipeline selects specific assets separately — your description must not conflict with them
+ - WRONG: "placed on a rustic wooden table with a ceramic cup of coffee"
+ - CORRECT: "placed on the table with a cup of coffee beside it"
+8. ACCESSORY RULE:
+ - You may mention the PRESENCE of accessories (cup, napkin, flowers, cutlery) but NOT their material or style
+ - Focus on SPATIAL ARRANGEMENT, not object descriptions
+9. OUTPUT: Return ONLY the description. No quotes, no prefixes like "Here is:".`;
 
     const userPrompt = `Scenario Name: ${scenarioName}
 Compositions: ${compositions.join(", ")}${handInfo}
@@ -1243,37 +703,11 @@ Compositions: ${compositions.join(", ")}${handInfo}
 Write the scene description:`;
 
     try {
-      const { text, cost } = await this.generateText(userPrompt, systemPrompt, false, "prompt-optimization");
+      const { text, cost } = await this.generateTextForAdmin(userPrompt, systemPrompt);
       return { text: text.trim(), cost };
     } catch (error) {
       console.error("[GeminiService] Scenario description generation failed:", error);
       throw error;
-    }
-  }
-
-  /**
-   * Modelin görsel üretip üretemeyeceğini test et
-   */
-  async testConnection(): Promise<boolean> {
-    try {
-      const client = await this.getClient();
-      const safetySettings = await getSafetySettings();
-      const genModel = client.getGenerativeModel({
-        model: this.textModel, // textModel ile test et (daha hızlı)
-        safetySettings,
-      });
-
-      // Retry wrapper ile bağlantı testi
-      const result = await withRetry(
-        async () => genModel.generateContent("Say 'OK' if you can hear me."),
-        { maxRetries: 2, initialDelayMs: 1000, context: `GeminiService.testConnection` }
-      ) as Awaited<ReturnType<typeof genModel.generateContent>>;
-      const response = result.response;
-
-      return !!response.text();
-    } catch (error) {
-      console.error("[GeminiService] Connection test failed:", error);
-      return false;
     }
   }
 }

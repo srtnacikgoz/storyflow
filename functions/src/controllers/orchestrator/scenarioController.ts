@@ -4,7 +4,7 @@
  */
 
 import { functions, db, getCors, REGION, errorResponse, getConfig } from "./shared";
-import { getScenarios, addScenario, updateScenario, getHandStyles } from "../../services/configService";
+import { getScenarios, addScenario, updateScenario } from "../../services/configService";
 import { FirestoreScenario } from "../../orchestrator/types";
 import { GeminiService } from "../../services/gemini";
 
@@ -38,8 +38,7 @@ export const listScenarios = functions
         }
 
         // Kategorilere ayır
-        const handScenarios = scenarios.filter((s) => s.includesHands && !s.isInterior);
-        const noHandScenarios = scenarios.filter((s) => !s.includesHands && !s.isInterior);
+        const standardScenarios = scenarios.filter((s) => !s.isInterior);
         const interiorScenarios = scenarios.filter((s) => s.isInterior);
 
         response.json({
@@ -47,8 +46,7 @@ export const listScenarios = functions
           data: {
             all: scenarios,
             byCategory: {
-              withHands: handScenarios,
-              withoutHands: noHandScenarios,
+              standard: standardScenarios,
               interior: interiorScenarios,
             },
             total: scenarios.length,
@@ -124,10 +122,8 @@ export const createScenario = functions
           id,
           name,
           description,
-          includesHands,
           compositionId,
           compositionEntry,
-          handPose,
           isInterior,
           interiorType,
           suggestedProducts,
@@ -140,6 +136,15 @@ export const createScenario = functions
           lightingPrompt,
           colorGradePrompt,
           geminiPresetId,
+
+          // v4.0: Sahne ayarları (Tema'dan taşındı)
+          setting,
+          petAllowed,
+          accessoryAllowed,
+          accessoryOptions,
+
+          // v4.1: Slot konfigürasyonu (CompositionTemplates'den taşındı)
+          compositionSlots,
         } = request.body;
 
         // Validasyon
@@ -180,13 +185,11 @@ export const createScenario = functions
           id,
           name,
           description,
-          includesHands: includesHands ?? false,
           compositionId,
           isActive: true,
           isInterior: isInterior ?? false,
           // Opsiyonel alanları sadece tanımlı ise ekle
           ...(compositionEntry !== undefined && { compositionEntry }),
-          ...(handPose !== undefined && { handPose }),
           ...(interiorType !== undefined && { interiorType }),
           ...(suggestedProducts !== undefined && { suggestedProducts }),
           ...(mood !== undefined && { mood }),
@@ -198,6 +201,15 @@ export const createScenario = functions
           ...(lightingPrompt !== undefined && { lightingPrompt }),
           ...(colorGradePrompt !== undefined && { colorGradePrompt }),
           ...(geminiPresetId !== undefined && { geminiPresetId }),
+
+          // v4.0: Sahne ayarları (Tema'dan taşındı)
+          ...(setting !== undefined && { setting }),
+          ...(petAllowed !== undefined && { petAllowed }),
+          ...(accessoryAllowed !== undefined && { accessoryAllowed }),
+          ...(accessoryOptions !== undefined && { accessoryOptions }),
+
+          // v4.1: Slot konfigürasyonu (CompositionTemplates'den taşındı)
+          ...(compositionSlots !== undefined && { compositionSlots }),
         };
 
         await addScenario(scenario);
@@ -363,32 +375,9 @@ export const deleteScenarioEndpoint = functions
   });
 
 /**
- * Tüm el stillerini listele
- * GET /listHandStyles
- */
-export const listHandStyles = functions
-  .region(REGION)
-  .https.onRequest(async (request, response) => {
-    const corsHandler = await getCors();
-    corsHandler(request, response, async () => {
-      try {
-        const handStyles = await getHandStyles();
-
-        response.json({
-          success: true,
-          data: handStyles,
-          total: handStyles.length,
-        });
-      } catch (error) {
-        errorResponse(response, error, "listHandStyles");
-      }
-    });
-  });
-
-/**
  * AI ile senaryo açıklaması üret (Gemini)
  * POST /generateScenarioDescription
- * Body: { scenarioName, includesHands, handPose?, compositions, compositionEntry? }
+ * Body: { scenarioName, compositions, compositionEntry? }
  */
 export const generateScenarioDescription = functions
   .region(REGION)
@@ -404,8 +393,6 @@ export const generateScenarioDescription = functions
 
         const {
           scenarioName,
-          includesHands,
-          handPose,
           compositions,
           compositionEntry,
         } = request.body;
@@ -432,8 +419,7 @@ export const generateScenarioDescription = functions
         const geminiService = new GeminiService({ apiKey: config.gemini.apiKey });
         const result = await geminiService.generateScenarioDescription({
           scenarioName,
-          includesHands: includesHands ?? false,
-          handPose,
+          includesHands: false,
           compositions,
           compositionEntry,
         });

@@ -35,7 +35,6 @@ const mockContext: SelectionContext = {
         shouldIncludePet: false,
         blockedScenarios: [],
         blockedTables: [],
-        blockedHandStyles: [],
         blockedCompositions: [],
         blockedProducts: [],
         blockedPlates: [],

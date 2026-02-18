@@ -36,12 +36,6 @@ async function seedGeminiTerminology(): Promise<void> {
     batch.set(presetsRef.doc("lighting-presets").collection("items").doc(preset.id), preset);
   }
 
-  // El pozları
-  console.log(`✋ ${geminiData.handPoses.length} el pozu yükleniyor...`);
-  for (const pose of geminiData.handPoses) {
-    batch.set(presetsRef.doc("hand-poses").collection("items").doc(pose.id), pose);
-  }
-
   // Kompozisyon şablonları
   console.log(`📐 ${geminiData.compositionTemplates.length} kompozisyon şablonu yükleniyor...`);
   for (const template of geminiData.compositionTemplates) {
@@ -72,7 +66,6 @@ async function seedGeminiTerminology(): Promise<void> {
   console.log(`
 📊 Özet:
 - ${geminiData.lightingPresets.length} ışıklandırma preset'i
-- ${geminiData.handPoses.length} el pozu
 - ${geminiData.compositionTemplates.length} kompozisyon şablonu
 - ${geminiData.moodDefinitions.length} mood tanımı
 - ${geminiData.productTextureProfiles.length} ürün doku profili
@@ -95,17 +88,6 @@ async function seedFirestoreConfig(): Promise<void> {
       .collection("items")
       .doc(scenario.id);
     batch.set(ref, scenario);
-  }
-
-  // El stillerini yükle
-  console.log(`✋ ${seedData.handStyles.length} el stili yükleniyor...`);
-  for (const handStyle of seedData.handStyles) {
-    const ref = db
-      .collection("global")
-      .doc("hand-styles")
-      .collection("items")
-      .doc(handStyle.id);
-    batch.set(ref, handStyle);
   }
 
   // Asset kişiliklerini yükle
@@ -145,7 +127,6 @@ async function seedFirestoreConfig(): Promise<void> {
   console.log(`
 📊 Özet:
 - ${seedData.scenarios.length} senaryo
-- ${seedData.handStyles.length} el stili
 - ${seedData.assetPersonalities.length} asset kişiliği
 - 5 config dosyası
 `);

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { api } from "../services/api";
 import { useLoading } from "../contexts/LoadingContext";
-import type { TimeSlotRule, Theme, CategorySubType } from "../types";
+import type { TimeSlotRule, CategorySubType } from "../types";
 import { Tooltip } from "../components/Tooltip";
 import { SetupStepper } from "../components/SetupStepper";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -107,7 +107,7 @@ export default function TimeSlots() {
   const { startLoading, stopLoading } = useLoading();
   const [rules, setRules] = useState<TimeSlotRule[]>([]);
   const [slots, setSlots] = useState<ScheduledSlot[]>([]);
-  const [themes, setThemes] = useState<Theme[]>([]);
+  const [scenarios, setScenarios] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [productCategories, setProductCategories] = useState<CategorySubType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -153,19 +153,19 @@ export default function TimeSlots() {
     setError(null);
     startLoading("timeslots", "Zaman dilimleri yükleniyor...");
     try {
-      const [rulesData, slotsData, themesData, categoriesData] = await Promise.all([
+      const [rulesData, slotsData, scenariosData, categoriesData] = await Promise.all([
         api.listTimeSlotRules(),
         api.listScheduledSlots({ limit: 50 }).catch(() => []),
-        api.listThemes().catch(() => []),
+        api.listScenarios().then(res => res.all || []).catch(() => []),
         // Ürün kategorilerini çek
         api.getCategoryByType("products")
           .then((cat) => cat?.subTypes.filter((st) => st.isActive) || [])
           .catch(() => []),
       ]);
-      console.log("[TimeSlots] loadData tamamlandı, rules:", rulesData.length, "themes:", themesData.length);
+      console.log("[TimeSlots] loadData tamamlandı, rules:", rulesData.length, "scenarios:", scenariosData.length);
       setRules(rulesData);
       setSlots(slotsData);
-      setThemes(themesData);
+      setScenarios(scenariosData);
       setProductCategories(categoriesData);
     } catch (err) {
       console.error("[TimeSlots] loadData HATA:", err);
@@ -434,7 +434,7 @@ export default function TimeSlots() {
       {(showAddModal || editingRule) && (
         <RuleModal
           rule={editingRule}
-          themes={themes}
+          scenarios={scenarios}
           productConfig={PRODUCT_CONFIG}
           productCategories={productCategories}
           onClose={() => {
@@ -656,14 +656,14 @@ function RuleCard({
 // Kural Modal - İyileştirilmiş versiyon
 function RuleModal({
   rule,
-  themes,
+  scenarios,
   productConfig,
   productCategories,
   onClose,
   onSuccess,
 }: {
   rule: TimeSlotRule | null;
-  themes: Theme[];
+  scenarios: Array<{ id: string; name: string; description?: string }>;
   productConfig: Record<string, ProductConfig>;
   productCategories: CategorySubType[];
   onClose: () => void;
@@ -675,12 +675,12 @@ function RuleModal({
   const [productType, setProductType] = useState<string>(
     rule?.productTypes?.[0] || "croissants"
   );
-  // Tema kullanım state'leri
-  const [useTheme, setUseTheme] = useState<boolean>(!!rule?.themeId);
-  const [themeId, setThemeId] = useState<string>(rule?.themeId || "");
+  // Senaryo kullanım state'leri
+  const [useScenario, setUseScenario] = useState<boolean>(!!rule?.scenarioId || !!rule?.themeId);
+  const [scenarioId, setScenarioId] = useState<string>(rule?.scenarioId || rule?.themeId || "");
   const [saving, setSaving] = useState(false);
-  // Tema uyarısı için state
-  const [showThemeWarning, setShowThemeWarning] = useState(false);
+  // Senaryo uyarısı için state
+  const [showScenarioWarning, setShowScenarioWarning] = useState(false);
 
   const toggleDay = (day: number) => {
     setDaysOfWeek((prev) =>
@@ -707,8 +707,8 @@ function RuleModal({
     }));
   }, [productCategories, productConfig]);
 
-  // Tema seçilmediğinde uyarı gösterip kullanıcıya karar aldıran fonksiyon
-  const handleSubmit = async (e: React.FormEvent, skipThemeWarning = false) => {
+  // Senaryo seçilmediğinde uyarı gösterip kullanıcıya karar aldıran fonksiyon
+  const handleSubmit = async (e: React.FormEvent, skipScenarioWarning = false) => {
     e.preventDefault();
 
     console.log("[TimeSlots] handleSubmit çağrıldı", {
@@ -716,9 +716,9 @@ function RuleModal({
       daysOfWeek,
       startHour,
       endHour,
-      useTheme,
-      themeId,
-      skipThemeWarning,
+      useScenario,
+      scenarioId,
+      skipScenarioWarning,
     });
 
     if (!productType) {
@@ -737,13 +737,13 @@ function RuleModal({
       return;
     }
 
-    // Tema seçilmemiş ve henüz uyarı gösterilmediyse uyarı göster
-    const hasNoTheme = !useTheme || (useTheme && !themeId);
-    console.log("[TimeSlots] Tema kontrolü:", { hasNoTheme, useTheme, themeId, skipThemeWarning });
+    // Senaryo seçilmemiş ve henüz uyarı gösterilmediyse uyarı göster
+    const hasNoScenario = !useScenario || (useScenario && !scenarioId);
+    console.log("[TimeSlots] Senaryo kontrolü:", { hasNoScenario, useScenario, scenarioId, skipScenarioWarning });
 
-    if (hasNoTheme && !skipThemeWarning) {
-      console.log("[TimeSlots] Tema uyarısı gösteriliyor");
-      setShowThemeWarning(true);
+    if (hasNoScenario && !skipScenarioWarning) {
+      console.log("[TimeSlots] Senaryo uyarısı gösteriliyor");
+      setShowScenarioWarning(true);
       return;
     }
 
@@ -758,8 +758,8 @@ function RuleModal({
       endHour,
       daysOfWeek,
       productType,
-      useTheme,
-      themeId,
+      useScenario,
+      scenarioId,
       isEdit: !!rule,
     });
 
@@ -772,11 +772,11 @@ function RuleModal({
         productTypes: [productType], // Backend hâlâ array bekliyor
       };
 
-      // Tema kullan seçildiyse ve tema seçildiyse ekle
-      if (useTheme && themeId) {
-        data.themeId = themeId;
+      // Senaryo kullan seçildiyse ve senaryo seçildiyse ekle
+      if (useScenario && scenarioId) {
+        data.scenarioId = scenarioId;
       }
-      // NOT: themeId undefined olduğunda field'ı ekleme (Firestore FieldValue.delete() gerektirir)
+      // NOT: scenarioId undefined olduğunda field'ı ekleme (Firestore FieldValue.delete() gerektirir)
 
       console.log("[TimeSlots] API'ye gönderilecek data:", data);
 
@@ -936,68 +936,70 @@ function RuleModal({
             )}
           </div>
 
-          {/* Tema Kullanımı */}
-          {themes.length > 0 && (
+          {/* Senaryo Kullanımı */}
+          {scenarios.length > 0 && (
             <div className="space-y-3">
-              {/* Tema Kullan Checkbox */}
+              {/* Senaryo Kullan Checkbox */}
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={useTheme}
+                  checked={useScenario}
                   onChange={(e) => {
-                    setUseTheme(e.target.checked);
+                    setUseScenario(e.target.checked);
                     if (!e.target.checked) {
-                      setThemeId("");
+                      setScenarioId("");
                     }
                   }}
                   className="w-5 h-5 text-brand-blue border-gray-300 rounded focus:ring-brand-blue"
                 />
                 <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                  🎨 Tema Kullan
+                  🎬 Senaryo Sabitle
                   <Tooltip
-                    content="Tema, belirli senaryolar ve asset'leri gruplar. Tutarlı görsel kimlik için önerilir."
+                    content="Belirli bir senaryoyu sabitlerseniz, bu zaman diliminde hep o senaryo kullanılır. Tutarlı görsel kimlik için önerilir."
                     position="right"
                   />
                 </span>
               </label>
 
-              {/* Tema Dropdown - Sadece checkbox işaretliyse göster */}
-              {useTheme && (
+              {/* Senaryo Dropdown - Sadece checkbox işaretliyse göster */}
+              {useScenario && (
                 <div className="ml-8">
                   <select
-                    value={themeId}
-                    onChange={(e) => setThemeId(e.target.value)}
+                    value={scenarioId}
+                    onChange={(e) => setScenarioId(e.target.value)}
                     className="input w-full"
                   >
-                    <option value="">Tema seçin...</option>
-                    {themes.map((theme) => (
-                      <option key={theme.id} value={theme.id}>
-                        {theme.name} ({theme.scenarios.length} senaryo)
+                    <option value="">Senaryo seçin...</option>
+                    {scenarios.map((scenario) => (
+                      <option key={scenario.id} value={scenario.id}>
+                        {scenario.name}
                       </option>
                     ))}
                   </select>
-                  {themeId && (
+                  {scenarioId && (
                     <div className="mt-2 p-3 bg-purple-50 rounded-xl text-sm">
                       <p className="text-purple-700 font-medium mb-1">
-                        Seçili Tema: {themes.find(t => t.id === themeId)?.name}
+                        Seçili Senaryo: {scenarios.find(s => s.id === scenarioId)?.name}
                       </p>
-                      <p className="text-purple-600 text-xs">
-                        Senaryolar: {themes.find(t => t.id === themeId)?.scenarios.join(", ")}
-                      </p>
+                      {scenarios.find(s => s.id === scenarioId)?.description && (
+                        <p className="text-purple-600 text-xs">
+                          {scenarios.find(s => s.id === scenarioId)?.description}
+                        </p>
+                      )}
                     </div>
                   )}
-                  {!themeId && (
+                  {!scenarioId && (
                     <p className="text-xs text-amber-600 mt-1">
-                      ⚠️ Tema seçilmedi - lütfen bir tema seçin veya "Tema Kullan"ı kapatın
+                      ⚠️ Senaryo seçilmedi - lütfen bir senaryo seçin veya "Senaryo Sabitle"yi kapatın
                     </p>
                   )}
                 </div>
               )}
 
-              {/* Tema kullanılmadığında açıklama */}
-              {!useTheme && (
+              {/* Senaryo kullanılmadığında açıklama */}
+              {!useScenario && (
                 <p className="text-xs text-gray-500 ml-8">
-                  Tema kullanılmadığında tüm senaryolar arasından seçim yapılır
+                  Senaryo sabitlenmediğinde tüm senaryolar arasından seçim yapılır
                 </p>
               )}
             </div>
@@ -1022,8 +1024,8 @@ function RuleModal({
           </div>
         </form>
 
-        {/* Tema Uyarı Modal'ı */}
-        {showThemeWarning && (
+        {/* Senaryo Uyarı Modal'ı */}
+        {showScenarioWarning && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
             <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
               <div className="flex items-start gap-4 mb-4">
@@ -1032,22 +1034,22 @@ function RuleModal({
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">
-                    Tema Seçilmedi
+                    Senaryo Seçilmedi
                   </h3>
                   <p className="text-gray-600 mt-1">
-                    Bu zaman dilimi için tema seçmediniz.
+                    Bu zaman dilimi için senaryo sabitlemediniz.
                   </p>
                 </div>
               </div>
 
               <div className="bg-amber-50 rounded-xl p-4 mb-6">
                 <p className="text-sm text-amber-800 font-medium mb-2">
-                  Tema seçilmediğinde ne olur?
+                  Senaryo sabitlenmediğinde ne olur?
                 </p>
                 <ul className="text-sm text-amber-700 space-y-1">
                   <li>• Tüm senaryolar arasından rastgele seçim yapılır</li>
-                  <li>• Asset'ler (masa, sandalye vb.) rastgele kombinasyonlar olabilir</li>
-                  <li>• Mağazanızın görsel tutarlılığı bozulabilir</li>
+                  <li>• Her üretimde farklı sahne ayarları kullanılır</li>
+                  <li>• Çeşitlilik artar ama tutarlılık azalabilir</li>
                 </ul>
               </div>
 
@@ -1055,23 +1057,22 @@ function RuleModal({
                 <button
                   type="button"
                   onClick={() => {
-                    setShowThemeWarning(false);
-                    // Tema seçim alanına scroll yap
-                    setUseTheme(true);
+                    setShowScenarioWarning(false);
+                    setUseScenario(true);
                   }}
                   className="flex-1 px-4 py-3 bg-brand-blue text-white rounded-xl font-medium hover:bg-brand-blue/90 transition-colors"
                 >
-                  Tema Seç
+                  Senaryo Seç
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setShowThemeWarning(false);
+                    setShowScenarioWarning(false);
                     doSave();
                   }}
                   className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
                 >
-                  Temasız Devam Et
+                  Senaryosuz Devam Et
                 </button>
               </div>
             </div>

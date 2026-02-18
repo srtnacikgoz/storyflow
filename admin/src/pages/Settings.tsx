@@ -114,6 +114,10 @@ export default function Settings() {
   const [schedulerEnabled, setSchedulerEnabled] = useState<boolean | null>(null);
   const [schedulerToggling, setSchedulerToggling] = useState(false);
 
+  // AI Model Seçimi (textModel kaldırıldı — sadece image model)
+  const [imageModel, setImageModel] = useState<string>("gemini-3-pro-image-preview");
+  const [modelSaving, setModelSaving] = useState(false);
+
   // Business Context
   const [businessContext, setBusinessContext] = useState<BusinessContext | null>(null);
   const [businessContextLoading, setBusinessContextLoading] = useState(false);
@@ -138,7 +142,6 @@ export default function Settings() {
   const [variationRules, setVariationRules] = useState({
     scenarioGap: 3,
     tableGap: 2,
-    handStyleGap: 4,
     compositionGap: 2,
     petFrequency: 15,
     similarityThreshold: 50,
@@ -326,6 +329,7 @@ export default function Settings() {
     try {
       const settings = await api.getSystemSettings();
       setSchedulerEnabled(settings.schedulerEnabled);
+      if (settings.imageModel) setImageModel(settings.imageModel);
     } catch (err) {
       console.error("[Settings] Scheduler durumu yüklenemedi:", err);
     }
@@ -383,6 +387,18 @@ export default function Settings() {
       setSchedulerEnabled(!enabled);
     } finally {
       setSchedulerToggling(false);
+    }
+  };
+
+  // AI Model kaydet
+  const handleSaveModels = async () => {
+    setModelSaving(true);
+    try {
+      await api.updateSystemSettings({ imageModel });
+    } catch (err) {
+      console.error("[Settings] Model ayarları kaydedilemedi:", err);
+    } finally {
+      setModelSaving(false);
     }
   };
 
@@ -481,11 +497,10 @@ export default function Settings() {
             <div className="flex items-center gap-3">
               {schedulerEnabled !== null && (
                 <span
-                  className={`text-xs px-2 py-0.5 rounded font-medium ${
-                    schedulerEnabled
+                  className={`text-xs px-2 py-0.5 rounded font-medium ${schedulerEnabled
                       ? "bg-green-100 text-green-700"
                       : "bg-red-100 text-red-700"
-                  }`}
+                    }`}
                 >
                   {schedulerEnabled ? "Aktif" : "Duraklatıldı"}
                 </span>
@@ -513,6 +528,49 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* AI Model Seçimi */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">AI Model Seçimi</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Prompt ve görsel üretiminde kullanılacak modelleri seçin
+            </p>
+          </div>
+          <button
+            onClick={handleSaveModels}
+            disabled={modelSaving}
+            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 text-sm"
+          >
+            {modelSaving ? "Kaydediliyor..." : "Kaydet"}
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Görsel Modeli (Image)
+            </label>
+            <select
+              value={imageModel}
+              onChange={(e) => setImageModel(e.target.value)}
+              className="w-full p-2 border rounded-lg text-sm"
+            >
+              <option value="gemini-3-pro-image-preview">Gemini 3 Pro Image — En kaliteli ($0.04)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Pipeline'daki tek AI modeli — görsel üretim + admin text helper
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-200">
+          <p className="text-sm text-green-800">
+            <strong>Sadeleştirilmiş Pipeline:</strong> Text model kaldırıldı. Senaryo seçimi kural bazlı, prompt template bazlı. Tek AI çağrısı: görsel üretim.
+          </p>
+        </div>
+      </div>
+
       {/* Business Context - İşletme Bağlamı */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
@@ -526,11 +584,10 @@ export default function Settings() {
             {businessContext && (
               <>
                 <span
-                  className={`text-xs px-2 py-0.5 rounded font-medium ${
-                    businessContext.isEnabled
+                  className={`text-xs px-2 py-0.5 rounded font-medium ${businessContext.isEnabled
                       ? "bg-green-100 text-green-700"
                       : "bg-gray-200 text-gray-600"
-                  }`}
+                    }`}
                 >
                   {businessContext.isEnabled ? "Aktif" : "Pasif"}
                 </span>
@@ -756,56 +813,56 @@ export default function Settings() {
                       return a.localeCompare(b);
                     })
                     .map(([productType, slots]) => (
-                    <tr key={productType} className={`border-b border-gray-100 hover:bg-gray-50 ${productType === "_default" ? "bg-blue-50/30" : ""}`}>
-                      <td className="py-2 px-2">
-                        <span className={`font-medium text-sm ${productType === "_default" ? "text-blue-700" : "text-gray-900"}`}>
-                          {PRODUCT_TYPE_LABELS[productType] || productType}
-                        </span>
-                        {productType === "_default" && (
-                          <span className="ml-1 text-xs text-blue-500">(yeni tipler için)</span>
-                        )}
-                      </td>
-                      {Object.keys(slotDefaults._default || {}).map((slotKey) => (
-                        <td key={slotKey} className="py-2 px-2">
-                          <div className="flex justify-center">
-                            <ToggleSwitch
-                              enabled={slots[slotKey] ?? false}
-                              onChange={(enabled) => handleSlotDefaultToggle(productType, slotKey, enabled)}
-                              disabled={slotDefaultsSaving}
-                            />
-                          </div>
+                      <tr key={productType} className={`border-b border-gray-100 hover:bg-gray-50 ${productType === "_default" ? "bg-blue-50/30" : ""}`}>
+                        <td className="py-2 px-2">
+                          <span className={`font-medium text-sm ${productType === "_default" ? "text-blue-700" : "text-gray-900"}`}>
+                            {PRODUCT_TYPE_LABELS[productType] || productType}
+                          </span>
+                          {productType === "_default" && (
+                            <span className="ml-1 text-xs text-blue-500">(yeni tipler için)</span>
+                          )}
                         </td>
-                      ))}
-                      <td className="py-2 px-1">
-                        {productType !== "_default" && (
-                          deleteConfirmProductType === productType ? (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => { handleRemoveProductType(productType); setDeleteConfirmProductType(null); }}
-                                className="text-xs px-1.5 py-0.5 bg-red-500 text-white rounded hover:bg-red-600"
-                              >
-                                Evet
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirmProductType(null)}
-                                className="text-xs px-1.5 py-0.5 border border-stone-300 rounded hover:bg-stone-50"
-                              >
-                                Hayır
-                              </button>
+                        {Object.keys(slotDefaults._default || {}).map((slotKey) => (
+                          <td key={slotKey} className="py-2 px-2">
+                            <div className="flex justify-center">
+                              <ToggleSwitch
+                                enabled={slots[slotKey] ?? false}
+                                onChange={(enabled) => handleSlotDefaultToggle(productType, slotKey, enabled)}
+                                disabled={slotDefaultsSaving}
+                              />
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteConfirmProductType(productType)}
-                              className="text-red-400 hover:text-red-600 text-xs p-1"
-                              title="Ürün tipini sil"
-                            >
-                              ✕
-                            </button>
-                          )
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                          </td>
+                        ))}
+                        <td className="py-2 px-1">
+                          {productType !== "_default" && (
+                            deleteConfirmProductType === productType ? (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => { handleRemoveProductType(productType); setDeleteConfirmProductType(null); }}
+                                  className="text-xs px-1.5 py-0.5 bg-red-500 text-white rounded hover:bg-red-600"
+                                >
+                                  Evet
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmProductType(null)}
+                                  className="text-xs px-1.5 py-0.5 border border-stone-300 rounded hover:bg-stone-50"
+                                >
+                                  Hayır
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setDeleteConfirmProductType(productType)}
+                                className="text-red-400 hover:text-red-600 text-xs p-1"
+                                title="Ürün tipini sil"
+                              >
+                                ✕
+                              </button>
+                            )
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -895,9 +952,8 @@ export default function Settings() {
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-2 h-2 rounded-full ${
-                      isCompleted ? "bg-green-500" : "bg-gray-300"
-                    }`}
+                    className={`w-2 h-2 rounded-full ${isCompleted ? "bg-green-500" : "bg-gray-300"
+                      }`}
                   />
                   <div>
                     <p className="font-medium text-gray-900">{tour.name}</p>
@@ -906,11 +962,10 @@ export default function Settings() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      isCompleted
+                    className={`text-xs px-2 py-0.5 rounded ${isCompleted
                         ? "bg-green-100 text-green-700"
                         : "bg-gray-200 text-gray-600"
-                    }`}
+                      }`}
                   >
                     {isCompleted ? "Tamamlandı" : "Görülmedi"}
                   </span>
@@ -978,18 +1033,6 @@ export default function Settings() {
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
             />
             <p className="text-xs text-gray-500 mt-1">Aynı masa kaç üretim sonra tekrarlanabilir</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              El Stili Aralığı: {variationRules.handStyleGap}
-            </label>
-            <input
-              type="range" min="1" max="10"
-              value={variationRules.handStyleGap}
-              onChange={(e) => setVariationRules({ ...variationRules, handStyleGap: parseInt(e.target.value) })}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-            />
-            <p className="text-xs text-gray-500 mt-1">Aynı el stili kaç üretim sonra tekrarlanabilir</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -44,7 +44,6 @@ export {
   createScenario,
   updateScenarioEndpoint,
   deleteScenarioEndpoint,
-  listHandStyles,
   generateScenarioDescription,
 
   // Pipeline Controller
@@ -54,6 +53,7 @@ export {
   orchestratorResendTelegram,
   orchestratorScheduledTrigger,
   validateBeforeGenerate,
+  assetTagAudit,
 
   // Slot Controller
   listScheduledSlots,
@@ -140,9 +140,12 @@ export {
   getQueueStats,
   getUsageStats,
 
-  // Beverage Rules Controller
-  getBeverageRulesConfigEndpoint,
-  updateBeverageRulesConfigEndpoint,
+  // Prompt Studio Controller
+  getPromptStudioConfig,
+  getPromptTemplateById,
+  updatePromptTemplateEndpoint,
+  revertPromptTemplateEndpoint,
+  clearPromptStudioCacheEndpoint,
 
   // Composition Controller (Dinamik Slot Sistemi)
   getSlotDefinitionsEndpoint,
@@ -152,6 +155,9 @@ export {
   createCompositionTemplateEndpoint,
   updateCompositionTemplateEndpoint,
   deleteCompositionTemplateEndpoint,
+
+  // Seed
+  seedGeminiTerminology,
 } from "./orchestrator";
 
 // Visual Critic

@@ -292,29 +292,7 @@ export type EatingMethod =
  */
 export type HoldingType = EatingMethod;
 
-/**
- * İçecek tipi - ürünle birlikte sunulacak içecek
- * Bardak eşleşmesi bu alan + bardak etiketleri ile yapılır
- */
-export type BeverageType =
-  | "coffee" // Kahve (pasta, çikolata vb.)
-  | "tea" // Çay (kruvasan vb.)
-  | "fruit-juice" // Taze sıkım meyve suyu
-  | "lemonade" // Limonata
-  | "none"; // İçecek yok
-
-/**
- * Ürün kategorisi için içecek kuralı
- * orchestratorConfig.beverageRules içinde tanımlanır
- */
-export interface BeverageRule {
-  /** Varsayılan içecek türü */
-  default: BeverageType;
-  /** Alternatif içecek (çeşitlilik için) */
-  alternate?: BeverageType;
-  /** Kaç paylaşımda bir alternatif kullanılacak (örn: 3 = her 3 paylaşımda 1) */
-  alternateFrequency?: number;
-}
+// BeverageType ve BeverageRule kaldırıldı — içecek seçimi artık etiket bazlı (orchestrator.ts beverageKeywords)
 
 /**
  * Asset metadata
@@ -357,18 +335,11 @@ export interface Asset {
   // Ürün nasıl yenir: elle, çatalla, kaşıkla, veya servis edilir
   eatingMethod?: EatingMethod;
 
-  // Elle tutulabilir mi? (sadece products kategorisi için)
-  // Bu alan senaryo seçiminde "el tutma" sahneleri için kullanılır
-  // Örn: Tiramisu kaşıkla yenir ama bardakta servis ediliyorsa elle tutulabilir
+  /** @deprecated El desteği kaldırıldı. */
   canBeHeldByHand?: boolean;
 
-  // plateRequired kaldırıldı (Faz 4) — composition mode'da kullanıcı tabak slot'unu kontrol eder
-  // beverageMatch kaldırıldı (Faz 4) — composition mode'da kullanıcı bardak slot'unu kontrol eder
-  defaultBeverage?: BeverageType;
-
-  // Alternatif içecek (çeşitlilik için)
-  // Her 3 paylaşımda bir varsayılan yerine bu içecek kullanılır
-  alternateBeverage?: BeverageType;
+  // plateRequired, beverageMatch, defaultBeverage, alternateBeverage kaldırıldı
+  // İçecek seçimi artık etiket bazlı
 
   // @deprecated - geriye uyumluluk için, yeni kodda eatingMethod kullanın
   holdingType?: HoldingType;
@@ -415,8 +386,9 @@ export interface TimeSlotRule {
   allowPairing?: boolean; // Kahve + pasta gibi kombinasyon
   pairingWith?: ProductType[]; // ["coffees"]
 
-  // Tema tercihi
-  themeId?: string; // "morning-energy" - Temalar sayfasından seçilir
+  // Senaryo tercihi
+  scenarioId?: string; // "flat-lay-kahve" - Senaryolar sayfasından seçilir
+  themeId?: string; // Deprecated: eski tema referansı (geriye uyumluluk)
 
   // Aktiflik
   isActive: boolean;
@@ -469,6 +441,7 @@ export type PipelineStage =
   | "asset_selection"
   | "scenario_selection"
   | "prompt_optimization"
+  | "prompt_building"
   | "image_generation"
   | "quality_control"
   | "content_creation"
@@ -492,43 +465,49 @@ export interface PipelineStatus {
  */
 export interface AssetSelection {
   product: Asset;
+
+  // Dinamik slot asset'leri — SlotDefinition key'leri ile eşleşir
+  slots: Record<string, Asset>;
+
+  // --- Slot dışı asset'ler (ayrı mekanizmalarla seçilir) ---
+  pet?: Asset;
+  environment?: Asset;
+  interior?: Asset;
+  exterior?: Asset;
+  accessory?: Asset;
+
+  // --- DEPRECATED: Geriye uyumluluk (eski Firestore verileri) ---
+  // Yeni kod slots'tan okumalı. Bu field'lar sadece eski veri desteği için.
   plate?: Asset;
   cup?: Asset;
   table?: Asset;
   music?: Asset;
-
-  // Genişletilmiş asset'ler
-  decor?: Asset; // Dekorasyon (bitki, kitap, vb.)
-  pet?: Asset; // Köpek, kedi
-  environment?: Asset; // Mekan referansı
-  interior?: Asset; // İç mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
-  exterior?: Asset; // Dış mekan fotoğrafı (AI atlanır, doğrudan kullanılır)
-  accessory?: Asset; // Aksesuar (telefon, çanta, anahtar, kitap vb.)
-  napkin?: Asset; // Peçete (sofra düzeni için)
-  cutlery?: Asset; // Çatal-bıçak (servis için)
+  decor?: Asset;
+  napkin?: Asset;
+  cutlery?: Asset;
 
   // Claude'un seçim gerekçesi
   selectionReasoning: string;
 
   // Çeşitlilik bilgisi
   includesPet: boolean;
-  petReason?: string; // Neden köpek dahil/hariç
+  petReason?: string;
 
   // Aksesuar bilgisi
-  includesAccessory?: boolean; // Aksesuar dahil mi
-  accessoryReason?: string; // Neden aksesuar dahil/hariç
+  includesAccessory?: boolean;
+  accessoryReason?: string;
 
   // Interior senaryo bilgisi
-  isInteriorScenario?: boolean; // true ise AI görsel üretimi atlanır
+  isInteriorScenario?: boolean;
 }
 
 /**
- * El stilleri
+ * @deprecated El desteği kaldırıldı. Geriye uyumluluk için tutulur.
  */
 export type HandStyleId = "elegant" | "bohemian" | "minimal" | "trendy" | "sporty";
 
 /**
- * El stili tanımı
+ * @deprecated El desteği kaldırıldı. Geriye uyumluluk için tutulur.
  */
 export interface HandStyle {
   id: HandStyleId;
@@ -540,7 +519,6 @@ export interface HandStyle {
 }
 
 /**
- * Kompozisyon varyantı (geriye uyumluluk için)
 /**
  * Senaryo tanımı
  *
@@ -551,10 +529,12 @@ export interface Scenario {
   name: string;
   description: string; // Senaryo açıklaması (AI scene description için kullanılabilir)
 
-  // === EL/KOMPOZİSYON ALANLARI ===
-  includesHands: boolean;
-  handPose?: string; // Hand pose ID (cupping, pinching, breaking, etc.)
-  compositionEntry?: string; // Composition entry point (bottom-right, overhead, etc.)
+  // === KOMPOZİSYON ALANLARI ===
+  /** @deprecated El desteği kaldırıldı. Eski Firestore verileri için opsiyonel tutulur. */
+  includesHands?: boolean;
+  /** @deprecated El desteği kaldırıldı. */
+  handPose?: string;
+  compositionEntry?: string;
 
   // === İNTERİOR SENARYO ===
   isInterior?: boolean; // true ise AI görsel üretimi ATLANIR
@@ -571,6 +551,18 @@ export interface Scenario {
 
   // Tekli kompozisyon ID'si - kullanıcının seçtiği çekim tarzı
   compositionId?: string;
+
+  // === SAHNE AYARLARI (Tema'dan taşındı) ===
+  setting?: ThemeSetting;           // preferredTags, weatherPreset, lightingPreset, atmospherePreset
+  petAllowed?: boolean;             // Köpek izni
+  accessoryAllowed?: boolean;       // Aksesuar izni
+  accessoryOptions?: string[];      // Aksesuar listesi (ör: ["kitap", "telefon"])
+
+  // === GÖRSEL EFEKTLERİ ===
+  shallowDepthOfField?: boolean;    // Ürün net, arka plan blur (bokeh efekti)
+
+  // === SLOT KONFİGÜRASYONU (CompositionTemplates'den taşındı) ===
+  compositionSlots?: Record<string, SlotConfig>;  // Her slot için disabled/random
 }
 
 /**
@@ -584,12 +576,15 @@ export interface ScenarioSelection {
   // Neden bu senaryo seçildi
   reasoning: string;
 
-  // === EL/KOMPOZİSYON BİLGİSİ ===
-  includesHands: boolean;
+  // === KOMPOZİSYON BİLGİSİ ===
+  /** @deprecated El desteği kaldırıldı. Her zaman false. */
+  includesHands?: boolean;
+  /** @deprecated El desteği kaldırıldı. */
   handStyle?: HandStyleId;
+  /** @deprecated El desteği kaldırıldı. */
   handStyleDetails?: HandStyle;
-  compositionId: string; // Seçilen kompozisyon (artık compositionEntry ile eşleşir)
-  composition: string; // Kompozisyon açıklaması
+  compositionId: string;
+  composition: string;
 
   // === İNTERİOR SENARYO ===
   isInterior?: boolean; // true ise AI görsel üretimi ATLANIR
@@ -726,13 +721,7 @@ export interface ClaudeAnalysisRequest {
 /**
  * Claude yanıtı
  */
-export interface ClaudeResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  tokensUsed: number;
-  cost: number;
-}
+// ClaudeResponse kaldırıldı — Claude entegrasyonu artık kullanılmıyor
 
 // ==========================================
 // CONFIG TYPES
@@ -742,11 +731,7 @@ export interface ClaudeResponse<T> {
  * Orchestrator konfigürasyonu
  */
 export interface OrchestratorConfig {
-  // Claude API
-  claudeApiKey: string;
-  claudeModel: string; // "claude-sonnet-4-20250514"
-
-  // Gemini API (text işlemleri için - asset selection, scenario selection, prompt optimization)
+  // Gemini API (text + image işlemleri için)
   geminiApiKey: string;
   geminiModel: string; // "gemini-3-pro-image-preview"
 
@@ -770,9 +755,7 @@ export interface OrchestratorConfig {
   timezone: string; // "Europe/Istanbul"
   scheduleBuffer: number; // Dakika önce hazırla (default: 30)
 
-  // İçecek kuralları - ürün kategorisine göre içecek eşleşmesi
-  // Key: subType slug (croissants, pastas, chocolates, vb.)
-  beverageRules?: Record<string, BeverageRule>;
+  // beverageRules kaldırıldı — içecek seçimi artık etiket bazlı
 }
 
 // ==========================================
@@ -813,7 +796,8 @@ export interface RuleCondition {
 export interface VariationRules {
   scenarioGap: number; // Aynı senaryo min kaç üretim sonra (default: 3)
   tableGap: number; // Aynı masa min kaç üretim sonra (default: 2)
-  handStyleGap: number; // Aynı el stili min kaç üretim sonra (default: 4)
+  /** @deprecated El desteği kaldırıldı. */
+  handStyleGap: number;
   compositionGap: number; // Aynı kompozisyon min kaç üretim sonra (default: 5)
   productGap: number; // Aynı ürün min kaç üretim sonra (default: 3)
   plateGap: number; // Aynı tabak min kaç üretim sonra (default: 2)
@@ -865,6 +849,7 @@ export interface ProductionHistoryEntry {
   scenarioId: string;
   compositionId: string;
   tableId?: string | null;
+  /** @deprecated El desteği kaldırıldı. Her zaman null. */
   handStyleId?: string | null;
   includesPet: boolean;
   productType: ProductType;
@@ -902,9 +887,10 @@ export interface DynamicConfig {
  */
 export interface OrchestratorRules {
   scenarios: Scenario[];
+  /** @deprecated El desteği kaldırıldı. */
   handStyles: HandStyle[];
   assetPersonalities: AssetPersonality[];
-  absoluteRules: string[]; // Mutlak kurallar listesi
+  absoluteRules: string[];
   version: string;
   parsedAt: number;
 }
@@ -921,7 +907,6 @@ export interface EffectiveRules {
   shouldIncludePet: boolean;
   blockedScenarios: string[]; // Son N üretimde kullanılan
   blockedTables: string[];
-  blockedHandStyles: string[];
   blockedCompositions: string[];
   blockedProducts: string[]; // Son N üretimde kullanılan ürünler
   blockedPlates: string[]; // Son N üretimde kullanılan tabaklar
@@ -1191,13 +1176,11 @@ export const DEFAULT_THEMES: Omit<Theme, "createdAt" | "updatedAt">[] = [
  * Kullanıcı üretilen görselde sorun bildirirken seçer
  */
 export type IssueCategoryId =
-  | "holding-mismatch" // Tutma şekli uyumsuz (elle tiramisu tutma gibi)
   | "product-unrecognized" // Ürün tanınmıyor/bozuk
   | "composition-bad" // Kompozisyon kötü
   | "lighting-bad" // Işık sorunu
   | "realism-low" // Gerçekçilik düşük
   | "background-issue" // Arka plan sorunu
-  | "hand-anatomy" // El anatomisi bozuk
   | "color-mismatch" // Renk uyumsuzluğu
   | "other"; // Diğer
 
@@ -1205,11 +1188,6 @@ export type IssueCategoryId =
  * Sorun kategorisi açıklamaları
  */
 export const ISSUE_CATEGORIES: Record<IssueCategoryId, { label: string; description: string; aiHint: string }> = {
-  "holding-mismatch": {
-    label: "Tutma Şekli Uyumsuz",
-    description: "Ürün elle tutulmaması gereken bir şekilde tutulmuş (ör: tiramisu elle)",
-    aiHint: "Bu ürün elle tutulmamalı, çatal/kaşık ile servis edilmeli veya tabakta gösterilmeli",
-  },
   "product-unrecognized": {
     label: "Ürün Tanınmıyor",
     description: "Ürün bozuk görünüyor veya tanınmıyor",
@@ -1234,11 +1212,6 @@ export const ISSUE_CATEGORIES: Record<IssueCategoryId, { label: string; descript
     label: "Arka Plan Sorunu",
     description: "Arka plan uygunsuz veya dikkat dağıtıcı",
     aiHint: "Daha sade ve ürünü ön plana çıkaran arka plan kullan",
-  },
-  "hand-anatomy": {
-    label: "El Anatomisi Bozuk",
-    description: "Parmak sayısı, pozisyon veya orantı hatası",
-    aiHint: "El anatomisine dikkat et, doğal pozisyon ve orantı kullan",
   },
   "color-mismatch": {
     label: "Renk Uyumsuzluğu",
@@ -1270,6 +1243,7 @@ export interface IssueFeedback {
   scenarioId?: string;
   productType?: string;
   productId?: string;
+  /** @deprecated El desteği kaldırıldı. */
   handStyleId?: string;
   compositionId?: string;
 
@@ -1295,8 +1269,7 @@ export interface FirestoreScenario extends Scenario {
 }
 
 /**
- * Firestore'da saklanan el stili
- * Collection: global/hand-styles/{styleId}
+ * @deprecated El desteği kaldırıldı. Geriye uyumluluk için tutulur.
  */
 export interface FirestoreHandStyle extends HandStyle {
   // Firestore meta
@@ -1481,6 +1454,7 @@ export interface CompatibilityMatrix {
  */
 export interface GlobalOrchestratorConfig {
   scenarios: Scenario[];
+  /** @deprecated El desteği kaldırıldı. */
   handStyles: HandStyle[];
   assetPersonalities: AssetPersonality[];
   diversityRules: FirestoreDiversityRules;
@@ -1588,6 +1562,9 @@ export interface DynamicCategory {
 
   // Alt kategoriler
   subTypes: CategorySubType[];
+
+  // Bu kategori hangi kompozisyon slotunu besliyor? (ör: "drinkware", "surface")
+  linkedSlotKey?: string;
 
   // Sistem kategorisi mi? (true ise silinemez)
   isSystem: boolean;
@@ -1773,7 +1750,7 @@ export type AIRuleCategoryId =
   | "lighting" // Işık kuralları
   | "product" // Ürün kuralları
   | "background" // Arka plan kuralları
-  | "hand" // El kuralları
+  | "hand" // @deprecated El desteği kaldırıldı
   | "general"; // Genel kurallar
 
 /**
@@ -1892,12 +1869,14 @@ export interface FirestoreSystemSettingsConfig {
   // Otomatik Paylaşım (Scheduler)
   schedulerEnabled: boolean; // Default: true - Tüm otomatik üretimleri açar/kapar
 
-  // AI Maliyetleri (USD per 1K token)
-  claudeInputCostPer1K: number; // Default: 0.003
-  claudeOutputCostPer1K: number; // Default: 0.015
+  // Claude maliyet alanları kaldırıldı — sadece Gemini kullanılıyor
 
   // AI Ayarları
   geminiDefaultFaithfulness: number; // Default: 0.7 (0.0-1.0 arası)
+
+  // AI Model Seçimi (textModel kaldırıldı — pipeline'da sadece image model)
+  textModel?: string;  // @deprecated — artık kullanılmıyor, geriye uyumluluk
+  imageModel: string;  // Görsel üretim modeli (default: "gemini-3-pro-image-preview")
 
   // Feedback
   maxFeedbackForPrompt: number; // Default: 10
@@ -2102,6 +2081,13 @@ export interface SlotDefinition {
    */
   assetSubType?: string;
 
+  /**
+   * AssetSelection'daki field adı
+   * Slot key ile AssetSelection'ın named field'ını eşler
+   * Örn: surface → "table", dish → "plate", drinkware → "cup"
+   */
+  assetFieldName: string;
+
   /** UI sıralaması */
   order: number;
 
@@ -2174,9 +2160,6 @@ export interface CompositionTemplate {
   /** Açıklama */
   description?: string;
 
-  /** Bağlı tema (opsiyonel — zorunlu bağ yok) */
-  themeId?: string;
-
   /** Bağlı senaryo (opsiyonel — zorunlu bağ yok) */
   scenarioId?: string;
 
@@ -2226,6 +2209,7 @@ export const DEFAULT_SLOT_DEFINITIONS: SlotDefinition[] = [
     isRequired: true,
     assetCategory: "furniture",
     assetSubType: "tables",
+    assetFieldName: "table",
     order: 1,
     isActive: true,
   },
@@ -2236,16 +2220,18 @@ export const DEFAULT_SLOT_DEFINITIONS: SlotDefinition[] = [
     isRequired: false,
     assetCategory: "props",
     assetSubType: "plates",
+    assetFieldName: "plate",
     order: 2,
     isActive: true,
   },
   {
     key: "drinkware",
     label: "Bardak / İçecek",
-    description: "İçecek kabı",
+    description: "İçecek kabı, bardak, fincan",
     isRequired: false,
-    assetCategory: "props",
-    assetSubType: "cups",
+    assetCategory: "cups", // Props değil, doğrudan cups kategorisi (daha geniş)
+    // assetSubType kaldırıldı: Alt tip kısıtlaması yok (fincan, kupa, cam bardak hepsi olur)
+    assetFieldName: "cup",
     order: 3,
     isActive: true,
   },
@@ -2256,6 +2242,7 @@ export const DEFAULT_SLOT_DEFINITIONS: SlotDefinition[] = [
     isRequired: false,
     assetCategory: "props",
     assetSubType: "napkins",
+    assetFieldName: "napkin",
     order: 4,
     isActive: true,
   },
@@ -2265,10 +2252,10 @@ export const DEFAULT_SLOT_DEFINITIONS: SlotDefinition[] = [
     description: "Çatal-bıçak, çiçek, mum ve dekoratif objeler",
     isRequired: false,
     assetCategory: "accessories",
+    assetFieldName: "cutlery",
     order: 5,
     isActive: true,
   },
-  // hands slot kaldırıldı — senaryo includesHands tek sahip (Faz 2.2)
 ];
 
 // ==========================================
@@ -2291,8 +2278,8 @@ export interface ProductSlotDefaults {
 /** Seed verisi: İlk kurulumda kullanılır */
 export const DEFAULT_PRODUCT_SLOT_DEFAULTS: Record<string, Record<string, boolean>> = {
   chocolates: { surface: true, dish: false, drinkware: true, textile: false, decor: false },
-  coffees:    { surface: true, dish: false, drinkware: true, textile: false, decor: false },
-  croissants: { surface: true, dish: true,  drinkware: true, textile: true,  decor: false },
-  pastas:     { surface: true, dish: true,  drinkware: true, textile: true,  decor: false },
-  _default:   { surface: true, dish: true,  drinkware: true, textile: true,  decor: false },
+  coffees: { surface: true, dish: false, drinkware: true, textile: false, decor: false },
+  croissants: { surface: true, dish: true, drinkware: true, textile: true, decor: false },
+  pastas: { surface: true, dish: true, drinkware: true, textile: true, decor: false },
+  _default: { surface: true, dish: true, drinkware: true, textile: true, decor: false },
 };

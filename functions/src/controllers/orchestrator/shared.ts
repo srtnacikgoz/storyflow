@@ -16,7 +16,6 @@ export const REGION = "europe-west1";
 export const db = getFirestore();
 
 // Firebase Secret tanımları
-export const claudeApiKey = defineSecret("CLAUDE_API_KEY");
 export const reveApiKey = defineSecret("REVE_API_KEY");
 
 // CORS handler'ı export et
@@ -28,7 +27,7 @@ export { functions };
 /**
  * Orchestrator config'i oluştur
  */
-export async function getOrchestratorConfig(claudeKey?: string): Promise<OrchestratorConfig> {
+export async function getOrchestratorConfig(): Promise<OrchestratorConfig> {
   const config = await getConfig();
 
   // Reve API key'i secret'tan al (yoksa boş string)
@@ -41,8 +40,6 @@ export async function getOrchestratorConfig(claudeKey?: string): Promise<Orchest
   }
 
   return {
-    claudeApiKey: claudeKey || claudeApiKey.value() || "",
-    claudeModel: "claude-sonnet-4-20250514",
     geminiApiKey: config.gemini.apiKey,
     geminiModel: "gemini-3-pro-image-preview",
     // Reve entegrasyonu - API key varsa aktif

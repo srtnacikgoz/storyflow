@@ -5,11 +5,9 @@ import type {
   OrchestratorDashboardStats,
   ScheduledSlot,
   ScheduledSlotStatus,
-  Theme,
   IssueCategoryId,
   PreFlightData,
-  CompositionTemplate,
-  CompositionConfig,
+  OrchestratorAsset,
 } from "../types";
 import { ISSUE_CATEGORIES } from "../types";
 import VisualCriticModal from "../components/VisualCriticModal";
@@ -95,13 +93,11 @@ export default function OrchestratorDashboard() {
   const [validationLoading, setValidationLoading] = useState(false);
   const [preFlightData, setPreFlightData] = useState<PreFlightData | null>(null);
 
-  // Tema seçimi
-  const [themes, setThemes] = useState<Theme[]>([]);
-  const [selectedThemeId, setSelectedThemeId] = useState<string>("");
+  // Senaryo seçimi
+  const [scenarios, setScenarios] = useState<Array<{ id: string; name: string; description?: string; isInterior?: boolean; petAllowed?: boolean; accessoryAllowed?: boolean }>>([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>("");
 
-  // Template seçimi (Kompozisyon Sistemi)
-  const [compositionTemplates, setCompositionTemplates] = useState<CompositionTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  // Template seçimi kaldırıldı — slot konfigürasyonu artık Senaryo'da
 
   // Progress Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -138,6 +134,12 @@ export default function OrchestratorDashboard() {
   // İşlem durumları
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // Asset Override (Pre-flight modal'da slot tıklayarak asset değiştirme)
+  const [assetOverrides, setAssetOverrides] = useState<Record<string, { id: string; filename: string; url: string }>>({});
+  const [assetPickerSlot, setAssetPickerSlot] = useState<{ key: string; label: string; category: string } | null>(null);
+  const [pickerAssets, setPickerAssets] = useState<OrchestratorAsset[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
   const loadData = useCallback(async (showGlobalLoading = false) => {
     setLoading(true);
     setError(null);
@@ -145,8 +147,12 @@ export default function OrchestratorDashboard() {
       startLoading("load-data", "Veriler yükleniyor...");
     }
     try {
-      const { stats: statsData, slots: slotsData, themes: themesData, aiStats, aiStatsMonthly, loadTimeMs } =
-        await api.loadDashboardData(10);
+      const [dashboardResult, scenariosResult] = await Promise.all([
+        api.loadDashboardData(10),
+        api.listScenarios().catch(() => ({ all: [], byCategory: { withHands: [], withoutHands: [], interior: [] }, total: 0 })),
+      ]);
+
+      const { stats: statsData, slots: slotsData, aiStats, aiStatsMonthly, loadTimeMs } = dashboardResult;
 
       console.log(`[Dashboard] Veriler ${loadTimeMs}ms'de yüklendi`);
 
@@ -156,21 +162,20 @@ export default function OrchestratorDashboard() {
         aiStatsMonthly,
       });
       setSlots(slotsData);
-      setThemes(themesData);
+      setScenarios(scenariosResult.all);
 
-      // Kompozisyon template'lerini paralel yükle (hata tolere edilir)
-      api.listCompositionTemplates("system").then(setCompositionTemplates).catch(() => {});
+      // Kompozisyon slot konfigürasyonu artık Senaryo'da
     } catch (err) {
       console.warn("[Dashboard] loadDashboardData başarısız, fallback deneniyor...", err);
       try {
-        const [statsData, slotsData, themesData] = await Promise.all([
+        const [statsData, slotsData, scenariosData] = await Promise.all([
           api.getOrchestratorDashboardStats(),
           api.listScheduledSlots({ limit: 10 }),
-          api.listThemes().catch(() => []),
+          api.listScenarios().catch(() => ({ all: [], byCategory: { withHands: [], withoutHands: [], interior: [] }, total: 0 })),
         ]);
         setStats(statsData);
         setSlots(slotsData);
-        setThemes(themesData);
+        setScenarios(scenariosData.all);
       } catch (fallbackErr) {
         setError(fallbackErr instanceof Error ? fallbackErr.message : "Veri yüklenemedi");
       }
@@ -229,24 +234,6 @@ export default function OrchestratorDashboard() {
     return true;
   });
 
-  // Template'ten compositionConfig oluştur
-  const buildCompositionConfig = (): CompositionConfig | undefined => {
-    if (!selectedTemplateId) return undefined;
-    const template = compositionTemplates.find(t => t.id === selectedTemplateId);
-    if (!template) return undefined;
-
-    // Template slot'larından compositionConfig oluştur
-    const slots: CompositionConfig["slots"] = {};
-    for (const [key, config] of Object.entries(template.slots)) {
-      slots[key] = { ...config, source: "template" as const };
-    }
-
-    return {
-      slots,
-      sourceTemplateId: template.id,
-    };
-  };
-
   // Pre-flight validation çalıştır ve sonra üret
   const runGenerateAfterValidation = async () => {
     setGenerating(true);
@@ -254,15 +241,15 @@ export default function OrchestratorDashboard() {
     setProgressInfo(null);
     setShowProgressModal(true);
     setShowValidationModal(false);
-
-    const compositionConfig = buildCompositionConfig();
+    setAssetPickerSlot(null);
 
     try {
+      const overrides = Object.keys(assetOverrides).length > 0 ? assetOverrides : undefined;
       const result = await api.orchestratorGenerateNow(
-        selectedThemeId || undefined,
+        selectedScenarioId || undefined,
         selectedAspectRatio,
         isRandomMode || undefined,
-        compositionConfig
+        overrides
       );
       setCurrentSlotId(result.slotId);
 
@@ -297,16 +284,17 @@ export default function OrchestratorDashboard() {
 
   // Hemen üret (pre-flight validation ile)
   const handleGenerateNow = async () => {
-    if (isRandomMode || !selectedThemeId) {
+    if (isRandomMode || !selectedScenarioId) {
       runGenerateAfterValidation();
       return;
     }
 
     setValidationLoading(true);
     try {
-      const validation = await api.validateBeforeGenerate(selectedThemeId);
+      const validation = await api.validateBeforeGenerate(selectedScenarioId);
       setValidationWarnings(validation.warnings);
       setPreFlightData(validation.preFlightData || null);
+      setAssetOverrides({});
       setShowValidationModal(true);
     } catch {
       runGenerateAfterValidation();
@@ -439,7 +427,6 @@ export default function OrchestratorDashboard() {
         scenarioId: pipelineResult?.scenarioSelection?.scenarioId,
         productType: pipelineResult?.assetSelection?.product?.subType,
         productId: pipelineResult?.assetSelection?.product?.id,
-        handStyleId: pipelineResult?.scenarioSelection?.handStyle || undefined,
         compositionId: pipelineResult?.scenarioSelection?.composition,
       });
 
@@ -453,6 +440,41 @@ export default function OrchestratorDashboard() {
       setReportLoading(false);
       stopLoading("report-issue");
     }
+  };
+
+  // Asset picker drawer'ı aç — backend'den gelen resolvedCategory ile ara
+  // resolvedCategory zaten doğru dar kategoriyi içerir (ör: "tabaklar", "bardaklar")
+  // subType eklemeye gerek yok — Firestore composite index sorunu yaratır
+  const openAssetPicker = async (slotKey: string, label: string, category?: string) => {
+    setAssetPickerSlot({ key: slotKey, label, category: category || slotKey });
+    setPickerLoading(true);
+    try {
+      let assets: OrchestratorAsset[] = [];
+      if (category) {
+        assets = await api.listAssets({ category, isActive: true });
+      }
+      setPickerAssets(assets);
+    } catch {
+      setPickerAssets([]);
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+
+  // Asset seçimi handler
+  const handleAssetSelect = (slotKey: string, asset: OrchestratorAsset) => {
+    const url = asset.thumbnailUrl || asset.cloudinaryUrl || asset.storageUrl;
+    setAssetOverrides(prev => ({ ...prev, [slotKey]: { id: asset.id, filename: asset.filename, url } }));
+    setAssetPickerSlot(null);
+  };
+
+  // Asset override'ını sıfırla
+  const clearAssetOverride = (slotKey: string) => {
+    setAssetOverrides(prev => {
+      const next = { ...prev };
+      delete next[slotKey];
+      return next;
+    });
   };
 
   const formatElapsedTime = (seconds: number): string => {
@@ -499,25 +521,19 @@ export default function OrchestratorDashboard() {
 
             {preFlightData ? (
               <div className="space-y-4 mb-6">
-                {/* Tema & Senaryo */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-purple-50 rounded-lg p-3">
-                    <div className="text-xs font-medium text-purple-600 mb-1">Tema</div>
-                    <div className="font-semibold text-gray-800">{preFlightData.theme.name}</div>
-                    <div className="flex gap-1 mt-1">
-                      {preFlightData.theme.petAllowed && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Pet</span>}
-                      {preFlightData.theme.accessoryAllowed && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Aksesuar</span>}
+                {/* Senaryo Bilgisi */}
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-xs font-medium text-blue-600">Senaryo</div>
+                    <div className="flex gap-1">
+                      {preFlightData.scenario.petAllowed && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Pet</span>}
+                      {preFlightData.scenario.accessoryAllowed && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Aksesuar</span>}
                     </div>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-3">
-                    <div className="text-xs font-medium text-blue-600 mb-1">
-                      Senaryo {preFlightData.scenarioCount > 1 && <span className="text-blue-400">({preFlightData.scenarioCount} aday)</span>}
-                    </div>
-                    <div className="font-semibold text-gray-800">{preFlightData.scenario.name}</div>
-                    {preFlightData.scenario.description && (
-                      <div className="text-xs text-gray-500 mt-1 line-clamp-2">{preFlightData.scenario.description}</div>
-                    )}
-                  </div>
+                  <div className="font-semibold text-gray-800">{preFlightData.scenario.name}</div>
+                  {preFlightData.scenario.description && (
+                    <div className="text-xs text-gray-500 mt-1 line-clamp-2">{preFlightData.scenario.description}</div>
+                  )}
                 </div>
 
                 {/* Pipeline Özeti */}
@@ -534,15 +550,7 @@ export default function OrchestratorDashboard() {
                         {preFlightData.scenario.compositionId}
                       </span>
                     )}
-                    {preFlightData.scenario.includesHands && preFlightData.scenario.handPose && (
-                      <span className="text-xs bg-pink-100 text-pink-800 px-2 py-1 rounded-full">
-                        {preFlightData.scenario.handPose}
-                      </span>
-                    )}
-                    {!preFlightData.scenario.includesHands && (
-                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">El yok</span>
-                    )}
-                    {preFlightData.beverage && !(preFlightData.theme.preferredTags?.cup?.includes("__none__")) && (
+                    {preFlightData.beverage && !(preFlightData.scenario.preferredTags?.cup?.includes("__none__")) && (
                       <span className="text-xs bg-cyan-100 text-cyan-800 px-2 py-1 rounded-full">
                         {preFlightData.beverage.defaultBeverage}
                         {preFlightData.beverage.alternateBeverage && ` / ${preFlightData.beverage.alternateBeverage}`}
@@ -553,41 +561,129 @@ export default function OrchestratorDashboard() {
 
                 {/* Asset Havuzu */}
                 <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-2">Asset Havuzu <span className="font-normal text-gray-400">— AI bu adaylardan seçecek</span></div>
+                  <div className="text-xs font-medium text-gray-500 mb-2">Asset Havuzu <span className="font-normal text-gray-400">— tıklayarak değiştir</span></div>
                   <div className="grid grid-cols-4 gap-2">
                     {([
-                      { label: "Ürün", total: preFlightData.assets.products.total, preferred: undefined, tags: preFlightData.scenario.suggestedProducts.length > 0 ? preFlightData.scenario.suggestedProducts : undefined, preview: preFlightData.assets.products.preview },
-                      { label: "Masa", total: preFlightData.assets.tables.total, preferred: preFlightData.assets.tables.preferred, tags: preFlightData.theme.preferredTags?.table, preview: preFlightData.assets.tables.preview },
-                      { label: "Tabak", total: preFlightData.assets.plates.total, preferred: preFlightData.assets.plates.preferred, tags: preFlightData.theme.preferredTags?.plate, preview: preFlightData.assets.plates.preview },
-                      { label: "Fincan", total: preFlightData.assets.cups.total, preferred: preFlightData.assets.cups.preferred, tags: preFlightData.theme.preferredTags?.cup, preview: preFlightData.assets.cups.preview },
-                    ] as Array<{ label: string; total: number; preferred: number | undefined; tags: string[] | undefined; preview: { id: string; filename: string; url: string; tags: string[] } | undefined }>).map((item) => {
+                      // Ürün kartı (sabit — slot dışı, tıklanamaz)
+                      { slotKey: null, label: "Ürün", total: preFlightData.assets.products.total, preferred: undefined, tags: preFlightData.scenario.suggestedProducts.length > 0 ? preFlightData.scenario.suggestedProducts : undefined, preview: preFlightData.assets.products.preview, matchDetails: undefined, category: undefined, subType: undefined },
+                      // Slot kartları (dinamik — slots varsa oradan, yoksa eski alanlardan)
+                      ...(preFlightData.assets.slots
+                        ? Object.entries(preFlightData.assets.slots)
+                            .filter(([, s]) => !s.disabled)
+                            .sort(([, a], [, b]) => (a.order || 0) - (b.order || 0))
+                            .map(([key, slot]) => ({
+                              slotKey: key,
+                              label: slot.label,
+                              total: slot.total,
+                              preferred: slot.preferred,
+                              tags: slot.matchDetails?.matchedTags?.length ? [...slot.matchDetails.matchedTags, ...(slot.matchDetails.missedTags || [])] : undefined,
+                              preview: slot.preview,
+                              matchDetails: slot.matchDetails,
+                              category: slot.category,
+                              subType: slot.subType,
+                            }))
+                        : [
+                            // Eski format fallback
+                            { slotKey: "surface" as string | null, label: "Masa", total: preFlightData.assets.tables?.total || 0, preferred: preFlightData.assets.tables?.preferred, tags: preFlightData.scenario.preferredTags?.table, preview: preFlightData.assets.tables?.preview, matchDetails: preFlightData.assets.tables?.matchDetails, category: "furniture" as string | undefined, subType: "tables" as string | undefined },
+                            { slotKey: "dish" as string | null, label: "Tabak", total: preFlightData.assets.plates?.total || 0, preferred: preFlightData.assets.plates?.preferred, tags: preFlightData.scenario.preferredTags?.plate, preview: preFlightData.assets.plates?.preview, matchDetails: preFlightData.assets.plates?.matchDetails, category: "props" as string | undefined, subType: "plates" as string | undefined },
+                            { slotKey: "drinkware" as string | null, label: "Fincan", total: preFlightData.assets.cups?.total || 0, preferred: preFlightData.assets.cups?.preferred, tags: preFlightData.scenario.preferredTags?.cup, preview: preFlightData.assets.cups?.preview, matchDetails: preFlightData.assets.cups?.matchDetails, category: "props" as string | undefined, subType: "cups" as string | undefined },
+                          ]
+                      ),
+                    ] as Array<{ slotKey: string | null; label: string; total: number; preferred: number | undefined; tags: string[] | undefined; preview: { id: string; filename: string; url: string; tags: string[] } | undefined; matchDetails: { bestScore: string; matchedTags: string[]; missedTags: string[]; bestAsset?: { id: string; filename: string; url: string; tags: string[] } } | undefined; category: string | undefined; subType: string | undefined }>).map((item) => {
                       const isNone = item.tags?.includes("__none__");
                       const activeTags = item.tags?.filter(t => t !== "__none__") || [];
+                      const override = item.slotKey ? assetOverrides[item.slotKey] : undefined;
+                      const isOverridden = !!override;
+                      const isClickable = !!item.slotKey && !isNone;
+                      // Eşleşme durumu renk sınıfı
+                      const matchBorderClass = isOverridden
+                        ? "border-blue-400 ring-1 ring-blue-200"
+                        : item.matchDetails
+                          ? item.matchDetails.missedTags.length === 0 && item.matchDetails.matchedTags.length > 0
+                            ? "border-green-300"
+                            : item.matchDetails.matchedTags.length === 0
+                              ? "border-red-300"
+                              : "border-amber-300"
+                          : "";
+                      // Override varsa thumbnail ve filename'i override'dan al
+                      const displayUrl = isOverridden ? override.url : item.preview?.url;
+                      const displayFilename = isOverridden ? override.filename : item.preview?.filename;
                       return (
-                        <div key={item.label} className={`bg-white rounded-lg p-2 border ${isNone ? "opacity-50 bg-gray-50" : ""}`}>
-                          <div className="text-xs font-medium text-gray-500 mb-1">{item.label}</div>
+                        <div
+                          key={item.label}
+                          className={`bg-white rounded-lg p-2 border ${isNone ? "opacity-50 bg-gray-50" : matchBorderClass} ${isClickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""} relative`}
+                          onClick={isClickable ? () => openAssetPicker(item.slotKey!, item.label, item.category) : undefined}
+                        >
+                          {/* Override badge */}
+                          {isOverridden && (
+                            <div className="absolute -top-1.5 -right-1.5 z-10">
+                              <span className="text-[9px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-medium shadow-sm">
+                                Degistirildi
+                              </span>
+                            </div>
+                          )}
+                          <div className="text-xs font-medium text-gray-500 mb-1 flex items-center justify-between">
+                            <span>{item.label}</span>
+                            {isOverridden && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); clearAssetOverride(item.slotKey!); }}
+                                className="text-[9px] text-blue-500 hover:text-blue-700 underline"
+                              >
+                                Sifirla
+                              </button>
+                            )}
+                          </div>
                           {isNone ? (
                             <div className="flex flex-col items-center py-2">
                               <div className="w-14 h-14 rounded-lg bg-gray-200 flex items-center justify-center text-gray-400 text-lg">—</div>
                               <div className="text-xs text-gray-400 mt-1">Yok</div>
                             </div>
-                          ) : item.preview?.url ? (
+                          ) : displayUrl ? (
                             <div className="flex flex-col items-center">
                               <img
-                                src={item.preview.url}
-                                alt={item.preview.filename}
-                                className="w-14 h-14 rounded-lg object-cover border border-gray-200"
+                                src={displayUrl}
+                                alt={displayFilename || ""}
+                                className={`w-14 h-14 rounded-lg object-cover border ${isOverridden ? "border-blue-300" : "border-gray-200"}`}
                               />
-                              <div className="text-[10px] text-gray-600 mt-1 truncate w-full text-center" title={item.preview.filename}>
-                                {item.preview.filename.length > 12 ? item.preview.filename.slice(0, 12) + "…" : item.preview.filename}
+                              <div className="text-[10px] text-gray-600 mt-1 truncate w-full text-center" title={displayFilename}>
+                                {(displayFilename || "").length > 12 ? (displayFilename || "").slice(0, 12) + "..." : displayFilename}
                               </div>
-                              <div className="text-[10px] text-gray-400">
-                                {item.preferred !== undefined && activeTags.length > 0
-                                  ? `${item.preferred}/${item.total} tercihli`
-                                  : `${item.total} aday`
-                                }
-                              </div>
-                              {activeTags.length > 0 && (
+                              {isOverridden ? (
+                                <div className="text-[10px] font-medium text-blue-600 mt-0.5">Manuel</div>
+                              ) : item.matchDetails ? (
+                                <div className={`text-[10px] font-medium mt-0.5 ${
+                                  item.matchDetails.matchedTags.length === 0
+                                    ? "text-red-600"
+                                    : item.matchDetails.missedTags.length === 0
+                                      ? "text-green-600"
+                                      : "text-amber-600"
+                                }`}>
+                                  {item.matchDetails.bestScore} etiket
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-gray-400">
+                                  {item.preferred !== undefined && activeTags.length > 0
+                                    ? `${item.preferred}/${item.total} tercihli`
+                                    : `${item.total} aday`
+                                  }
+                                </div>
+                              )}
+                              {/* Etiket detayları (override yoksa göster) */}
+                              {!isOverridden && item.matchDetails && item.matchDetails.missedTags.length > 0 && (
+                                <div className="flex flex-wrap gap-0.5 mt-0.5 justify-center">
+                                  {item.matchDetails.missedTags.slice(0, 2).map(t => (
+                                    <span key={t} className="text-[9px] bg-red-50 text-red-500 px-1 py-px rounded line-through">{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {!isOverridden && item.matchDetails && item.matchDetails.matchedTags.length > 0 && (
+                                <div className="flex flex-wrap gap-0.5 mt-0.5 justify-center">
+                                  {item.matchDetails.matchedTags.slice(0, 2).map(t => (
+                                    <span key={t} className="text-[9px] bg-green-50 text-green-600 px-1 py-px rounded">{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {!isOverridden && !item.matchDetails && activeTags.length > 0 && (
                                 <div className="flex flex-wrap gap-0.5 mt-0.5 justify-center">
                                   {activeTags.slice(0, 2).map(t => (
                                     <span key={t} className="text-[9px] bg-gray-100 text-gray-500 px-1 py-px rounded">{t}</span>
@@ -600,11 +696,17 @@ export default function OrchestratorDashboard() {
                               <div className={`text-lg font-bold ${item.total === 0 ? "text-red-500" : "text-gray-800"}`}>
                                 {item.total}
                               </div>
-                              {item.preferred !== undefined && activeTags.length > 0 && (
+                              {item.matchDetails ? (
+                                <div className={`text-xs font-medium ${
+                                  item.matchDetails.matchedTags.length === 0 ? "text-red-600" : "text-amber-600"
+                                }`}>
+                                  {item.matchDetails.bestScore} etiket
+                                </div>
+                              ) : item.preferred !== undefined && activeTags.length > 0 ? (
                                 <div className={`text-xs ${item.preferred > 0 ? "text-green-600" : "text-amber-600"}`}>
                                   {item.preferred} tercih
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                           )}
                         </div>
@@ -614,23 +716,23 @@ export default function OrchestratorDashboard() {
                 </div>
 
                 {/* Atmosfer Preset'leri */}
-                {(preFlightData.theme.presets.weather || preFlightData.theme.presets.lighting || preFlightData.theme.presets.atmosphere) && (
+                {(preFlightData.scenario.presets?.weather || preFlightData.scenario.presets?.lighting || preFlightData.scenario.presets?.atmosphere) && (
                   <div className="bg-gray-50 rounded-lg p-3">
                     <div className="text-xs font-medium text-gray-500 mb-2">Atmosfer</div>
                     <div className="flex flex-wrap gap-2">
-                      {preFlightData.theme.presets.weather && (
+                      {preFlightData.scenario.presets?.weather && (
                         <span className="text-xs bg-sky-100 text-sky-800 px-2 py-1 rounded-full">
-                          {preFlightData.theme.presets.weather}
+                          {preFlightData.scenario.presets.weather}
                         </span>
                       )}
-                      {preFlightData.theme.presets.lighting && (
+                      {preFlightData.scenario.presets?.lighting && (
                         <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-                          {preFlightData.theme.presets.lighting}
+                          {preFlightData.scenario.presets.lighting}
                         </span>
                       )}
-                      {preFlightData.theme.presets.atmosphere && (
+                      {preFlightData.scenario.presets?.atmosphere && (
                         <span className="text-xs bg-violet-100 text-violet-800 px-2 py-1 rounded-full">
-                          {preFlightData.theme.presets.atmosphere}
+                          {preFlightData.scenario.presets.atmosphere}
                         </span>
                       )}
                     </div>
@@ -832,16 +934,8 @@ export default function OrchestratorDashboard() {
                   <div className="bg-gray-50 rounded-xl p-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-2">Senaryo</h4>
                     <p className="font-semibold text-gray-900">{selectedSlot.pipelineResult.scenarioSelection.scenarioName}</p>
-                    {selectedSlot.pipelineResult.scenarioSelection.themeName && (
-                      <p className="text-xs text-purple-600 mt-1">Tema: {selectedSlot.pipelineResult.scenarioSelection.themeName}</p>
-                    )}
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       <span className="text-xs bg-white px-2 py-0.5 rounded border">{selectedSlot.pipelineResult.scenarioSelection.composition}</span>
-                      {selectedSlot.pipelineResult.scenarioSelection.includesHands && (
-                        <span className="text-xs bg-pink-50 text-pink-700 px-2 py-0.5 rounded border border-pink-200">
-                          {selectedSlot.pipelineResult.scenarioSelection.handStyleDetails?.name || selectedSlot.pipelineResult.scenarioSelection.handStyle || "El var"}
-                        </span>
-                      )}
                     </div>
                   </div>
                 )}
@@ -861,43 +955,59 @@ export default function OrchestratorDashboard() {
                           <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.product.subType} - {selectedSlot.pipelineResult.assetSelection.product.filename}</p>
                         </div>
                       </div>
-                      {/* Masa */}
-                      {selectedSlot.pipelineResult.assetSelection.table && (
-                        <div className="flex items-center gap-3">
-                          {selectedSlot.pipelineResult.assetSelection.table.storageUrl && (
-                            <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.table.storageUrl) || ""} alt="Masa" className="w-10 h-10 object-cover rounded-lg" />
-                          )}
-                          <div>
-                            <p className="text-xs font-medium">Masa</p>
-                            <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.table.filename}</p>
-                          </div>
-                        </div>
-                      )}
-                      {/* Tabak */}
-                      {selectedSlot.pipelineResult.assetSelection.plate && (
-                        <div className="flex items-center gap-3">
-                          {selectedSlot.pipelineResult.assetSelection.plate.storageUrl && (
-                            <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.plate.storageUrl) || ""} alt="Tabak" className="w-10 h-10 object-cover rounded-lg" />
-                          )}
-                          <div>
-                            <p className="text-xs font-medium">Tabak</p>
-                            <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.plate.filename}</p>
-                          </div>
-                        </div>
-                      )}
-                      {/* Fincan */}
-                      {selectedSlot.pipelineResult.assetSelection.cup && (
-                        <div className="flex items-center gap-3">
-                          {selectedSlot.pipelineResult.assetSelection.cup.storageUrl && (
-                            <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.cup.storageUrl) || ""} alt="Fincan" className="w-10 h-10 object-cover rounded-lg" />
-                          )}
-                          <div>
-                            <p className="text-xs font-medium">Fincan</p>
-                            <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.cup.filename}</p>
-                          </div>
-                        </div>
-                      )}
-                      {/* Pet */}
+                      {/* Slot asset'leri — dinamik */}
+                      {selectedSlot.pipelineResult.assetSelection.slots
+                        ? Object.entries(selectedSlot.pipelineResult.assetSelection.slots).map(([key, asset]) => (
+                            <div key={key} className="flex items-center gap-3">
+                              {asset.storageUrl && (
+                                <img src={convertStorageUrl(asset.storageUrl) || ""} alt={key} className="w-10 h-10 object-cover rounded-lg" />
+                              )}
+                              <div>
+                                <p className="text-xs font-medium">{key}</p>
+                                <p className="text-xs text-gray-500">{asset.filename}</p>
+                              </div>
+                            </div>
+                          ))
+                        : (
+                          <>
+                            {/* Fallback: eski named fields */}
+                            {selectedSlot.pipelineResult.assetSelection.table && (
+                              <div className="flex items-center gap-3">
+                                {selectedSlot.pipelineResult.assetSelection.table.storageUrl && (
+                                  <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.table.storageUrl) || ""} alt="Masa" className="w-10 h-10 object-cover rounded-lg" />
+                                )}
+                                <div>
+                                  <p className="text-xs font-medium">Masa</p>
+                                  <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.table.filename}</p>
+                                </div>
+                              </div>
+                            )}
+                            {selectedSlot.pipelineResult.assetSelection.plate && (
+                              <div className="flex items-center gap-3">
+                                {selectedSlot.pipelineResult.assetSelection.plate.storageUrl && (
+                                  <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.plate.storageUrl) || ""} alt="Tabak" className="w-10 h-10 object-cover rounded-lg" />
+                                )}
+                                <div>
+                                  <p className="text-xs font-medium">Tabak</p>
+                                  <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.plate.filename}</p>
+                                </div>
+                              </div>
+                            )}
+                            {selectedSlot.pipelineResult.assetSelection.cup && (
+                              <div className="flex items-center gap-3">
+                                {selectedSlot.pipelineResult.assetSelection.cup.storageUrl && (
+                                  <img src={convertStorageUrl(selectedSlot.pipelineResult.assetSelection.cup.storageUrl) || ""} alt="Fincan" className="w-10 h-10 object-cover rounded-lg" />
+                                )}
+                                <div>
+                                  <p className="text-xs font-medium">Fincan</p>
+                                  <p className="text-xs text-gray-500">{selectedSlot.pipelineResult.assetSelection.cup.filename}</p>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )
+                      }
+                      {/* Pet (slot dışı) */}
                       {selectedSlot.pipelineResult.assetSelection.pet && (
                         <div className="flex items-center gap-3">
                           {selectedSlot.pipelineResult.assetSelection.pet.storageUrl && (
@@ -909,7 +1019,7 @@ export default function OrchestratorDashboard() {
                           </div>
                         </div>
                       )}
-                      {/* Aksesuar */}
+                      {/* Aksesuar (slot dışı) */}
                       {selectedSlot.pipelineResult.assetSelection.accessory && (
                         <div className="flex items-center gap-3">
                           {selectedSlot.pipelineResult.assetSelection.accessory.storageUrl && (
@@ -990,7 +1100,7 @@ export default function OrchestratorDashboard() {
                         setCriticContext({
                           imagePath: selectedSlot.pipelineResult?.generatedImage?.storageUrl || "",
                           prompt: selectedSlot.pipelineResult?.optimizedPrompt?.mainPrompt || "",
-                          mood: selectedSlot.pipelineResult?.scenarioSelection?.themeName,
+                          mood: selectedSlot.pipelineResult?.scenarioSelection?.scenarioName,
                           product: selectedSlot.pipelineResult?.assetSelection?.product?.subType,
                           pipelineId: selectedSlot.pipelineResult?.id
                         });
@@ -1082,6 +1192,69 @@ export default function OrchestratorDashboard() {
         </div>
       )}
 
+      {/* Asset Picker Drawer */}
+      {assetPickerSlot && (
+        <div className="fixed inset-0 z-[55] flex">
+          {/* Overlay */}
+          <div className="flex-1 bg-black/30" onClick={() => setAssetPickerSlot(null)} />
+          {/* Drawer */}
+          <div className="w-full max-w-sm bg-white shadow-2xl flex flex-col animate-slide-in-right">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">{assetPickerSlot.label} Sec</h3>
+                <p className="text-[11px] text-gray-400">{assetPickerSlot.category}</p>
+              </div>
+              <button onClick={() => setAssetPickerSlot(null)} className="text-gray-400 hover:text-gray-600 p-1">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {pickerLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-blue"></div>
+                </div>
+              ) : pickerAssets.length === 0 ? (
+                <div className="text-center text-gray-400 text-sm py-8">Asset bulunamadi</div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {pickerAssets.map((asset) => {
+                    const thumbUrl = asset.thumbnailUrl || asset.cloudinaryUrl || asset.storageUrl;
+                    const isSelected = assetOverrides[assetPickerSlot.key]?.id === asset.id;
+                    return (
+                      <button
+                        key={asset.id}
+                        onClick={() => handleAssetSelect(assetPickerSlot.key, asset)}
+                        className={`rounded-lg border-2 overflow-hidden transition-all hover:shadow-md ${
+                          isSelected ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <div className="aspect-square bg-gray-100">
+                          <img src={thumbUrl} alt={asset.filename} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="px-1.5 py-1 bg-white">
+                          <div className="text-[10px] text-gray-700 truncate font-medium" title={asset.filename}>
+                            {asset.filename}
+                          </div>
+                          {asset.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-0.5 mt-0.5">
+                              {asset.tags.slice(0, 2).map(t => (
+                                <span key={t} className="text-[8px] bg-gray-100 text-gray-500 px-1 rounded">{t}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Visual Critic Modal */}
       {showCriticModal && criticContext && (
         <VisualCriticModal
@@ -1149,11 +1322,11 @@ export default function OrchestratorDashboard() {
         {/* LEFT PANEL - Kontroller */}
         <div className="lg:col-span-4 space-y-5">
 
-          {/* Tema + Üretim Kartı */}
+          {/* Senaryo + Üretim Kartı */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden lg:sticky lg:top-4">
-            {/* Tema başlık */}
+            {/* Senaryo başlık */}
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-800">Tema Seçimi</h2>
+              <h2 className="text-sm font-semibold text-gray-800">Senaryo Seçimi</h2>
               <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -1165,14 +1338,14 @@ export default function OrchestratorDashboard() {
               </label>
             </div>
 
-            {/* Tema kartları */}
-            {themes.length > 0 && (
+            {/* Senaryo kartları */}
+            {scenarios.length > 0 && (
               <div className="p-2 space-y-1.5 max-h-[380px] overflow-y-auto">
-                {/* Tema Yok */}
+                {/* Senaryo Yok */}
                 <button
-                  onClick={() => setSelectedThemeId("")}
+                  onClick={() => setSelectedScenarioId("")}
                   className={`w-full p-2.5 rounded-xl border text-left transition-all ${
-                    selectedThemeId === ""
+                    selectedScenarioId === ""
                       ? "border-gray-400 bg-gray-50 shadow-sm"
                       : "border-transparent hover:bg-gray-50"
                   }`}
@@ -1186,37 +1359,28 @@ export default function OrchestratorDashboard() {
                   </div>
                 </button>
 
-                {/* Tema Kartları */}
-                {themes.map((theme) => (
+                {/* Senaryo Kartları */}
+                {scenarios.map((scenario) => (
                   <button
-                    key={theme.id}
-                    onClick={() => setSelectedThemeId(theme.id)}
+                    key={scenario.id}
+                    onClick={() => setSelectedScenarioId(scenario.id)}
                     className={`w-full p-2.5 rounded-xl border text-left transition-all ${
-                      selectedThemeId === theme.id
+                      selectedScenarioId === scenario.id
                         ? "border-brand-blue bg-brand-blue/5 shadow-sm"
                         : "border-transparent hover:bg-gray-50"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-sm font-medium text-gray-800 truncate">{theme.name}</span>
+                      <span className="text-sm font-medium text-gray-800 truncate">{scenario.name}</span>
                       <div className="flex gap-0.5 flex-shrink-0 ml-2">
-                        {theme.petAllowed && <span className="text-[10px]">🐕</span>}
-                        {theme.accessoryAllowed && <span className="text-[10px]">✨</span>}
+                        {scenario.petAllowed && <span className="text-[10px]">🐕</span>}
+                        {scenario.accessoryAllowed && <span className="text-[10px]">✨</span>}
+                        {scenario.isInterior && <span className="text-[10px]">🏠</span>}
                       </div>
                     </div>
-                    {theme.description && (
-                      <p className="text-[11px] text-gray-500 line-clamp-1 mb-1">{theme.description}</p>
+                    {scenario.description && (
+                      <p className="text-[11px] text-gray-500 line-clamp-1">{scenario.description}</p>
                     )}
-                    <div className="flex flex-wrap gap-1">
-                      {theme.scenarios.slice(0, 2).map((scenario) => (
-                        <span key={scenario} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
-                          {scenario}
-                        </span>
-                      ))}
-                      {theme.scenarios.length > 2 && (
-                        <span className="text-[10px] text-gray-400">+{theme.scenarios.length - 2}</span>
-                      )}
-                    </div>
                   </button>
                 ))}
               </div>
@@ -1224,43 +1388,6 @@ export default function OrchestratorDashboard() {
 
             {/* Üret bölümü */}
             <div className="p-3 border-t border-gray-100 bg-gray-50/50 space-y-2.5">
-              {/* Kompozisyon Template seçimi */}
-              {compositionTemplates.length > 0 && (
-                <select
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="w-full text-sm p-2 border border-gray-200 rounded-lg bg-white focus:ring-1 focus:ring-brand-blue focus:border-brand-blue"
-                >
-                  <option value="">Serbest (template yok)</option>
-                  {compositionTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}{t.description ? ` — ${t.description}` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {/* Seçili template bilgisi */}
-              {selectedTemplateId && (() => {
-                const t = compositionTemplates.find(ct => ct.id === selectedTemplateId);
-                if (!t) return null;
-                const activeSlots = Object.entries(t.slots).filter(([, c]) => c.state !== "disabled");
-                return (
-                  <div className="px-2 py-1.5 bg-brand-blue/5 border border-brand-blue/20 rounded-lg">
-                    <p className="text-[11px] text-brand-blue font-medium">{activeSlots.length} aktif slot</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {activeSlots.map(([key, config]) => (
-                        <span key={key} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          config.state === "manual" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                        }`}>
-                          {key}: {config.state === "manual" ? "Seçili" : "Rastgele"}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
               <select
                 value={selectedAspectRatio}
                 onChange={(e) => setSelectedAspectRatio(e.target.value as InstagramAspectRatio)}
@@ -1277,7 +1404,7 @@ export default function OrchestratorDashboard() {
                 disabled={generating || validationLoading}
                 className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {validationLoading ? "Kontrol ediliyor..." : generating ? "Üretiliyor..." : selectedTemplateId ? "Template ile Üret" : "Şimdi Üret"}
+                {validationLoading ? "Kontrol ediliyor..." : generating ? "Üretiliyor..." : "Şimdi Üret"}
               </button>
             </div>
           </div>
@@ -1390,7 +1517,7 @@ export default function OrchestratorDashboard() {
             <div className="bg-white rounded-2xl border border-gray-200 p-16 text-center">
               <div className="text-gray-300 text-5xl mb-3">🎬</div>
               <p className="text-gray-500 text-sm">Henüz üretim yok</p>
-              <p className="text-gray-400 text-xs mt-1">Soldan bir tema seçip "Şimdi Üret" butonuna basın</p>
+              <p className="text-gray-400 text-xs mt-1">Soldan bir senaryo seçip "Şimdi Üret" butonuna basın</p>
             </div>
           ) : viewMode === "grid" ? (
             <div className={`grid ${GRID_CONFIG[gridSize].cols} gap-3`}>

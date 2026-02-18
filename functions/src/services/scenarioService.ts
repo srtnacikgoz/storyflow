@@ -103,19 +103,11 @@ export class ScenarioService {
   }
 
   /**
-   * El içeren senaryoları getir
+   * Standart (non-interior) senaryoları getir
    */
-  async getHandScenarios(activeOnly: boolean = true): Promise<Scenario[]> {
+  async getStandardScenarios(activeOnly: boolean = true): Promise<Scenario[]> {
     const scenarios = await this.getAllScenarios(activeOnly);
-    return scenarios.filter((s) => s.includesHands && !s.isInterior);
-  }
-
-  /**
-   * El içermeyen (masa üstü) senaryoları getir
-   */
-  async getTableTopScenarios(activeOnly: boolean = true): Promise<Scenario[]> {
-    const scenarios = await this.getAllScenarios(activeOnly);
-    return scenarios.filter((s) => !s.includesHands && !s.isInterior);
+    return scenarios.filter((s) => !s.isInterior);
   }
 
   /**

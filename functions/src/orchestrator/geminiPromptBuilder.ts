@@ -38,17 +38,6 @@ export interface GeminiLightingPreset {
   bestFor: string[];
 }
 
-export interface GeminiHandPose {
-  id: string;
-  name: string;
-  nameEn: string;
-  geminiPrompt: string;
-  skinTone: string;
-  nailStyle: string;
-  entryPoint: string; // bottom-right, bottom-left, right-side, top-down
-  bestFor: string[];
-}
-
 export interface GeminiCompositionTemplate {
   id: string;
   name: string;
@@ -79,7 +68,6 @@ export interface GeminiProductTextureProfile {
 let cachedPresets: {
   moods: GeminiMoodDefinition[];
   lighting: GeminiLightingPreset[];
-  handPoses: GeminiHandPose[];
   compositions: GeminiCompositionTemplate[];
   negativePrompts: GeminiNegativePromptSet[];
   textureProfiles: GeminiProductTextureProfile[];
@@ -104,14 +92,12 @@ export async function loadGeminiPresets(): Promise<typeof cachedPresets> {
     // Paralel yükleme
     const [
       lightingDocs,
-      handPoseDocs,
       compositionDocs,
       moodDocs,
       textureDocs,
       negativeDocs,
     ] = await Promise.all([
       presetsRef.doc("lighting-presets").collection("items").get(),
-      presetsRef.doc("hand-poses").collection("items").get(),
       presetsRef.doc("composition-templates").collection("items").get(),
       presetsRef.doc("mood-definitions").collection("items").get(),
       presetsRef.doc("product-textures").collection("items").get(),
@@ -121,192 +107,35 @@ export async function loadGeminiPresets(): Promise<typeof cachedPresets> {
     cachedPresets = {
       moods: moodDocs.docs.map(doc => ({ id: doc.id, ...doc.data() } as GeminiMoodDefinition)),
       lighting: lightingDocs.docs.map(doc => ({ id: doc.id, ...doc.data() } as GeminiLightingPreset)),
-      handPoses: handPoseDocs.docs.map(doc => ({ id: doc.id, ...doc.data() } as GeminiHandPose)),
       compositions: compositionDocs.docs.map(doc => ({ id: doc.id, ...doc.data() } as GeminiCompositionTemplate)),
       negativePrompts: negativeDocs.docs.map(doc => ({ id: doc.id, ...doc.data() } as GeminiNegativePromptSet)),
       textureProfiles: textureDocs.docs.map(doc => ({ id: doc.id, ...doc.data() } as GeminiProductTextureProfile)),
       loadedAt: Date.now(),
     };
 
-    console.log(`[GeminiPromptBuilder] Loaded presets: ${cachedPresets.moods.length} moods, ${cachedPresets.lighting.length} lighting, ${cachedPresets.handPoses.length} hand poses`);
+    console.log(`[GeminiPromptBuilder] Loaded presets: ${cachedPresets.moods.length} moods, ${cachedPresets.lighting.length} lighting, ${cachedPresets.compositions.length} compositions`);
+
+    // Zorunlu koleksiyonlar boş olmamalı
+    if (cachedPresets.moods.length === 0) {
+      throw new Error("[GeminiPromptBuilder] Firestore'da mood-definitions koleksiyonu boş. /seedGeminiTerminology endpoint'ini çağırarak veri yükleyin.");
+    }
+    if (cachedPresets.lighting.length === 0) {
+      throw new Error("[GeminiPromptBuilder] Firestore'da lighting-presets koleksiyonu boş. /seedGeminiTerminology endpoint'ini çağırarak veri yükleyin.");
+    }
+    if (cachedPresets.compositions.length === 0) {
+      throw new Error("[GeminiPromptBuilder] Firestore'da composition-templates koleksiyonu boş. /seedGeminiTerminology endpoint'ini çağırarak veri yükleyin.");
+    }
+    if (cachedPresets.textureProfiles.length === 0) {
+      throw new Error("[GeminiPromptBuilder] Firestore'da product-textures koleksiyonu boş. /seedGeminiTerminology endpoint'ini çağırarak veri yükleyin.");
+    }
 
     return cachedPresets;
   } catch (error) {
-    console.error("[GeminiPromptBuilder] Failed to load presets:", error);
-    // Fallback to hardcoded defaults if Firestore fails
-    return getDefaultPresets();
+    // Sessiz fallback YASAK — pipeline'ı durdur, net hata ver
+    console.error("[GeminiPromptBuilder] Firestore preset yükleme hatası:", error);
+    cachedPresets = null; // Cache'i temizle
+    throw new Error(`[GeminiPromptBuilder] Gemini preset'leri Firestore'dan yüklenemedi. Pipeline durduruluyor. Hata: ${error instanceof Error ? error.message : String(error)}`);
   }
-}
-
-/**
- * Hardcoded default presets (Firestore erişimi başarısız olursa)
- */
-function getDefaultPresets(): typeof cachedPresets {
-  return {
-    moods: [
-      {
-        id: "morning-ritual",
-        name: "Sabah Ritüeli",
-        nameEn: "Morning Ritual",
-        geminiAtmosphere: "Bright and airy, fresh morning energy, clean minimal aesthetic",
-        lighting: "Natural morning light, soft shadows",
-        temperature: "5500K",
-        colorPalette: ["white", "cream", "light wood", "pastel"],
-        timeOfDay: ["morning"],
-        bestFor: ["breakfast", "coffee", "croissants"],
-      },
-      {
-        id: "cozy-intimate",
-        name: "Samimi/Sıcak",
-        nameEn: "Cozy Intimate",
-        geminiAtmosphere: "Warm and inviting, intimate gathering, comfortable homey feeling",
-        lighting: "Warm tungsten accent, soft diffused",
-        temperature: "3000K",
-        colorPalette: ["warm brown", "cream", "burnt orange", "gold"],
-        timeOfDay: ["evening", "night"],
-        bestFor: ["comfort food", "sharing moments", "hot drinks"],
-      },
-      {
-        id: "bright-airy",
-        name: "Aydınlık/Ferah",
-        nameEn: "Bright Airy",
-        geminiAtmosphere: "Clean contemporary aesthetic, bright editorial style, minimalist elegance",
-        lighting: "Soft diffused daylight, minimal shadows",
-        temperature: "5000K",
-        colorPalette: ["white", "marble", "light grey", "sage"],
-        timeOfDay: ["morning", "noon", "afternoon"],
-        bestFor: ["modern presentation", "editorial", "product focus"],
-      },
-    ],
-    lighting: [
-      {
-        id: "soft-diffused",
-        name: "Yumuşak Yayılmış",
-        nameEn: "Soft Diffused",
-        direction: "diffused-window",
-        quality: "soft",
-        temperature: "5000K",
-        geminiTerms: ["soft diffused natural light", "gentle shadows", "even illumination"],
-        geminiPrompt: "Soft diffused natural light, gentle shadows, even illumination",
-        bestFor: ["croissants", "cakes", "cookies"],
-      },
-      {
-        id: "dramatic-side",
-        name: "Dramatik Yan Işık",
-        nameEn: "Dramatic Side Light",
-        direction: "side-lighting-45",
-        quality: "hard",
-        temperature: "3500K",
-        geminiTerms: ["dramatic side-lighting", "45 degrees", "defined shadows", "texture emphasis"],
-        geminiPrompt: "Dramatic side-lighting at 45 degrees, defined shadows, texture emphasis",
-        bestFor: ["chocolates", "macarons", "dark pastries"],
-      },
-      {
-        id: "golden-backlight",
-        name: "Altın Arka Işık",
-        nameEn: "Golden Backlight",
-        direction: "backlighting",
-        quality: "soft",
-        temperature: "3200K",
-        geminiTerms: ["warm backlighting", "golden rim light", "subsurface glow"],
-        geminiPrompt: "Warm backlighting, golden rim light, subsurface glow",
-        bestFor: ["bread", "croissants", "honey glazed"],
-      },
-    ],
-    handPoses: [
-      {
-        id: "cupping",
-        name: "Kavrama",
-        nameEn: "Cupping",
-        geminiPrompt: "Elegant feminine hands gently cupping, protective hold, nurturing gesture",
-        skinTone: "warm olive",
-        nailStyle: "natural short nails, subtle nude polish",
-        entryPoint: "bottom-right",
-        bestFor: ["warm drinks", "delicate items", "round objects"],
-      },
-      {
-        id: "pinching",
-        name: "Tutma",
-        nameEn: "Pinching",
-        geminiPrompt: "Delicate pinch grip between thumb and fingers, refined gesture, precise hold",
-        skinTone: "warm olive",
-        nailStyle: "natural manicure",
-        entryPoint: "bottom-right",
-        bestFor: ["small pastries", "chocolates", "macarons"],
-      },
-      {
-        id: "breaking",
-        name: "Kırma",
-        nameEn: "Breaking",
-        geminiPrompt: "Hands gently breaking apart, revealing interior texture, discovery moment",
-        skinTone: "warm olive",
-        nailStyle: "natural nails",
-        entryPoint: "center",
-        bestFor: ["bread", "croissants", "filled pastries"],
-      },
-    ],
-    compositions: [
-      {
-        id: "bottom-right",
-        name: "Sağ Alt Köşe",
-        nameEn: "Bottom Right Entry",
-        entryPoint: "bottom-right",
-        geminiPrompt: "Hand entering frame from bottom-right corner",
-        cameraAngle: "45-degree",
-        subjectPlacement: "center",
-      },
-      {
-        id: "overhead",
-        name: "Kuşbakışı",
-        nameEn: "Overhead",
-        entryPoint: "top-down",
-        geminiPrompt: "Overhead view with hands from top",
-        cameraAngle: "90-degree",
-        subjectPlacement: "center",
-      },
-    ],
-    negativePrompts: [
-      {
-        id: "always-avoid",
-        category: "always",
-        terms: [
-          "steam", "smoke", "vapor",
-          "stacked plates", "plates on top of each other",
-          "multiple same products", "duplicates",
-          "text", "watermarks", "logos",
-          "artificial", "plastic appearance",
-        ],
-        priority: 1,
-      },
-      {
-        id: "hand-avoid",
-        category: "hands",
-        terms: [
-          "deformed fingers", "extra fingers",
-          "unnatural hand position",
-          "floating hands",
-        ],
-        priority: 2,
-      },
-    ],
-    textureProfiles: [
-      {
-        id: "croissant",
-        productType: "croissants",
-        geminiTerms: ["golden-brown laminated layers", "flaky buttery exterior", "visible honeycomb crumb structure"],
-        geminiPrompt: "Perfectly laminated croissant showing golden-brown flaky layers, visible honeycomb interior structure",
-        focusAreas: ["lamination", "color gradient", "flakiness"],
-      },
-      {
-        id: "chocolate",
-        productType: "chocolates",
-        geminiTerms: ["glossy tempered surface", "sharp snap lines", "mirror-like sheen"],
-        geminiPrompt: "Professionally tempered chocolate with glossy mirror-like surface, sharp clean edges",
-        focusAreas: ["temper shine", "surface quality", "edge definition"],
-      },
-    ],
-    loadedAt: Date.now(),
-  };
 }
 
 /**
@@ -327,16 +156,6 @@ export async function getLightingPreset(presetId: string): Promise<GeminiLightin
   if (!presets) return null;
 
   return presets.lighting.find(l => l.id === presetId) || null;
-}
-
-/**
- * Hand pose ID'den Gemini el pozu tanımını al
- */
-export async function getHandPose(poseId: string): Promise<GeminiHandPose | null> {
-  const presets = await loadGeminiPresets();
-  if (!presets) return null;
-
-  return presets.handPoses.find(h => h.id === poseId) || null;
 }
 
 /**
@@ -364,9 +183,10 @@ export async function getTextureProfile(productType: string): Promise<GeminiProd
  */
 export async function buildNegativePrompt(categories?: string[]): Promise<string> {
   const presets = await loadGeminiPresets();
+  // loadGeminiPresets artık hata fırlatır, null dönmez
+  // Ama TypeScript için null check korunuyor
   if (!presets) {
-    // Fallback to basic negatives
-    return "steam, smoke, stacked plates, duplicates, deformed fingers, text, watermarks";
+    throw new Error("[GeminiPromptBuilder] Preset'ler yüklenemedi — negative prompt oluşturulamıyor.");
   }
 
   let negatives = presets.negativePrompts;
@@ -693,8 +513,8 @@ export function analyzeAtmosphere(params: {
   // Genel skor hesapla (temperature %40, harmony %60)
   const tempScore = temperatureConflict.severity === "none" ? 100
     : temperatureConflict.severity === "minor" ? 80
-    : temperatureConflict.severity === "moderate" ? 50
-    : 20;
+      : temperatureConflict.severity === "moderate" ? 50
+        : 20;
   const overallScore = Math.round(tempScore * 0.4 + colorHarmony.harmonyScore * 0.6);
 
   // Prompt'a eklenecek ayarlamalar
@@ -783,10 +603,8 @@ function buildSceneSettingFromTheme(setting: ThemeSetting): string[] {
 export async function buildGeminiPrompt(params: {
   moodId?: string;
   lightingPresetId?: string;
-  handPoseId?: string;
   compositionId?: string;
   productType?: string;
-  includesHands: boolean;
   timeOfDay: string;
   // Asset etiketleri - Gemini'ye constraint olarak gönderilir
   assetTags?: {
@@ -801,19 +619,18 @@ export async function buildGeminiPrompt(params: {
   scenarioDescription?: string;
   // Tema sahne ayarları - Hava, ışık, atmosfer
   themeSetting?: ThemeSetting;
-  // İçecek tipi - beverageRules'dan gelen: "tea", "coffee" vb.
-  beverageType?: string;
   // Tema izni: AI dekoratif aksesuar üretsin mi?
   accessoryAllowed?: boolean;
   // Kullanıcının seçtiği aksesuar listesi
   accessoryOptions?: string[];
+  // Shallow depth of field — ürün net, arka plan blur
+  shallowDepthOfField?: boolean;
 }): Promise<{
   mainPrompt: string;
   negativePrompt: string;
   metadata: {
     mood?: GeminiMoodDefinition;
     lighting?: GeminiLightingPreset;
-    handPose?: GeminiHandPose;
     composition?: GeminiCompositionTemplate;
     textureProfile?: GeminiProductTextureProfile;
   };
@@ -932,27 +749,7 @@ export async function buildGeminiPrompt(params: {
     });
   }
 
-  // === KARAR 3: El Pozu ===
-  const handPose = params.includesHands && params.handPoseId
-    ? presets?.handPoses.find(h => h.id === params.handPoseId)
-    : null;
-
-  if (params.includesHands) {
-    decisions.push({
-      step: "hand-pose-selection",
-      input: params.handPoseId || null,
-      matched: !!handPose,
-      result: handPose ? `${handPose.name} (${handPose.id})` : null,
-      fallback: false,
-      details: handPose
-        ? { geminiPrompt: handPose.geminiPrompt, skinTone: handPose.skinTone }
-        : params.handPoseId
-          ? { reason: `handPoseId "${params.handPoseId}" bulunamadı` }
-          : { reason: "handPoseId verilmedi" },
-    });
-  }
-
-  // === KARAR 4: Kompozisyon ===
+  // === KARAR 3: Kompozisyon ===
   const composition = params.compositionId
     ? presets?.compositions.find(c => c.id === params.compositionId)
     : null;
@@ -1085,19 +882,7 @@ export async function buildGeminiPrompt(params: {
     details: { source: lightingSource },
   });
 
-  // 4. El (varsa)
-  if (params.includesHands && handPose) {
-    promptParts.push(`HANDS:`);
-    promptParts.push(`- ${handPose.geminiPrompt}`);
-    promptParts.push(`- Skin tone: ${handPose.skinTone}`);
-    promptParts.push(`- Nails: ${handPose.nailStyle}`);
-    if (composition) {
-      promptParts.push(`- ${composition.geminiPrompt}`);
-    }
-    promptParts.push("");
-  }
-
-  // 5. Ürün dokusu — KALDIRILDI (v3.0)
+  // 4. Ürün dokusu — KALDIRILDI (v3.0)
   // Ürün zaten [1] referans görsel olarak gidiyor.
   // Metin ile doku tarif etmek referans görselle çelişki yaratıyordu.
 
@@ -1130,42 +915,35 @@ export async function buildGeminiPrompt(params: {
     }
   }
 
-  // 5.6a Aksesuar Yönlendirmesi — KALDIRILDI (v3.0)
-  // Aksesuar referans görsel olarak gönderiliyorsa metin talimatı gereksiz.
-  // "Add ONE accessory" ile "Use ONLY references" çelişiyordu.
+  // 5.6a Aksesuar Yönlendirmesi — kullanıcının seçtiği aksesuarları prompt'a ekle
   if (params.accessoryAllowed && params.accessoryOptions && params.accessoryOptions.length > 0) {
+    const accessoryList = params.accessoryOptions.join(", ");
+    const accessoryInstruction = `\nACCESSORIES: Include the following decorative accessories naturally in the scene: ${accessoryList}. Place them organically on the table surface, complementing the main composition.`;
+    promptParts.push(accessoryInstruction);
     decisions.push({
       step: "accessory-direction",
-      input: `accessoryOptions: [${params.accessoryOptions.join(", ")}]`,
+      input: `accessoryOptions: [${accessoryList}]`,
       matched: true,
-      result: `Aksesuar referans görsel olarak gönderildi (prompt'a metin eklenmedi — v3.0)`,
+      result: accessoryInstruction.trim(),
       fallback: false,
-      details: { source: "theme.accessoryOptions", options: params.accessoryOptions, note: "Accessory sent as reference image, no text instruction needed" },
+      details: { source: "scenario.accessoryOptions", options: params.accessoryOptions },
     });
   }
 
-  // 5.6b İçecek Tipi — PROMPT'TAN KALDIRILDI (v3.0)
-  // Beverage bilgisi artık cup referans görselin description'ına ekleniyor
-  // (orchestrator.ts'de: "ceramic, contains dark brown coffee")
-  // Böylece ayrı bir "MANDATORY" blok yerine referansla birlikte gidiyor
-  if (params.beverageType) {
-    const beverageLabels: Record<string, string> = {
-      tea: "TEA (amber/golden liquid)",
-      coffee: "COFFEE (dark brown liquid)",
-      "fruit-juice": "FRUIT JUICE (colorful liquid)",
-      lemonade: "LEMONADE (pale yellow liquid)",
-    };
-    const label = beverageLabels[params.beverageType] || params.beverageType.toUpperCase();
-
+  // 5.6b Shallow Depth of Field — ürün net, arka plan bokeh
+  if (params.shallowDepthOfField) {
+    promptParts.push(`\nDEPTH OF FIELD: Use a very shallow depth of field (wide aperture, f/1.8-f/2.8). The main product must be tack-sharp with crisp detail. All background elements (cups, plates, props, environment) should be smoothly blurred with beautiful circular bokeh. Create a strong separation between the sharp foreground subject and the soft, dreamy background.`);
     decisions.push({
-      step: "beverage-type",
-      input: params.beverageType,
+      step: "shallow-depth-of-field",
+      input: "shallowDepthOfField: true",
       matched: true,
-      result: `İçecek tipi: ${label} (cup referans description'ına eklendi, ayrı blok yok — v3.0)`,
+      result: "Shallow DOF talimatı eklendi — ürün net, arka plan bokeh",
       fallback: false,
-      details: { beverageType: params.beverageType, label, note: "Beverage info added to cup reference description in orchestrator.ts" },
+      details: { source: "scenario.shallowDepthOfField" },
     });
   }
+
+  // beverageType kaldırıldı — içecek seçimi artık etiket bazlı (orchestrator.ts beverageKeywords)
 
   // 5.7 Sahne Yönlendirmesi — v3.0: Senaryo + Tema birleşik, prompt ana gövdesi
   // Kompozisyon her zaman eklenir, senaryo ve tema açıklamaları varsa birleştirilir
@@ -1313,8 +1091,7 @@ export async function buildGeminiPrompt(params: {
   promptParts.push(`9:16 vertical for Instagram Stories. Sharp focus on details, crisp textures.`);
 
   // Negative prompt oluştur
-  const negativeCategories = params.includesHands ? ["always", "hands"] : ["always"];
-  const negativePrompt = await buildNegativePrompt(negativeCategories);
+  const negativePrompt = await buildNegativePrompt(["always"]);
 
   // === PROMPT POLLUTION KONTROLÜ ===
   // Oluşturulan prompt'u pollution terimler için kontrol et
@@ -1345,7 +1122,7 @@ export async function buildGeminiPrompt(params: {
     });
   }
 
-  console.log(`[GeminiPromptBuilder] Prompt built: mood=${mood?.id || "NONE"}, lighting=${lighting?.id || lightingSource}, hands=${handPose?.id || "NONE"}, texture=${textureProfile?.productType || "NONE"}, decisions=${decisions.length} steps`);
+  console.log(`[GeminiPromptBuilder] Prompt built: mood=${mood?.id || "NONE"}, lighting=${lighting?.id || lightingSource}, texture=${textureProfile?.productType || "NONE"}, decisions=${decisions.length} steps`);
 
   return {
     mainPrompt: rawPrompt, // Orijinal prompt (uyarılarla birlikte)
@@ -1353,7 +1130,6 @@ export async function buildGeminiPrompt(params: {
     metadata: {
       mood: mood || undefined,
       lighting: lighting || undefined,
-      handPose: handPose || undefined,
       composition: composition || undefined,
       textureProfile: textureProfile || undefined,
     },
@@ -1368,21 +1144,14 @@ export async function buildGeminiPrompt(params: {
  */
 export function extractGeminiParamsFromScenario(scenario: {
   mood?: string;
-  // lightingPreset kaldırıldı - Işık artık sadece Mood'dan
-  handPose?: string;
   compositionEntry?: string;
-  includesHands?: boolean;
 }): {
   moodId?: string;
-  // lightingPresetId kaldırıldı - Mood fallback kullanılacak
-  handPoseId?: string;
   compositionId?: string;
 } {
   return {
     moodId: scenario.mood || undefined,
-    // lightingPresetId: Artık Senaryo'dan değil, buildGeminiPrompt içinde Mood'dan alınacak
-    handPoseId: scenario.includesHands ? scenario.handPose || undefined : undefined,
-    compositionId: scenario.includesHands ? scenario.compositionEntry || undefined : undefined,
+    compositionId: scenario.compositionEntry || undefined,
   };
 }
 

@@ -32,7 +32,6 @@ const THEMES_TOUR_STEPS: TourStep[] = [
 interface Scenario {
   id: string;
   name: string;
-  includesHands: boolean;
   isInterior: boolean;
 }
 
@@ -120,10 +119,9 @@ export default function Themes() {
     try {
       const response = await api.listScenarios();
       // API'den gelen senaryoları Scenario tipine dönüştür
-      const scenarios: Scenario[] = response.all.map((s: { id: string; name: string; includesHands?: boolean; isInterior?: boolean }) => ({
+      const scenarios: Scenario[] = response.all.map((s: { id: string; name: string; isInterior?: boolean }) => ({
         id: s.id,
         name: s.name,
-        includesHands: s.includesHands ?? false,
         isInterior: s.isInterior ?? false,
       }));
       setAllScenarios(scenarios);
@@ -547,9 +545,7 @@ export default function Themes() {
                         <span
                           className={`text-xs px-2 py-1 rounded ${scenario?.isInterior
                             ? "bg-green-100 text-green-700"
-                            : scenario?.includesHands
-                              ? "bg-purple-100 text-purple-700"
-                              : "bg-blue-100 text-blue-700"
+                            : "bg-blue-100 text-blue-700"
                             }`}
                         >
                           {scenario?.name || scenarioId}
@@ -830,7 +826,6 @@ export default function Themes() {
                             <option key={scenario.id} value={scenario.id}>
                               {scenario.name}
                               {scenario.isInterior ? " (Interior)" : ""}
-                              {scenario.includesHands ? " (El var)" : ""}
                             </option>
                           ))}
                         </select>
@@ -844,9 +839,6 @@ export default function Themes() {
                                 <span className="font-medium text-amber-800">{selected.name}</span>
                                 {selected.isInterior && (
                                   <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Interior</span>
-                                )}
-                                {selected.includesHands && (
-                                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">El var</span>
                                 )}
                               </div>
                               {selected.isInterior && (

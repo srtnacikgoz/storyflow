@@ -568,19 +568,21 @@ export const addMainCategory = functions
           icon,
           description,
           subTypes,
+          linkedSlotKey,
         } = request.body as {
           type: string;
           displayName: string;
           icon: string;
           description?: string;
           subTypes?: CategorySubType[];
+          linkedSlotKey?: string;
         };
 
         // Zorunlu alan kontrolü
-        if (!type || !displayName || !icon) {
+        if (!type || !displayName) {
           response.status(400).json({
             success: false,
-            error: "type, displayName ve icon zorunludur",
+            error: "type ve displayName zorunludur",
           });
           return;
         }
@@ -588,8 +590,9 @@ export const addMainCategory = functions
         const result = await categoryService.addMainCategory({
           type: type.toLowerCase().trim() as DynamicCategoryType,
           displayName: displayName.trim(),
-          icon,
+          icon: icon || "",
           description,
+          linkedSlotKey: linkedSlotKey || undefined,
           order: 0, // Service'de otomatik hesaplanacak
           isSystem: false,
           isDeleted: false,
@@ -634,6 +637,7 @@ export const updateMainCategory = functions
           description,
           order,
           isDeleted,
+          linkedSlotKey,
         } = request.body as {
           type: string;
           displayName?: string;
@@ -641,6 +645,7 @@ export const updateMainCategory = functions
           description?: string;
           order?: number;
           isDeleted?: boolean;
+          linkedSlotKey?: string | null;
         };
 
         if (!type) {
@@ -657,6 +662,7 @@ export const updateMainCategory = functions
           ...(description !== undefined && { description }),
           ...(order !== undefined && { order }),
           ...(isDeleted !== undefined && { isDeleted }),
+          ...(linkedSlotKey !== undefined && { linkedSlotKey: linkedSlotKey || undefined }),
         });
 
         if (!result.success) {

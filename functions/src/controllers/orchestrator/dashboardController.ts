@@ -192,7 +192,6 @@ export const loadDashboardData = onRequest(
             totalCost: aiStatsMonthly.totalCost,
             totalCalls: aiStatsMonthly.totalCalls,
             geminiCalls: aiStatsMonthly.geminiCalls,
-            claudeCalls: aiStatsMonthly.claudeCalls,
           },
           slots,
           themes,

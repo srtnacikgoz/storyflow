@@ -3,7 +3,7 @@
  * Scheduled slot CRUD ve durum işlemleri
  */
 
-import { functions, db, getCors, getConfig, REGION, claudeApiKey, getOrchestratorConfig, errorResponse } from "./shared";
+import { functions, db, getCors, getConfig, REGION, getOrchestratorConfig, errorResponse } from "./shared";
 import { getInstagramService } from "../../lib/serviceFactory";
 import { OrchestratorScheduler } from "../../orchestrator/scheduler";
 
@@ -221,7 +221,7 @@ export const deleteScheduledSlot = functions
  */
 export const retrySlot = functions
   .region(REGION)
-  .runWith({ timeoutSeconds: 540, memory: "1GB", secrets: [claudeApiKey] })
+  .runWith({ timeoutSeconds: 540, memory: "1GB" })
   .https.onRequest(async (request, response) => {
     const corsHandler = await getCors();
     corsHandler(request, response, async () => {
@@ -297,7 +297,7 @@ export const retrySlot = functions
  */
 export const approveSlot = functions
   .region(REGION)
-  .runWith({ timeoutSeconds: 120, secrets: [claudeApiKey] })
+  .runWith({ timeoutSeconds: 120 })
   .https.onRequest(async (request, response) => {
     const corsHandler = await getCors();
     corsHandler(request, response, async () => {

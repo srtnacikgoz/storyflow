@@ -21,7 +21,7 @@ const VARIABLE_INFO: Record<string, { description: string; source: string; page?
   },
   moodRule: {
     description: "Mood'a ozel gorsel yonergeleri. Ornek: romantic icin sicak tonlar ve yumusak isik",
-    source: "claudeService.ts icerisinde hardcoded MOOD_RULES sozlugu",
+    source: "Pipeline icerisinde hardcoded MOOD_RULES sozlugu",
   },
   blockedAssetsSection: {
     description: "Son uretimde kullanilan asset'leri engelleyen yonerge (tekrar onleme)",
@@ -35,10 +35,6 @@ const VARIABLE_INFO: Record<string, { description: string; source: string; page?
     description: "Urunun elde tutulup tutulamayacagi bilgisi",
     source: "Gorseller > urun duzenle > 'Elde tutulabilir' alani",
     page: "/assets",
-  },
-  blockedHandStylesRule: {
-    description: "Son uretimde kullanilan el stillerini engelleyen yonerge",
-    source: "Diversity Rules > handStyleGap ayarina gore otomatik",
   },
   blockedCompositionsRule: {
     description: "Son uretimde kullanilan kompozisyonlari engelleyen yonerge",
@@ -262,11 +258,10 @@ export default function PromptStudio() {
                   setIsEditing(false);
                   setShowHistory(false);
                 }}
-                className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
-                  isSelected
+                className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${isSelected
                     ? "border-brand-mustard bg-brand-mustard/10 shadow-sm"
                     : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-xl">{info.icon}</span>
@@ -320,11 +315,10 @@ export default function PromptStudio() {
                     <>
                       <button
                         onClick={() => setShowHistory(!showHistory)}
-                        className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
-                          showHistory
+                        className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${showHistory
                             ? "bg-gray-100 border-gray-300 text-gray-700"
                             : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                        }`}
+                          }`}
                       >
                         Gecmis ({selectedTemplate.history.length})
                       </button>

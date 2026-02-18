@@ -3,24 +3,20 @@
  * AI API kullanımını ve maliyetlerini takip eder
  */
 
-import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 
 // Maliyet sabitleri (USD)
 export const COSTS = {
-  VISION_API: 0.01, // GPT-4 Vision per image
-  DALLE_3_HD: 0.08, // DALL-E 3 HD 1024x1024
-  DALLE_3_STANDARD: 0.04, // DALL-E 3 Standard
-  GEMINI_FLASH: 0.01, // Gemini 2.5 Flash Image
-  GEMINI_PRO: 0.04, // Gemini 3 Pro Image Preview
+  GEMINI_IMAGE: 0.04, // Gemini 3 Pro Image Preview
 };
 
 // Usage tipi
-export type UsageType = "vision" | "dalle" | "instagram_post" | "gemini-flash" | "gemini-pro";
+export type UsageType = "gemini" | "instagram_post";
 
 // Usage kaydı
 export interface UsageRecord {
   id?: string;
-  type: UsageType;
+  type: UsageType | string; // string for backward compatibility with legacy types
   cost: number;
   description: string;
   itemId?: string; // İlgili queue item
@@ -31,20 +27,14 @@ export interface UsageRecord {
 // Usage istatistikleri
 export interface UsageStats {
   today: {
-    vision: { count: number; cost: number };
-    dalle: { count: number; cost: number };
     gemini: { count: number; cost: number };
     total: number;
   };
   thisMonth: {
-    vision: { count: number; cost: number };
-    dalle: { count: number; cost: number };
     gemini: { count: number; cost: number };
     total: number;
   };
   allTime: {
-    vision: { count: number; cost: number };
-    dalle: { count: number; cost: number };
     gemini: { count: number; cost: number };
     total: number;
   };
@@ -94,52 +84,23 @@ export class UsageService {
   }
 
   /**
-   * Vision API kullanımı logla
-   */
-  async logVisionUsage(itemId?: string): Promise<string> {
-    return this.logUsage({
-      type: "vision",
-      cost: COSTS.VISION_API,
-      description: "GPT-4 Vision görsel analizi",
-      itemId,
-    });
-  }
-
-  /**
-   * DALL-E kullanımı logla
-   */
-  async logDalleUsage(itemId?: string, quality: "hd" | "standard" = "hd"): Promise<string> {
-    const cost = quality === "hd" ? COSTS.DALLE_3_HD : COSTS.DALLE_3_STANDARD;
-    return this.logUsage({
-      type: "dalle",
-      cost,
-      description: `DALL-E 3 ${quality.toUpperCase()} görsel oluşturma`,
-      itemId,
-    });
-  }
-
-  /**
    * Gemini kullanımı logla
    */
   async logGeminiUsage(
     itemId?: string,
-    cost: number = COSTS.GEMINI_FLASH,
-    modelType: "gemini-flash" | "gemini-pro" = "gemini-flash"
+    cost: number = COSTS.GEMINI_IMAGE
   ): Promise<string> {
-    const descriptions: Record<string, string> = {
-      "gemini-flash": "Gemini 2.5 Flash Image img2img dönüşümü",
-      "gemini-pro": "Gemini 3 Pro Image img2img dönüşümü",
-    };
     return this.logUsage({
-      type: modelType,
+      type: "gemini",
       cost,
-      description: descriptions[modelType],
+      description: "Gemini 3 Pro Image img2img dönüşümü",
       itemId,
     });
   }
 
   /**
    * Kullanım istatistiklerini getir
+   * Not: Legacy kayıtlar (vision, dalle, gemini-flash, gemini-pro) gemini altında toplanır
    */
   async getStats(): Promise<UsageStats> {
     const now = new Date();
@@ -153,9 +114,9 @@ export class UsageService {
       .get();
 
     const stats: UsageStats = {
-      today: {vision: {count: 0, cost: 0}, dalle: {count: 0, cost: 0}, gemini: {count: 0, cost: 0}, total: 0},
-      thisMonth: {vision: {count: 0, cost: 0}, dalle: {count: 0, cost: 0}, gemini: {count: 0, cost: 0}, total: 0},
-      allTime: {vision: {count: 0, cost: 0}, dalle: {count: 0, cost: 0}, gemini: {count: 0, cost: 0}, total: 0},
+      today: { gemini: { count: 0, cost: 0 }, total: 0 },
+      thisMonth: { gemini: { count: 0, cost: 0 }, total: 0 },
+      allTime: { gemini: { count: 0, cost: 0 }, total: 0 },
     };
 
     snapshot.forEach((doc) => {
@@ -163,17 +124,11 @@ export class UsageService {
       const isToday = data.date === today;
       const isThisMonth = data.date >= monthStart;
 
-      // Gemini modellerini aynı kategoride topla
-      const isGemini = data.type === "gemini-flash" || data.type === "gemini-pro";
+      // Tüm AI kullanımlarını gemini altında topla (legacy dahil)
+      const isAI = data.type !== "instagram_post";
 
       // All time
-      if (data.type === "vision") {
-        stats.allTime.vision.count++;
-        stats.allTime.vision.cost += data.cost;
-      } else if (data.type === "dalle") {
-        stats.allTime.dalle.count++;
-        stats.allTime.dalle.cost += data.cost;
-      } else if (isGemini) {
+      if (isAI) {
         stats.allTime.gemini.count++;
         stats.allTime.gemini.cost += data.cost;
       }
@@ -181,13 +136,7 @@ export class UsageService {
 
       // This month
       if (isThisMonth) {
-        if (data.type === "vision") {
-          stats.thisMonth.vision.count++;
-          stats.thisMonth.vision.cost += data.cost;
-        } else if (data.type === "dalle") {
-          stats.thisMonth.dalle.count++;
-          stats.thisMonth.dalle.cost += data.cost;
-        } else if (isGemini) {
+        if (isAI) {
           stats.thisMonth.gemini.count++;
           stats.thisMonth.gemini.cost += data.cost;
         }
@@ -196,13 +145,7 @@ export class UsageService {
 
       // Today
       if (isToday) {
-        if (data.type === "vision") {
-          stats.today.vision.count++;
-          stats.today.vision.cost += data.cost;
-        } else if (data.type === "dalle") {
-          stats.today.dalle.count++;
-          stats.today.dalle.cost += data.cost;
-        } else if (isGemini) {
+        if (isAI) {
           stats.today.gemini.count++;
           stats.today.gemini.cost += data.cost;
         }
@@ -212,16 +155,10 @@ export class UsageService {
 
     // Maliyetleri 2 ondalık basamağa yuvarla
     const round = (n: number) => Math.round(n * 100) / 100;
-    stats.today.vision.cost = round(stats.today.vision.cost);
-    stats.today.dalle.cost = round(stats.today.dalle.cost);
     stats.today.gemini.cost = round(stats.today.gemini.cost);
     stats.today.total = round(stats.today.total);
-    stats.thisMonth.vision.cost = round(stats.thisMonth.vision.cost);
-    stats.thisMonth.dalle.cost = round(stats.thisMonth.dalle.cost);
     stats.thisMonth.gemini.cost = round(stats.thisMonth.gemini.cost);
     stats.thisMonth.total = round(stats.thisMonth.total);
-    stats.allTime.vision.cost = round(stats.allTime.vision.cost);
-    stats.allTime.dalle.cost = round(stats.allTime.dalle.cost);
     stats.allTime.gemini.cost = round(stats.allTime.gemini.cost);
     stats.allTime.total = round(stats.allTime.total);
 
@@ -244,3 +181,4 @@ export class UsageService {
     })) as UsageRecord[];
   }
 }
+

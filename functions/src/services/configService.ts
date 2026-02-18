@@ -16,7 +16,6 @@
 import * as admin from "firebase-admin";
 import {
   FirestoreScenario,
-  FirestoreHandStyle,
   FirestoreAssetPersonality,
   FirestoreDiversityRules,
   FirestoreTimeMoodConfig,
@@ -34,7 +33,6 @@ import {
   GlobalOrchestratorConfig,
   FirestoreAssetSelectionConfig,
   FirestoreRuleEngineConfig,
-  BeverageRule,
   SlotDefinition,
   FirestoreSlotDefinitionsConfig,
   CompositionTemplate,
@@ -50,8 +48,6 @@ import {
   DEFAULT_PROMPT_STUDIO_CONFIG,
   DEFAULT_PROMPT_TEMPLATES,
   DEFAULT_RULE_ENGINE_CONFIG,
-  DEFAULT_BEVERAGE_RULES,
-  DEFAULT_BEVERAGE_TAG_MAPPINGS,
 } from "../orchestrator/seed/defaultData";
 import { DEFAULT_SLOT_DEFINITIONS, ProductSlotDefaults, DEFAULT_PRODUCT_SLOT_DEFAULTS } from "../orchestrator/types";
 
@@ -218,23 +214,6 @@ export async function getScenarios(): Promise<FirestoreScenario[]> {
     id: doc.id,
     ...doc.data(),
   })) as FirestoreScenario[];
-}
-
-/**
- * Tüm el stillerini getirir
- */
-export async function getHandStyles(): Promise<FirestoreHandStyle[]> {
-  const snapshot = await getDb()
-    .collection("global")
-    .doc("hand-styles")
-    .collection("items")
-    .where("isActive", "==", true)
-    .get();
-
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as FirestoreHandStyle[];
 }
 
 /**
@@ -588,62 +567,8 @@ export async function updateRuleEngineConfig(
   clearConfigCache();
 }
 
-// ==========================================
-// BEVERAGE RULES CONFIG
-// ==========================================
-
-export interface BeverageRulesConfig {
-  rules: Record<string, BeverageRule>;
-  /** İçecek türü → etiket eşleştirmesi (Türkçe/İngilizce) */
-  tagMappings: Record<string, string[]>;
-  updatedAt: number;
-}
-
-/**
- * İçecek kurallarını getirir
- */
-export async function getBeverageRulesConfig(): Promise<BeverageRulesConfig> {
-  const doc = await getDb()
-    .collection("global")
-    .doc("config")
-    .collection("settings")
-    .doc("beverage-rules")
-    .get();
-
-  if (!doc.exists) {
-    return {
-      rules: DEFAULT_BEVERAGE_RULES,
-      tagMappings: DEFAULT_BEVERAGE_TAG_MAPPINGS,
-      updatedAt: Date.now(),
-    };
-  }
-
-  // Firestore'dan gelen data'da tagMappings yoksa default ekle
-  const data = doc.data() as BeverageRulesConfig;
-  return {
-    ...data,
-    tagMappings: data.tagMappings || DEFAULT_BEVERAGE_TAG_MAPPINGS,
-  };
-}
-
-/**
- * İçecek kurallarını günceller
- */
-export async function updateBeverageRulesConfig(
-  updates: Partial<BeverageRulesConfig>
-): Promise<void> {
-  await getDb()
-    .collection("global")
-    .doc("config")
-    .collection("settings")
-    .doc("beverage-rules")
-    .set({
-      ...updates,
-      updatedAt: Date.now(),
-    }, { merge: true });
-
-  clearConfigCache();
-}
+// BeverageRulesConfig, getBeverageRulesConfig, updateBeverageRulesConfig kaldırıldı
+// İçecek seçimi artık etiket bazlı — orchestrator.ts beverageKeywords
 
 /**
  * Tüm config'leri tek seferde getirir (cache ile)
@@ -661,7 +586,6 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
   // Paralel olarak tüm config'leri yükle
   const [
     scenarios,
-    handStyles,
     assetPersonalities,
     diversityRules,
     timeMoodConfig,
@@ -678,7 +602,6 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
     ruleEngine,
   ] = await Promise.all([
     getScenarios(),
-    getHandStyles(),
     getAssetPersonalities(),
     getDiversityRules(),
     getTimeMoodConfig(),
@@ -698,7 +621,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
   // Config oluştur
   const config: GlobalOrchestratorConfig = {
     scenarios,
-    handStyles,
+    handStyles: [], // @deprecated El desteği kaldırıldı
     assetPersonalities,
     diversityRules,
     timeMoodConfig,
@@ -721,7 +644,7 @@ export async function getGlobalConfig(forceRefresh = false): Promise<GlobalOrche
   configCache = config;
   cacheTimestamp = now;
 
-  console.log(`[ConfigService] Loaded: ${scenarios.length} scenarios, ${handStyles.length} hand styles`);
+  console.log(`[ConfigService] Loaded: ${scenarios.length} scenarios`);
 
   return config;
 }
@@ -765,16 +688,6 @@ export async function seedFirestoreConfig(): Promise<void> {
     batch.set(ref, scenario);
   }
 
-  // El stillerini yükle
-  for (const handStyle of seedData.handStyles) {
-    const ref = getDb()
-      .collection("global")
-      .doc("hand-styles")
-      .collection("items")
-      .doc(handStyle.id);
-    batch.set(ref, handStyle);
-  }
-
   // Asset kişiliklerini yükle
   for (const personality of seedData.assetPersonalities) {
     const ref = getDb()
@@ -800,7 +713,7 @@ export async function seedFirestoreConfig(): Promise<void> {
   batch.set(configRef.doc("asset-selection"), seedData.assetSelectionConfig);
   batch.set(configRef.doc("prompt-studio"), seedData.promptStudioConfig);
   batch.set(configRef.doc("rule-engine"), seedData.ruleEngineConfig);
-  batch.set(configRef.doc("beverage-rules"), seedData.beverageRulesConfig);
+  // beverage-rules kaldırıldı — içecek seçimi artık etiket bazlı
 
   await batch.commit();
 
