@@ -138,7 +138,13 @@ async function withRetry<T>(
  * Pipeline'da tek AI çağrısı: görsel üretim
  * Admin helper'lar (tema/senaryo açıklaması) için image model text de üretebilir
  */
-export type GeminiModel = "gemini-3-pro-image-preview";
+export type GeminiModel = "gemini-3-pro-image-preview" | "gemini-2.5-flash-image" | "gemini-2.0-flash-exp";
+
+/**
+ * Desteklenen image model ID'leri
+ * Admin Panel dropdown ve orchestrator validasyonu için
+ */
+export type ImageModelId = GeminiModel;
 
 /**
  * Gemini config
@@ -208,6 +214,7 @@ export class GeminiService {
     pipelineId?: string;
     slotId?: string;
     productType?: string;
+    referenceImages?: Array<{ type: string; id: string; filename: string }>;
   } = {};
 
   /**
@@ -229,6 +236,7 @@ export class GeminiService {
     pipelineId?: string;
     slotId?: string;
     productType?: string;
+    referenceImages?: Array<{ type: string; id: string; filename: string }>;
   }): void {
     this.pipelineContext = context;
   }
@@ -396,11 +404,38 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
             details.push(`${key}: ${JSON.stringify(promptFeedback[key])}`);
           }
         }
+
+        // RAW RESPONSE DUMP — tüm Gemini response bilgisini logla
+        const rawDump: Record<string, unknown> = {};
+        try {
+          rawDump.promptFeedback = promptFeedback || null;
+          rawDump.candidates = (response as any).candidates || null;
+          rawDump.usageMetadata = (response as any).usageMetadata || null;
+          rawDump.modelVersion = (response as any).modelVersion || null;
+          // Response'un tüm key'lerini tara
+          const responseKeys = Object.keys(response);
+          for (const key of responseKeys) {
+            if (!rawDump[key] && key !== "text") {
+              try {
+                rawDump[key] = JSON.parse(JSON.stringify((response as any)[key]));
+              } catch {
+                rawDump[key] = `[serialize error: ${typeof (response as any)[key]}]`;
+              }
+            }
+          }
+        } catch (dumpErr) {
+          rawDump.dumpError = String(dumpErr);
+        }
+        console.error(`[GeminiService] BLOCKED — Raw response dump:`, JSON.stringify(rawDump, null, 2));
+
         const detailStr = details.length > 0 ? ` [${details.join(" | ")}]` : "";
-        throw new GeminiBlockedError(
+        const blockedError = new GeminiBlockedError(
           `Görsel üretilemedi — Gemini engelledi.${detailStr}`,
           "NO_CANDIDATES"
         );
+        // Raw dump'ı error'a ekle (loglama için)
+        (blockedError as any).rawResponseDump = rawDump;
+        throw blockedError;
       }
 
       const candidate = response.candidates[0];
@@ -421,11 +456,24 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
             (r: any) => `${r.category}=${r.probability}${r.blocked ? " [BLOCKED]" : ""}`
           ).join(", ")}`);
         }
+
+        // RAW CANDIDATE DUMP
+        const rawDump: Record<string, unknown> = {
+          promptFeedback: promptFeedback || null,
+          candidateFinishReason,
+          candidateSafetyRatings,
+          candidateIndex: (candidate as any).index,
+          usageMetadata: (response as any).usageMetadata || null,
+        };
+        console.error(`[GeminiService] NO_CONTENT — Raw candidate dump:`, JSON.stringify(rawDump, null, 2));
+
         const detailStr = details.length > 0 ? ` [${details.join(" | ")}]` : "";
-        throw new GeminiBlockedError(
+        const blockedError = new GeminiBlockedError(
           `Görsel içerik boş döndü.${detailStr}`,
           "NO_CONTENT"
         );
+        (blockedError as any).rawResponseDump = rawDump;
+        throw blockedError;
       }
 
       // Görsel içeriği bul
@@ -471,6 +519,7 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
         pipelineId: this.pipelineContext.pipelineId,
         slotId: this.pipelineContext.slotId,
         productType: this.pipelineContext.productType,
+        referenceImages: this.pipelineContext.referenceImages,
       });
 
       return {
@@ -487,12 +536,18 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
       const errorMessage = error instanceof Error ? error.message : "Unknown Gemini API error";
       const errorType = error instanceof GeminiBlockedError ? "blocked" : "error";
 
+      // Raw response dump varsa error mesajına ekle
+      const rawDump = (error as any)?.rawResponseDump;
+      const fullErrorMessage = rawDump
+        ? `${errorMessage} | RAW_DUMP: ${JSON.stringify(rawDump)}`
+        : errorMessage;
+
       await AILogService.logGemini("image-generation", {
         model: this.imageModel,
         userPrompt: fullPrompt,
         negativePrompt: options.negativePrompt,
         status: errorType as "error" | "blocked",
-        error: errorMessage,
+        error: fullErrorMessage,
         cost: 0,
         durationMs,
         inputImageCount,
@@ -500,6 +555,7 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
         pipelineId: this.pipelineContext.pipelineId,
         slotId: this.pipelineContext.slotId,
         productType: this.pipelineContext.productType,
+        referenceImages: this.pipelineContext.referenceImages,
       });
 
       // Bilinen hata tiplerini kontrol et

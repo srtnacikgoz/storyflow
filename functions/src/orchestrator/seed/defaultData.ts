@@ -348,6 +348,9 @@ export const DEFAULT_SYSTEM_SETTINGS_CONFIG: Omit<FirestoreSystemSettingsConfig,
   // AI Model Seçimi (textModel kaldırıldı — sadece image model)
   imageModel: "gemini-3-pro-image-preview",
 
+  // Prompt Optimizer (varsayılan: kapalı)
+  promptOptimizerModel: "none",
+
   // Feedback
   // Prompt'a dahil edilecek maksimum geri bildirim sayısı
   maxFeedbackForPrompt: 10,

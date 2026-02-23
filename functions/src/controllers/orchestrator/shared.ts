@@ -7,6 +7,7 @@ import * as functions from "firebase-functions";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore } from "firebase-admin/firestore";
 import { getCors, getConfig } from "../../lib/serviceFactory";
+import { getSystemSettings } from "../../services/configService";
 import { OrchestratorConfig } from "../../orchestrator/types";
 
 // Region sabiti
@@ -29,6 +30,7 @@ export { functions };
  */
 export async function getOrchestratorConfig(): Promise<OrchestratorConfig> {
   const config = await getConfig();
+  const systemSettings = await getSystemSettings();
 
   // Reve API key'i secret'tan al (yoksa boş string)
   let reveKey = "";
@@ -39,13 +41,17 @@ export async function getOrchestratorConfig(): Promise<OrchestratorConfig> {
     console.log("[Config] REVE_API_KEY not configured, using Gemini for image generation");
   }
 
+  // Provider seçimi: Reve (key varsa) veya Gemini (varsayılan)
+  const imageProvider: "gemini" | "reve" = reveKey ? "reve" : "gemini";
+
   return {
     geminiApiKey: config.gemini.apiKey,
     geminiModel: "gemini-3-pro-image-preview",
-    // Reve entegrasyonu - API key varsa aktif
+    // Reve entegrasyonu
     reveApiKey: reveKey || undefined,
     reveVersion: "latest",
-    imageProvider: reveKey ? "reve" : "gemini",
+    // Provider seçimi
+    imageProvider,
     qualityThreshold: 7,
     maxRetries: 3,
     telegramBotToken: config.telegram?.botToken || "",
@@ -53,6 +59,11 @@ export async function getOrchestratorConfig(): Promise<OrchestratorConfig> {
     approvalTimeout: config.telegram?.approvalTimeout || 60,
     timezone: "Europe/Istanbul",
     scheduleBuffer: 30,
+    // Prompt Optimizer
+    promptOptimizerModel: systemSettings?.promptOptimizerModel || "none",
+    anthropicApiKey: systemSettings?.anthropicApiKey || undefined,
+    openaiApiKey: systemSettings?.openaiApiKey || undefined,
+    openaiBaseUrl: systemSettings?.openaiBaseUrl || undefined,
   };
 }
 

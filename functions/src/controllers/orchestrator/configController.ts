@@ -434,12 +434,24 @@ export const getSystemSettingsConfig = functions
     const corsHandler = await getCors();
     corsHandler(request, response, async () => {
       try {
-        // ConfigService üzerinden oku (cache'li)
+        // fresh=1 query param gelirse cache'i bypass et
+        if (request.query.fresh === "1") {
+          clearConfigCache();
+        }
         const systemSettings = await getSystemSettings();
+
+        // API key'leri maskele — frontend'e tam key gönderilmez
+        const safeSettings = { ...systemSettings } as Record<string, unknown>;
+        if (safeSettings.anthropicApiKey && typeof safeSettings.anthropicApiKey === "string") {
+          safeSettings.anthropicApiKey = "●●●●" + (safeSettings.anthropicApiKey as string).slice(-4);
+        }
+        if (safeSettings.openaiApiKey && typeof safeSettings.openaiApiKey === "string") {
+          safeSettings.openaiApiKey = "●●●●" + (safeSettings.openaiApiKey as string).slice(-4);
+        }
 
         response.json({
           success: true,
-          data: systemSettings,
+          data: safeSettings,
         });
       } catch (error) {
         errorResponse(response, error, "getSystemSettingsConfig");
@@ -554,9 +566,41 @@ export const updateSystemSettingsConfig = functions
           delete updates.textModel; // Eski admin panel'den gelebilir, sessizce ignore et
         }
 
+        // Validasyon: promptOptimizerModel
+        if (updates.promptOptimizerModel !== undefined) {
+          const allowedOptimizerModels = [
+            "none",
+            "gemini-2.0-flash",
+            "gemini-2.5-flash-preview-05-20",
+            "claude-haiku-4-5-20251001",
+            "claude-sonnet-4-6",
+            "gpt-4o-mini",
+            "deepseek-chat",
+          ];
+          if (!allowedOptimizerModels.includes(updates.promptOptimizerModel)) {
+            response.status(400).json({
+              success: false,
+              error: `Geçersiz optimizer model: ${updates.promptOptimizerModel}`,
+            });
+            return;
+          }
+        }
+
+        // Validasyon: API key'ler — boş string veya min 10 karakter
+        if (updates.anthropicApiKey !== undefined && updates.anthropicApiKey !== "" && updates.anthropicApiKey.length < 10) {
+          response.status(400).json({ success: false, error: "Geçersiz Anthropic API key" });
+          return;
+        }
+        if (updates.openaiApiKey !== undefined && updates.openaiApiKey !== "" && updates.openaiApiKey.length < 10) {
+          response.status(400).json({ success: false, error: "Geçersiz OpenAI API key" });
+          return;
+        }
+
         // Validasyon: imageModel (izin verilen modeller)
         if (updates.imageModel !== undefined) {
-          const allowedImageModels = ["gemini-3-pro-image-preview"];
+          const allowedImageModels = [
+            "gemini-3-pro-image-preview",
+          ];
           if (typeof updates.imageModel !== "string" || !allowedImageModels.includes(updates.imageModel)) {
             response.status(400).json({
               success: false,
@@ -702,7 +746,9 @@ export const seedGeminiTerminology = functions
         if (settingsDoc.exists) {
           const modelData = settingsDoc.data() || {};
           const modelUpdates: Record<string, any> = {};
-          const validImageModels = ["gemini-3-pro-image-preview"];
+          const validImageModels = [
+            "gemini-3-pro-image-preview",
+          ];
           // textModel varsa kaldır
           if (modelData.textModel) {
             const { FieldValue: FV } = await import("firebase-admin/firestore");

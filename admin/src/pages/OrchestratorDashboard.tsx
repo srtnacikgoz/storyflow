@@ -561,7 +561,9 @@ export default function OrchestratorDashboard() {
 
                 {/* Asset Havuzu */}
                 <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-2">Asset Havuzu <span className="font-normal text-gray-400">— tıklayarak değiştir</span></div>
+                  <div className="text-xs font-medium text-gray-500 mb-2">
+                    Referans Görseller <span className="font-normal text-gray-400">— 4 görsel Gemini'ye gider, diğerleri sadece metin</span>
+                  </div>
                   <div className="grid grid-cols-4 gap-2">
                     {([
                       // Ürün kartı (sabit — slot dışı, tıklanamaz)
@@ -589,12 +591,25 @@ export default function OrchestratorDashboard() {
                             { slotKey: "drinkware" as string | null, label: "Fincan", total: preFlightData.assets.cups?.total || 0, preferred: preFlightData.assets.cups?.preferred, tags: preFlightData.scenario.preferredTags?.cup, preview: preFlightData.assets.cups?.preview, matchDetails: preFlightData.assets.cups?.matchDetails, category: "props" as string | undefined, subType: "cups" as string | undefined },
                           ]
                       ),
-                    ] as Array<{ slotKey: string | null; label: string; total: number; preferred: number | undefined; tags: string[] | undefined; preview: { id: string; filename: string; url: string; tags: string[] } | undefined; matchDetails: { bestScore: string; matchedTags: string[]; missedTags: string[]; bestAsset?: { id: string; filename: string; url: string; tags: string[] } } | undefined; category: string | undefined; subType: string | undefined }>).map((item) => {
+                    ] as Array<{ slotKey: string | null; label: string; total: number; preferred: number | undefined; tags: string[] | undefined; preview: { id: string; filename: string; url: string; tags: string[] } | undefined; matchDetails: { bestScore: string; matchedTags: string[]; missedTags: string[]; bestAsset?: { id: string; filename: string; url: string; tags: string[] } } | undefined; category: string | undefined; subType: string | undefined }>)
+                    // Referans görsel olarak gönderilen slot'lar önce, sadece metin olanlar sonra
+                    .sort((a, b) => {
+                      const refSlots = new Set([null, "surface", "dish", "drinkware"]); // null = ürün
+                      const aIsRef = refSlots.has(a.slotKey);
+                      const bIsRef = refSlots.has(b.slotKey);
+                      if (aIsRef && !bIsRef) return -1;
+                      if (!aIsRef && bIsRef) return 1;
+                      return 0;
+                    })
+                    .map((item) => {
                       const isNone = item.tags?.includes("__none__");
                       const activeTags = item.tags?.filter(t => t !== "__none__") || [];
                       const override = item.slotKey ? assetOverrides[item.slotKey] : undefined;
                       const isOverridden = !!override;
                       const isClickable = !!item.slotKey && !isNone;
+                      // Referans görsel olarak Gemini'ye gönderilen slot'lar (product + table + cup)
+                      const isReferenceImage = item.slotKey === null || item.slotKey === "surface" || item.slotKey === "dish" || item.slotKey === "drinkware";
+                      const isTextOnly = !isReferenceImage && !isNone;
                       // Eşleşme durumu renk sınıfı
                       const matchBorderClass = isOverridden
                         ? "border-blue-400 ring-1 ring-blue-200"
@@ -611,11 +626,19 @@ export default function OrchestratorDashboard() {
                       return (
                         <div
                           key={item.label}
-                          className={`bg-white rounded-lg p-2 border ${isNone ? "opacity-50 bg-gray-50" : matchBorderClass} ${isClickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""} relative`}
+                          className={`bg-white rounded-lg p-2 border ${isNone ? "opacity-50 bg-gray-50" : isTextOnly ? "opacity-60 border-dashed border-gray-300" : matchBorderClass} ${isClickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""} relative`}
                           onClick={isClickable ? () => openAssetPicker(item.slotKey!, item.label, item.category) : undefined}
                         >
+                          {/* Text-only badge */}
+                          {isTextOnly && !isNone && (
+                            <div className="absolute -top-1.5 -right-1.5 z-10">
+                              <span className="text-[9px] bg-gray-400 text-white px-1.5 py-0.5 rounded-full font-medium shadow-sm">
+                                Metin
+                              </span>
+                            </div>
+                          )}
                           {/* Override badge */}
-                          {isOverridden && (
+                          {isOverridden && !isTextOnly && (
                             <div className="absolute -top-1.5 -right-1.5 z-10">
                               <span className="text-[9px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-medium shadow-sm">
                                 Degistirildi

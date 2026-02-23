@@ -10,7 +10,7 @@
 /**
  * AI Service Provider
  */
-export type AIProvider = "gemini";
+export type AIProvider = "gemini" | "reve" | "claude" | "openai-compatible";
 
 /**
  * AI Log Stage - Orchestrator pipeline aşamaları

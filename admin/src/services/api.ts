@@ -2175,6 +2175,10 @@ class ApiService {
     cacheTTLMinutes: number;
     textModel?: string;
     imageModel: string;
+    promptOptimizerModel?: string;
+    anthropicApiKey?: string;
+    openaiApiKey?: string;
+    openaiBaseUrl?: string;
     updatedAt: number;
     updatedBy?: string;
   }> {
@@ -2189,10 +2193,14 @@ class ApiService {
         cacheTTLMinutes: number;
         textModel: string;
         imageModel: string;
+        promptOptimizerModel?: string;
+        anthropicApiKey?: string;
+        openaiApiKey?: string;
+        openaiBaseUrl?: string;
         updatedAt: number;
         updatedBy?: string;
       };
-    }>("getSystemSettingsConfig");
+    }>("getSystemSettingsConfig?fresh=1");
     return response.data;
   }
 
@@ -2208,6 +2216,10 @@ class ApiService {
     cacheTTLMinutes?: number;
     textModel?: string;
     imageModel?: string;
+    promptOptimizerModel?: string;
+    anthropicApiKey?: string;
+    openaiApiKey?: string;
+    openaiBaseUrl?: string;
   }): Promise<void> {
     await this.fetch<{ success: boolean }>("updateSystemSettingsConfig", {
       method: "POST",

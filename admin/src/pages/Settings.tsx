@@ -118,6 +118,15 @@ export default function Settings() {
   const [imageModel, setImageModel] = useState<string>("gemini-3-pro-image-preview");
   const [modelSaving, setModelSaving] = useState(false);
 
+  // Prompt Optimizer
+  const [promptOptimizerModel, setPromptOptimizerModel] = useState<string>("none");
+  const [anthropicApiKey, setAnthropicApiKey] = useState<string>("");
+  const [openaiApiKey, setOpenaiApiKey] = useState<string>("");
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState<string>("");
+  const [hasAnthropicKey, setHasAnthropicKey] = useState(false);
+  const [hasOpenaiKey, setHasOpenaiKey] = useState(false);
+  const [optimizerSaving, setOptimizerSaving] = useState(false);
+
   // Business Context
   const [businessContext, setBusinessContext] = useState<BusinessContext | null>(null);
   const [businessContextLoading, setBusinessContextLoading] = useState(false);
@@ -330,6 +339,11 @@ export default function Settings() {
       const settings = await api.getSystemSettings();
       setSchedulerEnabled(settings.schedulerEnabled);
       if (settings.imageModel) setImageModel(settings.imageModel);
+      // Prompt Optimizer
+      if (settings.promptOptimizerModel) setPromptOptimizerModel(settings.promptOptimizerModel);
+      if (settings.openaiBaseUrl) setOpenaiBaseUrl(settings.openaiBaseUrl);
+      setHasAnthropicKey(!!settings.anthropicApiKey);
+      setHasOpenaiKey(!!settings.openaiApiKey);
     } catch (err) {
       console.error("[Settings] Scheduler durumu yüklenemedi:", err);
     }
@@ -399,6 +413,27 @@ export default function Settings() {
       console.error("[Settings] Model ayarları kaydedilemedi:", err);
     } finally {
       setModelSaving(false);
+    }
+  };
+
+  // Prompt Optimizer kaydet
+  const handleSaveOptimizer = async () => {
+    setOptimizerSaving(true);
+    try {
+      const payload: Record<string, string> = { promptOptimizerModel };
+      if (anthropicApiKey) payload.anthropicApiKey = anthropicApiKey;
+      if (openaiApiKey) payload.openaiApiKey = openaiApiKey;
+      if (openaiBaseUrl) payload.openaiBaseUrl = openaiBaseUrl;
+      await api.updateSystemSettings(payload);
+      // Input'ları temizle, key'in var olduğunu işaretle
+      if (anthropicApiKey) { setAnthropicApiKey(""); setHasAnthropicKey(true); }
+      if (openaiApiKey) { setOpenaiApiKey(""); setHasOpenaiKey(true); }
+      alert("Prompt Optimizer ayarları kaydedildi!");
+    } catch (err) {
+      console.error("[Settings] Optimizer ayarları kaydedilemedi:", err);
+      alert("Kaydetme hatası: " + (err instanceof Error ? err.message : "Bilinmeyen hata"));
+    } finally {
+      setOptimizerSaving(false);
     }
   };
 
@@ -559,7 +594,7 @@ export default function Settings() {
               <option value="gemini-3-pro-image-preview">Gemini 3 Pro Image — En kaliteli ($0.04)</option>
             </select>
             <p className="text-xs text-gray-500 mt-1">
-              Pipeline'daki tek AI modeli — görsel üretim + admin text helper
+              Gemini: Multimodal generateContent, 6+ referans görsel destekler
             </p>
           </div>
         </div>
@@ -568,6 +603,104 @@ export default function Settings() {
           <p className="text-sm text-green-800">
             <strong>Sadeleştirilmiş Pipeline:</strong> Text model kaldırıldı. Senaryo seçimi kural bazlı, prompt template bazlı. Tek AI çağrısı: görsel üretim.
           </p>
+        </div>
+      </div>
+
+      {/* Prompt Optimizer */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">Prompt Optimizer</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Template prompt'u görsel üretim öncesi AI ile optimize eder. Güvenlik filtresi bloklamalarını azaltır.
+            </p>
+          </div>
+          <button
+            onClick={handleSaveOptimizer}
+            disabled={optimizerSaving}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
+          >
+            {optimizerSaving ? "Kaydediliyor..." : "Kaydet"}
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Optimizer Modeli
+            </label>
+            <select
+              value={promptOptimizerModel}
+              onChange={(e) => setPromptOptimizerModel(e.target.value)}
+              className="w-full p-2 border rounded-lg text-sm"
+            >
+              <option value="none">Kapalı — template direkt gider</option>
+              <optgroup label="Gemini">
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash (~$0.001)</option>
+                <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash (~$0.002)</option>
+              </optgroup>
+              <optgroup label="Claude">
+                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (~$0.002)</option>
+                <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (~$0.008)</option>
+              </optgroup>
+              <optgroup label="OpenAI Compatible">
+                <option value="gpt-4o-mini">GPT-4o Mini (~$0.001)</option>
+                <option value="deepseek-chat">DeepSeek Chat (~$0.0005)</option>
+              </optgroup>
+            </select>
+          </div>
+
+          {/* Claude seçiliyse Anthropic API Key */}
+          {promptOptimizerModel.startsWith("claude") && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Anthropic API Key
+              </label>
+              {hasAnthropicKey && (
+                <p className="text-xs text-green-600 mb-1">API key tanımlı</p>
+              )}
+              <input
+                type="password"
+                placeholder={hasAnthropicKey ? "Yeni key girmek için yazın..." : "sk-ant-..."}
+                value={anthropicApiKey}
+                onChange={(e) => setAnthropicApiKey(e.target.value)}
+                className="w-full p-2 border rounded-lg text-sm"
+              />
+            </div>
+          )}
+
+          {/* OpenAI-compatible seçiliyse */}
+          {(promptOptimizerModel.startsWith("gpt") || promptOptimizerModel.startsWith("deepseek")) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                OpenAI API Key
+              </label>
+              {hasOpenaiKey && (
+                <p className="text-xs text-green-600 mb-1">API key tanımlı</p>
+              )}
+              <input
+                type="password"
+                placeholder={hasOpenaiKey ? "Yeni key girmek için yazın..." : "sk-..."}
+                value={openaiApiKey}
+                onChange={(e) => setOpenaiApiKey(e.target.value)}
+                className="w-full p-2 border rounded-lg text-sm mb-2"
+              />
+              {promptOptimizerModel === "deepseek-chat" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Base URL
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://api.deepseek.com/v1"
+                    value={openaiBaseUrl}
+                    onChange={(e) => setOpenaiBaseUrl(e.target.value)}
+                    className="w-full p-2 border rounded-lg text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

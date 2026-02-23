@@ -12,6 +12,7 @@ import { RulesService } from "./rulesService";
 import { FeedbackService } from "../services/feedbackService";
 import { AIRulesService } from "../services/aiRulesService";
 import { AILogService } from "../services/aiLogService";
+import { createPromptOptimizer } from "../services/promptOptimizer";
 import { getFixedAssets, getAssetSelectionConfig, getProductSlotDefaults, getSlotDefinitions, getSystemSettings } from "../services/configService";
 import * as categoryService from "../services/categoryService";
 import {
@@ -104,9 +105,9 @@ export class Orchestrator {
         apiKey: config.reveApiKey,
         version: config.reveVersion || "latest",
       });
-      console.log(`[Orchestrator] v2.2.0 - Image Provider: REVE (${config.reveVersion || "latest"})`);
+      console.log(`[Orchestrator] v2.3.0 - Image Provider: REVE (${config.reveVersion || "latest"})`);
     } else {
-      console.log(`[Orchestrator] v2.2.0 - Image Provider: GEMINI (gemini-3-pro-image-preview)`);
+      console.log(`[Orchestrator] v2.3.0 - Image Provider: GEMINI (gemini-3-pro-image-preview)`);
     }
 
     console.log(`[Orchestrator] Pipeline: sadece image model (text model kaldırıldı)`);
@@ -166,14 +167,33 @@ export class Orchestrator {
 
     // Config'den image model seçimini oku (deploy gerektirmeden değiştirilebilir)
     const systemSettings = await getSystemSettings();
-    const validImageModels = ["gemini-3-pro-image-preview"];
+    const validImageModels = [
+      "gemini-3-pro-image-preview",
+    ];
     const rawImageModel = systemSettings.imageModel || "gemini-3-pro-image-preview";
-    const imageModel = (validImageModels.includes(rawImageModel) ? rawImageModel : "gemini-3-pro-image-preview") as import("../services/gemini").GeminiModel;
+    const imageModel = validImageModels.includes(rawImageModel) ? rawImageModel : "gemini-3-pro-image-preview";
+
+    // Gemini model'ini güncelle
     this.gemini = new GeminiService({
       apiKey: this.config.geminiApiKey,
-      imageModel,
+      imageModel: imageModel as import("../services/gemini").GeminiModel,
     });
-    console.log(`[Orchestrator] Image model from config: ${imageModel}`);
+    console.log(`[Orchestrator] Image model from config: ${imageModel} (GEMINI)`);
+
+    // Prompt Optimizer ayarını runtime'da oku (deploy gerektirmeden değiştirilebilir)
+    if (systemSettings.promptOptimizerModel) {
+      this.config.promptOptimizerModel = systemSettings.promptOptimizerModel;
+    }
+    if (systemSettings.anthropicApiKey) {
+      this.config.anthropicApiKey = systemSettings.anthropicApiKey;
+    }
+    if (systemSettings.openaiApiKey) {
+      this.config.openaiApiKey = systemSettings.openaiApiKey;
+    }
+    if (systemSettings.openaiBaseUrl) {
+      this.config.openaiBaseUrl = systemSettings.openaiBaseUrl;
+    }
+    console.log(`[Orchestrator] Prompt optimizer: ${this.config.promptOptimizerModel || "none"}`);
 
     // Benzersiz pipeline ID oluştur (AI loglarını gruplamak için)
     const pipelineId = slotId
@@ -854,6 +874,46 @@ export class Orchestrator {
               type: "product",
               reason: "compositionConfig",
             },
+            ...(result.assetSelection.plate ? {
+              plate: {
+                id: result.assetSelection.plate.id,
+                name: result.assetSelection.plate.filename,
+                filename: result.assetSelection.plate.filename,
+                type: "plate",
+              },
+            } : {}),
+            ...(result.assetSelection.table ? {
+              table: {
+                id: result.assetSelection.table.id,
+                name: result.assetSelection.table.filename,
+                filename: result.assetSelection.table.filename,
+                type: "table",
+              },
+            } : {}),
+            ...(result.assetSelection.cup ? {
+              cup: {
+                id: result.assetSelection.cup.id,
+                name: result.assetSelection.cup.filename,
+                filename: result.assetSelection.cup.filename,
+                type: "cup",
+              },
+            } : {}),
+            ...(result.assetSelection.napkin ? {
+              napkin: {
+                id: result.assetSelection.napkin.id,
+                name: result.assetSelection.napkin.filename,
+                filename: result.assetSelection.napkin.filename,
+                type: "napkin",
+              },
+            } : {}),
+            ...(result.assetSelection.cutlery ? {
+              cutlery: {
+                id: result.assetSelection.cutlery.id,
+                name: result.assetSelection.cutlery.filename,
+                filename: result.assetSelection.cutlery.filename,
+                type: "cutlery",
+              },
+            } : {}),
           },
         },
       });
@@ -1235,7 +1295,75 @@ export class Orchestrator {
             promptBuildingSteps: basePromptResult.promptBuildingSteps,
           },
         });
-        console.log(`[Orchestrator] Prompt built (${basePromptResult.promptBuildingSteps?.length || 0} steps) — AI optimizasyonu kaldırıldı`);
+        console.log(`[Orchestrator] Prompt built (${basePromptResult.promptBuildingSteps?.length || 0} steps)`);
+
+        // ==========================================
+        // STAGE 3.5: PROMPT OPTIMIZATION (opsiyonel)
+        // ==========================================
+        if (this.config.promptOptimizerModel && this.config.promptOptimizerModel !== "none") {
+          await this.checkCancellation(slotId);
+          console.log(`[Orchestrator] Stage 3.5: Prompt Optimization (${this.config.promptOptimizerModel})`);
+          status.currentStage = "prompt_optimization";
+
+          const optimizeStart = Date.now();
+          try {
+            const optimizer = createPromptOptimizer(this.config.promptOptimizerModel, {
+              geminiApiKey: this.config.geminiApiKey,
+              anthropicApiKey: this.config.anthropicApiKey,
+              openaiApiKey: this.config.openaiApiKey,
+              openaiBaseUrl: this.config.openaiBaseUrl,
+            });
+
+            const optimizeResult = await optimizer.optimize({
+              rawPrompt: result.optimizedPrompt.mainPrompt,
+              negativePrompt: result.optimizedPrompt.negativePrompt,
+              metadata: {},
+            });
+
+            // Log
+            await AILogService.logGeminiDetailed("prompt-optimization", {
+              model: this.config.promptOptimizerModel,
+              userPrompt: result.optimizedPrompt.mainPrompt,
+              negativePrompt: result.optimizedPrompt.negativePrompt,
+              status: "success",
+              cost: optimizeResult.cost,
+              durationMs: Date.now() - optimizeStart,
+              pipelineId,
+              slotId,
+              productType,
+              decisionDetails: {
+                promptDetails: {
+                  mainPrompt: optimizeResult.optimizedPrompt,
+                  negativePrompt: optimizeResult.optimizedNegativePrompt,
+                  customizations: optimizeResult.changes,
+                },
+              },
+            });
+
+            // Prompt'ları güncelle
+            result.optimizedPrompt.mainPrompt = optimizeResult.optimizedPrompt;
+            result.optimizedPrompt.negativePrompt = optimizeResult.optimizedNegativePrompt;
+
+            console.log(`[Orchestrator] Prompt optimized (${optimizeResult.changes.length} changes, ${Date.now() - optimizeStart}ms)`);
+          } catch (err) {
+            // Soft fail — orijinal prompt ile devam et
+            console.warn(`[Orchestrator] Prompt optimization failed, continuing with original:`, err);
+            await AILogService.logGeminiDetailed("prompt-optimization", {
+              model: this.config.promptOptimizerModel,
+              userPrompt: result.optimizedPrompt.mainPrompt,
+              status: "error",
+              error: err instanceof Error ? err.message : String(err),
+              durationMs: Date.now() - optimizeStart,
+              pipelineId,
+              slotId,
+              productType,
+            });
+          }
+
+          status.completedStages.push("prompt_optimization");
+        } else {
+          console.log("[Orchestrator] Prompt optimization: kapalı (model=none)");
+        }
 
         // ==========================================
         // STAGE 4: IMAGE GENERATION (TEK AI çağrısı — with retry on block)
@@ -1262,12 +1390,11 @@ export class Orchestrator {
             // Asset objelerini doğrudan gönderiyoruz - Cloudinary URL varsa otomatik kullanılacak
             const referenceImages: Array<{ base64: string; mimeType: string; label: string; description?: string }> = [];
 
-            // Basit referans asset'leri yükle (plate, table, napkin, cutlery)
+            // Referans görsel olarak table + plate gönder (product + table + plate + cup = 4 görsel)
+            // Napkin, cutlery prompt'ta text olarak tarif edilir — görsel token tasarrufu
             const simpleRefs: Array<{ asset: Asset | undefined; label: string }> = [
               { asset: result.assetSelection!.plate, label: "plate" },
               { asset: result.assetSelection!.table, label: "table" },
-              { asset: result.assetSelection!.napkin, label: "napkin" },
-              { asset: result.assetSelection!.cutlery, label: "cutlery" },
             ];
             for (const { asset, label } of simpleRefs) {
               if (asset) {
@@ -1332,7 +1459,23 @@ export class Orchestrator {
               referenceImages.push({ base64: cupBase64, mimeType: "image/png", label: "cup", description: cupDescription || undefined });
             }
 
-            console.log(`[Orchestrator] ${referenceImages.length} reference images loaded for ${this.imageProvider.toUpperCase()}`);
+            // Gönderilen referans görsellerin detaylı logunu tut (product + plate + table + cup = 4 görsel)
+            const referenceImageDetails = [
+              { type: "product", id: productAsset?.id, filename: productAsset?.filename },
+              ...(result.assetSelection!.plate ? [{ type: "plate", id: result.assetSelection!.plate.id, filename: result.assetSelection!.plate.filename }] : []),
+              ...(result.assetSelection!.table ? [{ type: "table", id: result.assetSelection!.table.id, filename: result.assetSelection!.table.filename }] : []),
+              ...(result.assetSelection!.cup ? [{ type: "cup", id: result.assetSelection!.cup.id, filename: result.assetSelection!.cup.filename }] : []),
+            ];
+            console.log(`[Orchestrator] ${referenceImages.length} reference images loaded for ${this.imageProvider.toUpperCase()}: ${referenceImageDetails.map(r => `${r.type}=${r.filename}`).join(", ")}`);
+
+            // Referans görsel bilgilerini pipeline context'e aktar (loglama için)
+            const pipelineContextForImages = {
+              pipelineId,
+              slotId,
+              productType,
+              referenceImages: referenceImageDetails,
+            };
+            this.gemini.setPipelineContext(pipelineContextForImages);
 
             // Görsel üret (Reve veya Gemini)
             let imageResult: { imageBase64: string; mimeType: string; model: string; cost: number };

@@ -76,9 +76,16 @@ export class AILogService {
     pipelineId?: string;
     slotId?: string;
     productType?: string;
+    referenceImages?: Array<{ type: string; id: string; filename: string }>;
   }): Promise<string> {
+    // Provider'ı model adından otomatik belirle
+    const provider = data.model.startsWith("reve") ? "reve" as const
+      : data.model.startsWith("claude") ? "claude" as const
+      : data.model.startsWith("gpt") || data.model.startsWith("deepseek") ? "openai-compatible" as const
+      : "gemini" as const;
+
     return this.createLog({
-      provider: "gemini",
+      provider,
       stage,
       model: data.model,
       userPrompt: data.userPrompt,
@@ -92,6 +99,18 @@ export class AILogService {
       pipelineId: data.pipelineId,
       slotId: data.slotId,
       productType: data.productType,
+      ...(data.referenceImages ? {
+        decisionDetails: {
+          selectedAssets: Object.fromEntries(
+            data.referenceImages.map(r => [r.type, {
+              id: r.id,
+              name: r.filename,
+              filename: r.filename,
+              type: r.type,
+            }])
+          ),
+        },
+      } : {}),
     });
   }
 
@@ -278,8 +297,13 @@ export class AILogService {
       };
     };
   }): Promise<string> {
+    const provider = data.model.startsWith("reve") ? "reve" as const
+      : data.model.startsWith("claude") ? "claude" as const
+      : data.model.startsWith("gpt") || data.model.startsWith("deepseek") ? "openai-compatible" as const
+      : "gemini" as const;
+
     return this.createLog({
-      provider: "gemini",
+      provider,
       stage,
       model: data.model,
       userPrompt: data.userPrompt,

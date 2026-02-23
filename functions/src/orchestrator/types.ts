@@ -756,6 +756,12 @@ export interface OrchestratorConfig {
   scheduleBuffer: number; // Dakika önce hazırla (default: 30)
 
   // beverageRules kaldırıldı — içecek seçimi artık etiket bazlı
+
+  // Prompt Optimizer
+  promptOptimizerModel?: string;    // "none" | model ID from MODEL_REGISTRY
+  anthropicApiKey?: string;         // Claude modelleri için
+  openaiApiKey?: string;            // OpenAI-compatible modeller için
+  openaiBaseUrl?: string;           // DeepSeek/MiniMax custom endpoint
 }
 
 // ==========================================
@@ -1890,6 +1896,12 @@ export interface FirestoreSystemSettingsConfig {
   // true: Cloudinary URL varsa Cloudinary'den yükle (tercih)
   // false: Her zaman Firebase Storage kullan (rollback)
   useCloudinary?: boolean; // Default: true
+
+  // Prompt Optimizer
+  promptOptimizerModel?: string;    // "none" | model ID
+  anthropicApiKey?: string;         // Firestore'da saklanacak
+  openaiApiKey?: string;            // Firestore'da saklanacak
+  openaiBaseUrl?: string;           // Custom endpoint
 
   // Meta
   updatedAt: number;
