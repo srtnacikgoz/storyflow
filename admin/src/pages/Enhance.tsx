@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "../services/api";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import BeforeAfterSlider from "../components/BeforeAfterSlider";
+import EnhancementGallery from "../components/EnhancementGallery";
 import type { EnhancementPreset, EnhancementStyle, EnhancementJob, EnhancementMode, PhotoAnalysis, UpscaleOption, UpscaleResult } from "../types";
 
 // Işık kalitesi badge renkleri
@@ -612,49 +613,8 @@ export default function Enhance() {
         </div>
       </div>
 
-      {/* Son İşler */}
-      {jobs.length > 0 && (
-        <div className="mt-8">
-          <h3 className="font-semibold text-gray-900 mb-3">Son İşler</h3>
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left px-4 py-2 text-gray-500 font-medium">Tarih</th>
-                  <th className="text-left px-4 py-2 text-gray-500 font-medium">Durum</th>
-                  <th className="text-left px-4 py-2 text-gray-500 font-medium">Ürün Tipi</th>
-                  <th className="text-left px-4 py-2 text-gray-500 font-medium">Skor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {jobs.slice(0, 10).map((job) => (
-                  <tr key={job.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-gray-600">
-                      {new Date(job.createdAt).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                        job.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-                        job.status === "failed" ? "bg-red-100 text-red-700" :
-                        job.status === "analyzing" ? "bg-blue-100 text-blue-700" :
-                        "bg-gray-100 text-gray-600"
-                      }`}>
-                        {job.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-gray-600 capitalize">
-                      {job.analysis?.productType || "—"}
-                    </td>
-                    <td className="px-4 py-2 text-gray-600">
-                      {job.analysis?.compositionScore ? `${job.analysis.compositionScore}/10` : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* Sonuç Galerisi */}
+      <EnhancementGallery jobs={jobs} />
     </div>
   );
 }
