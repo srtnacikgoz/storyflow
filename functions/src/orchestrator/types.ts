@@ -502,12 +502,12 @@ export interface AssetSelection {
 }
 
 /**
- * @deprecated El desteği kaldırıldı. Geriye uyumluluk için tutulur.
+ * @deprecated Eski el stili sistemi. Yeni kodda HandStyleDefinition kullanın.
  */
 export type HandStyleId = "elegant" | "bohemian" | "minimal" | "trendy" | "sporty";
 
 /**
- * @deprecated El desteği kaldırıldı. Geriye uyumluluk için tutulur.
+ * @deprecated Eski el stili sistemi. Yeni kodda HandStyleDefinition kullanın.
  */
 export interface HandStyle {
   id: HandStyleId;
@@ -516,6 +516,37 @@ export interface HandStyle {
   nailPolish: string;
   accessories: string;
   tattoo: string;
+}
+
+// ==========================================
+// HAND STYLE SYSTEM (Dinamik El Stilleri)
+// ==========================================
+
+/**
+ * El stili tanımı
+ * Firestore: global/config/settings/hand-styles
+ *
+ * Admin Panel > Ayarlar > El Stilleri'nden yönetilir.
+ * Senaryo bazında handStyleIds ile seçilebilir.
+ */
+export interface HandStyleDefinition {
+  id: string;           // "elegant-manicured"
+  label: string;        // "Bakımlı & Zarif"
+  geminiPrompt: string; // Gemini'ye gönderilecek el tanımı
+  category: string;     // "neutral" | "male" | "child"
+  tags: string[];       // Arama/filtreleme için etiketler
+  isActive: boolean;
+  order: number;
+}
+
+/**
+ * El stilleri konfigürasyonu
+ * Document: global/config/settings/hand-styles
+ */
+export interface HandStylesConfig {
+  styles: HandStyleDefinition[];
+  updatedAt: number;
+  updatedBy?: string;
 }
 
 /**
@@ -530,9 +561,8 @@ export interface Scenario {
   description: string; // Senaryo açıklaması (AI scene description için kullanılabilir)
 
   // === KOMPOZİSYON ALANLARI ===
-  /** @deprecated El desteği kaldırıldı. Eski Firestore verileri için opsiyonel tutulur. */
   includesHands?: boolean;
-  /** @deprecated El desteği kaldırıldı. */
+  handStyleIds?: string[]; // Seçili el stili ID'leri (boş = tüm aktif stillerden rastgele)
   handPose?: string;
   compositionEntry?: string;
 
@@ -560,6 +590,10 @@ export interface Scenario {
 
   // === GÖRSEL EFEKTLERİ ===
   shallowDepthOfField?: boolean;    // Ürün net, arka plan blur (bokeh efekti)
+
+  // === PATLATILMIŞ GÖRÜNÜM ===
+  isExplodedView?: boolean;           // Patlatılmış görünüm modu (deconstructed view)
+  explodedViewDescription?: string;   // Katman açıklaması (isExplodedView=true ise zorunlu)
 
   // === SLOT KONFİGÜRASYONU (CompositionTemplates'den taşındı) ===
   compositionSlots?: Record<string, SlotConfig>;  // Her slot için disabled/random
@@ -1903,6 +1937,9 @@ export interface FirestoreSystemSettingsConfig {
   openaiApiKey?: string;            // Firestore'da saklanacak
   openaiBaseUrl?: string;           // Custom endpoint
 
+  // Senaryo Yazıcı Model (admin panel senaryo açıklaması üretimi)
+  scenarioWriterModel?: string;     // "none" | model ID (gemini-*, claude-*)
+
   // Meta
   updatedAt: number;
   updatedBy?: string;
@@ -2295,3 +2332,52 @@ export const DEFAULT_PRODUCT_SLOT_DEFAULTS: Record<string, Record<string, boolea
   pastas: { surface: true, dish: true, drinkware: true, textile: true, decor: false },
   _default: { surface: true, dish: true, drinkware: true, textile: true, decor: false },
 };
+
+// ==========================================
+// PHOTO ENHANCEMENT TYPES
+// ==========================================
+
+/** Enhancement arka plan preset'i */
+export interface EnhancementPreset {
+  id: string;
+  displayName: string;
+  description?: string;
+  backgroundStyle: string;
+  backgroundPrompt: string;
+  shadowType: string;
+  shadowPrompt: string;
+  lightingDirection: string;
+  colorTemperature: string;
+  isActive: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Enhancement iş durumu */
+export type EnhancementJobStatus = "pending" | "analyzing" | "processing" | "completed" | "failed";
+
+/** AI fotoğraf analiz sonucu */
+export interface PhotoAnalysis {
+  productType: string;
+  surfaceProperties: string;
+  currentLighting: string;
+  currentBackground: string;
+  compositionScore: number;
+  suggestedPreset?: string;
+  notes?: string;
+}
+
+/** Enhancement iş kaydı */
+export interface EnhancementJob {
+  id: string;
+  originalImageUrl: string;
+  originalStoragePath: string;
+  analysis?: PhotoAnalysis;
+  selectedPresetId?: string;
+  enhancedImageUrl?: string;
+  status: EnhancementJobStatus;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+}

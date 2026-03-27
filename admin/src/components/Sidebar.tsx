@@ -1,13 +1,14 @@
 import { NavLink } from "react-router-dom";
 
-// Menü Grupları
+// Menü Grupları — tüm path'ler /admin prefix'li
 const menuGroups = [
   {
     title: "YÖNETİM",
     items: [
       {
-        path: "/",
+        path: "/admin",
         label: "Genel Bakış",
+        end: true,
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -16,7 +17,7 @@ const menuGroups = [
         ),
       },
       {
-        path: "/ai-monitor",
+        path: "/admin/ai-monitor",
         label: "AI Monitor",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -31,9 +32,8 @@ const menuGroups = [
     title: "KURULUM ADIMLARI",
     description: "Sırasıyla tamamlayın",
     items: [
-      // v3.0: Moods artık Senaryolar içinde (Mood + Scenario birleşik)
       {
-        path: "/scenarios",
+        path: "/admin/scenarios",
         label: "1. Senaryolar",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,7 +43,7 @@ const menuGroups = [
         ),
       },
       {
-        path: "/time-slots",
+        path: "/admin/time-slots",
         label: "2. Zaman Kuralları",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -58,7 +58,7 @@ const menuGroups = [
     title: "KAYNAKLAR",
     items: [
       {
-        path: "/assets",
+        path: "/admin/assets",
         label: "Görseller",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,7 +68,7 @@ const menuGroups = [
         ),
       },
       {
-        path: "/categories",
+        path: "/admin/categories",
         label: "Kategoriler",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,7 +78,7 @@ const menuGroups = [
         ),
       },
       {
-        path: "/styles",
+        path: "/admin/styles",
         label: "Stiller",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,7 +88,7 @@ const menuGroups = [
         ),
       },
       {
-        path: "/ai-rules",
+        path: "/admin/ai-rules",
         label: "AI Kuralları",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,7 +98,7 @@ const menuGroups = [
         ),
       },
       {
-        path: "/ai-terminology",
+        path: "/admin/ai-terminology",
         label: "AI Terminoloji",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,7 +113,7 @@ const menuGroups = [
     title: "ÜRETİM ARAÇLARI",
     items: [
       {
-        path: "/orchestrator",
+        path: "/admin/orchestrator",
         label: "İçerik Üretici",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,7 +123,17 @@ const menuGroups = [
         ),
       },
       {
-        path: "/prompt-studio",
+        path: "/admin/enhance",
+        label: "Fotoğraf İyileştir",
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+        ),
+      },
+      {
+        path: "/admin/prompt-studio",
         label: "Prompt Studio",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,7 +143,7 @@ const menuGroups = [
         ),
       },
       {
-        path: "/rule-engine",
+        path: "/admin/rule-engine",
         label: "Rule Engine",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,10 +155,25 @@ const menuGroups = [
     ]
   },
   {
+    title: "NOTLAR",
+    items: [
+      {
+        path: "/admin/ideas",
+        label: "Fikir Defteri",
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        ),
+      },
+    ]
+  },
+  {
     title: "SİSTEM",
     items: [
       {
-        path: "/settings",
+        path: "/admin/settings",
         label: "Ayarlar",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,7 +209,7 @@ export default function Sidebar() {
               </p>
               {group.description && (
                 <p className="px-3 mb-2 text-[10px] text-amber-600 font-medium italic">
-                  💡 {group.description}
+                  {group.description}
                 </p>
               )}
               <div className="space-y-1">
@@ -192,6 +217,7 @@ export default function Sidebar() {
                   <NavLink
                     key={item.path}
                     to={item.path}
+                    end={"end" in item ? item.end : undefined}
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 text-sm ${isActive
                         ? "bg-brand-blue/10 text-brand-blue font-semibold shadow-sm"

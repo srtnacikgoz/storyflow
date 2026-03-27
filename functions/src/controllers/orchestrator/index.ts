@@ -37,6 +37,7 @@ export {
   updateScenarioEndpoint,
   deleteScenarioEndpoint,
   generateScenarioDescription, // AI Writer
+  generateScenePreview, // Sahne Önizleme (4 varyasyon)
 } from "./scenarioController";
 
 // Pipeline Controller
@@ -97,6 +98,12 @@ export {
   // Product Slot Defaults
   getProductSlotDefaultsEndpoint,
   updateProductSlotDefaultsEndpoint,
+  // Hand Styles (Dinamik El Stilleri)
+  getHandStylesEndpoint,
+  updateHandStylesEndpoint,
+  // Landing Hero Config (Landing Page Görselleri)
+  getLandingHeroConfig,
+  updateLandingHeroConfig,
   // Prompt Studio
   getPromptStudioConfig,
   getPromptTemplateById,
@@ -189,3 +196,29 @@ export {
   updateCompositionTemplateEndpoint,
   deleteCompositionTemplateEndpoint,
 } from "./compositionController";
+
+// Ideas Controller (Fikir Defteri)
+export {
+  listIdeas,
+  createIdea,
+  updateIdea,
+  deleteIdea,
+} from "./ideasController";
+
+// Poster Controller
+export {
+  generatePoster,
+} from "./posterController";
+
+// Enhancement Controller (Fotoğraf İyileştirme)
+export {
+  listEnhancementPresets,
+  createEnhancementPreset,
+  updateEnhancementPreset,
+  deleteEnhancementPreset,
+  seedEnhancementPresets,
+  listEnhancementJobs,
+  createEnhancementJob,
+  getEnhancementJob,
+  analyzePhoto,
+} from "./enhancementController";

@@ -810,6 +810,9 @@ export interface OrchestratorDashboardStats {
     totalCost: number;
     totalCalls: number;
     geminiCalls: number;
+    totalInputTokens?: number;
+    totalOutputTokens?: number;
+    imageGenerationCount?: number;
   };
 }
 
@@ -1104,6 +1107,9 @@ export interface AIStats {
   avgDurationMs: number;
   byStage: Record<string, number>;
   errorCount: number;
+  totalInputTokens?: number;
+  totalOutputTokens?: number;
+  imageGenerationCount?: number;
 }
 
 // ==========================================
@@ -1488,4 +1494,47 @@ export interface CompositionConfig {
   sourcePresetId?: string;
 }
 
+// ==========================================
+// PHOTO ENHANCEMENT TYPES
+// ==========================================
 
+export interface EnhancementPreset {
+  id: string;
+  displayName: string;
+  description?: string;
+  backgroundStyle: string;
+  backgroundPrompt: string;
+  shadowType: string;
+  shadowPrompt: string;
+  lightingDirection: string;
+  colorTemperature: string;
+  isActive: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type EnhancementJobStatus = "pending" | "analyzing" | "processing" | "completed" | "failed";
+
+export interface PhotoAnalysis {
+  productType: string;
+  surfaceProperties: string;
+  currentLighting: string;
+  currentBackground: string;
+  compositionScore: number;
+  suggestedPreset?: string;
+  notes?: string;
+}
+
+export interface EnhancementJob {
+  id: string;
+  originalImageUrl: string;
+  originalStoragePath: string;
+  analysis?: PhotoAnalysis;
+  selectedPresetId?: string;
+  enhancedImageUrl?: string;
+  status: EnhancementJobStatus;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+}

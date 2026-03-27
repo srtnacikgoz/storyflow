@@ -55,6 +55,10 @@ import type {
   // Composition System
   SlotDefinitionsConfig,
   CompositionTemplate,
+  // Enhancement types
+  EnhancementPreset,
+  EnhancementJob,
+  PhotoAnalysis,
 } from "../types";
 
 // Firebase Functions base URL
@@ -117,7 +121,7 @@ class ApiService {
    */
   private async fetch<T>(
     endpoint: string,
-    options?: RequestInit
+    options?: RequestInit & { signal?: AbortSignal }
   ): Promise<T> {
     const response = await fetch(`${this.baseUrl}/${endpoint}`, {
       ...options,
@@ -808,7 +812,9 @@ class ApiService {
     scenarioId?: string,
     aspectRatio?: "1:1" | "3:4" | "9:16",
     isRandomMode?: boolean,
-    assetOverrides?: Record<string, { id: string; filename: string; url: string }>
+    assetOverrides?: Record<string, { id: string; filename: string; url: string }>,
+    disabledSlots?: string[],
+    preGeneratedImageBase64?: string
   ): Promise<{
     success: boolean;
     message: string;
@@ -821,6 +827,8 @@ class ApiService {
       aspectRatio?: string;
       isRandomMode?: boolean;
       compositionConfig?: { slots: Record<string, { state: string; assetId: string; source: string }> };
+      productOverrideId?: string;
+      preGeneratedImageBase64?: string;
     } = {};
     if (scenarioId) {
       body.scenarioId = scenarioId;
@@ -831,13 +839,34 @@ class ApiService {
     if (isRandomMode) {
       body.isRandomMode = true;
     }
+
     // Asset override'larını compositionConfig formatına çevir
+    const slots: Record<string, { state: string; assetId: string; source: string }> = {};
+
     if (assetOverrides && Object.keys(assetOverrides).length > 0) {
-      const slots: Record<string, { state: string; assetId: string; source: string }> = {};
       for (const [key, override] of Object.entries(assetOverrides)) {
-        slots[key] = { state: "manual", assetId: override.id, source: "override" };
+        if (key === "product") {
+          // Ürün override'ı ayrı alan olarak gönder
+          body.productOverrideId = override.id;
+        } else {
+          slots[key] = { state: "manual", assetId: override.id, source: "override" };
+        }
       }
+    }
+
+    // Disabled slot'ları compositionConfig'e ekle
+    if (disabledSlots && disabledSlots.length > 0) {
+      for (const slotKey of disabledSlots) {
+        slots[slotKey] = { state: "disabled", assetId: "", source: "override" };
+      }
+    }
+
+    if (Object.keys(slots).length > 0) {
       body.compositionConfig = { slots };
+    }
+
+    if (preGeneratedImageBase64) {
+      body.preGeneratedImageBase64 = preGeneratedImageBase64;
     }
 
     const response = await this.fetch<{
@@ -2081,6 +2110,36 @@ class ApiService {
   }
 
   /**
+   * AI Sahne Önizleme — Dashboard pre-flight modal'dan 4 varyasyon üret
+   * Referans asset'ler (masa, tabak, bardak) dahil edilir
+   */
+  async generateScenePreview(params: {
+    scenarioId: string;
+    compositionConfig?: { slots: Record<string, { state: string; assetId: string; source: string }> };
+    productOverrideId?: string;
+    aspectRatio?: string;
+    previewCount?: 1 | 2 | 4;
+  }, signal?: AbortSignal): Promise<{
+    previews: Array<{ imageBase64: string; mimeType: string } | null>;
+    productUsed: { id: string; filename: string };
+    successCount: number;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        previews: Array<{ imageBase64: string; mimeType: string } | null>;
+        productUsed: { id: string; filename: string };
+        successCount: number;
+      };
+    }>("generateScenePreview", {
+      method: "POST",
+      body: JSON.stringify(params),
+      signal,
+    });
+    return response.data;
+  }
+
+  /**
    * AI ile Senaryo açıklaması üret (Gemini)
    */
   async generateScenarioDescription(params: {
@@ -2179,6 +2238,7 @@ class ApiService {
     anthropicApiKey?: string;
     openaiApiKey?: string;
     openaiBaseUrl?: string;
+    scenarioWriterModel?: string;
     updatedAt: number;
     updatedBy?: string;
   }> {
@@ -2197,6 +2257,7 @@ class ApiService {
         anthropicApiKey?: string;
         openaiApiKey?: string;
         openaiBaseUrl?: string;
+        scenarioWriterModel?: string;
         updatedAt: number;
         updatedBy?: string;
       };
@@ -2220,6 +2281,7 @@ class ApiService {
     anthropicApiKey?: string;
     openaiApiKey?: string;
     openaiBaseUrl?: string;
+    scenarioWriterModel?: string;
   }): Promise<void> {
     await this.fetch<{ success: boolean }>("updateSystemSettingsConfig", {
       method: "POST",
@@ -2406,6 +2468,99 @@ class ApiService {
     await this.fetch<{ success: boolean }>("updateProductSlotDefaultsEndpoint", {
       method: "POST",
       body: JSON.stringify({ defaults }),
+    });
+  }
+
+  // ==========================================
+  // LANDING HERO CONFIG (Landing Page Görselleri)
+  // ==========================================
+
+  /**
+   * Landing page hero config'ini getir (public)
+   */
+  async getLandingHeroConfig(): Promise<{
+    collageSlots: Record<string, { imageUrl: string; label?: string }>;
+    resultImage?: { imageUrl: string; label?: string } | null;
+    updatedAt: number;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        collageSlots: Record<string, { imageUrl: string; label?: string }>;
+        resultImage?: { imageUrl: string; label?: string } | null;
+        updatedAt: number;
+      };
+    }>("getLandingHeroConfig");
+    return response.data;
+  }
+
+  /**
+   * Landing page hero config'ini güncelle (admin)
+   */
+  async updateLandingHeroConfig(updates: {
+    collageSlots?: Record<string, { imageUrl: string; label?: string } | null>;
+    resultImage?: { imageUrl: string; label?: string } | null;
+  }): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateLandingHeroConfig", {
+      method: "POST",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  // ==========================================
+  // HAND STYLES (Dinamik El Stilleri)
+  // ==========================================
+
+  /**
+   * El stillerini getir
+   */
+  async getHandStyles(): Promise<{
+    styles: Array<{
+      id: string;
+      label: string;
+      geminiPrompt: string;
+      category: string;
+      tags: string[];
+      isActive: boolean;
+      order: number;
+    }>;
+    updatedAt: number;
+    updatedBy?: string;
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        styles: Array<{
+          id: string;
+          label: string;
+          geminiPrompt: string;
+          category: string;
+          tags: string[];
+          isActive: boolean;
+          order: number;
+        }>;
+        updatedAt: number;
+        updatedBy?: string;
+      };
+    }>("getHandStylesEndpoint");
+    return response.data;
+  }
+
+  /**
+   * El stillerini güncelle
+   */
+  async updateHandStyles(styles: Array<{
+    id: string;
+    label: string;
+    geminiPrompt: string;
+    category: string;
+    tags: string[];
+    isActive: boolean;
+    order: number;
+  }>): Promise<void> {
+    await this.fetch<{ success: boolean }>("updateHandStylesEndpoint", {
+      method: "POST",
+      body: JSON.stringify({ styles }),
     });
   }
 
@@ -2627,6 +2782,111 @@ class ApiService {
     });
   }
 
+  // ==========================================
+  // Poster Operations
+  // ==========================================
+
+  /**
+   * Poster üret — Claude API (skill system prompt) + Gemini görsel üretimi
+   */
+  async generatePoster(params: {
+    productImageBase64?: string;
+    productImageUrl?: string;
+    productMimeType?: string;
+    posterType?: string;
+    title?: string;
+    subtitle?: string;
+    price?: string;
+    mood?: string;
+    additionalNotes?: string;
+  }): Promise<{
+    posterUrl: string;
+    posterBase64: string;
+    mimeType: string;
+    generatedPrompt: string;
+    cost: { claude: number; gemini: number; total: number };
+  }> {
+    const response = await this.fetch<{
+      success: boolean;
+      data: {
+        posterUrl: string;
+        posterBase64: string;
+        mimeType: string;
+        generatedPrompt: string;
+        cost: { claude: number; gemini: number; total: number };
+      };
+    }>("generatePoster", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+    return response.data;
+  }
+
+  // ==========================================
+  // Enhancement Preset API
+  // ==========================================
+
+  async getEnhancementPresets(activeOnly = false): Promise<EnhancementPreset[]> {
+    const params = activeOnly ? "?activeOnly=true" : "";
+    const res = await this.fetch<{ presets: EnhancementPreset[] }>(`listEnhancementPresets${params}`);
+    return res.presets;
+  }
+
+  async createEnhancementPreset(data: Partial<EnhancementPreset>): Promise<EnhancementPreset> {
+    const res = await this.fetch<{ preset: EnhancementPreset }>("createEnhancementPreset", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.preset;
+  }
+
+  async updateEnhancementPreset(id: string, data: Partial<EnhancementPreset>): Promise<void> {
+    await this.fetch(`updateEnhancementPreset?id=${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEnhancementPreset(id: string): Promise<void> {
+    await this.fetch(`deleteEnhancementPreset?id=${id}`, { method: "DELETE" });
+  }
+
+  async seedEnhancementPresets(): Promise<{ added: number; skipped: number }> {
+    const res = await this.fetch<{ added: number; skipped: number }>("seedEnhancementPresets", {
+      method: "POST",
+    });
+    return res;
+  }
+
+  // ==========================================
+  // Enhancement Job API
+  // ==========================================
+
+  async getEnhancementJobs(limit = 50): Promise<EnhancementJob[]> {
+    const res = await this.fetch<{ jobs: EnhancementJob[] }>(`listEnhancementJobs?limit=${limit}`);
+    return res.jobs;
+  }
+
+  async createEnhancementJob(data: { originalImageUrl: string; originalStoragePath: string }): Promise<EnhancementJob> {
+    const res = await this.fetch<{ job: EnhancementJob }>("createEnhancementJob", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.job;
+  }
+
+  async getEnhancementJob(id: string): Promise<EnhancementJob> {
+    const res = await this.fetch<{ job: EnhancementJob }>(`getEnhancementJob?id=${id}`);
+    return res.job;
+  }
+
+  async analyzePhoto(jobId: string, imageBase64: string, mimeType: string): Promise<PhotoAnalysis> {
+    const res = await this.fetch<{ analysis: PhotoAnalysis }>("analyzePhoto", {
+      method: "POST",
+      body: JSON.stringify({ jobId, imageBase64, mimeType }),
+    });
+    return res.analysis;
+  }
 }
 
 

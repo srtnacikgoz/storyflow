@@ -5,6 +5,9 @@ import Layout from "./components/Layout";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { LoadingOverlay } from "./components/LoadingOverlay";
 
+// Landing page (public)
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+
 // Lazy loaded pages - sadece ihtiyaç duyulduğunda yüklenir
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -22,6 +25,8 @@ const Styles = lazy(() => import("./pages/Styles"));
 const PromptStudio = lazy(() => import("./pages/PromptStudio"));
 const RuleEngine = lazy(() => import("./pages/RuleEngine"));
 const AITerminology = lazy(() => import("./pages/AITerminology"));
+const Ideas = lazy(() => import("./pages/Ideas"));
+const Enhance = lazy(() => import("./pages/Enhance"));
 // CompositionTemplates kaldırıldı — slot konfigürasyonu Senaryolar'a taşındı
 
 // Loading fallback component
@@ -41,7 +46,11 @@ function App() {
     <LoadingProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Layout />}>
+          {/* Public landing page */}
+          <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
+
+          {/* Admin panel (sidebar + authenticated) */}
+          <Route path="/admin" element={<Layout />}>
             <Route index element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
             {/* Orchestrator routes */}
@@ -57,6 +66,8 @@ function App() {
             <Route path="prompt-studio" element={<Suspense fallback={<PageLoader />}><PromptStudio /></Suspense>} />
             <Route path="rule-engine" element={<Suspense fallback={<PageLoader />}><RuleEngine /></Suspense>} />
             <Route path="ai-terminology" element={<Suspense fallback={<PageLoader />}><AITerminology /></Suspense>} />
+            <Route path="ideas" element={<Suspense fallback={<PageLoader />}><Ideas /></Suspense>} />
+            <Route path="enhance" element={<Suspense fallback={<PageLoader />}><Enhance /></Suspense>} />
             {/* composition-templates route kaldırıldı — slot konfigürasyonu Senaryolar'a taşındı */}
           </Route>
         </Routes>
