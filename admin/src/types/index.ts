@@ -1526,12 +1526,27 @@ export interface PhotoAnalysis {
   notes?: string;
 }
 
+export interface EnhancementStyle {
+  id: string;
+  displayName: string;
+  description?: string;
+  promptInstructions: string;
+  isActive: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type EnhancementMode = "full" | "enhance-only";
+
 export interface EnhancementJob {
   id: string;
   originalImageUrl: string;
   originalStoragePath: string;
   analysis?: PhotoAnalysis;
   selectedPresetId?: string;
+  selectedStyleId?: string;
+  enhancementMode?: EnhancementMode;
   enhancedImageUrl?: string;
   status: EnhancementJobStatus;
   error?: string;

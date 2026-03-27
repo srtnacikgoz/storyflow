@@ -3,7 +3,7 @@
  * Varsayılan arka plan ve iyileştirme preset'leri
  */
 
-import { EnhancementPreset } from "../types";
+import { EnhancementPreset, EnhancementStyle } from "../types";
 
 export const DEFAULT_ENHANCEMENT_PRESETS: Omit<EnhancementPreset, "createdAt" | "updatedAt">[] = [
   {
@@ -70,5 +70,44 @@ export const DEFAULT_ENHANCEMENT_PRESETS: Omit<EnhancementPreset, "createdAt" | 
     colorTemperature: "warm",
     isActive: true,
     order: 5,
+  },
+];
+
+/**
+ * Varsayılan Enhancement Stilleri (ışık/renk/mood)
+ * Matthew Vaughn DNA kuralları entegre
+ */
+export const DEFAULT_ENHANCEMENT_STYLES: Omit<EnhancementStyle, "createdAt" | "updatedAt">[] = [
+  {
+    id: "natural",
+    displayName: "Doğal",
+    description: "Minimal müdahale — sadece ışık ve renk düzeltme",
+    promptInstructions: "Minimal enhancement: correct white balance, slightly brighten dark areas, gentle sharpening. Keep the natural look — do NOT over-saturate or over-process. The photo should look like a well-lit version of itself.",
+    isActive: true,
+    order: 1,
+  },
+  {
+    id: "vivid",
+    displayName: "Canlı",
+    description: "Doygun renkler, yüksek kontrast — sosyal medya için optimum",
+    promptInstructions: "Vivid enhancement: boost color saturation by 20-30%, increase contrast, make textures POP. Golden crusts should GLOW, chocolate should look deep and rich. Colors should be vibrant but still realistic — not neon. High contrast between light and shadow areas.",
+    isActive: true,
+    order: 2,
+  },
+  {
+    id: "cinematic",
+    displayName: "Sinematik",
+    description: "Sıcak tonlar, shallow DoF hissi, filmsel kalite",
+    promptInstructions: "Cinematic enhancement: apply warm color grading (slight orange/amber shift in highlights, cool blues in shadows). Shallow depth of field feel with soft bokeh in background. Subtle film grain texture. Gentle highlight bloom on reflective surfaces. The image should feel like a still from a premium food commercial.",
+    isActive: true,
+    order: 3,
+  },
+  {
+    id: "clean",
+    displayName: "Temiz",
+    description: "Beyaz dengesi düzeltme, minimal işleme — e-ticaret için",
+    promptInstructions: "Clean enhancement: perfect white balance correction, remove any color cast, even lighting across the product. Crisp and sharp details. No mood or atmosphere — pure product representation. Suitable for e-commerce and catalog use.",
+    isActive: true,
+    order: 4,
   },
 ];

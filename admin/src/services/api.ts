@@ -57,7 +57,9 @@ import type {
   CompositionTemplate,
   // Enhancement types
   EnhancementPreset,
+  EnhancementStyle,
   EnhancementJob,
+  EnhancementMode,
   PhotoAnalysis,
 } from "../types";
 
@@ -2888,10 +2890,32 @@ class ApiService {
     return res.analysis;
   }
 
-  async enhancePhoto(jobId: string, presetId: string): Promise<{ enhancedImageUrl: string }> {
+  async enhancePhoto(params: {
+    jobId: string;
+    presetId?: string;
+    styleId?: string;
+    mode?: EnhancementMode;
+  }): Promise<{ enhancedImageUrl: string }> {
     const res = await this.fetch<{ enhancedImageUrl: string }>("enhancePhoto", {
       method: "POST",
-      body: JSON.stringify({ jobId, presetId }),
+      body: JSON.stringify(params),
+    });
+    return res;
+  }
+
+  // ==========================================
+  // Enhancement Style API
+  // ==========================================
+
+  async getEnhancementStyles(activeOnly = false): Promise<EnhancementStyle[]> {
+    const params = activeOnly ? "?activeOnly=true" : "";
+    const res = await this.fetch<{ styles: EnhancementStyle[] }>(`listEnhancementStyles${params}`);
+    return res.styles;
+  }
+
+  async seedEnhancementStyles(): Promise<{ added: number; skipped: number }> {
+    const res = await this.fetch<{ added: number; skipped: number }>("seedEnhancementStyles", {
+      method: "POST",
     });
     return res;
   }

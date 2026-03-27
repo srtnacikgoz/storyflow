@@ -222,4 +222,6 @@ export {
   getEnhancementJob,
   analyzePhoto,
   enhancePhoto,
+  listEnhancementStyles,
+  seedEnhancementStyles,
 } from "./enhancementController";

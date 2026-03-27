@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../services/api";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import type { EnhancementPreset, EnhancementJob, PhotoAnalysis } from "../types";
+import BeforeAfterSlider from "../components/BeforeAfterSlider";
+import type { EnhancementPreset, EnhancementStyle, EnhancementJob, EnhancementMode, PhotoAnalysis } from "../types";
 
 // Işık kalitesi badge renkleri
 const LIGHTING_COLORS: Record<string, string> = {
@@ -13,12 +14,15 @@ const LIGHTING_COLORS: Record<string, string> = {
 export default function Enhance() {
   // State
   const [presets, setPresets] = useState<EnhancementPreset[]>([]);
+  const [styles, setStyles] = useState<EnhancementStyle[]>([]);
   const [jobs, setJobs] = useState<EnhancementJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [currentJob, setCurrentJob] = useState<EnhancementJob | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
+  const [enhanceMode, setEnhanceMode] = useState<EnhancementMode>("full");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<PhotoAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +38,13 @@ export default function Enhance() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [presetsData, jobsData] = await Promise.all([
+      const [presetsData, stylesData, jobsData] = await Promise.all([
         api.getEnhancementPresets(),
+        api.getEnhancementStyles(),
         api.getEnhancementJobs(20),
       ]);
       setPresets(presetsData);
+      setStyles(stylesData);
       setJobs(jobsData);
     } catch (err) {
       setError("Veri yüklenirken hata oluştu");
@@ -52,8 +58,11 @@ export default function Enhance() {
   const handleSeedPresets = async () => {
     setSeedingPresets(true);
     try {
-      const result = await api.seedEnhancementPresets();
-      alert(`${result.added} preset eklendi, ${result.skipped} zaten vardı`);
+      const [presetResult, styleResult] = await Promise.all([
+        api.seedEnhancementPresets(),
+        api.seedEnhancementStyles(),
+      ]);
+      alert(`Preset: ${presetResult.added} eklendi. Stil: ${styleResult.added} eklendi.`);
       await loadData();
     } catch (err) {
       alert("Seed hatası: " + (err instanceof Error ? err.message : "Bilinmeyen hata"));
@@ -160,14 +169,20 @@ export default function Enhance() {
 
   // İyileştir
   const handleEnhance = async () => {
-    if (!currentJob || !selectedPreset) return;
+    if (!currentJob) return;
+    if (enhanceMode === "full" && !selectedPreset) return;
 
     setEnhancing(true);
     setError(null);
     setEnhancedUrl(null);
 
     try {
-      const result = await api.enhancePhoto(currentJob.id, selectedPreset);
+      const result = await api.enhancePhoto({
+        jobId: currentJob.id,
+        presetId: selectedPreset || undefined,
+        styleId: selectedStyle || undefined,
+        mode: enhanceMode,
+      });
       setEnhancedUrl(result.enhancedImageUrl);
       // Job listesini güncelle
       await loadData();
@@ -184,6 +199,8 @@ export default function Enhance() {
     setPreviewUrl(null);
     setAnalysis(null);
     setSelectedPreset(null);
+    setSelectedStyle(null);
+    setEnhanceMode("full");
     setEnhancedUrl(null);
     setError(null);
   };
@@ -207,7 +224,7 @@ export default function Enhance() {
             Gerçek ürün fotoğrafını yükle, AI ile analiz et, preset seç
           </p>
         </div>
-        {presets.length === 0 && (
+        {(presets.length === 0 || styles.length === 0) && (
           <button
             onClick={handleSeedPresets}
             disabled={seedingPresets}
@@ -413,9 +430,9 @@ export default function Enhance() {
           {/* İyileştir butonu */}
           <button
             onClick={handleEnhance}
-            disabled={!currentJob || !selectedPreset || enhancing || !analysis}
+            disabled={!currentJob || enhancing || !analysis || (enhanceMode === "full" && !selectedPreset)}
             className={`w-full py-3 rounded-xl font-medium transition-all ${
-              !currentJob || !selectedPreset || !analysis
+              !currentJob || !analysis || (enhanceMode === "full" && !selectedPreset)
                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                 : enhancing
                   ? "bg-amber-400 text-white cursor-wait"
@@ -427,22 +444,88 @@ export default function Enhance() {
                 <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                 İyileştiriliyor...
               </span>
-            ) : !analysis ? "Önce Analiz Et" : !selectedPreset ? "Preset Seç" : "İyileştir"}
+            ) : !analysis ? "Önce Analiz Et" : (enhanceMode === "full" && !selectedPreset) ? "Preset Seç" : "İyileştir"}
           </button>
 
-          {/* Sonuç görseli */}
-          {enhancedUrl && (
+          {/* Stil Seçimi (Faz 3) */}
+          {styles.filter(s => s.isActive).length > 0 && (
+            <div className="mt-2">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Enhancement Stili (opsiyonel)</h4>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedStyle(null)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    !selectedStyle
+                      ? "bg-gray-800 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  Yok
+                </button>
+                {styles.filter(s => s.isActive).map((style) => (
+                  <button
+                    key={style.id}
+                    onClick={() => setSelectedStyle(style.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      selectedStyle === style.id
+                        ? "bg-amber-500 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                    title={style.description}
+                  >
+                    {style.displayName}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Mod Seçimi */}
+          {analysis && (
+            <div className="mt-2">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">İyileştirme Modu</h4>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEnhanceMode("full")}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    enhanceMode === "full"
+                      ? "bg-amber-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  Tam (Arka Plan + Stil)
+                </button>
+                <button
+                  onClick={() => setEnhanceMode("enhance-only")}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    enhanceMode === "enhance-only"
+                      ? "bg-amber-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  Sadece İyileştir
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                {enhanceMode === "full"
+                  ? "Arka plan değiştirilir + stil uygulanır"
+                  : "Arka plan korunur, sadece ışık/renk/detay iyileştirilir"}
+              </p>
+            </div>
+          )}
+
+          {/* Before/After karşılaştırma (Faz 3) */}
+          {enhancedUrl && previewUrl && (
             <div className="mt-4 space-y-3">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                 <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Sonuç
+                Sonuç — Karşılaştır
               </h3>
-              <img
-                src={enhancedUrl}
-                alt="İyileştirilmiş görsel"
-                className="w-full rounded-xl shadow-md object-contain max-h-96 bg-gray-100"
+              <BeforeAfterSlider
+                beforeUrl={previewUrl}
+                afterUrl={enhancedUrl}
               />
               <div className="flex gap-2">
                 <a

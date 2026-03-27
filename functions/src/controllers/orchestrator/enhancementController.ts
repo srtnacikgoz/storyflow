@@ -121,6 +121,45 @@ export const seedEnhancementPresets = functions
   });
 
 // ==========================================
+// Style Endpoints (Faz 3)
+// ==========================================
+
+export const listEnhancementStyles = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 10, memory: "256MB", minInstances: 0 })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        const activeOnly = request.query.activeOnly === "true";
+        const styles = await enhancementService.listStyles(activeOnly);
+        successResponse(response, { styles, count: styles.length });
+      } catch (error) {
+        errorResponse(response, error, "listEnhancementStyles");
+      }
+    });
+  });
+
+export const seedEnhancementStyles = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 30, memory: "256MB", minInstances: 0 })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+        const result = await enhancementService.seedStyles();
+        successResponse(response, result);
+      } catch (error) {
+        errorResponse(response, error, "seedEnhancementStyles");
+      }
+    });
+  });
+
+// ==========================================
 // Job Endpoints
 // ==========================================
 
@@ -285,29 +324,44 @@ export const enhancePhoto = functions
           return;
         }
 
-        const { jobId, presetId } = request.body;
-        if (!jobId || !presetId) {
-          response.status(400).json({ success: false, error: "jobId ve presetId zorunlu" });
+        const { jobId, presetId, styleId, mode } = request.body as {
+          jobId: string;
+          presetId?: string;
+          styleId?: string;
+          mode?: "full" | "enhance-only";
+        };
+        const enhanceMode = mode || "full";
+
+        if (!jobId) {
+          response.status(400).json({ success: false, error: "jobId zorunlu" });
+          return;
+        }
+        if (enhanceMode === "full" && !presetId) {
+          response.status(400).json({ success: false, error: "full modda presetId zorunlu" });
           return;
         }
 
-        // Job ve preset'i al
+        // Job, preset ve stil'i al
         const job = await enhancementService.getJob(jobId);
         if (!job) {
           response.status(404).json({ success: false, error: "Job bulunamadı" });
           return;
         }
 
-        const preset = await enhancementService.getPreset(presetId);
-        if (!preset) {
+        const preset = presetId ? await enhancementService.getPreset(presetId) : null;
+        if (enhanceMode === "full" && !preset) {
           response.status(404).json({ success: false, error: "Preset bulunamadı" });
           return;
         }
 
+        const style = styleId ? await enhancementService.getStyle(styleId) : null;
+
         // Job'u processing durumuna geçir
         await enhancementService.updateJob(jobId, {
           status: "processing",
-          selectedPresetId: presetId,
+          selectedPresetId: presetId || undefined,
+          selectedStyleId: styleId || undefined,
+          enhancementMode: enhanceMode,
         });
 
         // Orijinal görseli indir ve base64'e çevir
@@ -320,7 +374,7 @@ export const enhancePhoto = functions
         const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
 
         // Enhancement prompt oluştur
-        const prompt = enhancementService.buildEnhancementPrompt(preset, job.analysis);
+        const prompt = enhancementService.buildEnhancementPrompt(preset, style, job.analysis, enhanceMode);
 
         // Gemini ile enhancement
         const config = await getConfig();

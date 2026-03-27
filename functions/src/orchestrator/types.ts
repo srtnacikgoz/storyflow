@@ -2368,6 +2368,21 @@ export interface PhotoAnalysis {
   notes?: string;
 }
 
+/** Enhancement stil preset'i (ışık/renk/mood) */
+export interface EnhancementStyle {
+  id: string;
+  displayName: string;
+  description?: string;
+  promptInstructions: string;
+  isActive: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Enhancement modu */
+export type EnhancementMode = "full" | "enhance-only";
+
 /** Enhancement iş kaydı */
 export interface EnhancementJob {
   id: string;
@@ -2375,6 +2390,8 @@ export interface EnhancementJob {
   originalStoragePath: string;
   analysis?: PhotoAnalysis;
   selectedPresetId?: string;
+  selectedStyleId?: string;
+  enhancementMode?: EnhancementMode;
   enhancedImageUrl?: string;
   status: EnhancementJobStatus;
   error?: string;

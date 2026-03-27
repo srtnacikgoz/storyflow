@@ -4,11 +4,12 @@
  */
 
 import { getFirestore } from "firebase-admin/firestore";
-import { EnhancementPreset, EnhancementJob, PhotoAnalysis } from "../orchestrator/types";
-import { DEFAULT_ENHANCEMENT_PRESETS } from "../orchestrator/seed/enhancementSeedData";
+import { EnhancementPreset, EnhancementJob, EnhancementStyle, PhotoAnalysis } from "../orchestrator/types";
+import { DEFAULT_ENHANCEMENT_PRESETS, DEFAULT_ENHANCEMENT_STYLES } from "../orchestrator/seed/enhancementSeedData";
 
 const db = getFirestore();
 const PRESETS_COLLECTION = "enhancement-presets";
+const STYLES_COLLECTION = "enhancement-styles";
 const JOBS_COLLECTION = "enhancement-jobs";
 
 export class EnhancementService {
@@ -57,6 +58,48 @@ export class EnhancementService {
         continue;
       }
       await this.createPreset(preset);
+      added++;
+    }
+    return { added, skipped };
+  }
+
+  // ==========================================
+  // Style CRUD
+  // ==========================================
+
+  async listStyles(activeOnly = false): Promise<EnhancementStyle[]> {
+    let ref: FirebaseFirestore.Query = db.collection(STYLES_COLLECTION);
+    if (activeOnly) {
+      ref = ref.where("isActive", "==", true);
+    }
+    ref = ref.orderBy("order", "asc");
+    const snapshot = await ref.get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EnhancementStyle));
+  }
+
+  async getStyle(id: string): Promise<EnhancementStyle | null> {
+    const doc = await db.collection(STYLES_COLLECTION).doc(id).get();
+    if (!doc.exists) return null;
+    return { id: doc.id, ...doc.data() } as EnhancementStyle;
+  }
+
+  async createStyle(data: Omit<EnhancementStyle, "createdAt" | "updatedAt">): Promise<EnhancementStyle> {
+    const now = Date.now();
+    const style: EnhancementStyle = { ...data, createdAt: now, updatedAt: now };
+    await db.collection(STYLES_COLLECTION).doc(data.id).set(style);
+    return style;
+  }
+
+  async seedStyles(): Promise<{ added: number; skipped: number }> {
+    let added = 0;
+    let skipped = 0;
+    for (const style of DEFAULT_ENHANCEMENT_STYLES) {
+      const existing = await db.collection(STYLES_COLLECTION).doc(style.id).get();
+      if (existing.exists) {
+        skipped++;
+        continue;
+      }
+      await this.createStyle(style);
       added++;
     }
     return { added, skipped };
@@ -147,34 +190,58 @@ Rules:
   // ==========================================
 
   /**
-   * Preset + analiz sonucuna göre enhancement prompt'u oluştur
-   * Tek Gemini çağrısında: BG kaldırma + yeni arka plan + gölge + ışık düzeltme
+   * Preset + stil + analiz sonucuna göre enhancement prompt'u oluştur
+   * mode: "full" = BG kaldırma + yeni arka plan + gölge + stil
+   * mode: "enhance-only" = mevcut arka planı koru, sadece ışık/renk/detay iyileştir
    */
-  buildEnhancementPrompt(preset: EnhancementPreset, analysis?: PhotoAnalysis): string {
+  buildEnhancementPrompt(
+    preset: EnhancementPreset | null,
+    style: EnhancementStyle | null,
+    analysis?: PhotoAnalysis,
+    mode: "full" | "enhance-only" = "full"
+  ): string {
     const productDesc = analysis
       ? `a ${analysis.surfaceProperties} ${analysis.productType}`
       : "the bakery product";
+
+    // Enhance-only modu: arka plan değiştirme, sadece iyileştir
+    if (mode === "enhance-only") {
+      const styleInstructions = style?.promptInstructions || "Enhance the lighting, color, and detail quality.";
+      return `You are a professional food photography retoucher. Enhance this photo of ${productDesc} WITHOUT changing the background or composition.
+
+ENHANCEMENT STYLE: ${styleInstructions}
+
+CRITICAL RULES:
+- DO NOT change the background — keep it exactly as is
+- DO NOT move, resize, or reposition the product
+- PRESERVE the product's shape, color, texture, and all details exactly
+- Only improve: lighting quality, color accuracy, detail sharpness, overall polish
+- The result should look like the same photo taken with better equipment and lighting
+- Output resolution: match input resolution
+
+Return ONLY the edited image.`;
+    }
+
+    // Full modu: BG kaldırma + yeni arka plan + gölge + stil
+    const bgInstructions = preset
+      ? `BACKGROUND: ${preset.backgroundPrompt}\n\nSHADOW: ${preset.shadowPrompt}\n\nLIGHTING:\n- Direction: ${preset.lightingDirection}\n- Color temperature: ${preset.colorTemperature}`
+      : "BACKGROUND: Clean, professional background suitable for the product.";
+
+    const styleInstructions = style
+      ? `\n\nENHANCEMENT STYLE: ${style.promptInstructions}`
+      : "";
 
     return `You are a professional food product photographer. Transform this photo into a premium product shot.
 
 TASK: Remove the current background and place ${productDesc} on a new background with natural shadow and professional lighting.
 
-BACKGROUND: ${preset.backgroundPrompt}
-
-SHADOW: ${preset.shadowPrompt}
-
-LIGHTING:
-- Direction: ${preset.lightingDirection}
-- Color temperature: ${preset.colorTemperature}
-- Professional studio-quality lighting that highlights the product's texture and details
+${bgInstructions}${styleInstructions}
 
 CRITICAL RULES:
 - PRESERVE the product EXACTLY as it appears — do NOT modify its shape, color, texture, or any detail
 - The product must look REAL, not AI-generated — maintain all imperfections and natural qualities
 - Remove ALL of the original background — no traces of the old environment
 - The shadow must look physically correct for the surface and lighting direction
-- High contrast, saturated colors — the product should GLOW
-- Shallow depth of field, soft bokeh if background has depth
 - Center the product in frame with balanced composition
 - Output resolution: match input resolution, at least 1024px on longest side
 
