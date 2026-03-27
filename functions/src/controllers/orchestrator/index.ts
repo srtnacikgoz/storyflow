@@ -221,4 +221,5 @@ export {
   createEnhancementJob,
   getEnhancementJob,
   analyzePhoto,
+  enhancePhoto,
 } from "./enhancementController";

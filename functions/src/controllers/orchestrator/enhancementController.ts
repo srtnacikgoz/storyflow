@@ -268,3 +268,152 @@ export const analyzePhoto = functions
       }
     });
   });
+
+/**
+ * Fotoğraf İyileştirme endpoint (Faz 2)
+ * Arka plan kaldırma + yeni arka plan + gölge + ışık düzeltme — tek Gemini çağrısı
+ */
+export const enhancePhoto = functions
+  .region(REGION)
+  .runWith({ timeoutSeconds: 120, memory: "1GB", minInstances: 0 })
+  .https.onRequest(async (request, response) => {
+    const corsHandler = await getCors();
+    corsHandler(request, response, async () => {
+      try {
+        if (request.method !== "POST") {
+          response.status(405).json({ success: false, error: "Use POST" });
+          return;
+        }
+
+        const { jobId, presetId } = request.body;
+        if (!jobId || !presetId) {
+          response.status(400).json({ success: false, error: "jobId ve presetId zorunlu" });
+          return;
+        }
+
+        // Job ve preset'i al
+        const job = await enhancementService.getJob(jobId);
+        if (!job) {
+          response.status(404).json({ success: false, error: "Job bulunamadı" });
+          return;
+        }
+
+        const preset = await enhancementService.getPreset(presetId);
+        if (!preset) {
+          response.status(404).json({ success: false, error: "Preset bulunamadı" });
+          return;
+        }
+
+        // Job'u processing durumuna geçir
+        await enhancementService.updateJob(jobId, {
+          status: "processing",
+          selectedPresetId: presetId,
+        });
+
+        // Orijinal görseli indir ve base64'e çevir
+        const imageResponse = await fetch(job.originalImageUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Görsel indirilemedi: ${imageResponse.status}`);
+        }
+        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+        const imageBase64 = imageBuffer.toString("base64");
+        const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
+
+        // Enhancement prompt oluştur
+        const prompt = enhancementService.buildEnhancementPrompt(preset, job.analysis);
+
+        // Gemini ile enhancement
+        const config = await getConfig();
+        const systemSettings = await getSystemSettings();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const imageModel = (systemSettings as any)?.imageModel || "gemini-3.1-flash-image-preview";
+
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
+        const model = genAI.getGenerativeModel({
+          model: imageModel,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          generationConfig: {
+            responseModalities: ["TEXT", "IMAGE"],
+          } as any,
+        });
+
+        console.log(`[enhancePhoto] Generating with model: ${imageModel}, preset: ${presetId}`);
+
+        const result = await model.generateContent([
+          {
+            inlineData: {
+              mimeType,
+              data: imageBase64,
+            },
+          },
+          { text: prompt },
+        ]);
+
+        // Sonuçtan görseli çıkar
+        const parts = result.response.candidates?.[0]?.content?.parts;
+        if (!parts) {
+          await enhancementService.updateJob(jobId, {
+            status: "failed",
+            error: "Gemini yanıt vermedi veya bloklandı",
+          });
+          response.status(500).json({ success: false, error: "Enhancement başarısız — yanıt yok" });
+          return;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith("image/"));
+        if (!imagePart || !imagePart.inlineData) {
+          // Blok nedeni kontrol et
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const textPart = parts.find((p: any) => p.text);
+          const blockReason = textPart?.text || "Görsel üretilemedi";
+          await enhancementService.updateJob(jobId, {
+            status: "failed",
+            error: `Enhancement bloklandı: ${blockReason.substring(0, 200)}`,
+          });
+          response.status(500).json({ success: false, error: blockReason.substring(0, 200) });
+          return;
+        }
+
+        // Enhanced görseli Storage'a kaydet
+        const { getStorage } = await import("firebase-admin/storage");
+        const bucket = getStorage().bucket();
+        const enhancedPath = `enhanced-photos/${jobId}_${presetId}.png`;
+        const file = bucket.file(enhancedPath);
+
+        const enhancedBuffer = Buffer.from(imagePart.inlineData.data, "base64");
+        await file.save(enhancedBuffer, {
+          metadata: { contentType: imagePart.inlineData.mimeType || "image/png" },
+        });
+
+        // Public URL oluştur
+        await file.makePublic();
+        const enhancedUrl = `https://storage.googleapis.com/${bucket.name}/${enhancedPath}`;
+
+        // Job'u tamamla
+        await enhancementService.updateJob(jobId, {
+          status: "completed",
+          enhancedImageUrl: enhancedUrl,
+        });
+
+        console.log(`[enhancePhoto] Completed: ${jobId}, preset: ${presetId}`);
+
+        successResponse(response, {
+          enhancedImageUrl: enhancedUrl,
+          jobId,
+          presetId,
+        });
+      } catch (error) {
+        // Job'u failed yap
+        const { jobId } = request.body || {};
+        if (jobId) {
+          await enhancementService.updateJob(jobId, {
+            status: "failed",
+            error: error instanceof Error ? error.message : "Bilinmeyen hata",
+          }).catch(() => {}); // Sessizce geç
+        }
+        errorResponse(response, error, "enhancePhoto");
+      }
+    });
+  });

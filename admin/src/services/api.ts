@@ -2887,6 +2887,14 @@ class ApiService {
     });
     return res.analysis;
   }
+
+  async enhancePhoto(jobId: string, presetId: string): Promise<{ enhancedImageUrl: string }> {
+    const res = await this.fetch<{ enhancedImageUrl: string }>("enhancePhoto", {
+      method: "POST",
+      body: JSON.stringify({ jobId, presetId }),
+    });
+    return res;
+  }
 }
 
 

@@ -142,6 +142,45 @@ Rules:
   /**
    * Gemini analiz sonucunu parse et
    */
+  // ==========================================
+  // Enhancement Prompt Builder (Faz 2)
+  // ==========================================
+
+  /**
+   * Preset + analiz sonucuna göre enhancement prompt'u oluştur
+   * Tek Gemini çağrısında: BG kaldırma + yeni arka plan + gölge + ışık düzeltme
+   */
+  buildEnhancementPrompt(preset: EnhancementPreset, analysis?: PhotoAnalysis): string {
+    const productDesc = analysis
+      ? `a ${analysis.surfaceProperties} ${analysis.productType}`
+      : "the bakery product";
+
+    return `You are a professional food product photographer. Transform this photo into a premium product shot.
+
+TASK: Remove the current background and place ${productDesc} on a new background with natural shadow and professional lighting.
+
+BACKGROUND: ${preset.backgroundPrompt}
+
+SHADOW: ${preset.shadowPrompt}
+
+LIGHTING:
+- Direction: ${preset.lightingDirection}
+- Color temperature: ${preset.colorTemperature}
+- Professional studio-quality lighting that highlights the product's texture and details
+
+CRITICAL RULES:
+- PRESERVE the product EXACTLY as it appears — do NOT modify its shape, color, texture, or any detail
+- The product must look REAL, not AI-generated — maintain all imperfections and natural qualities
+- Remove ALL of the original background — no traces of the old environment
+- The shadow must look physically correct for the surface and lighting direction
+- High contrast, saturated colors — the product should GLOW
+- Shallow depth of field, soft bokeh if background has depth
+- Center the product in frame with balanced composition
+- Output resolution: match input resolution, at least 1024px on longest side
+
+Return ONLY the edited image.`;
+  }
+
   parseAnalysisResult(text: string): PhotoAnalysis | null {
     try {
       // JSON bloğu çıkar (markdown code fence varsa temizle)
