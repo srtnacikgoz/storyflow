@@ -225,3 +225,9 @@ export {
   listEnhancementStyles,
   seedEnhancementStyles,
 } from "./enhancementController";
+
+// Upscale Controller (Faz 4)
+export {
+  listUpscaleOptions,
+  upscaleImage,
+} from "./upscaleController";

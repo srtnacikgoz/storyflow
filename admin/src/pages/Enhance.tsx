@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "../services/api";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import BeforeAfterSlider from "../components/BeforeAfterSlider";
-import type { EnhancementPreset, EnhancementStyle, EnhancementJob, EnhancementMode, PhotoAnalysis } from "../types";
+import type { EnhancementPreset, EnhancementStyle, EnhancementJob, EnhancementMode, PhotoAnalysis, UpscaleOption, UpscaleResult } from "../types";
 
 // Işık kalitesi badge renkleri
 const LIGHTING_COLORS: Record<string, string> = {
@@ -29,6 +29,9 @@ export default function Enhance() {
   const [seedingPresets, setSeedingPresets] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [enhancedUrl, setEnhancedUrl] = useState<string | null>(null);
+  const [upscaleOptions, setUpscaleOptions] = useState<UpscaleOption[]>([]);
+  const [upscaling, setUpscaling] = useState(false);
+  const [upscaleResult, setUpscaleResult] = useState<UpscaleResult | null>(null);
 
   // İlk yükleme
   useEffect(() => {
@@ -38,14 +41,16 @@ export default function Enhance() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [presetsData, stylesData, jobsData] = await Promise.all([
+      const [presetsData, stylesData, jobsData, upscaleData] = await Promise.all([
         api.getEnhancementPresets(),
         api.getEnhancementStyles(),
         api.getEnhancementJobs(20),
+        api.getUpscaleOptions().catch(() => []),
       ]);
       setPresets(presetsData);
       setStyles(stylesData);
       setJobs(jobsData);
+      setUpscaleOptions(upscaleData);
     } catch (err) {
       setError("Veri yüklenirken hata oluştu");
       console.error(err);
@@ -202,7 +207,30 @@ export default function Enhance() {
     setSelectedStyle(null);
     setEnhanceMode("full");
     setEnhancedUrl(null);
+    setUpscaleResult(null);
     setError(null);
+  };
+
+  // Upscale
+  const handleUpscale = async (optionId: string) => {
+    if (!currentJob && !enhancedUrl) return;
+
+    setUpscaling(true);
+    setUpscaleResult(null);
+    setError(null);
+
+    try {
+      const result = await api.upscaleImage({
+        jobId: currentJob?.id,
+        imageUrl: !currentJob ? enhancedUrl || undefined : undefined,
+        optionId,
+      });
+      setUpscaleResult(result);
+    } catch (err) {
+      setError("Upscale hatası: " + (err instanceof Error ? err.message : "Bilinmeyen hata"));
+    } finally {
+      setUpscaling(false);
+    }
   };
 
   // Loading
@@ -527,22 +555,58 @@ export default function Enhance() {
                 beforeUrl={previewUrl}
                 afterUrl={enhancedUrl}
               />
-              <div className="flex gap-2">
-                <a
-                  href={enhancedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 text-center px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 text-sm font-medium"
-                >
-                  Tam Boyut Aç
-                </a>
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
-                >
-                  Yeni Fotoğraf
-                </button>
-              </div>
+              {/* Upscale seçenekleri */}
+              {upscaleOptions.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">İndir — Boyut Seç</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {upscaleOptions.map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleUpscale(opt.id)}
+                        disabled={upscaling}
+                        className="text-left p-2.5 rounded-lg border border-gray-200 hover:border-amber-400 hover:bg-amber-50 transition-all disabled:opacity-50 text-xs"
+                      >
+                        <span className="font-medium text-gray-800 block">{opt.displayName}</span>
+                        <span className="text-gray-400">{opt.width}x{opt.height || "auto"} · {opt.format.toUpperCase()}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {upscaling && (
+                    <div className="flex items-center gap-2 mt-2 text-sm text-amber-600">
+                      <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-amber-500" />
+                      Boyutlandırılıyor...
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Upscale sonucu */}
+              {upscaleResult && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-emerald-800">
+                      {upscaleResult.width}x{upscaleResult.height} · {(upscaleResult.sizeBytes / 1024).toFixed(0)}KB
+                    </span>
+                  </div>
+                  <a
+                    href={upscaleResult.url}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full text-center px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 text-sm font-medium"
+                  >
+                    İndir
+                  </a>
+                </div>
+              )}
+
+              <button
+                onClick={handleReset}
+                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+              >
+                Yeni Fotoğraf
+              </button>
             </div>
           )}
         </div>

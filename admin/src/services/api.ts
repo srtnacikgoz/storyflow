@@ -61,6 +61,8 @@ import type {
   EnhancementJob,
   EnhancementMode,
   PhotoAnalysis,
+  UpscaleOption,
+  UpscaleResult,
 } from "../types";
 
 // Firebase Functions base URL
@@ -2916,6 +2918,27 @@ class ApiService {
   async seedEnhancementStyles(): Promise<{ added: number; skipped: number }> {
     const res = await this.fetch<{ added: number; skipped: number }>("seedEnhancementStyles", {
       method: "POST",
+    });
+    return res;
+  }
+
+  // ==========================================
+  // Upscale API (Faz 4)
+  // ==========================================
+
+  async getUpscaleOptions(): Promise<UpscaleOption[]> {
+    const res = await this.fetch<{ options: UpscaleOption[] }>("listUpscaleOptions");
+    return res.options;
+  }
+
+  async upscaleImage(params: {
+    jobId?: string;
+    imageUrl?: string;
+    optionId: string;
+  }): Promise<UpscaleResult> {
+    const res = await this.fetch<UpscaleResult>("upscaleImage", {
+      method: "POST",
+      body: JSON.stringify(params),
     });
     return res;
   }

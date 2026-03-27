@@ -2383,6 +2383,28 @@ export interface EnhancementStyle {
 /** Enhancement modu */
 export type EnhancementMode = "full" | "enhance-only";
 
+/** Upscale çıktı formatı */
+export interface UpscaleOption {
+  id: string;
+  displayName: string;
+  description: string;
+  width: number;
+  height: number;
+  aspectRatio: string;
+  format: "jpeg" | "png";
+  quality: number;
+}
+
+/** Upscale sonucu */
+export interface UpscaleResult {
+  url: string;
+  storagePath: string;
+  width: number;
+  height: number;
+  format: string;
+  sizeBytes: number;
+}
+
 /** Enhancement iş kaydı */
 export interface EnhancementJob {
   id: string;

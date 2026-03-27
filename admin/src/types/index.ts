@@ -1539,6 +1539,26 @@ export interface EnhancementStyle {
 
 export type EnhancementMode = "full" | "enhance-only";
 
+export interface UpscaleOption {
+  id: string;
+  displayName: string;
+  description: string;
+  width: number;
+  height: number;
+  aspectRatio: string;
+  format: "jpeg" | "png";
+  quality: number;
+}
+
+export interface UpscaleResult {
+  url: string;
+  storagePath: string;
+  width: number;
+  height: number;
+  format: string;
+  sizeBytes: number;
+}
+
 export interface EnhancementJob {
   id: string;
   originalImageUrl: string;

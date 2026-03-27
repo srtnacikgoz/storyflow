@@ -4,7 +4,7 @@
  */
 
 import { getFirestore } from "firebase-admin/firestore";
-import { EnhancementPreset, EnhancementJob, EnhancementStyle, PhotoAnalysis } from "../orchestrator/types";
+import { EnhancementPreset, EnhancementJob, EnhancementStyle, PhotoAnalysis, UpscaleOption, UpscaleResult } from "../orchestrator/types";
 import { DEFAULT_ENHANCEMENT_PRESETS, DEFAULT_ENHANCEMENT_STYLES } from "../orchestrator/seed/enhancementSeedData";
 
 const db = getFirestore();
@@ -266,5 +266,114 @@ Return ONLY the edited image.`;
       console.error("[EnhancementService] Analiz parse hatası:", text.substring(0, 200));
       return null;
     }
+  }
+
+  // ==========================================
+  // Upscale (Faz 4) — Sharp.js ile kalite artırma
+  // ==========================================
+
+  /** Sabit upscale seçenekleri */
+  static readonly UPSCALE_OPTIONS: UpscaleOption[] = [
+    {
+      id: "instagram-feed",
+      displayName: "Instagram Feed",
+      description: "1080x1350 (4:5) — Feed paylaşımı için optimum",
+      width: 1080,
+      height: 1350,
+      aspectRatio: "4:5",
+      format: "jpeg",
+      quality: 95,
+    },
+    {
+      id: "instagram-story",
+      displayName: "Instagram Story",
+      description: "1080x1920 (9:16) — Story ve Reels için",
+      width: 1080,
+      height: 1920,
+      aspectRatio: "9:16",
+      format: "jpeg",
+      quality: 95,
+    },
+    {
+      id: "square",
+      displayName: "Kare",
+      description: "1080x1080 (1:1) — Profil ve grid için",
+      width: 1080,
+      height: 1080,
+      aspectRatio: "1:1",
+      format: "jpeg",
+      quality: 95,
+    },
+    {
+      id: "hd",
+      displayName: "Yüksek Kalite",
+      description: "2160px — Katalog ve baskı için",
+      width: 2160,
+      height: 2700,
+      aspectRatio: "4:5",
+      format: "png",
+      quality: 100,
+    },
+    {
+      id: "original",
+      displayName: "Orijinal Oran",
+      description: "Orijinal en-boy oranını koru, 2K'ya upscale",
+      width: 2048,
+      height: 0, // Orijinal orana göre hesaplanacak
+      aspectRatio: "original",
+      format: "png",
+      quality: 100,
+    },
+  ];
+
+  /**
+   * Sharp.js ile görsel upscale + sharpen + format dönüşümü
+   */
+  async upscaleImage(
+    imageBuffer: Buffer,
+    option: UpscaleOption
+  ): Promise<{ buffer: Buffer; width: number; height: number; format: string }> {
+    const sharp = (await import("sharp")).default;
+
+    // Orijinal boyutları al
+    const metadata = await sharp(imageBuffer).metadata();
+    const origWidth = metadata.width || 1024;
+    const origHeight = metadata.height || 1024;
+
+    let targetWidth = option.width;
+    let targetHeight = option.height;
+
+    // "original" oranında: orijinal aspect ratio korunarak upscale
+    if (option.aspectRatio === "original" || targetHeight === 0) {
+      const ratio = origHeight / origWidth;
+      targetHeight = Math.round(targetWidth * ratio);
+    }
+
+    // Resize + crop (cover) + sharpen
+    let pipeline = sharp(imageBuffer)
+      .resize(targetWidth, targetHeight, {
+        fit: "cover",
+        position: "centre",
+        kernel: "lanczos3",
+      })
+      .sharpen({ sigma: 0.8, m1: 1.0, m2: 0.5 });
+
+    // Format seçimi
+    let outputFormat = option.format;
+    if (option.format === "jpeg") {
+      pipeline = pipeline.jpeg({ quality: option.quality, mozjpeg: true });
+    } else {
+      pipeline = pipeline.png({ quality: option.quality, compressionLevel: 6 });
+      outputFormat = "png";
+    }
+
+    const outputBuffer = await pipeline.toBuffer();
+
+    return {
+      buffer: outputBuffer,
+      width: targetWidth,
+      height: targetHeight,
+      format: outputFormat,
+    };
   }
 }
