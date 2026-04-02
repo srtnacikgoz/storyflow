@@ -2242,6 +2242,7 @@ class ApiService {
     anthropicApiKey?: string;
     openaiApiKey?: string;
     openaiBaseUrl?: string;
+    openRouterApiKey?: string;
     scenarioWriterModel?: string;
     updatedAt: number;
     updatedBy?: string;
@@ -2261,6 +2262,7 @@ class ApiService {
         anthropicApiKey?: string;
         openaiApiKey?: string;
         openaiBaseUrl?: string;
+        openRouterApiKey?: string;
         scenarioWriterModel?: string;
         updatedAt: number;
         updatedBy?: string;
@@ -2285,7 +2287,12 @@ class ApiService {
     anthropicApiKey?: string;
     openaiApiKey?: string;
     openaiBaseUrl?: string;
+    openRouterApiKey?: string;
     scenarioWriterModel?: string;
+    posterPromptModel?: string;
+    posterImageModel?: string;
+    analysisModel?: string;
+    preferredProvider?: string;
   }): Promise<void> {
     await this.fetch<{ success: boolean }>("updateSystemSettingsConfig", {
       method: "POST",
@@ -2791,39 +2798,215 @@ class ApiService {
   // ==========================================
 
   /**
-   * Poster üret — Claude API (skill system prompt) + Gemini görsel üretimi
+   * Poster üret — stil + mood + aspect ratio bazlı profesyonel poster
    */
   async generatePoster(params: {
     productImageBase64?: string;
     productImageUrl?: string;
     productMimeType?: string;
-    posterType?: string;
+    styleId?: string;
+    moodId?: string;
+    aspectRatioId?: string;
+    typographyId?: string;
+    layoutId?: string;
     title?: string;
     subtitle?: string;
     price?: string;
-    mood?: string;
     additionalNotes?: string;
+    variationCount?: number;
   }): Promise<{
-    posterUrl: string;
-    posterBase64: string;
-    mimeType: string;
+    variations: Array<{
+      posterUrl: string;
+      posterBase64: string;
+      galleryId: string;
+      variationIndex: number;
+    }>;
     generatedPrompt: string;
+    productAnalysis: string;
     cost: { claude: number; gemini: number; total: number };
+    count: number;
   }> {
     const response = await this.fetch<{
       success: boolean;
       data: {
-        posterUrl: string;
-        posterBase64: string;
-        mimeType: string;
+        variations: Array<{
+          posterUrl: string;
+          posterBase64: string;
+          galleryId: string;
+          variationIndex: number;
+        }>;
         generatedPrompt: string;
+        productAnalysis: string;
         cost: { claude: number; gemini: number; total: number };
+        count: number;
+        logs?: Array<{ ts: number; phase: string; level: string; message: string; data?: any }>;
       };
     }>("generatePoster", {
       method: "POST",
       body: JSON.stringify(params),
     });
     return response.data;
+  }
+
+  // Poster config — stiller, mood'lar, aspect ratio'lar
+  async listPosterStyles(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listPosterStyles");
+    return res.data;
+  }
+
+  async listPosterMoods(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listPosterMoods");
+    return res.data;
+  }
+
+  async listPosterAspectRatios(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listPosterAspectRatios");
+    return res.data;
+  }
+
+  async listPosterTypographies(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listPosterTypographies");
+    return res.data;
+  }
+
+  async listPosterLayouts(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listPosterLayouts");
+    return res.data;
+  }
+
+  async seedPosterConfig(): Promise<any> {
+    const res = await this.fetch<{ success: boolean; data: any }>("seedPosterConfig", {
+      method: "POST",
+      body: JSON.stringify({ secretKey: "maestro-seed-2026" }),
+    });
+    return res.data;
+  }
+
+  async listPosterGallery(limit = 20): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>(`listPosterGallery?limit=${limit}`);
+    return res.data;
+  }
+
+  async deletePosterGalleryItem(id: string): Promise<void> {
+    await this.fetch("deletePosterGalleryItem", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  async submitPosterFeedback(params: {
+    posterId: string;
+    rating: number;
+    feedbackCategories?: string[];
+    feedbackNote?: string;
+  }): Promise<void> {
+    await this.fetch("submitPosterFeedback", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getPosterGlobalRules(): Promise<{ rules: string[] }> {
+    const res = await this.fetch<{ success: boolean; data: { rules: string[] } }>("getPosterGlobalRules");
+    return res.data;
+  }
+
+  async updatePosterGlobalRules(rules: string[]): Promise<void> {
+    await this.fetch("updatePosterGlobalRules", {
+      method: "POST",
+      body: JSON.stringify({ rules }),
+    });
+  }
+
+  async triggerPosterLearning(styleId: string): Promise<any> {
+    const res = await this.fetch<{ success: boolean; data: any }>("triggerPosterLearning", {
+      method: "POST",
+      body: JSON.stringify({ styleId }),
+    });
+    return res.data;
+  }
+
+  // Poster Smart — kombinasyon kontrol + stil CRUD + görsel analiz
+  async checkPosterCombination(styleId: string, moodId: string): Promise<{
+    warning: boolean; count?: number; message?: string; feedbacks?: any[];
+  }> {
+    const res = await this.fetch<{ success: boolean; data: any }>("checkPosterCombination", {
+      method: "POST",
+      body: JSON.stringify({ styleId, moodId }),
+    });
+    return res.data;
+  }
+
+  // Model Registry
+  async listTextModels(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listTextModels");
+    return res.data;
+  }
+
+  async listImageModels(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listImageModels");
+    return res.data;
+  }
+
+  async seedModelRegistry(): Promise<any> {
+    const res = await this.fetch<{ success: boolean; data: any }>("seedModelRegistry", {
+      method: "POST",
+      body: JSON.stringify({ secretKey: "maestro-seed-2026" }),
+    });
+    return res.data;
+  }
+
+  async createPosterStyle(data: any): Promise<{ id: string }> {
+    const res = await this.fetch<{ success: boolean; data: { id: string } }>("createPosterStyle", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  }
+
+  async updatePosterStyle(id: string, updates: any): Promise<void> {
+    await this.fetch("updatePosterStyle", {
+      method: "POST",
+      body: JSON.stringify({ id, ...updates }),
+    });
+  }
+
+  async deletePosterStyle(id: string): Promise<void> {
+    await this.fetch("deletePosterStyle", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  async generatePosterPrompt(params: {
+    productImageBase64?: string;
+    productImageUrl?: string;
+    productMimeType?: string;
+    styleId?: string;
+    moodId?: string;
+    aspectRatioId?: string;
+    typographyId?: string;
+    layoutId?: string;
+    title?: string;
+    subtitle?: string;
+    price?: string;
+    targetModel: string;
+    includeText?: boolean;
+    additionalNotes?: string;
+  }): Promise<{ prompt: string; analysis: string; targetModel: string; style: string; mood: string; cost: number }> {
+    const res = await this.fetch<{ success: boolean; data: any }>("generatePosterPrompt", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+    return res.data;
+  }
+
+  async analyzePosterDesign(imageBase64: string, imageMimeType?: string): Promise<any> {
+    const res = await this.fetch<{ success: boolean; data: any }>("analyzePosterDesign", {
+      method: "POST",
+      body: JSON.stringify({ imageBase64, imageMimeType }),
+    });
+    return res.data;
   }
 
   // ==========================================

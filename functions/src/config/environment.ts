@@ -46,15 +46,8 @@ export function getConfig(): Config {
   const instagramAccessToken = getConfigValue("INSTAGRAM_ACCESS_TOKEN", ["instagram", "access_token"]);
   const geminiApiKey = getConfigValue("GEMINI_API_KEY", ["gemini", "api_key"]);
 
-  // Validate required configurations
-  if (!instagramAccountId) {
-    throw new Error("Missing required config: INSTAGRAM_ACCOUNT_ID or instagram.account_id");
-  }
-
-  if (!instagramAccessToken) {
-    throw new Error("Missing required config: INSTAGRAM_ACCESS_TOKEN or instagram.access_token");
-  }
-
+  // Instagram config opsiyonel — poster gibi Instagram gerektirmeyen fonksiyonlar da getConfig() kullanıyor
+  // Gemini key zorunlu
   if (!geminiApiKey) {
     throw new Error("Missing required config: GEMINI_API_KEY or gemini.api_key");
   }
@@ -62,8 +55,8 @@ export function getConfig(): Config {
   // Build config object
   const appConfig: Config = {
     instagram: {
-      accountId: instagramAccountId,
-      accessToken: instagramAccessToken,
+      accountId: instagramAccountId || "",
+      accessToken: instagramAccessToken || "",
     },
     gemini: {
       apiKey: geminiApiKey,
