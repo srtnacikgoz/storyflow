@@ -98,12 +98,8 @@ export {
   // Product Slot Defaults
   getProductSlotDefaultsEndpoint,
   updateProductSlotDefaultsEndpoint,
-  // Hand Styles (Dinamik El Stilleri)
-  getHandStylesEndpoint,
-  updateHandStylesEndpoint,
-  // Landing Hero Config (Landing Page Görselleri)
-  getLandingHeroConfig,
-  updateLandingHeroConfig,
+  // Hand Styles — configController'dan taşındı, standalone endpoint olarak kaldı
+  // getLandingHeroConfig — configController'dan taşındı, standalone endpoint olarak kaldı
   // Prompt Studio
   getPromptStudioConfig,
   getPromptTemplateById,
@@ -205,10 +201,38 @@ export {
   deleteIdea,
 } from "./ideasController";
 
-// Poster Controller
+// Model Registry Controller
 export {
-  generatePoster,
-} from "./posterController";
+  seedModelRegistry,
+  listTextModels,
+  listImageModels,
+} from "./modelRegistryController";
+
+// Poster Smart Controller (kombinasyon kontrol + stil CRUD + görsel analiz)
+export {
+  checkPosterCombination,
+  updatePosterStyle,
+  createPosterStyle,
+  deletePosterStyle,
+  analyzePosterDesign,
+  generatePosterPrompt,
+} from "./posterSmartController";
+
+// Poster Config Controller (seed + listeleme + galeri + feedback + öğrenme)
+export {
+  seedPosterConfig,
+  listPosterStyles,
+  listPosterMoods,
+  listPosterAspectRatios,
+  listPosterTypographies,
+  listPosterLayouts,
+  listPosterGallery,
+  deletePosterGalleryItem,
+  submitPosterFeedback,
+  getPosterGlobalRules,
+  updatePosterGlobalRules,
+  triggerPosterLearning,
+} from "./posterConfigController";
 
 // Enhancement Controller (Fotoğraf İyileştirme)
 export {

@@ -45,6 +45,7 @@ export {
   updateScenarioEndpoint,
   deleteScenarioEndpoint,
   generateScenarioDescription,
+  generateScenePreview,
 
   // Pipeline Controller
   triggerOrchestratorScheduler,
@@ -158,6 +159,40 @@ export {
 
   // Seed
   seedGeminiTerminology,
+  seedOrchestratorConfig,
+
+  // Ideas Controller (Fikir Defteri)
+  listIdeas,
+  createIdea,
+  updateIdea,
+  deleteIdea,
+
+  // Model Registry Controller
+  seedModelRegistry,
+  listTextModels,
+  listImageModels,
+
+  // Poster Smart Controller
+  checkPosterCombination,
+  updatePosterStyle,
+  createPosterStyle,
+  deletePosterStyle,
+  analyzePosterDesign,
+  generatePosterPrompt,
+
+  // Poster Config Controller
+  seedPosterConfig,
+  listPosterStyles,
+  listPosterMoods,
+  listPosterAspectRatios,
+  listPosterTypographies,
+  listPosterLayouts,
+  listPosterGallery,
+  deletePosterGalleryItem,
+  submitPosterFeedback,
+  getPosterGlobalRules,
+  updatePosterGlobalRules,
+  triggerPosterLearning,
 } from "./orchestrator";
 
 // Visual Critic

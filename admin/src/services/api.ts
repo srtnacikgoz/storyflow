@@ -2797,57 +2797,6 @@ class ApiService {
   // Poster Operations
   // ==========================================
 
-  /**
-   * Poster üret — stil + mood + aspect ratio bazlı profesyonel poster
-   */
-  async generatePoster(params: {
-    productImageBase64?: string;
-    productImageUrl?: string;
-    productMimeType?: string;
-    styleId?: string;
-    moodId?: string;
-    aspectRatioId?: string;
-    typographyId?: string;
-    layoutId?: string;
-    title?: string;
-    subtitle?: string;
-    price?: string;
-    additionalNotes?: string;
-    variationCount?: number;
-  }): Promise<{
-    variations: Array<{
-      posterUrl: string;
-      posterBase64: string;
-      galleryId: string;
-      variationIndex: number;
-    }>;
-    generatedPrompt: string;
-    productAnalysis: string;
-    cost: { claude: number; gemini: number; total: number };
-    count: number;
-  }> {
-    const response = await this.fetch<{
-      success: boolean;
-      data: {
-        variations: Array<{
-          posterUrl: string;
-          posterBase64: string;
-          galleryId: string;
-          variationIndex: number;
-        }>;
-        generatedPrompt: string;
-        productAnalysis: string;
-        cost: { claude: number; gemini: number; total: number };
-        count: number;
-        logs?: Array<{ ts: number; phase: string; level: string; message: string; data?: any }>;
-      };
-    }>("generatePoster", {
-      method: "POST",
-      body: JSON.stringify(params),
-    });
-    return response.data;
-  }
-
   // Poster config — stiller, mood'lar, aspect ratio'lar
   async listPosterStyles(): Promise<any[]> {
     const res = await this.fetch<{ success: boolean; data: any[] }>("listPosterStyles");
@@ -2922,17 +2871,6 @@ class ApiService {
     const res = await this.fetch<{ success: boolean; data: any }>("triggerPosterLearning", {
       method: "POST",
       body: JSON.stringify({ styleId }),
-    });
-    return res.data;
-  }
-
-  // Poster Smart — kombinasyon kontrol + stil CRUD + görsel analiz
-  async checkPosterCombination(styleId: string, moodId: string): Promise<{
-    warning: boolean; count?: number; message?: string; feedbacks?: any[];
-  }> {
-    const res = await this.fetch<{ success: boolean; data: any }>("checkPosterCombination", {
-      method: "POST",
-      body: JSON.stringify({ styleId, moodId }),
     });
     return res.data;
   }

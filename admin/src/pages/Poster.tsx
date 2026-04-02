@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
-import PosterResult from "../components/poster/PosterResult";
-import CombinationWarning from "../components/poster/CombinationWarning";
 import PosterAnalyzer from "../components/poster/PosterAnalyzer";
 import PromptGenerator from "../components/poster/PromptGenerator";
 
@@ -59,27 +57,6 @@ export default function Poster() {
   const [productMimeType, setProductMimeType] = useState("image/jpeg");
   const [productPreview, setProductPreview] = useState<string | null>(null);
 
-  // Kombinasyon uyarı
-  const [showWarning, setShowWarning] = useState(false);
-
-  // Varyasyon sayısı
-  const [variationCount, setVariationCount] = useState(1);
-
-  // Üretim
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [backendLogs, setBackendLogs] = useState<Array<{ ts: number; phase: string; level: string; message: string; data?: any }>>([]);
-  const [showLogs, setShowLogs] = useState(false);
-  const [logsCopied, setLogsCopied] = useState(false);
-  const [result, setResult] = useState<{
-    variations: Array<{ posterUrl: string; posterBase64: string; galleryId: string; variationIndex: number }>;
-    generatedPrompt: string;
-    productAnalysis: string;
-    cost: { claude: number; gemini: number; total: number };
-    count: number;
-    logs?: Array<{ ts: number; phase: string; level: string; message: string; data?: any }>;
-  } | null>(null);
-
   // Config yükle
   useEffect(() => {
     loadConfig();
@@ -132,67 +109,18 @@ export default function Poster() {
     reader.readAsDataURL(file);
   };
 
-  // Üret butonuna basınca önce kombinasyon kontrolü
-  const handleGenerateClick = () => {
-    if (!productImageBase64) { setError("Ürün görseli yükleyin."); return; }
-    setShowWarning(true); // CombinationWarning kontrolü başlatır
-  };
-
-  const handleGenerate = async () => {
-    setShowWarning(false);
-    if (!productImageBase64) { setError("Ürün görseli yükleyin."); return; }
-    setGenerating(true);
-    setError(null);
-    setResult(null);
-    setBackendLogs([]);
-    try {
-      const res = await api.generatePoster({
-        productImageBase64,
-        productMimeType,
-        styleId: selectedStyle,
-        moodId: selectedMood,
-        aspectRatioId: selectedRatio,
-        typographyId: selectedTypography || undefined,
-        layoutId: selectedLayout || undefined,
-        title: title || undefined,
-        subtitle: subtitle || undefined,
-        price: price || undefined,
-        additionalNotes: [
-          additionalNotes,
-          explodedLayers ? `EXPLODED VIEW LAYER ORDER (bottom to top):\n${explodedLayers}` : "",
-        ].filter(Boolean).join("\n\n") || undefined,
-        variationCount,
-      });
-      if ((res as any).logs) setBackendLogs((res as any).logs);
-      setResult(res as any);
-      setShowLogs(true);
-    } catch (err: any) {
-      // Hata response'unda da logs olabilir
-      try {
-        const body = JSON.parse(err.message?.match(/\{.*\}/s)?.[0] || "{}");
-        if (body.logs) setBackendLogs(body.logs);
-      } catch { /* ignore */ }
-      setError(err.message || "Poster üretimi başarısız.");
-      setShowLogs(true);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleReset = () => {
-    setResult(null);
-    setProductImageBase64(null);
-    setProductPreview(null);
-    setTitle(""); setSubtitle(""); setPrice("");
-    setAdditionalNotes(""); setExplodedLayers(""); setError(null);
-  };
-
   // Mood uyumluluk kontrolü
   const isCompatible = (moodId: string) => {
     const mood = moods.find(m => m.id === moodId);
     if (!mood?.compatibleStyles?.length) return true;
     return mood.compatibleStyles.includes(selectedStyle);
   };
+
+  // Prompt Generator'a gönderilecek birleşik notlar
+  const combinedAdditionalNotes = [
+    additionalNotes,
+    explodedLayers ? `EXPLODED VIEW LAYER ORDER (bottom to top):\n${explodedLayers}` : "",
+  ].filter(Boolean).join("\n\n");
 
   // Config yüklenirken
   if (configLoading) {
@@ -218,117 +146,12 @@ export default function Poster() {
     );
   }
 
-  // Log paneli renderı — sonuç ve form ekranında ortak kullanılacak
-  const renderLogPanel = () => {
-    if (backendLogs.length === 0) return null;
-    const PHASE_COLORS: Record<string, string> = {
-      INIT: "text-blue-400", CONFIG: "text-cyan-400",
-      "FAZ-1": "text-violet-400", "FAZ-2": "text-amber-400",
-      "FAZ-3": "text-emerald-400", "FAZ-4": "text-pink-400", "ÖZET": "text-yellow-300",
-    };
-    const PHASE_LABELS: Record<string, string> = {
-      INIT: "Başlangıç", CONFIG: "Konfigürasyon",
-      "FAZ-1": "Faz 1 — Claude Prompt Üretimi", "FAZ-2": "Faz 2 — Görsel Üretim",
-      "FAZ-3": "Faz 3 — Text Overlay", "FAZ-4": "Faz 4 — Storage & Galeri", "ÖZET": "Özet",
-    };
-    return (
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
-        <button
-          onClick={() => setShowLogs(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition text-sm"
-        >
-          <span className="font-medium text-gray-700">
-            Detaylı Loglar <span className="text-gray-400 font-normal">({backendLogs.length} kayıt)</span>
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={e => {
-                e.stopPropagation();
-                const formatted = backendLogs.map(l => {
-                  const icon = l.level === "error" ? "❌" : l.level === "warn" ? "⚠️" : "✓";
-                  const time = `+${(l.ts / 1000).toFixed(1)}s`;
-                  const dataStr = l.data ? "\n    " + Object.entries(l.data).map(([k, v]) => {
-                    if (typeof v === "object" && v !== null) return `${k}: ${JSON.stringify(v, null, 2)}`;
-                    return `${k}: ${v}`;
-                  }).join("\n    ") : "";
-                  return `[${time}] ${icon} ${l.phase} — ${l.message}${dataStr}`;
-                }).join("\n\n");
-                navigator.clipboard.writeText(formatted);
-                setLogsCopied(true);
-                setTimeout(() => setLogsCopied(false), 2000);
-              }}
-              className="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition"
-            >
-              {logsCopied ? "Kopyalandı ✓" : "Tümünü Kopyala"}
-            </button>
-            <span className="text-gray-400 text-xs">{showLogs ? "▲" : "▼"}</span>
-          </div>
-        </button>
-        {showLogs && (
-          <div className="bg-gray-950 max-h-[600px] overflow-y-auto">
-            {[...new Set(backendLogs.map(l => l.phase))].map(phase => (
-              <div key={phase} className="border-b border-gray-800 last:border-b-0">
-                <div className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider ${PHASE_COLORS[phase] || "text-gray-400"} bg-gray-900/50 sticky top-0`}>
-                  {PHASE_LABELS[phase] || phase}
-                </div>
-                {backendLogs.filter(l => l.phase === phase).map((l, i) => (
-                  <div key={i} className={`px-4 py-1.5 text-xs font-mono border-t border-gray-800/50 ${l.level === "error" ? "bg-red-950/30" : ""}`}>
-                    <div className="flex items-start gap-2">
-                      <span className="text-gray-600 shrink-0 w-12 text-right">+{(l.ts / 1000).toFixed(1)}s</span>
-                      <span className="shrink-0">{l.level === "error" ? "❌" : l.level === "warn" ? "⚠️" : "✓"}</span>
-                      <span className={l.level === "error" ? "text-red-400" : "text-gray-300"}>{l.message}</span>
-                    </div>
-                    {l.data && (
-                      <div className="ml-16 mt-1 space-y-0.5">
-                        {Object.entries(l.data).map(([k, v]) => (
-                          <div key={k} className="flex gap-2">
-                            <span className="text-gray-500 shrink-0">{k}:</span>
-                            {typeof v === "object" && v !== null ? (
-                              <pre className="text-gray-400 whitespace-pre-wrap break-all">{JSON.stringify(v, null, 2)}</pre>
-                            ) : (
-                              <span className={`break-all ${k === "prompt" || k === "analiz" ? "text-green-400/80" : "text-gray-400"}`}>
-                                {String(v)}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Sonuç
-  if (result) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Poster Üret</h1>
-        </div>
-        <PosterResult
-          result={result}
-          selectedRatio={selectedRatio}
-          onReset={handleReset}
-        />
-        <div className="mt-6">
-          {renderLogPanel()}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Poster Üret</h1>
-          <p className="text-sm text-gray-500 mt-1">Stil + mood + aspect ratio bazlı profesyonel poster</p>
+          <h1 className="text-2xl font-bold text-gray-900">Poster Prompt Üret</h1>
+          <p className="text-sm text-gray-500 mt-1">ChatGPT, Midjourney veya DALL-E için optimize edilmiş prompt</p>
         </div>
         <PosterAnalyzer onApplyStyle={(sId, mId, tId) => {
           if (sId) setSelectedStyle(sId);
@@ -529,46 +352,6 @@ export default function Poster() {
           </div>
         </div>
 
-        {/* Varyasyon Sayısı */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Varyasyon Sayısı</label>
-          <div className="flex gap-2">
-            {[1, 2, 4].map(n => (
-              <button
-                key={n}
-                onClick={() => setVariationCount(n)}
-                className={`flex-1 py-2 rounded-xl text-center text-sm font-medium transition ${
-                  variationCount === n
-                    ? "bg-violet-600 text-white"
-                    : "bg-gray-50 text-gray-600 border border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                {n === 1 ? "1 poster" : `${n} varyasyon`}
-                <span className="block text-[10px] opacity-70 mt-0.5">
-                  ~${(n * 0.04).toFixed(2)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {error && <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{error}</div>}
-
-        <button
-          onClick={handleGenerateClick}
-          disabled={generating || !productImageBase64}
-          className="w-full bg-gradient-to-r from-violet-600 to-purple-700 text-white py-3 rounded-xl font-medium hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {generating ? (
-            <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Poster üretiliyor... (30-60 sn)</>
-          ) : (
-            "Poster Üret"
-          )}
-        </button>
-
-        {/* Log Paneli */}
-        {renderLogPanel()}
-
         {/* Prompt Üret */}
         <PromptGenerator
           productImageBase64={productImageBase64}
@@ -581,19 +364,9 @@ export default function Poster() {
           title={title}
           subtitle={subtitle}
           price={price}
-          additionalNotes={additionalNotes}
+          additionalNotes={combinedAdditionalNotes}
         />
       </div>
-
-      {/* Kombinasyon Uyarı Modalı */}
-      {showWarning && (
-        <CombinationWarning
-          styleId={selectedStyle}
-          moodId={selectedMood}
-          onProceed={handleGenerate}
-          onCancel={() => setShowWarning(false)}
-        />
-      )}
     </div>
   );
 }
