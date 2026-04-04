@@ -189,6 +189,7 @@ export const analyzeVisualStyle = createHttpFunction(async (req, res) => {
   }
 
   const systemPrompt = `You analyze product photography and extract precise visual style properties.
+IMPORTANT: ALL output MUST be in English. Never use Turkish or any other language.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -220,7 +221,8 @@ Return ONLY valid JSON with this exact structure:
 }
 
 The promptTemplate MUST include [PRODUCT] as a placeholder for the product name.
-Be specific and technical — this data will be used to reproduce this visual style.`;
+Be specific and technical — this data will be used to reproduce this visual style.
+ALL descriptions, adjectives, and the promptTemplate MUST be in English.`;
 
   const userText = "Analyze this product photography image and extract its complete visual style properties. Return JSON only.";
 
@@ -366,6 +368,7 @@ export const generateStandardPrompt = createHttpFunction(async (req, res) => {
       if (hasKey) {
         const systemPrompt = `You are a prompt engineer. Reformat the given image generation prompt for a specific AI model.
 ${MODEL_FORMAT_INSTRUCTIONS[targetModel]}
+IMPORTANT: The output prompt MUST be entirely in English. Never translate to Turkish or any other language.
 Return ONLY the reformatted prompt — no explanations, no labels.`;
 
         try {
