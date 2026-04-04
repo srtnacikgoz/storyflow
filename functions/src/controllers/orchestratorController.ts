@@ -197,13 +197,14 @@ export {
   updatePosterGlobalRules,
   triggerPosterLearning,
 
-  // Style Studio Controller (Stil Stüdyosu)
+  // Style Studio Controller v2 (Stil Stüdyosu)
   listVisualStandards,
   createVisualStandard,
   updateVisualStandard,
   deleteVisualStandard,
   analyzeVisualStyle,
-  generateStandardPrompt,
+  analyzeProductImage,
+  generateStudioPrompt,
   seedVisualStandards,
 } from "./orchestrator";
 

@@ -259,13 +259,14 @@ export {
   upscaleImage,
 } from "./upscaleController";
 
-// Style Studio Controller (Stil Stüdyosu)
+// Style Studio Controller v2 (Stil Stüdyosu)
 export {
   listVisualStandards,
   createVisualStandard,
   updateVisualStandard,
   deleteVisualStandard,
   analyzeVisualStyle,
-  generateStandardPrompt,
+  analyzeProductImage,
+  generateStudioPrompt,
   seedVisualStandards,
 } from "./styleStudioController";

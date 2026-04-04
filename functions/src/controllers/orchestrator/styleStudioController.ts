@@ -1,50 +1,15 @@
 /**
- * Style Studio Controller
- * Görsel standart yönetimi — CRUD, AI analiz, prompt üretimi, seed
+ * Style Studio Controller v2
+ * CRUD, AI sahne/ürün analizi, prompt birleştirme, seed
+ * Tüm AI mantığı styleStudioAiService'te — controller sadece HTTP, doğrulama, Firestore
  */
 
 import { createHttpFunction, db } from "./shared";
-import { getSystemSettings } from "../../services/configService";
 import { clearConfigCache } from "../../services/config/configCache";
 import { buildDefaultSceneStandards, SceneStandardSeed } from "./styleStudioSeedData";
+import { analyzeScene, analyzeProduct, composePrompt } from "../../services/styleStudioAiService";
 
 const VISUAL_STANDARDS_PATH = "global/config/style-studio/standards/items";
-
-// ─── Görsel standart tipi ───────────────────────────────────────────────────
-
-interface VisualStandard {
-  id: string;
-  name: string;
-  isActive: boolean;
-  isDefault: boolean;
-  background?: {
-    type?: string;
-    color?: string;
-    description?: string;
-  };
-  lighting?: {
-    direction?: string;
-    quality?: string;
-    temperature?: string;
-    description?: string;
-  };
-  colorPalette?: string[];
-  surface?: {
-    material?: string;
-    texture?: string;
-    description?: string;
-  };
-  ambiance?: {
-    mood?: string;
-    adjectives?: string[];
-    description?: string;
-  };
-  cameraAngle?: string;
-  overallDescription?: string;
-  promptTemplate?: string;
-  createdAt: number;
-  updatedAt?: number;
-}
 
 // ─── CRUD ───────────────────────────────────────────────────────────────────
 
@@ -81,14 +46,14 @@ export const createVisualStandard = createHttpFunction(async (req, res) => {
 
   const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "").replace(/^-+/, "");
 
-  // Aynı ID zaten varsa hata ver
+  // Aynı ID zaten varsa çakışma hatası
   const existing = await db.collection(VISUAL_STANDARDS_PATH).doc(id).get();
   if (existing.exists) {
     res.status(409).json({ success: false, error: "Bu ID zaten mevcut" });
     return;
   }
 
-  const standard: VisualStandard = {
+  const standard = {
     ...rest,
     id,
     name,
@@ -150,7 +115,7 @@ export const deleteVisualStandard = createHttpFunction(async (req, res) => {
 // ─── AI Analiz ──────────────────────────────────────────────────────────────
 
 /**
- * Görsel analiz — fotoğraftan görsel standart özelliklerini çıkar
+ * Sahne fotoğrafını analiz et
  * POST /analyzeVisualStyle
  * Body: { imageBase64, imageMimeType? }
  */
@@ -166,174 +131,57 @@ export const analyzeVisualStyle = createHttpFunction(async (req, res) => {
     return;
   }
 
-  const systemSettings = await getSystemSettings();
-  const anthropicApiKey = systemSettings?.anthropicApiKey;
-  const openRouterApiKey = (systemSettings as any)?.openRouterApiKey;
-  const analysisModel = systemSettings?.posterAnalysisModel;
-
-  if (!analysisModel) {
-    res.status(400).json({ success: false, error: "Poster analiz modeli tanımlı değil (Ayarlar > AI Model Seçimi)" });
-    return;
-  }
-
-  // Model yönlendirme: slash içermeyen = Anthropic, slash içeren = OpenRouter
-  const isAnthropicModel = !analysisModel.includes("/");
-
-  if (isAnthropicModel && !anthropicApiKey) {
-    res.status(400).json({ success: false, error: "Anthropic API key tanımlı değil (Ayarlar > API Ayarları)" });
-    return;
-  }
-  if (!isAnthropicModel && !openRouterApiKey) {
-    res.status(400).json({ success: false, error: "OpenRouter API key tanımlı değil (Ayarlar > API Ayarları)" });
-    return;
-  }
-
-  const systemPrompt = `You analyze product photography and extract precise visual style properties.
-IMPORTANT: ALL output MUST be in English. Never use Turkish or any other language.
-
-Return ONLY valid JSON with this exact structure:
-{
-  "background": {
-    "type": "solid | gradient | textured | surface",
-    "color": "approximate hex or descriptive color",
-    "description": "detailed description of the background"
-  },
-  "lighting": {
-    "direction": "overhead | side | front | backlit | three-point",
-    "quality": "soft diffused | hard directional | natural",
-    "temperature": "warm 2700-3500K | neutral 4000K | cool 5000K+",
-    "description": "lighting setup description"
-  },
-  "colorPalette": ["#hex1", "#hex2", "#hex3", "#hex4", "#hex5"],
-  "surface": {
-    "material": "marble | wood | fabric | ceramic | concrete | none",
-    "texture": "smooth | rough | grain | matte | glossy",
-    "description": "surface description"
-  },
-  "ambiance": {
-    "mood": "minimal | cozy | editorial | dramatic | fresh | rustic | elegant",
-    "adjectives": ["adj1", "adj2", "adj3"],
-    "description": "overall ambiance and feel"
-  },
-  "cameraAngle": "overhead | 45-degree | eye-level | three-quarter",
-  "overallDescription": "2-3 sentence description of the complete visual style",
-  "promptTemplate": "A product photography image of [PRODUCT] with [describe background], [describe lighting], [describe surface/props], [describe mood/atmosphere]. Shot from [cameraAngle]. [Additional style descriptors]."
-}
-
-The promptTemplate MUST include [PRODUCT] as a placeholder for the product name.
-Be specific and technical — this data will be used to reproduce this visual style.
-ALL descriptions, adjectives, and the promptTemplate MUST be in English.`;
-
-  const userText = "Analyze this product photography image and extract its complete visual style properties. Return JSON only.";
-
-  let responseText: string;
-
-  console.log(`[analyzeVisualStyle] Model: ${analysisModel}, isAnthropic: ${isAnthropicModel}`);
-
   try {
-    if (isAnthropicModel) {
-      const Anthropic = (await import("@anthropic-ai/sdk")).default;
-      const anthropic = new Anthropic({ apiKey: anthropicApiKey });
-      const result = await anthropic.messages.create({
-        model: analysisModel,
-        max_tokens: 1200,
-        system: systemPrompt,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: (imageMimeType || "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
-                data: imageBase64,
-              },
-            },
-            { type: "text", text: userText },
-          ],
-        }],
-      });
-      responseText = result.content
-        .filter((b): b is { type: "text"; text: string } => b.type === "text")
-        .map(b => b.text).join("").trim();
-    } else {
-      const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openRouterApiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://instagram-automation-ad77b.web.app",
-        },
-        body: JSON.stringify({
-          model: analysisModel,
-          max_tokens: 1200,
-          messages: [
-            { role: "system", content: systemPrompt },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image_url",
-                  image_url: { url: `data:${imageMimeType || "image/jpeg"};base64,${imageBase64}` },
-                },
-                { type: "text", text: userText },
-              ],
-            },
-          ],
-        }),
-      });
-      const orData = await orResponse.json() as any;
-      if (!orResponse.ok) {
-        const errMsg = orData?.error?.message || orData?.error?.code || JSON.stringify(orData?.error) || "Bilinmeyen OpenRouter hatası";
-        throw new Error(`OpenRouter (${analysisModel}): ${errMsg}`);
-      }
-      responseText = (orData.choices?.[0]?.message?.content || "").trim();
-    }
+    const analysis = await analyzeScene(imageBase64, imageMimeType || "image/jpeg");
+    res.json({ success: true, data: analysis });
   } catch (err: any) {
-    console.error(`[analyzeVisualStyle] Model hatası (${analysisModel}):`, err?.message || err);
-    res.status(500).json({
-      success: false,
-      error: `Model hatası (${analysisModel}): ${err?.message || "Bilinmeyen hata"}`,
-    });
-    return;
+    console.error("[analyzeScene]", err?.message);
+    res.status(500).json({ success: false, error: err?.message || "Sahne analizi başarısız" });
   }
-
-  // JSON parse
-  let analysis;
-  try {
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { error: "Parse failed", raw: responseText };
-  } catch {
-    analysis = { error: "Parse failed", raw: responseText };
-  }
-
-  res.json({ success: true, data: analysis });
-}, { timeoutSeconds: 60, memory: "512MiB" });
-
-// ─── Prompt Üretimi ─────────────────────────────────────────────────────────
-
-// Hedef model bazlı yeniden formatlama talimatları
-const MODEL_FORMAT_INSTRUCTIONS: Record<string, string> = {
-  gemini: `Rewrite as a single flowing paragraph. Include camera specs (lens, aperture), lighting with color temperature (e.g. "5500K daylight"), and spatial composition directions. Be descriptive about textures and materials.`,
-  "dall-e": `Rewrite as structured sentences following this order: 1) Background/Scene 2) Subject/Product reference 3) Key Details 4) Style/Medium 5) Technical lighting 6) Mood. Wrap any text in "double quotes". Specify font style and placement.`,
-  midjourney: `Rewrite as comma-separated descriptive phrases — concise, evocative, no full sentences. Keep under 60 words. End with: --ar 2:3 --v 7 --s 150 --q 2 --style raw --no blurry distorted watermark cartoon`,
-  flux: `Rewrite as a detailed descriptive paragraph. Include art direction, composition, framing, lighting type and direction, style classification, and material/texture descriptions for realism.`,
-};
+}, { timeoutSeconds: 90, memory: "512MiB" });
 
 /**
- * Standart için hazır prompt üret
- * POST /generateStandardPrompt
- * Body: { standardId, productName, productDescription?, targetModel? }
+ * Ürün fotoğrafını analiz et (YENİ)
+ * POST /analyzeProductImage
+ * Body: { imageBase64, imageMimeType? }
  */
-export const generateStandardPrompt = createHttpFunction(async (req, res) => {
+export const analyzeProductImage = createHttpFunction(async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).json({ success: false, error: "Use POST" });
     return;
   }
 
-  const { standardId, productName, productDescription, targetModel } = req.body || {};
-  if (!standardId || !productName) {
-    res.status(400).json({ success: false, error: "standardId ve productName gerekli" });
+  const { imageBase64, imageMimeType } = req.body || {};
+  if (!imageBase64) {
+    res.status(400).json({ success: false, error: "imageBase64 gerekli" });
+    return;
+  }
+
+  try {
+    const analysis = await analyzeProduct(imageBase64, imageMimeType || "image/jpeg");
+    res.json({ success: true, data: analysis });
+  } catch (err: any) {
+    console.error("[analyzeProduct]", err?.message);
+    res.status(500).json({ success: false, error: err?.message || "Ürün analizi başarısız" });
+  }
+}, { timeoutSeconds: 90, memory: "512MiB" });
+
+// ─── Prompt Üretimi ─────────────────────────────────────────────────────────
+
+/**
+ * Sahne + ürün analizinden final prompt üret (generateStandardPrompt'un yerini alır)
+ * POST /generateStudioPrompt
+ * Body: { standardId, productAnalysis, targetModel?, productName? }
+ */
+export const generateStudioPrompt = createHttpFunction(async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "Use POST" });
+    return;
+  }
+
+  const { standardId, productAnalysis, targetModel, productName } = req.body || {};
+  if (!standardId || !productAnalysis) {
+    res.status(400).json({ success: false, error: "standardId ve productAnalysis gerekli" });
     return;
   }
 
@@ -344,100 +192,55 @@ export const generateStandardPrompt = createHttpFunction(async (req, res) => {
     return;
   }
 
-  const standard = doc.data() as VisualStandard;
-  if (!standard.promptTemplate) {
-    res.status(400).json({ success: false, error: "Bu standartta promptTemplate tanımlı değil" });
+  const standard = doc.data() as any;
+  const scenePrompt: string = standard.scenePrompt || standard.promptTemplate || "";
+
+  if (!scenePrompt) {
+    res.status(400).json({ success: false, error: "Bu standartta scenePrompt tanımlı değil" });
     return;
   }
 
-  // [PRODUCT] placeholder'ını değiştir
-  const productLabel = productDescription ? `${productName} (${productDescription})` : productName;
-  let prompt = standard.promptTemplate.replace(/\[PRODUCT\]/g, productLabel);
+  // productAnalysis hem string hem object olabilir
+  const productPrompt: string = typeof productAnalysis === "string"
+    ? productAnalysis
+    : (productAnalysis.productPrompt as string) || JSON.stringify(productAnalysis);
 
-  // Hedef model seçilmişse AI ile yeniden formatla
-  if (targetModel && MODEL_FORMAT_INSTRUCTIONS[targetModel]) {
-    const systemSettings = await getSystemSettings();
-    const anthropicApiKey = systemSettings?.anthropicApiKey;
-    const openRouterApiKey = (systemSettings as any)?.openRouterApiKey;
-    const promptModel = systemSettings?.posterPromptModel || systemSettings?.posterAnalysisModel;
+  const resolvedProductName: string = productName
+    || (typeof productAnalysis === "object" && productAnalysis.name)
+    || "product";
 
-    if (promptModel) {
-      const isAnthropicModel = !promptModel.includes("/");
-      const hasKey = isAnthropicModel ? !!anthropicApiKey : !!openRouterApiKey;
+  const resolvedTargetModel: string = targetModel || "gemini";
 
-      if (hasKey) {
-        const systemPrompt = `You are a prompt engineer. Reformat the given image generation prompt for a specific AI model.
-${MODEL_FORMAT_INSTRUCTIONS[targetModel]}
-IMPORTANT: The output prompt MUST be entirely in English. Never translate to Turkish or any other language.
-Return ONLY the reformatted prompt — no explanations, no labels.`;
+  try {
+    const finalPrompt = await composePrompt(
+      scenePrompt,
+      productPrompt,
+      resolvedTargetModel,
+      resolvedProductName,
+      standard.name
+    );
 
-        try {
-          let reformatted: string;
-
-          if (isAnthropicModel) {
-            const Anthropic = (await import("@anthropic-ai/sdk")).default;
-            const anthropic = new Anthropic({ apiKey: anthropicApiKey });
-            const result = await anthropic.messages.create({
-              model: promptModel,
-              max_tokens: 800,
-              system: systemPrompt,
-              messages: [{ role: "user", content: prompt }],
-            });
-            reformatted = result.content
-              .filter((b): b is { type: "text"; text: string } => b.type === "text")
-              .map(b => b.text).join("").trim();
-          } else {
-            const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${openRouterApiKey}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://instagram-automation-ad77b.web.app",
-              },
-              body: JSON.stringify({
-                model: promptModel,
-                max_tokens: 800,
-                messages: [
-                  { role: "system", content: systemPrompt },
-                  { role: "user", content: prompt },
-                ],
-              }),
-            });
-            const orData = await orResponse.json() as any;
-            if (orResponse.ok) {
-              reformatted = (orData.choices?.[0]?.message?.content || "").trim();
-            } else {
-              // Hata durumunda orijinal prompt'u kullan
-              console.warn(`[generateStandardPrompt] OpenRouter hatası, orijinal prompt kullanılıyor`);
-              reformatted = prompt;
-            }
-          }
-
-          if (reformatted) prompt = reformatted;
-        } catch (err: any) {
-          console.warn(`[generateStandardPrompt] Reformat hatası, orijinal prompt kullanılıyor:`, err?.message);
-          // Hata olsa bile orijinal prompt'u döndür
-        }
-      }
-    }
+    res.json({
+      success: true,
+      data: {
+        finalPrompt,
+        scenePrompt,
+        productPrompt,
+        targetModel: resolvedTargetModel,
+        sceneName: standard.name,
+        productName: resolvedProductName,
+      },
+    });
+  } catch (err: any) {
+    console.error("[generateStudioPrompt]", err?.message);
+    res.status(500).json({ success: false, error: err?.message || "Prompt üretimi başarısız" });
   }
-
-  res.json({
-    success: true,
-    data: {
-      prompt,
-      standardId,
-      standardName: standard.name,
-      productName,
-      targetModel: targetModel || "generic",
-    },
-  });
-}, { timeoutSeconds: 60, memory: "512MiB" });
+}, { timeoutSeconds: 90, memory: "512MiB" });
 
 // ─── Seed ───────────────────────────────────────────────────────────────────
 
 /**
- * 4 varsayılan görsel standart yükle
+ * Varsayılan sahne standartlarını Firestore'a yükle
  * POST /seedVisualStandards
  */
 export const seedVisualStandards = createHttpFunction(async (req, res) => {
