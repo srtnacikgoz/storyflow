@@ -239,7 +239,7 @@ function ProductView({ result }: { result: ProductAnalysisResult }) {
 
 // --- Ana Bileşen ---
 
-export function AnalysisResultPanel(props: AnalysisResultPanelProps) {
+export default function AnalysisResultPanel(props: AnalysisResultPanelProps) {
   if (props.type === "scene") {
     return <SceneView result={props.result} />;
   }
