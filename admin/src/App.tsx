@@ -27,7 +27,10 @@ const RuleEngine = lazy(() => import("./pages/RuleEngine"));
 const AITerminology = lazy(() => import("./pages/AITerminology"));
 const Ideas = lazy(() => import("./pages/Ideas"));
 const Enhance = lazy(() => import("./pages/Enhance"));
-// CompositionTemplates kaldırıldı — slot konfigürasyonu Senaryolar'a taşındı
+const Poster = lazy(() => import("./pages/Poster"));
+const PosterGallery = lazy(() => import("./pages/PosterGallery"));
+const QRCode = lazy(() => import("./pages/QRCode"));
+const StyleStudio = lazy(() => import("./pages/StyleStudio"));
 
 // Loading fallback component
 function PageLoader() {
@@ -68,6 +71,10 @@ function App() {
             <Route path="ai-terminology" element={<Suspense fallback={<PageLoader />}><AITerminology /></Suspense>} />
             <Route path="ideas" element={<Suspense fallback={<PageLoader />}><Ideas /></Suspense>} />
             <Route path="enhance" element={<Suspense fallback={<PageLoader />}><Enhance /></Suspense>} />
+            <Route path="poster" element={<Suspense fallback={<PageLoader />}><Poster /></Suspense>} />
+            <Route path="poster-gallery" element={<Suspense fallback={<PageLoader />}><PosterGallery /></Suspense>} />
+            <Route path="qr-code" element={<Suspense fallback={<PageLoader />}><QRCode /></Suspense>} />
+            <Route path="style-studio" element={<Suspense fallback={<PageLoader />}><StyleStudio /></Suspense>} />
             {/* composition-templates route kaldırıldı — slot konfigürasyonu Senaryolar'a taşındı */}
           </Route>
         </Routes>
