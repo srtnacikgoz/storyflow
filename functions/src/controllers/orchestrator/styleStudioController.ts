@@ -6,7 +6,7 @@
 import { createHttpFunction, db } from "./shared";
 import { getSystemSettings } from "../../services/configService";
 import { clearConfigCache } from "../../services/config/configCache";
-import { buildDefaultVisualStandards } from "./styleStudioSeedData";
+import { buildDefaultSceneStandards, SceneStandardSeed } from "./styleStudioSeedData";
 
 const VISUAL_STANDARDS_PATH = "global/config/style-studio/standards/items";
 
@@ -447,7 +447,7 @@ export const seedVisualStandards = createHttpFunction(async (req, res) => {
   }
 
   const now = Date.now();
-  const defaults = buildDefaultVisualStandards(now);
+  const defaults = buildDefaultSceneStandards(now);
 
   const batch = db.batch();
   for (const standard of defaults) {
@@ -459,7 +459,7 @@ export const seedVisualStandards = createHttpFunction(async (req, res) => {
 
   res.json({
     success: true,
-    data: { seeded: defaults.length, ids: defaults.map(s => s.id) },
+    data: { seeded: defaults.length, ids: defaults.map((s: SceneStandardSeed) => s.id) },
     message: `${defaults.length} görsel standart yüklendi`,
   });
 });
