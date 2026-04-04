@@ -40,6 +40,7 @@ const CATEGORY_LABELS: Record<ProductCategory, string> = {
 // AI Model etiketleri
 const AI_MODEL_LABELS: Record<AIModel, string> = {
   "gemini-3-pro-image-preview": "Gemini 3 Pro",
+  "gemini-3.1-flash-image-preview": "Nano Banana 2",
   "none": "AI Kapalı",
 };
 

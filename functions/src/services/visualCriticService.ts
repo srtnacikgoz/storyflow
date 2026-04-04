@@ -39,10 +39,14 @@ interface CritiqueResponse {
  */
 export class VisualCriticService {
     private genAI: GoogleGenerativeAI;
-    private modelName = "gemini-3-pro-image-preview"; // Image model — text de üretebilir
+    private modelName: string;
 
-    constructor(apiKey: string) {
+    constructor(apiKey: string, modelName?: string) {
         this.genAI = new GoogleGenerativeAI(apiKey);
+        if (!modelName) {
+            throw new Error("Visual critic modeli belirtilmedi (Ayarlar > AI Model Seçimi)");
+        }
+        this.modelName = modelName;
     }
 
     /**

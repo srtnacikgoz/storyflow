@@ -153,6 +153,11 @@ export interface AILog {
 
   // Metrikler
   tokensUsed?: number; // Token kullanımı
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
   cost?: number; // Maliyet (USD)
   durationMs: number; // İşlem süresi (ms)
 
@@ -179,9 +184,10 @@ export interface AILog {
 /**
  * AI Model Types for Image Enhancement
  * - gemini-3-pro-image-preview: Gemini 3 Pro Image Preview
+ * - gemini-3.1-flash-image-preview: Gemini 3.1 Flash Image Preview (Nano Banana 2)
  * - none: AI işleme yok
  */
-export type AIModel = "gemini-3-pro-image-preview" | "none";
+export type AIModel = "gemini-3-pro-image-preview" | "gemini-3.1-flash-image-preview" | "none";
 
 /**
  * Style Variants for Image Transformation

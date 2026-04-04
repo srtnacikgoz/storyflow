@@ -3,6 +3,7 @@ import { defineSecret } from "firebase-functions/params";
 import { VisualCriticService } from "../services/visualCriticService";
 import { AILogService } from "../services/aiLogService";
 import { getStorage } from "firebase-admin/storage";
+import { getSystemSettings } from "../services/configService";
 
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
@@ -96,8 +97,13 @@ export const analyzeImage = onRequest(
                 }
             }
 
-            // 3. Initialize Service
-            const service = new VisualCriticService(geminiApiKey.value());
+            // 3. Initialize Service — model Firestore'dan
+            const systemSettings = await getSystemSettings();
+            if (!systemSettings?.visualCriticModel) {
+                res.status(400).json({ success: false, error: "Visual critic modeli tanımlı değil (Ayarlar > AI Model Seçimi)" });
+                return;
+            }
+            const service = new VisualCriticService(geminiApiKey.value(), systemSettings.visualCriticModel);
 
             // 4. Call Service
             const result = await service.critiqueImage({

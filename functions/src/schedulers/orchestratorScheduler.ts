@@ -2,6 +2,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { OrchestratorScheduler as SchedulerClass } from "../orchestrator/scheduler";
 import { OrchestratorConfig } from "../orchestrator/types";
+import { getSystemSettings } from "../services/configService";
 
 // v2 secrets - tüm hassas değerler burada tanımlanmalı
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -30,17 +31,22 @@ export const orchestratorScheduler = onSchedule(
         console.log("⏰ Orchestrator Scheduler triggered:", new Date().toISOString());
 
         try {
-            // 1. Prepare Configuration - v2'de doğrudan secret'lardan oku
+            // 1. Prepare Configuration - secret'lar + Firestore system settings
+            const systemSettings = await getSystemSettings();
+            if (!systemSettings?.imageModel) {
+                throw new Error("Görsel üretim modeli Firestore'da tanımlı değil (Ayarlar > AI Model Seçimi)");
+            }
+
             const orchestratorConfig: OrchestratorConfig = {
                 geminiApiKey: geminiApiKey.value(),
-                geminiModel: "gemini-3-pro-image-preview",
+                geminiModel: systemSettings.imageModel,
                 qualityThreshold: 7,
                 maxRetries: 3,
                 telegramBotToken: telegramBotToken.value() || "",
                 telegramChatId: telegramChatId.value() || "",
                 approvalTimeout: 60,
                 timezone: "Europe/Istanbul",
-                scheduleBuffer: 30, // 30 mins buffer for optimal time triggering
+                scheduleBuffer: 30,
             };
 
             const scheduler = new SchedulerClass(orchestratorConfig);

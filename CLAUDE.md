@@ -31,6 +31,18 @@
 - **Önce kaldır, sonra ekle**: Bir şey eklemeden önce kaldırılabilecek bir şey var mı sor
 - **Otorite zinciri**: Tema → estetik/atmosfer/izinler. Senaryo → sahne/ürün uyumluluğu/el/kompozisyon. Dashboard → sadece tetikleme
 
+### 0.1. DİNAMİK MİMARİ (Hardcoded Yasağı — Kesin Kural)
+Bu proje **config-driven** çalışır. Hardcoded veri YASAKTIR.
+- **Seçenek listeleri Firestore'da yaşar**: El tipleri, ışık preset'leri, atmosfer seçenekleri, kompozisyon tipleri — hepsi Firestore'da tutulur ve Admin Panel'den yönetilir. Koda gömülmez.
+- **Yeni özellik = Firestore koleksiyonu + Admin UI**: Bir özellik ekleniyorsa mutlaka:
+  1. Firestore'da dinamik koleksiyon/döküman (CRUD)
+  2. Admin Panel'de yönetim sayfası veya bölümü (ekleme, düzenleme, silme, sıralama)
+  3. Pipeline'da bu dinamik veriyi okuyarak kullanma
+- **Hardcoded array/enum YASAK**: `const HAND_TYPES = [...]` gibi kod içi sabit listeler YASAK. Bunlar Firestore'a seed edilir, Admin'den düzenlenir.
+- **Seed fonksiyonu zorunlu**: Yeni bir Firestore koleksiyonu ekleniyorsa, varsayılan verileri yükleyen bir seed endpoint'i de olmalı.
+- **Kullanıcı her zaman değiştirebilmeli**: Deploy gerektirmeden, Admin Panel'den her listeyi güncelleyebilmeli.
+- **Test**: Firestore'da veri yoksa pipeline sessizce fallback KULLANMAZ — hata verir ve kullanıcıyı yönlendirir.
+
 ### 1. Varsayımda Bulunma
 - "Muhtemelen", "Sanırım", "Büyük ihtimalle" → YASAK
 - Bilmiyorsan "bilmiyorum, araştırayım" de
@@ -90,6 +102,7 @@
 3. **İşlevsiz kod yasak** - Bir özellik ya tam çalışır ya hiç olmaz
 4. **Gizli bilgi commit etme** - API key, şifre, .env yasak
 5. **Gereksiz çoğaltma yasak** - Aynı kararı iki yerde verdirme. Çakışan alan varsa birini kaldır. İşlevsel ama tek yerde yeterli olan özelliği diğer yerlerden temizle
+6. **Dosya boyutu limiti (400 satır)** - Bir dosya 400 satırı geçtiyse yeni özellik o dosyaya EKLENmez, kendi modülü oluşturulur. 400+ satır dosyalar fırsat buldukça bölünür. Barrel export pattern ile mevcut import'lar korunur.
 
 ---
 

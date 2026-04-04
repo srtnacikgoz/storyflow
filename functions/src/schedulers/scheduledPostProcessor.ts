@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import {
     getQueueService,
     getConfig,
@@ -10,17 +10,17 @@ import {
     getTimeScoreService,
 } from "../lib/serviceFactory";
 
-const REGION = "europe-west1";
-const TIMEZONE = "Europe/Istanbul";
-
 // Zamanı gelen postları: Gemini ile işle → skipApproval'a göre paylaş veya onay bekle
 // ==========================================
-export const processScheduledPosts = functions
-    .region(REGION)
-    .runWith({ timeoutSeconds: 540, memory: "1GB" })
-    .pubsub.schedule("*/15 * * * *")
-    .timeZone(TIMEZONE)
-    .onRun(async () => {
+export const processScheduledPosts = onSchedule(
+    {
+        schedule: "*/15 * * * *",
+        timeZone: "Europe/Istanbul",
+        region: "europe-west1",
+        timeoutSeconds: 540,
+        memory: "1GiB",
+    },
+    async () => {
         console.log("[Scheduled Processor] Running...");
 
         try {
@@ -211,4 +211,5 @@ export const processScheduledPosts = functions
         } catch (error) {
             console.error("[Scheduled Processor] Error:", error);
         }
-    });
+    }
+);

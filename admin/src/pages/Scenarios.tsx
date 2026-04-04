@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { api } from "../services/api";
 import { useLoading } from "../contexts/LoadingContext";
 import { Tooltip } from "../components/Tooltip";
@@ -7,7 +7,7 @@ import { PageGuide } from "../components/PageGuide"; // New Import
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageTour } from "../components/PageTour";
 import type { TourStep } from "../components/PageTour";
-import type { DynamicCategory, ThemeSetting, SlotDefinition, SlotConfig, SlotState } from "../types";
+import type { DynamicCategory, ThemeSetting, SlotDefinition } from "../types";
 import { WEATHER_PRESETS, LIGHTING_PRESETS, ATMOSPHERE_PRESETS } from "../types";
 import { slugify } from "../utils/stringUtils";
 
@@ -59,6 +59,7 @@ interface Scenario {
   accessoryAllowed?: boolean;
   accessoryOptions?: string[];
   shallowDepthOfField?: boolean;
+  includesHands?: boolean;
   createdAt?: number;
   updatedAt?: number;
 }
@@ -70,6 +71,11 @@ const DEFAULT_COMPOSITION_TYPES = [
   { id: "close-up-detail", name: "Yakın Çekim (Macro)", description: "Dokuya odaklanma", icon: "🔍", bestFor: "Kalite vurgulama" },
   { id: "ambient-scene", name: "Ortam Sahnesi", description: "Ürün sahnenin parçası", icon: "☕", bestFor: "Hikaye anlatımı" },
   { id: "minimal-clean", name: "Minimal / Sade", description: "Temiz arka plan", icon: "⬜", bestFor: "E-ticaret, katalog" },
+  { id: "single-product-showcase", name: "Tek Ürün Vitrin", description: "İzole ürün, temiz arka plan", icon: "💎", bestFor: "E-ticaret, vitrin" },
+  { id: "macro-texture-detail", name: "Makro Doku Detay", description: "Extreme close-up, doku çalışması", icon: "🔬", bestFor: "Kalite, doku" },
+  { id: "beverage-hero", name: "İçecek Hero", description: "Bardak/fincan hero çekim", icon: "🥤", bestFor: "Kahve, içecek" },
+  { id: "chocolate-luxury", name: "Çikolata Lüks", description: "Moody dark, premium estetik", icon: "🍫", bestFor: "Çikolata, lüks" },
+  { id: "catalog-shot", name: "Katalog Çekim", description: "Beyaz arka plan, stüdyo ışık", icon: "📋", bestFor: "Katalog, menü" },
 ];
 
 // Kompozisyon ID'sine göre ikon döndürür
@@ -87,6 +93,11 @@ const getCompositionIcon = (id: string): string => {
     "close-up-detail": "🔍",
     "ambient-scene": "☕",
     "minimal-clean": "⬜",
+    "single-product-showcase": "💎",
+    "macro-texture-detail": "🔬",
+    "beverage-hero": "🥤",
+    "chocolate-luxury": "🍫",
+    "catalog-shot": "📋",
   };
   return icons[id] || "📷";
 };
@@ -123,12 +134,14 @@ interface ScenarioFormData {
     lightingPreset: string;
     atmospherePreset: string;
   };
+  includesHands: boolean;
   petAllowed: boolean;
   accessoryAllowed: boolean;
   accessoryOptions: string[];
   shallowDepthOfField: boolean;
-  // Slot konfigürasyonu (CompositionTemplates'den taşındı)
-  compositionSlots: Record<string, SlotConfig>;
+  isExplodedView: boolean;
+  explodedViewDescription: string;
+  compositionSlots: Record<string, { state: "random" | "disabled" }>;
 }
 
 // Boş form
@@ -146,10 +159,13 @@ const emptyForm: ScenarioFormData = {
     lightingPreset: "",
     atmospherePreset: "",
   },
+  includesHands: false,
   petAllowed: false,
   accessoryAllowed: false,
   accessoryOptions: [],
   shallowDepthOfField: false,
+  isExplodedView: false,
+  explodedViewDescription: "",
   compositionSlots: {},
 };
 
@@ -159,6 +175,7 @@ export default function Scenarios() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "interior">("all");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Dinamik kategoriler
   const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
@@ -188,22 +205,24 @@ export default function Scenarios() {
   const [deleting, setDeleting] = useState(false);
 
   // Sahne ayarları: Asset tag'leri (slot konfigürasyonunda kullanılıyor)
-  const [slotTags, setSlotTags] = useState<Record<string, string[]>>({});
 
   // Sahne ayarları accordion
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
 
   // Slot tanımları (CompositionTemplates'den taşındı)
-  const [slotDefinitions, setSlotDefinitions] = useState<SlotDefinition[]>([]);
   // Slot tag dropdown'ları açık/kapalı
-  const [slotTagsOpen, setSlotTagsOpen] = useState<Record<string, boolean>>({});
-  const slotTagsRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Detay modal
   const [detailScenario, setDetailScenario] = useState<Scenario | null>(null);
 
   // AI description generation
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Senaryo yazıcı model (Settings'den)
+  const [scenarioWriterModel, setScenarioWriterModel] = useState<string>("none");
+
+  // Slot tanımları (compositionSlots konfigürasyonu için)
+  const [slotDefinitions, setSlotDefinitions] = useState<SlotDefinition[]>([]);
 
   // Dinamik interior tipleri
   const INTERIOR_TYPES = useMemo(() => {
@@ -233,96 +252,31 @@ export default function Scenarios() {
     return DEFAULT_COMPOSITION_TYPES;
   }, [geminiPresets]);
 
-  // Dropdown dışına tıklayınca kapat (slot tag dropdown'ları)
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      Object.entries(slotTagsRefs.current).forEach(([key, ref]) => {
-        if (ref && !ref.contains(e.target as Node)) {
-          setSlotTagsOpen(prev => ({ ...prev, [key]: false }));
-        }
-      });
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Slot tag'lerini yükle — kategori bazlı (3 aşamalı arama)
-  const loadSlotTags = async (defs: SlotDefinition[]) => {
-    try {
-      // Kategorileri yükle
-      const categoriesData = await api.getCategories().catch(() => null);
-      const categories = categoriesData?.categories.filter(c => !c.isDeleted) || [];
-
-      const activeDefs = defs.filter(d => d.isActive);
-      const results = await Promise.all(
-        activeDefs.map(async (def) => {
-          const tagSet = new Set<string>();
-          const checkedCategoryTypes = new Set<string>();
-
-          // 1. linkedSlotKey: Bu slota bağlı TÜM kategorilerden yükle
-          const linkedCats = categories.filter(c => c.linkedSlotKey === def.key);
-          for (const cat of linkedCats) {
-            checkedCategoryTypes.add(cat.type);
-            const assets = await api.listAssets({ category: cat.type, isActive: true }).catch(() => []);
-            assets.forEach(a => a.tags?.forEach((tag: string) => tagSet.add(tag)));
-          }
-
-          // 2. assetCategory/assetSubType: Slot tanımındaki kategoriyi de kontrol et
-          if (def.assetCategory && !checkedCategoryTypes.has(def.assetCategory)) {
-            checkedCategoryTypes.add(def.assetCategory);
-            const catAssets = await api.listAssets({ category: def.assetCategory, isActive: true }).catch(() => []);
-            const filtered = def.assetSubType
-              ? catAssets.filter(a => a.subType === def.assetSubType)
-              : catAssets;
-            filtered.forEach(a => a.tags?.forEach((tag: string) => tagSet.add(tag)));
-          }
-
-          // 3. Otomatik isim eşleştirme: Hâlâ tag bulunamadıysa,
-          //    slot label'ındaki anahtar kelimeler ile kategori adını eşleştir
-          //    Örn: "Bardak / İçecek" → "Bardaklar" kategorisini bulur
-          if (tagSet.size === 0 && def.label) {
-            const keywords = def.label
-              .toLowerCase()
-              .split(/[\s\/\-]+/)
-              .filter(w => w.length > 2);
-
-            const matchedCats = categories.filter(cat => {
-              if (checkedCategoryTypes.has(cat.type)) return false;
-              const catName = cat.displayName.toLowerCase();
-              return keywords.some(kw => catName.includes(kw));
-            });
-
-            for (const cat of matchedCats) {
-              const assets = await api.listAssets({ category: cat.type, isActive: true }).catch(() => []);
-              assets.forEach(a => a.tags?.forEach((tag: string) => tagSet.add(tag)));
-            }
-          }
-
-          return { key: def.key, tags: Array.from(tagSet).sort() };
-        })
-      );
-      const tagMap: Record<string, string[]> = {};
-      results.forEach(r => { tagMap[r.key] = r.tags; });
-      setSlotTags(tagMap);
-    } catch (err) {
-      console.error("Slot tag'leri yüklenemedi:", err);
-    }
-  };
 
   useEffect(() => {
     loadInitialData();
   }, []);
 
   const loadInitialData = async () => {
-    // Kategorileri, Gemini preset'lerini ve senaryoları paralel yükle
+    // Kategorileri, Gemini preset'lerini, settings ve senaryoları paralel yükle
     try {
-      const [categoriesData, presetsData] = await Promise.all([
+      const [categoriesData, presetsData, settingsData, slotDefsData] = await Promise.all([
         api.getCategories().catch(() => null),
         api.getGeminiPresets().catch((err) => {
           console.error("[Scenarios] Gemini preset'leri yüklenemedi:", err);
           return null;
         }),
+        api.getSystemSettings().catch(() => null),
+        api.getSlotDefinitions().catch(() => null),
       ]);
+
+      if (slotDefsData?.slots) {
+        setSlotDefinitions(slotDefsData.slots.filter((s: SlotDefinition) => s.isActive));
+      }
+
+      if (settingsData?.scenarioWriterModel) {
+        setScenarioWriterModel(settingsData.scenarioWriterModel);
+      }
 
       if (categoriesData) {
         setDynamicCategories(categoriesData.categories.filter((c) => !c.isDeleted));
@@ -346,23 +300,16 @@ export default function Scenarios() {
     setError(null);
     startLoading("scenarios", "Senaryolar yükleniyor...");
     try {
-      const [scenarioResponse, slotDefs] = await Promise.all([
-        api.get<{
-          success: boolean;
-          data: { all: Scenario[] };
-          error?: string;
-        }>("listScenarios?includeInactive=true"),
-        api.getSlotDefinitions().catch(() => ({ slots: [] })),
-      ]);
+      const scenarioResponse = await api.get<{
+        success: boolean;
+        data: { all: Scenario[] };
+        error?: string;
+      }>("listScenarios?includeInactive=true");
       if (scenarioResponse.success) {
         setScenarios(scenarioResponse.data.all || []);
       } else {
         setError(scenarioResponse.error || "Senaryolar yüklenemedi");
       }
-      const activeDefs = (slotDefs.slots || []).filter((s: SlotDefinition) => s.isActive);
-      setSlotDefinitions(activeDefs);
-      // SlotDefinition'lardan dinamik tag yükleme
-      loadSlotTags(activeDefs);
     } catch (err) {
       setError("Senaryolar yüklenirken hata oluştu");
       console.error(err);
@@ -374,15 +321,21 @@ export default function Scenarios() {
 
   // Filtrelenmiş senaryolar
   const filteredScenarios = scenarios.filter((s) => {
-    if (filter === "all") return true;
-    if (filter === "interior") return s.isInterior;
+    if (filter === "interior" && !s.isInterior) return false;
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      return s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q);
+    }
     return true;
   });
 
   // Modal aç (yeni)
   const openNewModal = () => {
     setEditingId(null);
-    setForm(emptyForm);
+    // Yeni senaryoda tüm slot'lar varsayılan açık
+    const defaultSlots: Record<string, { state: "random" | "disabled" }> = {};
+    slotDefinitions.forEach((s) => { defaultSlots[s.key] = { state: "random" }; });
+    setForm({ ...emptyForm, compositionSlots: defaultSlots });
     setShowModal(true);
   };
 
@@ -406,33 +359,14 @@ export default function Scenarios() {
         lightingPreset: scenario.setting?.lightingPreset || "",
         atmospherePreset: scenario.setting?.atmospherePreset || "",
       },
+      includesHands: scenario.includesHands || false,
       petAllowed: scenario.petAllowed || false,
       accessoryAllowed: scenario.accessoryAllowed || false,
       accessoryOptions: scenario.accessoryOptions || [],
       shallowDepthOfField: scenario.shallowDepthOfField || false,
-      compositionSlots: (() => {
-        // Mevcut compositionSlots varsa onu kullan
-        const slots: Record<string, SlotConfig> = (scenario as any).compositionSlots || {};
-        // Geriye uyumluluk: eski preferredTags varsa ve slot'ta filterTags yoksa taşı
-        const pt = scenario.setting?.preferredTags;
-        if (pt) {
-          const mapping: Record<string, string[]> = {
-            surface: pt.table || [],
-            dish: pt.plate || [],
-            drinkware: pt.cup || [],
-          };
-          for (const [slotKey, tags] of Object.entries(mapping)) {
-            if (tags.length > 0 && !slots[slotKey]) {
-              if (tags.includes("__none__")) {
-                // __none__ → disabled
-              } else {
-                slots[slotKey] = { state: "manual", filterTags: tags };
-              }
-            }
-          }
-        }
-        return slots;
-      })(),
+      isExplodedView: (scenario as any).isExplodedView || false,
+      explodedViewDescription: (scenario as any).explodedViewDescription || "",
+      compositionSlots: (scenario as any).compositionSlots || {},
     });
     setShowModal(true);
   };
@@ -452,24 +386,15 @@ export default function Scenarios() {
       alert("Kompozisyon türü seçmelisiniz");
       return;
     }
+    if (form.isExplodedView && !form.explodedViewDescription.trim()) {
+      alert("Patlatılmış görünüm aktifken katman açıklaması zorunludur");
+      return;
+    }
 
     setSaving(true);
     try {
       // Setting objesini oluştur (boş alanları dahil etme)
       const setting: ThemeSetting = {};
-      // preferredTags: slot konfigürasyonundaki filterTags'den otomatik türet
-      const preferredTags: NonNullable<ThemeSetting["preferredTags"]> = {};
-      const surfaceTags = form.compositionSlots.surface?.filterTags || [];
-      const dishTags = form.compositionSlots.dish?.filterTags || [];
-      const drinkwareTags = form.compositionSlots.drinkware?.filterTags || [];
-      // "disabled" slot → __none__ (sahnede olmasın)
-      if (form.compositionSlots.surface?.state === "disabled") preferredTags.table = ["__none__"];
-      else if (surfaceTags.length > 0) preferredTags.table = surfaceTags;
-      if (form.compositionSlots.dish?.state === "disabled") preferredTags.plate = ["__none__"];
-      else if (dishTags.length > 0) preferredTags.plate = dishTags;
-      if (form.compositionSlots.drinkware?.state === "disabled") preferredTags.cup = ["__none__"];
-      else if (drinkwareTags.length > 0) preferredTags.cup = drinkwareTags;
-      if (Object.keys(preferredTags).length > 0) setting.preferredTags = preferredTags;
       if (form.setting.weatherPreset) {
         setting.weatherPreset = form.setting.weatherPreset as ThemeSetting["weatherPreset"];
       }
@@ -491,11 +416,13 @@ export default function Scenarios() {
         suggestedProducts: form.suggestedProducts,
         // Sahne ayarları (Tema'dan taşındı)
         setting: Object.keys(setting).length > 0 ? setting : undefined,
+        includesHands: form.includesHands || undefined,
         petAllowed: form.petAllowed,
         accessoryAllowed: form.accessoryAllowed,
         accessoryOptions: form.accessoryOptions.length > 0 ? form.accessoryOptions : undefined,
         shallowDepthOfField: form.shallowDepthOfField || undefined,
-        // Slot konfigürasyonu (CompositionTemplates'den taşındı)
+        isExplodedView: form.isExplodedView || undefined,
+        explodedViewDescription: form.isExplodedView ? form.explodedViewDescription.trim() : undefined,
         compositionSlots: Object.keys(form.compositionSlots).length > 0 ? form.compositionSlots : undefined,
       };
 
@@ -521,7 +448,7 @@ export default function Scenarios() {
 
     setDeleting(true);
     try {
-      await api.delete<{ success: boolean }>(`deleteScenarioEndpoint?id=${deleteId}`);
+      await api.delete<{ success: boolean }>(`deleteScenarioEndpoint?id=${deleteId}&hardDelete=true`);
       setDeleteId(null);
       loadScenarios();
     } catch (err) {
@@ -659,23 +586,37 @@ export default function Scenarios() {
           </div>
         ) : (
           <>
-            {/* Filtreler */}
-            <div className="flex gap-2 mb-6">
-              {[
-                { key: "all", label: "Tümü", count: scenarios.length },
-                { key: "interior", label: "Interior", count: scenarios.filter((s) => s.isInterior).length },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key as typeof filter)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter === f.key
-                    ? "bg-amber-100 text-amber-800"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                >
-                  {f.label} ({f.count})
-                </button>
-              ))}
+            {/* Filtreler + Arama */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex gap-2">
+                {[
+                  { key: "all", label: "Tümü", count: scenarios.length },
+                  { key: "interior", label: "Interior", count: scenarios.filter((s) => s.isInterior).length },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setFilter(f.key as typeof filter)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter === f.key
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                  >
+                    {f.label} ({f.count})
+                  </button>
+                ))}
+              </div>
+              <div className="relative flex-1 max-w-xs">
+                <input
+                  type="text"
+                  placeholder="Senaryo ara..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
             </div>
 
             {/* Senaryo Listesi */}
@@ -816,6 +757,109 @@ export default function Scenarios() {
               </div>
 
               <div className="p-6 space-y-5">
+                {/* ========== ŞABLONDAN BAŞLA ========== */}
+                {!editingId && (
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4">
+                    <label className="block text-sm font-semibold text-amber-800 mb-2">
+                      Şablondan Başla (opsiyonel)
+                    </label>
+                    <p className="text-xs text-amber-600 mb-3">
+                      Hazır bir çekim modu seçerek formu otomatik doldurun. Sonra dilediğiniz gibi düzenleyin.
+                    </p>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const templateId = e.target.value;
+                        if (!templateId) return;
+                        // Şablon eşleştirmeleri
+                        const templates: Record<string, Partial<ScenarioFormData>> = {
+                          "tek-urun-vitrin": {
+                            name: "Tek Ürün Vitrin",
+                            description: "Single product on clean backdrop. No plates, cups or table props. Product isolated, occupying 50-70% of frame. Studio-style showcase.",
+                            compositionId: "single-product-showcase",
+                            suggestedProducts: ["croissants", "chocolates", "pastas"],
+                            shallowDepthOfField: false,
+                          },
+                          "makro-doku": {
+                            name: "Makro Doku",
+                            description: "Extreme close-up texture study. Shallow DOF (f/1.8), product fills 85-95% of frame. Every layer, pore and surface detail visible.",
+                            compositionId: "macro-texture-detail",
+                            suggestedProducts: ["chocolates", "croissants", "pastas"],
+                            shallowDepthOfField: true,
+                          },
+                          "icecek-sicak-hero": {
+                            name: "İçecek Hero (Sıcak)",
+                            description: "Hot beverage as hero. Latte art or golden crema visible. Warm atmosphere suggesting freshness. Cup centered at eye-level.",
+                            compositionId: "beverage-hero",
+                            suggestedProducts: ["coffees"],
+                            shallowDepthOfField: false,
+                          },
+                          "icecek-soguk-hero": {
+                            name: "İçecek Hero (Soğuk)",
+                            description: "Cold beverage as hero. Condensation droplets on glass surface. Refreshing, crisp atmosphere. Glass centered at eye-level.",
+                            compositionId: "beverage-hero",
+                            suggestedProducts: ["coffees"],
+                            shallowDepthOfField: false,
+                          },
+                          "cikolata-lux": {
+                            name: "Çikolata Lüks",
+                            description: "Moody dark backdrop, premium chocolate aesthetic. Specular highlights on tempered surface. Rim lighting, deep shadows.",
+                            compositionId: "chocolate-luxury",
+                            suggestedProducts: ["chocolates"],
+                            shallowDepthOfField: false,
+                          },
+                          "urun-duet": {
+                            name: "Ürün Düeti",
+                            description: "Two complementary products in minimal composition. Clean arrangement, balanced spacing. Duo presentation.",
+                            compositionId: "minimal-clean",
+                            suggestedProducts: ["chocolates", "croissants"],
+                            shallowDepthOfField: false,
+                          },
+                          "katalog-cekim": {
+                            name: "Katalog Çekim",
+                            description: "Pure white or neutral background, studio lighting. Standard catalog framing for print materials.",
+                            compositionId: "catalog-shot",
+                            suggestedProducts: ["croissants", "chocolates", "pastas"],
+                            shallowDepthOfField: false,
+                          },
+                          "menu-gorseli": {
+                            name: "Menü Görseli",
+                            description: "Catalog-style product shot for QR menus. Bottom 25% kept clear for text overlay. Clean white background.",
+                            compositionId: "catalog-shot",
+                            suggestedProducts: ["croissants", "chocolates", "pastas", "coffees"],
+                            shallowDepthOfField: false,
+                          },
+                        };
+                        const tmpl = templates[templateId];
+                        if (tmpl) {
+                          setForm((prev) => ({
+                            ...prev,
+                            ...tmpl,
+                            id: prev.id, // ID'yi koruyalım
+                          }));
+                        }
+                      }}
+                      className="w-full border border-amber-300 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="">Şablon seçin...</option>
+                      <optgroup label="Ürün Çekimleri">
+                        <option value="tek-urun-vitrin">💎 Tek Ürün Vitrin</option>
+                        <option value="makro-doku">🔬 Makro Doku</option>
+                        <option value="cikolata-lux">🍫 Çikolata Lüks</option>
+                        <option value="urun-duet">⬜ Ürün Düeti</option>
+                      </optgroup>
+                      <optgroup label="İçecek Çekimleri">
+                        <option value="icecek-sicak-hero">🥤 İçecek Hero (Sıcak)</option>
+                        <option value="icecek-soguk-hero">🥤 İçecek Hero (Soğuk)</option>
+                      </optgroup>
+                      <optgroup label="Katalog / Menü">
+                        <option value="katalog-cekim">📋 Katalog Çekim</option>
+                        <option value="menu-gorseli">📋 Menü Görseli</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                )}
+
                 {/* ========== TEMEL BİLGİLER ========== */}
                 <fieldset className="border border-gray-200 rounded-lg p-4">
                   <legend className="text-sm font-semibold text-gray-700 px-2">📝 Temel Bilgiler</legend>
@@ -848,46 +892,53 @@ export default function Scenarios() {
                         <label className="block text-sm font-medium text-gray-700">
                           Açıklama *
                         </label>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!form.name) {
-                              alert("Önce bir Senaryo Adı girin.");
-                              return;
-                            }
-                            if (!form.compositionId) {
-                              alert("Önce Kompozisyon Türü seçin.");
-                              return;
-                            }
-                            setIsGenerating(true);
-                            try {
-                              const result = await api.generateScenarioDescription({
-                                scenarioName: form.name,
-                                compositions: [form.compositionId],
-                                compositionEntry: form.compositionEntry || undefined,
-                              });
-                              setForm(prev => ({ ...prev, description: result.description }));
-                            } catch (err) {
-                              alert("AI üretimi başarısız oldu.");
-                              console.error(err);
-                            } finally {
-                              setIsGenerating(false);
-                            }
-                          }}
-                          disabled={isGenerating || !form.name || !form.compositionId}
-                          className="text-xs bg-gradient-to-r from-teal-500 to-emerald-600 text-white px-3 py-1.5 rounded-full hover:shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          {isGenerating ? (
-                            <>
-                              <span className="animate-spin text-[10px]">✨</span>
-                              Yazılıyor...
-                            </>
-                          ) : (
-                            <>
-                              <span>✨</span> Gemini ile Yaz
-                            </>
+                        <div className="relative group">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!form.name) {
+                                alert("Önce bir Senaryo Adı girin.");
+                                return;
+                              }
+                              if (!form.compositionId) {
+                                alert("Önce Kompozisyon Türü seçin.");
+                                return;
+                              }
+                              setIsGenerating(true);
+                              try {
+                                const result = await api.generateScenarioDescription({
+                                  scenarioName: form.name,
+                                  compositions: [form.compositionId],
+                                  compositionEntry: form.compositionEntry || undefined,
+                                });
+                                setForm(prev => ({ ...prev, description: result.description }));
+                              } catch (err) {
+                                alert("AI üretimi başarısız oldu.");
+                                console.error(err);
+                              } finally {
+                                setIsGenerating(false);
+                              }
+                            }}
+                            disabled={isGenerating || !form.name || !form.compositionId || scenarioWriterModel === "none"}
+                            className="text-xs bg-gradient-to-r from-teal-500 to-emerald-600 text-white px-3 py-1.5 rounded-full hover:shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {isGenerating ? (
+                              <>
+                                <span className="animate-spin text-[10px]">✨</span>
+                                Yazılıyor...
+                              </>
+                            ) : (
+                              <>
+                                <span>✨</span> AI ile Yaz
+                              </>
+                            )}
+                          </button>
+                          {scenarioWriterModel === "none" && (
+                            <div className="absolute bottom-full right-0 mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
+                              Ayarlar &gt; Senaryo Yazıcı Modeli seçin
+                            </div>
                           )}
-                        </button>
+                        </div>
                       </div>
                       <div className="relative">
                         <textarea
@@ -901,13 +952,13 @@ export default function Scenarios() {
                         {isGenerating && (
                           <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] rounded-lg flex items-center justify-center">
                             <div className="text-emerald-600 text-sm font-medium animate-pulse">
-                              Gemini sahneyi hayal ediyor... 🎬
+                              AI sahneyi hayal ediyor... 🎬
                             </div>
                           </div>
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        *Ad ve Kompozisyon seçimleriniz Gemini&apos;ye iletilir. Sadece sahne anını tarif eder (ışık/atmosfer Mood&apos;un işi).
+                        *Ad ve Kompozisyon seçimleriniz AI modeline iletilir. Sadece sahne anını tarif eder (ışık/atmosfer Mood&apos;un işi).
                       </p>
                     </div>
                   </div>
@@ -1038,6 +1089,51 @@ export default function Scenarios() {
                   )}
                 </fieldset>
 
+                {/* ========== SLOT KONFİGÜRASYONU ========== */}
+                {slotDefinitions.length > 0 && (
+                  <fieldset className="border border-stone-200 rounded-lg p-4">
+                    <legend className="text-sm font-semibold text-stone-700 px-2 flex items-center gap-2">
+                      🧩 Referans Görseller (Slot'lar)
+                    </legend>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Bu senaryoda hangi referans görseller kullanılsın? Kapalı olanlar üretimden çıkarılır.
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {slotDefinitions.map((slot) => {
+                        const currentState = form.compositionSlots[slot.key]?.state || "random";
+                        const isEnabled = currentState !== "disabled";
+                        return (
+                          <label
+                            key={slot.key}
+                            className={`flex items-center gap-2 p-2.5 border rounded-lg cursor-pointer transition ${
+                              isEnabled
+                                ? "bg-emerald-50 border-emerald-300"
+                                : "bg-gray-50 border-gray-200 opacity-60"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              onChange={(e) => {
+                                const newState = e.target.checked ? "random" : "disabled";
+                                setForm((prev) => ({
+                                  ...prev,
+                                  compositionSlots: {
+                                    ...prev.compositionSlots,
+                                    [slot.key]: { state: newState },
+                                  },
+                                }));
+                              }}
+                              className="rounded text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <span className="text-sm">{slot.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                )}
+
                 {/* ========== SAHNE AYARLARI (Tema'dan taşındı - katlanabilir) ========== */}
                 <fieldset className="border border-stone-200 rounded-lg">
                   <legend className="text-sm font-semibold text-stone-700 px-2">
@@ -1056,128 +1152,20 @@ export default function Scenarios() {
 
                   {sceneSettingsOpen && (
                     <div className="p-4 space-y-4">
-                      {/* Slot Konfigürasyonu */}
-                      {slotDefinitions.length > 0 && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Slot Konfigürasyonu
-                            <span className="text-xs font-normal text-gray-400 ml-1">Her slot için pasif / etiket seç / rastgele</span>
-                          </label>
-                          <div className="space-y-3">
-                            {slotDefinitions.map((def) => {
-                              const slotConfig = form.compositionSlots[def.key];
-                              const currentState: SlotState = slotConfig?.state || "disabled";
-                              const currentTags = slotConfig?.filterTags || [];
-                              const availableTags = slotTags[def.key] || [];
-                              const isOpen = slotTagsOpen[def.key] || false;
-
-                              return (
-                                <div
-                                  key={def.key}
-                                  className={`p-3 border rounded-lg transition-colors ${
-                                    currentState === "disabled"
-                                      ? "border-stone-200 bg-stone-50"
-                                      : currentState === "manual"
-                                        ? "border-emerald-200 bg-emerald-50/30"
-                                        : "border-amber-200 bg-amber-50/30"
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <span className="text-sm font-medium text-gray-900">{def.label}</span>
-                                      {def.isRequired && <span className="text-xs text-amber-600 ml-2">Zorunlu</span>}
-                                    </div>
-                                    <div className="flex gap-1">
-                                      {([["disabled", "Pasif"], ["manual", "Etiket Seç"], ["random", "Rastgele"]] as [SlotState, string][]).map(([state, label]) => {
-                                        const isDisabledOption = def.isRequired && state === "disabled";
-                                        return (
-                                          <button
-                                            key={state}
-                                            type="button"
-                                            disabled={isDisabledOption}
-                                            onClick={() => {
-                                              const newSlots = { ...form.compositionSlots };
-                                              if (state === "disabled") {
-                                                delete newSlots[def.key];
-                                              } else {
-                                                newSlots[def.key] = { state, ...(state === "manual" && currentTags.length > 0 ? { filterTags: currentTags } : {}) };
-                                              }
-                                              setForm({ ...form, compositionSlots: newSlots });
-                                            }}
-                                            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-                                              isDisabledOption
-                                                ? "bg-stone-100 text-stone-300 cursor-not-allowed"
-                                                : currentState === state
-                                                  ? state === "disabled"
-                                                    ? "bg-stone-300 text-stone-700"
-                                                    : state === "manual"
-                                                      ? "bg-emerald-500 text-white"
-                                                      : "bg-blue-500 text-white"
-                                                  : "bg-white border border-stone-300 text-stone-600 hover:bg-stone-50"
-                                            }`}
-                                          >
-                                            {label}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-
-                                  {/* Tag seçim dropdown — sadece "manual" modda */}
-                                  {currentState === "manual" && (
-                                    <div className="mt-2" ref={(el) => { slotTagsRefs.current[def.key] = el; }}>
-                                      {availableTags.length > 0 ? (
-                                        <div className="relative">
-                                          <button
-                                            type="button"
-                                            onClick={() => setSlotTagsOpen(prev => ({ ...prev, [def.key]: !isOpen }))}
-                                            className="w-full px-3 py-2 border border-stone-300 rounded-lg bg-white text-left text-sm flex items-center justify-between"
-                                          >
-                                            <span className={currentTags.length > 0 ? "text-stone-800" : "text-stone-400"}>
-                                              {currentTags.length > 0 ? currentTags.join(", ") : "Etiket seçin..."}
-                                            </span>
-                                            <svg className={`w-4 h-4 text-stone-400 transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                          </button>
-                                          {isOpen && (
-                                            <div className="absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                              {availableTags.map(tag => {
-                                                const isSelected = currentTags.includes(tag);
-                                                return (
-                                                  <label key={tag} className="flex items-center gap-2 px-4 py-2 hover:bg-stone-50 cursor-pointer text-sm">
-                                                    <input
-                                                      type="checkbox"
-                                                      checked={isSelected}
-                                                      onChange={() => {
-                                                        const updated = isSelected
-                                                          ? currentTags.filter(t => t !== tag)
-                                                          : [...currentTags, tag];
-                                                        const newSlots = { ...form.compositionSlots };
-                                                        newSlots[def.key] = { state: "manual", filterTags: updated };
-                                                        setForm({ ...form, compositionSlots: newSlots });
-                                                      }}
-                                                      className="rounded border-stone-300 text-emerald-600"
-                                                    />
-                                                    <span className={isSelected ? "text-stone-800 font-medium" : "text-stone-600"}>{tag}</span>
-                                                  </label>
-                                                );
-                                              })}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <p className="text-xs text-stone-400 italic">Bu slot için asset etiketleri bulunamadı.</p>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                      {/* Pet/Accessory/Hand izinleri */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-rose-50 transition">
+                          <input
+                            type="checkbox"
+                            checked={form.includesHands}
+                            onChange={(e) => setForm({ ...form, includesHands: e.target.checked })}
+                            className="w-5 h-5 text-rose-600 rounded mt-0.5"
+                          />
+                          <div>
+                            <span className="text-sm font-medium">El Dahil</span>
+                            <p className="text-xs text-gray-500 mt-0.5">Görselde el görünür (Ayarlar'daki aktif stillerden seçilir)</p>
                           </div>
-                        </div>
-                      )}
-
-                      {/* Pet/Accessory izinleri */}
-                      <div className="grid grid-cols-2 gap-4">
+                        </label>
                         <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-green-50 transition">
                           <input
                             type="checkbox"
@@ -1247,6 +1235,36 @@ export default function Scenarios() {
                           <p className="text-xs text-gray-500 mt-0.5">Ana ürün net, arka plan blur (bokeh efekti)</p>
                         </div>
                       </label>
+
+                      {/* Patlatılmış Görünüm (Exploded View) */}
+                      <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-amber-50 transition">
+                        <input
+                          type="checkbox"
+                          checked={form.isExplodedView}
+                          onChange={(e) => setForm({ ...form, isExplodedView: e.target.checked, explodedViewDescription: e.target.checked ? form.explodedViewDescription : "" })}
+                          className="w-5 h-5 text-amber-600 rounded mt-0.5"
+                        />
+                        <div>
+                          <span className="text-sm font-medium">Patlatılmış Görünüm (Exploded View)</span>
+                          <p className="text-xs text-gray-500 mt-0.5">Ürün ortadan kesilmiş, katmanlar havada asılı — deconstructed stil</p>
+                        </div>
+                      </label>
+
+                      {form.isExplodedView && (
+                        <div>
+                          <label className="block text-sm font-medium text-stone-700 mb-1">
+                            Katman Açıklaması <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            value={form.explodedViewDescription}
+                            onChange={(e) => setForm({ ...form, explodedViewDescription: e.target.value })}
+                            placeholder="Ör: Ortadan ikiye kesilmiş kruvasan, alt katmanda dill sos, üzerinde küp salatalık turşusu, iki dilim Kars kaşarı, yaprak kıvırcık marul, üstte zeytin ezmesi"
+                            rows={3}
+                            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Her katmanı detaylı tanımlayın — Gemini bu açıklamaya göre havada asılı katmanları oluşturacak</p>
+                        </div>
+                      )}
 
                       {/* Hava Durumu */}
                       <div>
@@ -1342,8 +1360,8 @@ export default function Scenarios() {
           title={`"${scenarios.find(s => s.id === deleteId)?.name || "Senaryo"}" Silinecek`}
           description="Bu senaryoyu silmek istediğinize emin misiniz?"
           consequences={[
-            "Senaryo pasif hale getirilecektir",
-            "Mevcut temalarda kullanılamaz hale gelir",
+            "Senaryo kalıcı olarak silinecektir",
+            "Bir temada kullanılıyorsa silme engellenir",
             "Geçmiş üretimler etkilenmez",
           ]}
           confirmText="Evet, Sil"
@@ -1412,33 +1430,6 @@ export default function Scenarios() {
                     })()}
                   </div>
                 </div>
-
-                {/* Slot Konfigürasyonu */}
-                {(detailScenario as any).compositionSlots && Object.keys((detailScenario as any).compositionSlots).length > 0 && (
-                  <div className="mt-3 pt-3 border-t">
-                    <span className="font-medium">Slot Seçimleri:</span>
-                    <div className="mt-1 space-y-1">
-                      {Object.entries((detailScenario as any).compositionSlots as Record<string, { state: string; filterTags?: string[] }>).map(([key, config]) => {
-                        const def = slotDefinitions.find(d => d.key === key);
-                        return (
-                          <div key={key} className="flex items-center gap-2 text-sm">
-                            <span className="text-gray-500">{def?.label || key}:</span>
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                              config.state === "disabled" ? "bg-stone-200 text-stone-600"
-                                : config.state === "manual" ? "bg-emerald-100 text-emerald-700"
-                                : "bg-blue-100 text-blue-700"
-                            }`}>
-                              {config.state === "disabled" ? "Pasif" : config.state === "manual" ? "Etiket" : "Rastgele"}
-                            </span>
-                            {config.filterTags && config.filterTags.length > 0 && (
-                              <span className="text-xs text-emerald-600">{config.filterTags.join(", ")}</span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
 
                 {/* Aksesuar */}
                 {detailScenario.accessoryAllowed && (

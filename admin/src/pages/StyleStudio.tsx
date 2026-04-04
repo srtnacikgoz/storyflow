@@ -1,20 +1,31 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
-import type { VisualStandard, VisualStyleAnalysisResult } from "../types";
+import type { SceneStandard, SceneAnalysisResult, ProductAnalysisResult } from "../types";
 import StyleAnalyzer from "../components/style-studio/StyleAnalyzer";
-import StandardPromptGenerator from "../components/style-studio/StandardPromptGenerator";
+import ProductAnalyzer from "../components/style-studio/ProductAnalyzer";
+import AnalysisResultPanel from "../components/style-studio/AnalysisResultPanel";
+import PromptComposer from "../components/style-studio/PromptComposer";
 
 export default function StyleStudio() {
-  const [standards, setStandards] = useState<VisualStandard[]>([]);
+  const [standards, setStandards] = useState<SceneStandard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "create">("list");
+  const [viewMode, setViewMode] = useState<"studio" | "create-scene">("studio");
   const [seeding, setSeeding] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<VisualStyleAnalysisResult | null>(null);
-  const [analysisImage, setAnalysisImage] = useState<string | null>(null);
-  const [standardName, setStandardName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [promptTarget, setPromptTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // Sahne olusturma
+  const [sceneAnalysis, setSceneAnalysis] = useState<SceneAnalysisResult | null>(null);
+  const [sceneImage, setSceneImage] = useState<string | null>(null);
+  const [sceneName, setSceneName] = useState("");
+  const [savingScene, setSavingScene] = useState(false);
+
+  // Studio akisi
+  const [selectedStandard, setSelectedStandard] = useState<SceneStandard | null>(null);
+  const [productAnalysis, setProductAnalysis] = useState<ProductAnalysisResult | null>(null);
+  const [productImage, setProductImage] = useState<string | null>(null);
+  const [showComposer, setShowComposer] = useState(false);
+
+  // Silme
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const loadStandards = async () => {
@@ -22,9 +33,9 @@ export default function StyleStudio() {
     setError(null);
     try {
       const data = await api.listVisualStandards();
-      setStandards(data as VisualStandard[]);
+      setStandards(data as SceneStandard[]);
     } catch (err: any) {
-      setError(err.message ?? "Standartlar yüklenemedi");
+      setError(err.message ?? "Sahneler yuklenemedi");
     } finally {
       setLoading(false);
     }
@@ -42,60 +53,86 @@ export default function StyleStudio() {
     }
   };
 
-  const handleAnalysisComplete = (result: VisualStyleAnalysisResult, preview: string) => {
-    setAnalysisResult(result);
-    setAnalysisImage(preview);
+  const handleSceneAnalysisComplete = (result: SceneAnalysisResult, preview: string) => {
+    setSceneAnalysis(result);
+    setSceneImage(preview);
   };
 
-  const handleSaveStandard = async () => {
-    if (!analysisResult || !standardName.trim()) return;
-    setSaving(true);
+  const handleSaveScene = async () => {
+    if (!sceneAnalysis || !sceneName.trim()) return;
+    setSavingScene(true);
     try {
       await api.createVisualStandard({
-        name: standardName.trim(),
-        description: analysisResult.overallDescription,
-        thumbnail: analysisImage ?? "",
-        background: analysisResult.background,
-        lighting: analysisResult.lighting,
-        colorPalette: analysisResult.colorPalette,
-        surface: analysisResult.surface,
-        ambiance: analysisResult.ambiance,
-        cameraAngle: analysisResult.cameraAngle,
-        promptTemplate: analysisResult.promptTemplate,
+        name: sceneName.trim(),
+        description: sceneAnalysis.overallDescription,
+        referenceImage: sceneImage ?? "",
+        background: sceneAnalysis.background,
+        lighting: sceneAnalysis.lighting,
+        colorPalette: sceneAnalysis.colorPalette,
+        surface: sceneAnalysis.surface,
+        ambiance: sceneAnalysis.ambiance,
+        servingBase: sceneAnalysis.servingBase,
+        propRules: sceneAnalysis.propRules,
+        depthOfField: sceneAnalysis.depthOfField,
+        cameraAngle: sceneAnalysis.cameraAngle,
+        productFrameRatio: sceneAnalysis.productFrameRatio,
+        scenePrompt: sceneAnalysis.scenePrompt,
         isActive: true,
         isDefault: false,
       });
-      setAnalysisResult(null);
-      setAnalysisImage(null);
-      setStandardName("");
-      setViewMode("list");
+      setSceneAnalysis(null);
+      setSceneImage(null);
+      setSceneName("");
+      setViewMode("studio");
       await loadStandards();
     } finally {
-      setSaving(false);
+      setSavingScene(false);
     }
   };
 
+  const handleSelectStandard = (s: SceneStandard) => {
+    setSelectedStandard(s);
+    setProductAnalysis(null);
+    setProductImage(null);
+    setShowComposer(false);
+  };
+
+  const handleProductAnalysisComplete = (result: ProductAnalysisResult, preview: string) => {
+    setProductAnalysis(result);
+    setProductImage(preview);
+  };
+
   const handleDelete = async (id: string) => {
-    if (!confirm("Bu standardı silmek istediğinize emin misiniz?")) return;
+    if (!confirm("Bu sahneyi silmek istediginize emin misiniz?")) return;
     setDeleting(id);
     try {
       await api.deleteVisualStandard(id);
       setStandards((prev) => prev.filter((s) => s.id !== id));
+      if (selectedStandard?.id === id) {
+        setSelectedStandard(null);
+        setProductAnalysis(null);
+        setProductImage(null);
+      }
     } finally {
       setDeleting(null);
     }
   };
 
-  const handleToggleActive = async (standard: VisualStandard) => {
-    try {
-      await api.updateVisualStandard(standard.id, { isActive: !standard.isActive });
-      setStandards((prev) =>
-        prev.map((s) => s.id === standard.id ? { ...s, isActive: !s.isActive } : s)
-      );
-    } catch (err: any) {
-      setError(err.message ?? "Durum güncellenemedi");
-    }
-  };
+  // Secili sahne verisini SceneAnalysisResult'a donustur
+  const reconstructSceneAnalysis = (s: SceneStandard): SceneAnalysisResult => ({
+    background: s.background,
+    lighting: s.lighting,
+    colorPalette: s.colorPalette,
+    surface: s.surface,
+    ambiance: s.ambiance,
+    servingBase: s.servingBase,
+    propRules: s.propRules,
+    depthOfField: s.depthOfField,
+    cameraAngle: s.cameraAngle,
+    productFrameRatio: s.productFrameRatio,
+    scenePrompt: s.scenePrompt,
+    overallDescription: s.description,
+  });
 
   if (loading) {
     return (
@@ -107,35 +144,28 @@ export default function StyleStudio() {
 
   return (
     <div className="space-y-6">
-      {/* Başlık */}
+      {/* Baslik */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Stil Stüdyosu</h1>
-          <p className="text-sm text-gray-500 mt-1">Görsel standartları analiz et ve yönet</p>
+          <h1 className="text-2xl font-bold text-gray-900">Stil Studyosu v2</h1>
+          <p className="text-sm text-gray-500 mt-1">Sahne sec, urun analiz et, prompt uret</p>
         </div>
         <div className="flex items-center gap-3">
-          {standards.length === 0 && viewMode === "list" && (
-            <button
-              onClick={handleSeed}
-              disabled={seeding}
-              className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-            >
-              {seeding ? "Yükleniyor…" : "Varsayılanları Yükle"}
+          {standards.length === 0 && viewMode === "studio" && (
+            <button onClick={handleSeed} disabled={seeding}
+              className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+              {seeding ? "Yukleniyor..." : "Varsayilanlari Yukle"}
             </button>
           )}
-          {viewMode === "list" ? (
-            <button
-              onClick={() => setViewMode("create")}
-              className="px-4 py-2 text-sm bg-brand-blue text-white rounded-xl hover:opacity-90"
-            >
-              + Yeni Standart
+          {viewMode === "studio" ? (
+            <button onClick={() => setViewMode("create-scene")}
+              className="px-4 py-2 text-sm bg-brand-blue text-white rounded-xl hover:opacity-90">
+              + Yeni Sahne
             </button>
           ) : (
-            <button
-              onClick={() => { setViewMode("list"); setAnalysisResult(null); setAnalysisImage(null); setStandardName(""); }}
-              className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50"
-            >
-              Listeye Dön
+            <button onClick={() => { setViewMode("studio"); setSceneAnalysis(null); setSceneImage(null); setSceneName(""); }}
+              className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">
+              Studyoya Don
             </button>
           )}
         </div>
@@ -145,94 +175,20 @@ export default function StyleStudio() {
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
       )}
 
-      {/* Oluşturma Görünümü */}
-      {viewMode === "create" && (
+      {/* Sahne Olusturma */}
+      {viewMode === "create-scene" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-6">
-          <StyleAnalyzer onAnalysisComplete={handleAnalysisComplete} />
-
-          {analysisResult && (
+          <StyleAnalyzer onAnalysisComplete={handleSceneAnalysisComplete} />
+          {sceneAnalysis && (
             <div className="space-y-4 pt-4 border-t border-gray-100">
-              {/* Renk Paleti */}
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-2">Renk Paleti</p>
-                <div className="flex gap-2">
-                  {analysisResult.colorPalette.map((hex) => (
-                    <div key={hex} className="flex flex-col items-center gap-1">
-                      <div className="w-8 h-8 rounded-lg border border-gray-200" style={{ backgroundColor: hex }} />
-                      <span className="text-[10px] text-gray-500 font-mono">{hex}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 2x2 Özellik Izgarası */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />
-                    <span className="text-xs font-semibold text-gray-700">Arkaplan</span>
-                  </div>
-                  <p className="text-xs text-gray-600">{analysisResult.background.type} · {analysisResult.background.color}</p>
-                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{analysisResult.background.description}</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-yellow-400" />
-                    <span className="text-xs font-semibold text-gray-700">Işık</span>
-                  </div>
-                  <p className="text-xs text-gray-600">{analysisResult.lighting.direction} · {analysisResult.lighting.quality}</p>
-                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{analysisResult.lighting.description}</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-stone-400" />
-                    <span className="text-xs font-semibold text-gray-700">Yüzey</span>
-                  </div>
-                  <p className="text-xs text-gray-600">{analysisResult.surface.material} · {analysisResult.surface.texture}</p>
-                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{analysisResult.surface.description}</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-violet-400" />
-                    <span className="text-xs font-semibold text-gray-700">Ambians</span>
-                  </div>
-                  <p className="text-xs text-gray-600">{analysisResult.ambiance.mood}</p>
-                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{analysisResult.ambiance.adjectives.join(", ")}</p>
-                </div>
-              </div>
-
-              {/* Kamera Açısı */}
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-400" />
-                <span className="text-xs font-medium text-gray-700">Kamera Açısı:</span>
-                <span className="text-xs text-gray-600">{analysisResult.cameraAngle}</span>
-              </div>
-
-              {/* Genel Açıklama */}
-              <div className="bg-blue-50 rounded-xl px-4 py-3">
-                <p className="text-xs text-blue-800">{analysisResult.overallDescription}</p>
-              </div>
-
-              {/* Prompt Şablonu */}
-              <div className="bg-gray-900 rounded-xl px-4 py-3">
-                <p className="text-xs text-gray-300 font-mono whitespace-pre-wrap">{analysisResult.promptTemplate}</p>
-              </div>
-
-              {/* Ad Girişi + Kaydet */}
+              <AnalysisResultPanel type="scene" result={sceneAnalysis} />
               <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={standardName}
-                  onChange={(e) => setStandardName(e.target.value)}
-                  placeholder="Standart adı…"
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
-                />
-                <button
-                  onClick={handleSaveStandard}
-                  disabled={saving || !standardName.trim()}
-                  className="px-5 py-2 text-sm bg-brand-blue text-white rounded-xl hover:opacity-90 disabled:opacity-50"
-                >
-                  {saving ? "Kaydediliyor…" : "Standart Olarak Kaydet"}
+                <input type="text" value={sceneName} onChange={(e) => setSceneName(e.target.value)}
+                  placeholder="Sahne adi..."
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/20" />
+                <button onClick={handleSaveScene} disabled={savingScene || !sceneName.trim()}
+                  className="px-5 py-2 text-sm bg-brand-blue text-white rounded-xl hover:opacity-90 disabled:opacity-50">
+                  {savingScene ? "Kaydediliyor..." : "Sahne Olarak Kaydet"}
                 </button>
               </div>
             </div>
@@ -240,91 +196,106 @@ export default function StyleStudio() {
         </div>
       )}
 
-      {/* Liste Görünümü */}
-      {viewMode === "list" && (
-        standards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
-            <div className="text-5xl mb-4">🎨</div>
-            <p className="text-base font-medium text-gray-600">Henüz görsel standart yok</p>
-            <p className="text-sm mt-1">Yeni standart ekle veya varsayılanları yükle</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {standards.map((standard) => (
-              <div key={standard.id} className="bg-white rounded-2xl border border-gray-100 p-4 flex gap-4">
-                {/* Küçük resim */}
-                <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
-                  {standard.thumbnail ? (
-                    <img src={standard.thumbnail} alt={standard.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex flex-wrap gap-1 p-2">
-                      {(standard.colorPalette ?? []).slice(0, 4).map((hex) => (
-                        <div key={hex} className="w-6 h-6 rounded" style={{ backgroundColor: hex }} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Bilgiler */}
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{standard.name}</p>
-                    <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{standard.description}</p>
-                  </div>
-
-                  {/* Etiketler */}
-                  <div className="flex flex-wrap gap-1">
-                    {standard.background?.type && (
-                      <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{standard.background.type}</span>
-                    )}
-                    {standard.lighting?.quality && (
-                      <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">{standard.lighting.quality}</span>
-                    )}
-                    {standard.ambiance?.mood && (
-                      <span className="text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{standard.ambiance.mood}</span>
-                    )}
-                    {standard.cameraAngle && (
-                      <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{standard.cameraAngle}</span>
-                    )}
-                  </div>
-
-                  {/* Aksiyonlar */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setPromptTarget({ id: standard.id, name: standard.name })}
-                      className="text-xs text-brand-blue hover:underline"
-                    >
-                      Prompt Oluştur
-                    </button>
-                    <span className="text-gray-200">|</span>
-                    <button
-                      onClick={() => handleToggleActive(standard)}
-                      className="text-xs text-gray-500 hover:text-gray-700"
-                    >
-                      {standard.isActive ? "Pasif Yap" : "Aktif Yap"}
-                    </button>
-                    <span className="text-gray-200">|</span>
-                    <button
-                      onClick={() => handleDelete(standard.id)}
-                      disabled={deleting === standard.id}
-                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
-                    >
-                      {deleting === standard.id ? "Siliniyor…" : "Sil"}
-                    </button>
-                  </div>
-                </div>
+      {/* Studio Gorunumu: 2 sutunlu */}
+      {viewMode === "studio" && (
+        <div className="flex gap-6" style={{ minHeight: "calc(100vh - 220px)" }}>
+          {/* Sol Panel — Sahne listesi */}
+          <div className="w-72 flex-shrink-0 space-y-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 220px)" }}>
+            {standards.length === 0 ? (
+              <div className="text-center text-gray-400 py-12">
+                <p className="text-sm font-medium text-gray-600">Henuz sahne yok</p>
+                <p className="text-xs mt-1">Yeni sahne olustur veya varsayilanlari yukle</p>
               </div>
-            ))}
+            ) : (
+              standards.map((s) => (
+                <div key={s.id} onClick={() => handleSelectStandard(s)}
+                  className={`group bg-white rounded-xl border p-3 cursor-pointer transition-colors hover:border-brand-blue/40 ${
+                    selectedStandard?.id === s.id ? "border-brand-blue bg-brand-blue/5" : "border-gray-100"
+                  }`}>
+                  <p className="text-sm font-semibold text-gray-900">{s.name}</p>
+                  <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{s.description}</p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {s.background?.type && (
+                      <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{s.background.type}</span>
+                    )}
+                    {s.lighting?.quality && (
+                      <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">{s.lighting.quality}</span>
+                    )}
+                    {s.ambiance?.mood && (
+                      <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">{s.ambiance.mood}</span>
+                    )}
+                    {s.cameraAngle && (
+                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{s.cameraAngle}</span>
+                    )}
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
+                    disabled={deleting === s.id}
+                    className="mt-2 text-xs text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50">
+                    {deleting === s.id ? "Siliniyor..." : "Sil"}
+                  </button>
+                </div>
+              ))
+            )}
           </div>
-        )
+
+          {/* Sag Panel — Detay + urun analiz + prompt */}
+          <div className="flex-1 space-y-6 overflow-y-auto" style={{ maxHeight: "calc(100vh - 220px)" }}>
+            {!selectedStandard ? (
+              <div className="flex flex-col items-center justify-center h-full text-center text-gray-400">
+                <p className="text-base font-medium text-gray-500">Soldaki listeden bir sahne sec</p>
+                <p className="text-sm mt-1">veya yeni sahne olustur</p>
+              </div>
+            ) : (
+              <>
+                {/* Sahne detaylari */}
+                <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+                  <div className="flex items-start gap-4">
+                    {selectedStandard.referenceImage && (
+                      <img src={selectedStandard.referenceImage} alt={selectedStandard.name}
+                        className="w-20 h-20 rounded-xl object-cover flex-shrink-0" />
+                    )}
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">{selectedStandard.name}</h2>
+                      <p className="text-sm text-gray-500 mt-0.5">{selectedStandard.description}</p>
+                    </div>
+                  </div>
+                  <AnalysisResultPanel type="scene" result={reconstructSceneAnalysis(selectedStandard)} />
+                </div>
+
+                {/* Urun Analizi */}
+                <div className="bg-white rounded-2xl border border-gray-100 p-5">
+                  <ProductAnalyzer onAnalysisComplete={handleProductAnalysisComplete} />
+                </div>
+
+                {/* Urun Analiz Sonuclari */}
+                {productAnalysis && (
+                  <div className="bg-white rounded-2xl border border-gray-100 p-5">
+                    <AnalysisResultPanel type="product" result={productAnalysis} />
+                  </div>
+                )}
+
+                {/* Prompt Olustur Butonu */}
+                {productAnalysis && (
+                  <button onClick={() => setShowComposer(true)}
+                    className="w-full px-5 py-3 text-sm font-medium bg-brand-blue text-white rounded-xl hover:opacity-90 transition-opacity">
+                    Prompt Olustur
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* Prompt Modal */}
-      {promptTarget && (
-        <StandardPromptGenerator
-          standardId={promptTarget.id}
-          standardName={promptTarget.name}
-          onClose={() => setPromptTarget(null)}
+      {/* PromptComposer Modal */}
+      {showComposer && selectedStandard && productAnalysis && productImage && (
+        <PromptComposer
+          standardId={selectedStandard.id}
+          standardName={selectedStandard.name}
+          productAnalysis={productAnalysis}
+          productImage={productImage}
+          sceneImage={selectedStandard.referenceImage ?? ""}
+          onClose={() => setShowComposer(false)}
         />
       )}
     </div>

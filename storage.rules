@@ -18,10 +18,30 @@ service firebase.storage {
       allow write: if true; // Development için açık
     }
 
+    // Enhancement originals, results & references - fotoğraf iyileştirme görselleri
+    match /enhancement-originals/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // Admin panel'den yüklenir
+    }
+    match /enhancement-results/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // Cloud Functions yazabilir
+    }
+    match /enhancement-references/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // Admin panel'den preset referans görselleri yüklenir
+    }
+
     // Generated images - AI tarafından üretilen görseller
     match /generated/{allPaths=**} {
       allow read: if true;
       allow write: if true; // Cloud Functions yazabilir
+    }
+
+    // Landing page hero görselleri
+    match /landing/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // Admin panel'den yüklenir
     }
   }
 }

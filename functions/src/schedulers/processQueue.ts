@@ -118,7 +118,7 @@ export async function processNextItem(
 
         // Model seçimi: Gemini 3.0 serisine göre
         // Tüm modeller artık tek image model'e yönlendiriliyor
-        const selectedModel: "gemini-3-pro-image-preview" = "gemini-3-pro-image-preview";
+        const selectedModel: "gemini-3-pro-image-preview" | "gemini-3.1-flash-image-preview" = item.aiModel === "gemini-3.1-flash-image-preview" ? "gemini-3.1-flash-image-preview" : "gemini-3-pro-image-preview";
 
         // GeminiService'i dynamic import ile yükle (startup timeout önlemi)
         const GeminiServiceClass = await getGeminiService();
@@ -422,7 +422,7 @@ export async function processWithApproval(
 
         // Model seçimi: Gemini 3.0 serisine göre
         // Tüm modeller artık tek image model'e yönlendiriliyor
-        const selectedModel: "gemini-3-pro-image-preview" = "gemini-3-pro-image-preview";
+        const selectedModel: "gemini-3-pro-image-preview" | "gemini-3.1-flash-image-preview" = item.aiModel === "gemini-3.1-flash-image-preview" ? "gemini-3.1-flash-image-preview" : "gemini-3-pro-image-preview";
 
         const GeminiServiceClass = await getGeminiService();
         const gemini = new GeminiServiceClass({

@@ -223,9 +223,15 @@ Return ONLY the edited image.`;
     }
 
     // Full modu: BG kaldırma + yeni arka plan + gölge + stil
+    const hasReference = preset?.referenceImageUrl;
+
     const bgInstructions = preset
       ? `BACKGROUND: ${preset.backgroundPrompt}\n\nSHADOW: ${preset.shadowPrompt}\n\nLIGHTING:\n- Direction: ${preset.lightingDirection}\n- Color temperature: ${preset.colorTemperature}`
       : "BACKGROUND: Clean, professional background suitable for the product.";
+
+    const referenceNote = hasReference
+      ? "\n\nREFERENCE IMAGE: A reference background photo is provided as the second image. Match the surface, texture, color, and lighting atmosphere of this reference as closely as possible. Do NOT copy the reference exactly — use it as a visual guide for the background style."
+      : "";
 
     const styleInstructions = style
       ? `\n\nENHANCEMENT STYLE: ${style.promptInstructions}`
@@ -235,7 +241,7 @@ Return ONLY the edited image.`;
 
 TASK: Remove the current background and place ${productDesc} on a new background with natural shadow and professional lighting.
 
-${bgInstructions}${styleInstructions}
+${bgInstructions}${referenceNote}${styleInstructions}
 
 CRITICAL RULES:
 - PRESERVE the product EXACTLY as it appears — do NOT modify its shape, color, texture, or any detail

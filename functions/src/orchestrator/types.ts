@@ -1940,6 +1940,24 @@ export interface FirestoreSystemSettingsConfig {
   // Senaryo Yazıcı Model (admin panel senaryo açıklaması üretimi)
   scenarioWriterModel?: string;     // "none" | model ID (gemini-*, claude-*)
 
+  // Poster Modelleri
+  posterModel?: string;             // Eski — posterImageModel'e taşındı
+  posterPromptModel?: string;       // Prompt yazıcı model (default: "anthropic/claude-haiku-4.5")
+  posterImageModel?: string;        // Görsel üretim model (default: "google/gemini-2.5-flash-image")
+  posterAnalysisModel?: string;     // Poster analiz modeli (default: "claude-haiku-4-5-20251001")
+  analysisModel?: string;           // Enhancement analiz/öğrenme model (default: "gemini-2.0-flash")
+
+  // Pipeline Modelleri
+  visualCriticModel?: string;       // Visual critic analiz modeli (default: "gemini-3-pro-image-preview")
+  posterLearningModel?: string;     // Poster learning/feedback analiz modeli (default: "claude-haiku-4-5-20251001")
+  previewImageModel?: string;       // Senaryo önizleme görsel üretim modeli (default: "gemini-3.1-flash-image-preview")
+
+  // Provider tercihi
+  preferredProvider?: "openrouter" | "direct"; // OpenRouter mı direkt API mi
+
+  // OpenRouter (tek API key ile tüm modellere erişim)
+  openRouterApiKey?: string;        // OpenRouter API key
+
   // Meta
   updatedAt: number;
   updatedBy?: string;
@@ -2348,6 +2366,8 @@ export interface EnhancementPreset {
   shadowPrompt: string;
   lightingDirection: string;
   colorTemperature: string;
+  referenceImageUrl?: string;
+  referenceStoragePath?: string;
   isActive: boolean;
   order: number;
   createdAt: number;

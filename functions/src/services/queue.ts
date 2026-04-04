@@ -51,7 +51,7 @@ export class QueueService {
       productCategory: data.productCategory || "chocolate",
       createdAt: FieldValue.serverTimestamp(),
       // AI Enhancement alanları
-      aiModel: data.aiModel || "gemini-flash",
+      aiModel: data.aiModel || "gemini-3-pro-image-preview",
       styleVariant: data.styleVariant || "lifestyle-moments",
       faithfulness: data.faithfulness ?? 0.7,
     };
@@ -94,7 +94,7 @@ export class QueueService {
       dayPreference: data.dayPreference,
       messageType: data.messageType,
       // AI Enhancement alanları
-      aiModel: (docData.aiModel as Photo["aiModel"]) || "gemini-flash",
+      aiModel: (docData.aiModel as Photo["aiModel"]) || "gemini-3-pro-image-preview",
       styleVariant: (docData.styleVariant as Photo["styleVariant"]) || "lifestyle-moments",
       faithfulness: (docData.faithfulness as number) ?? 0.7,
       // Caption template alanları
@@ -655,7 +655,7 @@ export class QueueService {
       messageType: data.messageType,
       analytics: data.analytics,
       // AI Enhancement alanları
-      aiModel: data.aiModel || "gemini-flash",
+      aiModel: data.aiModel || "gemini-3-pro-image-preview",
       styleVariant: data.styleVariant || "lifestyle-moments",
       faithfulness: data.faithfulness ?? 0.7,
       isEnhanced: data.isEnhanced,

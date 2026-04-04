@@ -77,6 +77,11 @@ export class AILogService {
     slotId?: string;
     productType?: string;
     referenceImages?: Array<{ type: string; id: string; filename: string }>;
+    usageMetadata?: {
+      promptTokenCount?: number;
+      candidatesTokenCount?: number;
+      totalTokenCount?: number;
+    };
   }): Promise<string> {
     // Provider'ı model adından otomatik belirle
     const provider = data.model.startsWith("reve") ? "reve" as const
@@ -99,6 +104,7 @@ export class AILogService {
       pipelineId: data.pipelineId,
       slotId: data.slotId,
       productType: data.productType,
+      usageMetadata: data.usageMetadata,
       ...(data.referenceImages ? {
         decisionDetails: {
           selectedAssets: Object.fromEntries(
@@ -390,6 +396,9 @@ export class AILogService {
     avgDurationMs: number;
     byStage: Record<string, number>;
     errorCount: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    imageGenerationCount: number;
   }> {
     try {
       const db = getDb();
@@ -408,6 +417,13 @@ export class AILogService {
       const totalCost = logs.reduce((sum, l) => sum + (l.cost || 0), 0);
       const totalDuration = logs.reduce((sum, l) => sum + (l.durationMs || 0), 0);
 
+      // Token toplamları
+      const totalInputTokens = logs.reduce((sum, l) => sum + (l.usageMetadata?.promptTokenCount || 0), 0);
+      const totalOutputTokens = logs.reduce((sum, l) => sum + (l.usageMetadata?.candidatesTokenCount || 0), 0);
+
+      // Görsel üretim sayısı
+      const imageGenerationCount = logs.filter((l) => l.stage === "image-generation" && l.status === "success").length;
+
       // Stage bazlı istatistikler
       const byStage: Record<string, number> = {};
       for (const log of logs) {
@@ -422,6 +438,9 @@ export class AILogService {
         avgDurationMs: logs.length > 0 ? totalDuration / logs.length : 0,
         byStage,
         errorCount,
+        totalInputTokens,
+        totalOutputTokens,
+        imageGenerationCount,
       };
     } catch (error) {
       console.error("[AILogService] Error fetching stats:", error);
@@ -433,6 +452,9 @@ export class AILogService {
         avgDurationMs: 0,
         byStage: {},
         errorCount: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        imageGenerationCount: 0,
       };
     }
   }

@@ -9,7 +9,7 @@ interface BeforeAfterSliderProps {
 
 /**
  * Before/After karşılaştırma slider'ı
- * Kullanıcı ortadaki çizgiyi sürükleyerek orijinal ve iyileştirilmiş görseli karşılaştırabilir
+ * clip-path ile her iki görsel de aynı boyutta kalır, sadece görünür alan değişir
  */
 export default function BeforeAfterSlider({
   beforeUrl,
@@ -43,6 +43,11 @@ export default function BeforeAfterSlider({
     setIsDragging(false);
   }, []);
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setIsDragging(true);
+    updatePosition(e.touches[0].clientX);
+  }, [updatePosition]);
+
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     updatePosition(e.touches[0].clientX);
   }, [updatePosition]);
@@ -56,10 +61,11 @@ export default function BeforeAfterSlider({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleMouseUp}
     >
-      {/* After (tam arka plan) */}
+      {/* After görsel (altta, sağ tarafta görünür) */}
       <img
         src={afterUrl}
         alt={afterLabel}
@@ -67,19 +73,14 @@ export default function BeforeAfterSlider({
         draggable={false}
       />
 
-      {/* Before (clip ile kesilmiş) */}
-      <div
-        className="absolute inset-0 overflow-hidden"
-        style={{ width: `${position}%` }}
-      >
-        <img
-          src={beforeUrl}
-          alt={beforeLabel}
-          className="absolute inset-0 w-full h-full object-contain"
-          style={{ width: containerRef.current ? `${containerRef.current.offsetWidth}px` : "100%" }}
-          draggable={false}
-        />
-      </div>
+      {/* Before görsel (üstte, clip-path ile sol tarafı görünür) */}
+      <img
+        src={beforeUrl}
+        alt={beforeLabel}
+        className="absolute inset-0 w-full h-full object-contain"
+        style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
+        draggable={false}
+      />
 
       {/* Slider çizgisi */}
       <div

@@ -15,6 +15,24 @@ export * from "./controllers/aiLogController";
 // Visual Critic - orchestratorController üzerinden export ediliyor
 export * from "./controllers/styleController";
 
+// Enhancement & Upscale Controllers
+export {
+  listEnhancementPresets,
+  createEnhancementPreset,
+  updateEnhancementPreset,
+  deleteEnhancementPreset,
+  seedEnhancementPresets,
+  listEnhancementJobs,
+  createEnhancementJob,
+  getEnhancementJob,
+  analyzePhoto,
+  enhancePhoto,
+  listEnhancementStyles,
+  seedEnhancementStyles,
+  listUpscaleOptions,
+  upscaleImage,
+} from "./controllers/orchestrator";
+
 // Export Schedulers
 export * from "./schedulers/scheduledPostProcessor"; // Mevcut scheduler (Paylaşım)
 export * from "./schedulers/orchestratorScheduler"; // YENİ: Üretim Scheduler'ı

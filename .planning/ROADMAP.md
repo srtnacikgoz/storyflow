@@ -1,6 +1,127 @@
-# Roadmap: Instagram Otomasyon - Sade Chocolate
+# Roadmap: Sade Storyflow
 
-## Overview
+> Son güncelleme: 2026-03-29
+
+## Güncel Vizyon
+
+Her araç kendi sayfasında bağımsız çalışır, test edilir, feedback alır. Senaryo/otomasyon en son katman — önce parçalar sağlam olmalı. Detaylar: `.claude/VISION.md`
+
+### Aktif Araçlar
+- **Poster Üret** ✅ — 8 stil, 6 mood, 5 tipografi, 6 layout, feedback + öğrenme sistemi
+- **Fotoğraf İyileştir** ✅ — Arka plan değiştirme, iyileştirme, upscale (geliştirilecek)
+- **İçerik Üretici** ✅ — Senaryo bazlı pipeline (karmaşık, basitleştirilecek)
+
+### Yakında — Senaryo Modalını Parçala (Builder / Lab / Learn)
+
+Monolitik İçerik Üretici modalı (32+ state) 3 bağımsız sayfaya bölünüyor. Plan onaylandı, detay: `.claude/plans/stateless-snuggling-firefly.md`
+
+**FAZ 1: Builder** (`/admin/content-builder`)
+- Hub & Spoke yapısı — sol menü, sağda blok detayı
+- 6 bağımsız blok: Senaryo, Ürün, Sahne, Işık & Atmosfer, Format, Kurallar
+- Her blok açılır/kapanır/override edilebilir
+- Çıktı: `ContentBuildConfig` objesi → Lab'a gönderilir
+- Mevcut OrchestratorDashboard'dan extract (senaryo listesi, asset picker, slot config)
+
+**FAZ 2: Lab** (`/admin/content-lab`)
+- Builder'dan config gelir → "Üret" → run kartı oluşur
+- Her run: config snapshot, prompt, sonuç, maliyet, süre
+- Yan yana karşılaştırma (2 run seç, diff gör)
+- "Sadece X'i değiştir" — tek blok override ile yeni run
+- Her run'a feedback (rating + kategori + not) verilebilir
+- Backend: `contentLabController.ts` + `contentRunService.ts`
+
+**FAZ 3: Learn** (`/admin/content-learn`)
+- Feedback Dashboard — kategori bazlı dağılım, trend, en düşük puanlar
+- Kural Önerileri — Claude feedback'lerden otomatik kural üretir → admin onaylar/reddeder
+- Knowledge Base — onaylı kurallar, aktif/pasif, geçmiş
+- Backend: `contentLearningService.ts` (poster learning pattern'i)
+
+**FAZ 4: Dashboard Basitleştirme**
+- OrchestratorDashboard → sadece galeri/tarihçe + tetikleme
+- Pre-flight modal kaldırılır (Builder'a taşındı)
+
+**FAZ 5: Otomasyon Entegrasyonu**
+- Scheduler kayıtlı Builder config'lerini kullanır
+- TimeSlotRule'a `buildConfigId` field'ı
+
+### Yakında — Diğer
+- **Şeffaf Arka Plan + Gölge** — Ürünü izole et, PNG çıktı, her yerde kullan
+- **AI Görsel İşleme Araştırması** — Pixury ve benzeri uygulamalar detaylı araştırma
+
+### Planlanan
+- **Menu Tasarım Sayfası** — Ürün yerleşimi, açıklama, fiyat, şablonlar, drag-drop, PDF/PNG export
+- **Video Özellikleri** — Ürün tanıtım videoları, UGC, Reels/Story
+- **Toplu İşleme** — Batch üretim + batch onay
+- **Pazarlama Takvimi** — Tatil/kampanya dönemlerine özel otomatik içerik
+
+---
+
+## Milestone: Teknik Bakım
+
+### Phase 24: Model Config Centralization
+**Goal:** Tüm hardcoded model string'lerini Firestore-driven hale getir — Admin Panel'den deploy gerektirmeden değiştirilebilir
+**Depends on:** —
+**Status:** Planlandı
+**Zorluk:** Düşük-Orta
+
+Planlar:
+- [ ] **24-01: Backend** — SystemSettings tip genişletmesi, visualCriticService/posterLearningService/posterSmartController/enhancementController hardcoded fix, shared.ts + scheduler Firestore entegrasyonu
+- [ ] **24-02: Admin Panel** — APISettingsSection'dan model seçimler kaldır, AIModelSection'a 8 model görevi ekle (İçerik, Önizleme, Poster Görsel, Poster Prompt, Poster Analiz, Enhancement Analiz, Visual Critic, Learning)
+
+---
+
+## Milestone: Poster Prompt Studio V2
+
+> **Vizyon:** Sektör standardı bir prompt üretici — görsel parametreler, UX akışı ve marka kişiselleştirmesiyle rakip araçları (Adobe Firefly, Canva AI, Midjourney) geride bırakan bir deneyim.
+
+### Phase 21: Görsel Parametreler
+**Goal:** Prompt kalitesini doğrudan etkileyen kamera açısı, ışık, arka plan ve teknik parametreler — Firestore-driven, Admin'den yönetilebilir
+**Depends on:** Mevcut Poster sayfası
+**Status:** Planlandı
+**Zorluk:** Orta
+
+Planlar:
+- [ ] **21-01: Kamera/Çekim Açısı** — "flat lay", "45° overhead", "hero shot", "close-up macro" tipi çekim seçenekleri. Firestore `poster-camera-angles` koleksiyonu + Admin UI + seed
+- [ ] **21-02: Işık/Aydınlatma Kontrolü** — "doğal gün ışığı", "stüdyo soft box", "golden hour", "neon glow". Firestore `poster-lighting-types` + Admin UI + seed
+- [ ] **21-03: Arka Plan/Ortam Seçimi** — "düz beyaz", "ahşap masa", "mermer yüzey", "açık hava". Firestore `poster-backgrounds` + Admin UI + seed
+- [ ] **21-04: Negatif Prompt Desteği** — "şunları dahil etme" alanı; model bazlı syntax (Midjourney: `--no`, SD: negative_prompt). UI toggle + prompt'a otomatik ekleme
+- [ ] **21-05: Aspect Ratio Genişletme** — 16:9 (YouTube/Facebook), 3:4, 4:3, özel boyut (px girişi). Mevcut Firestore `poster-aspect-ratios` koleksiyonuna eklenir
+- [ ] **21-06: Çözünürlük/Kalite Parametreleri** — Model-spesifik teknik ekler: Midjourney (`--q 2 --stylize 750`), DALL-E (`quality: hd`). Seçili modele göre otomatik ekleme, arayüzden fine-tune
+
+### Phase 22: UX & Akış İyileştirmeleri
+**Goal:** Üretilen prompt düzenlenebilir, çoklu varyasyon üretilebilir, wizard akışıyla adım adım rehberlik
+**Depends on:** Phase 21
+**Status:** Planlandı
+**Zorluk:** Orta
+
+Planlar:
+- [ ] **22-01: Prompt Önizleme/Düzenleme** — Üretilen prompt inline edit edilebilir textarea; değişiklik history (undo/redo); "yeniden üret" butonu değişiklikleri sıfırlamaz
+- [ ] **22-02: Varyasyon Üretimi** — Tek tıkla 3 farklı varyasyon üret (farklı kompozisyon/açı/atmosfer yorumu); yan yana önizleme; favoriye kaydet
+- [ ] **22-03: Prompt Dili Seçimi** — TR/EN toggle; EN seçilirse İngilizce prompt üretilir (Midjourney/DALL-E için daha iyi sonuç); kullanıcı tercihini localStorage'da hatırla
+- [ ] **22-04: Adım Adım Wizard Akış** — Mevcut tek form yerine 4 adım: 1) Ürün & Kategori, 2) Görsel Parametreler, 3) Stil & Atmosfer, 4) Önizleme & Üret; adımlar arası ilerleme bar'ı
+- [ ] **22-05: Görsel Referans Önizleme** — Seçilen stil+kamera+ışık kombinasyonuna göre "bu kombinasyon böyle görünür" örnek thumbnail'ları (statik veya AI üretimi); prompt olmadan ne bekleneceği net olsun
+
+### Phase 23: Kişiselleştirme & Hafıza
+**Goal:** Marka presetleri, prompt geçmişi ve renk paleti ile araç iş akışına tam entegre olur
+**Depends on:** Phase 22
+**Status:** Planlandı
+**Zorluk:** Orta-Zor
+
+Planlar:
+- [ ] **23-01: Renk Paleti Kontrolü** — HEX input veya color picker; "baskın renk" ve "aksan renk" tanımı; prompt'a "color palette: #FF5733, #2C3E50" olarak eklenir; marka presetiyle entegre
+- [ ] **23-02: Ürün Kategorisi/Sektör Seçimi** — "Yiyecek & İçecek", "Kozmetik", "Moda", "Teknoloji" vs. Firestore `poster-product-categories` + Admin UI + seed; seçim prompt context'i zenginleştirir, token israfını azaltır
+- [ ] **23-03: Prompt Geçmişi & Şablonlar** — Son 50 prompt Firestore'da kullanıcı bazlı kayıtlı; "şablon olarak kaydet" butonu; şablon listesinden hızlı yükle; şablona isim ve tag ver
+- [ ] **23-04: Marka Kimliği/Preset Sistemi** — Marka adı, renk paleti, tipografi tercihleri, varsayılan stil/mood bir kez kaydedilir; "Marka Presetlerim" dropdown; yeni poster açılınca otomatik yükle seçeneği; Firestore `brand-presets` koleksiyonu + Admin UI
+
+### Araştırılacak Referanslar
+- Pixury (iTunes: id6751626758) — AI ürün fotoğrafı + video
+- *(ek referanslar araştırma sonrası eklenecek)*
+
+---
+
+## Eski Fazlar (Tarihsel Kayıt)
+
+## Overview (Orijinal)
 
 Sıfırdan başlayarak Instagram paylaşım otomasyonunu hayata geçiriyoruz. Firebase Cloud Functions üzerinde TypeScript ile serverless bir sistem kuruyoruz. OpenAI ile fotoğraf analiz ve iyileştirme, Instagram Graph API ile otomatik paylaşım yapacak. Her gün 09:00'da tetiklenecek, Firestore'daki kuyruktan fotoğraf alıp işleyip paylaşacak.
 
@@ -144,6 +265,10 @@ Telegram'a önizleme + butonlar gönderilir
 | 18. Multi-AI Provider | 0/5 | 📋 Planlandı | - |
 | 19. Video İçerik | 0/5 | 📋 Planlandı | - |
 | 20. Multi-Tenant SaaS | 0/6 | 📋 Planlandı | - |
+| **Poster Prompt Studio V2 Milestone** | | | |
+| 21. Görsel Parametreler | 0/6 | 📋 Planlandı | - |
+| 22. UX & Akış İyileştirmeleri | 0/5 | 📋 Planlandı | - |
+| 23. Kişiselleştirme & Hafıza | 0/4 | 📋 Planlandı | - |
 
 ## Notes
 
@@ -161,6 +286,7 @@ Telegram'a önizleme + butonlar gönderilir
 - **Milestone v9.0 (Dijital Asistan):** 📋 PLANLANDI - Phase 14-17
 - **Milestone v10.0 (Multi-Provider & Video):** 📋 PLANLANDI - Phase 18-19
 - **Milestone v11.0 (SaaS):** 📋 PLANLANDI - Phase 20
+- **Milestone v12.0 (Poster Prompt Studio V2):** 📋 PLANLANDI - Phase 21-23
 - **Region:** europe-west1 (Belçika)
 - **AI Enhancement:** Gemini 2.0 Flash Experimental (img2img)
 - **Cost Estimate:** ~$0/ay (Gemini şimdilik ücretsiz)

@@ -138,7 +138,7 @@ async function withRetry<T>(
  * Pipeline'da tek AI çağrısı: görsel üretim
  * Admin helper'lar (tema/senaryo açıklaması) için image model text de üretebilir
  */
-export type GeminiModel = "gemini-3-pro-image-preview" | "gemini-2.5-flash-image" | "gemini-2.0-flash-exp";
+export type GeminiModel = "gemini-3-pro-image-preview" | "gemini-3.1-flash-image-preview" | "gemini-2.5-flash-image" | "gemini-2.0-flash-exp";
 
 /**
  * Desteklenen image model ID'leri
@@ -163,7 +163,8 @@ export interface ImageTransformOptions {
   faithfulness?: number; // 0.0 - 1.0 (varsayılan: 0.7)
   aspectRatio?: "1:1" | "9:16" | "16:9" | "4:3" | "3:4";
   textOverlay?: string; // Görsel üzerine yazılacak metin (opsiyonel)
-  referenceImages?: Array<{ base64: string; mimeType: string; label: string; description?: string }>; // Ek referans görseller (tabak, masa vb.)
+  referenceImages?: Array<{ base64: string; mimeType: string; label: string; description?: string; tags?: string[] }>; // Ek referans görseller (tabak, masa vb.)
+  disabledSlotKeys?: string[]; // Disable edilmiş slot'lar — sahnede olmamalı
 }
 
 /**
@@ -218,10 +219,21 @@ export class GeminiService {
   } = {};
 
   /**
-   * Maliyet sabitleri (USD per request)
+   * Token-bazlı fiyat tablosu (USD per 1M token)
+   * Kaynak: https://ai.google.dev/gemini-api/docs/pricing (Mart 2026)
+   */
+  static readonly TOKEN_COSTS: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
+    "gemini-3-pro-image-preview": { inputPerMillion: 2.00, outputPerMillion: 120.00 },
+    "gemini-3.1-flash-image-preview": { inputPerMillion: 0.30, outputPerMillion: 30.00 },
+  };
+
+  /**
+   * Statik maliyet sabitleri (usageMetadata yoksa fallback)
+   * gemini-3-pro: ~$0.134/görsel, gemini-3.1-flash: ~$0.10/görsel
    */
   static readonly COSTS: Record<string, number> = {
-    "gemini-3-pro-image-preview": 0.04,
+    "gemini-3-pro-image-preview": 0.134,
+    "gemini-3.1-flash-image-preview": 0.10,
   };
 
   constructor(config: GeminiConfig) {
@@ -297,25 +309,47 @@ export class GeminiService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     // SECTION 1: Reference Objects — Gemini'ye referans görsellerin listesi
-    let editPrefix = `SECTION 1 — REFERENCE OBJECTS (preserve exactly):
-[1] MAIN PRODUCT — use exactly as shown
+    // KRİTİK: Ürün görselinden SADECE ürünün kendisi alınmalı, arka plan/tabak/masa yok sayılmalı
+    const hasSlotRefs = options.referenceImages && options.referenceImages.length > 0;
+    let editPrefix = `SECTION 1 — REFERENCE OBJECTS:
+[1] MAIN PRODUCT IMAGE — EXTRACT ONLY THE FOOD/PRODUCT ITEM from this image. IGNORE the plate, surface, table, background, and any other objects in this image. Only the product itself matters.
 `;
 
-    // Referans görsellere [N] tagging ile label ekle
-    if (options.referenceImages && options.referenceImages.length > 0) {
+    // Referans görsellere [N] tagging ile label ekle — table hariç diğerlerine etiket ekle
+    if (hasSlotRefs) {
+      const noTagSlots = new Set(["table"]);
       let refIndex = 2;
-      for (const ref of options.referenceImages) {
-        const desc = ref.description ? ` — ${ref.description}` : "";
-        editPrefix += `[${refIndex}] ${ref.label.toUpperCase()}${desc}
+      for (const ref of options.referenceImages!) {
+        const tagStr = !noTagSlots.has(ref.label) && ref.tags?.length
+          ? ` (${ref.tags.join(", ")})`
+          : "";
+        editPrefix += `[${refIndex}] ${ref.label.toUpperCase()}${tagStr} — use this exact ${ref.label} in the final image
 `;
         refIndex++;
       }
     }
 
-    // Kısa ve kesin fidelity kuralı (25 satır → 3 satır)
+    // Fidelity kuralı — referans slot'lar varsa ürün görselindeki arka planı yok say
+    // Disabled slot'lar — sahnede olmaması gereken objeler
+    let excludedRule = "";
+    if (options.disabledSlotKeys?.length) {
+      const slotLabelMap: Record<string, string> = {
+        dish: "plate/dish/serving plate",
+        surface: "table/surface/countertop",
+        drinkware: "cup/glass/drink/coffee",
+        textile: "napkin/textile/cloth",
+        decor: "accessory/decoration/vase/flowers",
+      };
+      const excluded = options.disabledSlotKeys.map(k => slotLabelMap[k] || k).join(", ");
+      excludedRule = `\n- EXCLUDED: Do NOT include ${excluded} in the final image. These items must not appear.`;
+    }
+
     editPrefix += `
-Match each reference object exactly. Do not replace, recolor, or add objects not shown in references.
-The scene should contain ONLY the referenced objects arranged in the composition described below.
+CRITICAL RULES:
+- From image [1], extract ONLY the food/product item. Discard its plate, table, surface, and background completely.
+${hasSlotRefs ? "- Use the TABLE, PLATE, and other objects ONLY from their dedicated reference images above." : ""}
+- Match each reference object's appearance (color, texture, shape) exactly.
+- The scene should contain ONLY the referenced objects arranged in the composition described below.${excludedRule}
 
 SECTION 2 — SCENE & ATMOSPHERE (creative direction):
 `;
@@ -500,11 +534,40 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
       // inlineData'yı güvenli şekilde al
       const inlineData = imagePart.inlineData!;
 
-      // Maliyet hesapla
-      const cost = GeminiService.COSTS[this.imageModel] || 0.0;
+      // usageMetadata yakala — birden fazla path dene
+      // SDK versiyonuna göre response.usageMetadata veya result.response.usageMetadata olabilir
+      const usageMetadata = (response as any).usageMetadata
+        || (result as any).response?.usageMetadata
+        || (result as any).usageMetadata
+        || null;
+
+      // DEBUG: Response yapısını logla (usageMetadata nerede?)
+      console.log(`[GeminiService] DEBUG usageMetadata:`, JSON.stringify({
+        hasUsageMetadata: !!usageMetadata,
+        responseKeys: Object.keys(response || {}),
+        resultKeys: Object.keys(result || {}),
+        usageMetadataPath: usageMetadata ? "found" : "missing",
+        rawUsageMetadata: usageMetadata,
+        // response.usageMetadata'nın tipi
+        responseUsageMetadataType: typeof (response as any).usageMetadata,
+        resultResponseUsageMetadataType: typeof (result as any).response?.usageMetadata,
+      }));
+
+      const promptTokenCount = usageMetadata?.promptTokenCount || 0;
+      const candidatesTokenCount = usageMetadata?.candidatesTokenCount || 0;
+      const totalTokenCount = usageMetadata?.totalTokenCount || 0;
+
+      // Maliyet hesapla: token-bazlı (usageMetadata varsa) veya statik fallback
+      let cost: number;
+      const tokenCosts = GeminiService.TOKEN_COSTS[this.imageModel];
+      if (usageMetadata && tokenCosts && (promptTokenCount > 0 || candidatesTokenCount > 0)) {
+        cost = (promptTokenCount * tokenCosts.inputPerMillion + candidatesTokenCount * tokenCosts.outputPerMillion) / 1_000_000;
+      } else {
+        cost = GeminiService.COSTS[this.imageModel] || 0.0;
+      }
       const durationMs = Date.now() - startTime;
 
-      console.log("[GeminiService] Image generated successfully");
+      console.log(`[GeminiService] Image generated successfully (tokens: ${promptTokenCount}/${candidatesTokenCount}/${totalTokenCount}, cost: $${cost.toFixed(4)})`);
 
       // AI Log kaydet
       await AILogService.logGemini("image-generation", {
@@ -520,6 +583,11 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
         slotId: this.pipelineContext.slotId,
         productType: this.pipelineContext.productType,
         referenceImages: this.pipelineContext.referenceImages,
+        usageMetadata: usageMetadata ? {
+          promptTokenCount,
+          candidatesTokenCount,
+          totalTokenCount,
+        } : undefined,
       });
 
       return {
@@ -609,7 +677,31 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
       const response = result.response;
       const text = response.text();
 
-      const cost = GeminiService.COSTS[model] || 0.04;
+      // usageMetadata yakala — birden fazla path dene
+      const usageMetadata = (response as any).usageMetadata
+        || (result as any).response?.usageMetadata
+        || (result as any).usageMetadata
+        || null;
+
+      // DEBUG: Response yapısını logla
+      console.log(`[GeminiService] DEBUG admin text usageMetadata:`, JSON.stringify({
+        hasUsageMetadata: !!usageMetadata,
+        responseKeys: Object.keys(response || {}),
+        rawUsageMetadata: usageMetadata,
+      }));
+
+      const promptTokenCount = usageMetadata?.promptTokenCount || 0;
+      const candidatesTokenCount = usageMetadata?.candidatesTokenCount || 0;
+      const totalTokenCount = usageMetadata?.totalTokenCount || 0;
+
+      // Token-bazlı maliyet veya statik fallback
+      let cost: number;
+      const tokenCosts = GeminiService.TOKEN_COSTS[model];
+      if (usageMetadata && tokenCosts && (promptTokenCount > 0 || candidatesTokenCount > 0)) {
+        cost = (promptTokenCount * tokenCosts.inputPerMillion + candidatesTokenCount * tokenCosts.outputPerMillion) / 1_000_000;
+      } else {
+        cost = GeminiService.COSTS[model] || 0.04;
+      }
       const durationMs = Date.now() - startTime;
 
       // AI Log kaydet
@@ -619,6 +711,11 @@ SECTION 2 — SCENE & ATMOSPHERE (creative direction):
         status: "success",
         cost,
         durationMs,
+        usageMetadata: usageMetadata ? {
+          promptTokenCount,
+          candidatesTokenCount,
+          totalTokenCount,
+        } : undefined,
       });
 
       return { text, cost };
@@ -765,5 +862,94 @@ Write the scene description:`;
       console.error("[GeminiService] Scenario description generation failed:", error);
       throw error;
     }
+  }
+
+  /**
+   * Poster Görseli Üret
+   * Referans ürün fotoğrafı + optimize edilmiş prompt ile poster üretir
+   * Aspect ratio 2:3 (40x60cm), 4K çözünürlük
+   */
+  async generatePoster(params: {
+    productImageBase64: string;
+    productMimeType: string;
+    prompt: string;
+    model?: string;
+    aspectRatio?: string;
+  }): Promise<{ imageBase64: string; mimeType: string; cost: number }> {
+    const { productImageBase64, productMimeType, prompt, model, aspectRatio } = params;
+
+    // Görseli optimize et
+    const imageBuffer = Buffer.from(productImageBase64, "base64");
+    const optimizedBuffer = await this.preprocessImage(imageBuffer);
+    const optimizedBase64 = optimizedBuffer.toString("base64");
+
+    const client = await this.getClient();
+    const safetySettings = await getSafetySettings();
+
+    // Poster modeli — dışarıdan alınır veya default
+    const posterModel = model || "gemini-2.5-flash-image";
+
+    const genModel = client.getGenerativeModel({
+      model: posterModel,
+      safetySettings,
+      generationConfig: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        responseModalities: ["TEXT", "IMAGE"] as any,
+      },
+    });
+
+    // Aspect ratio talimatı (prompt'ta zaten var ama pekiştirme)
+    const ratioLabel = aspectRatio || "2:3";
+    const posterPrompt = `IMPORTANT: Generate this image in ${ratioLabel} aspect ratio.\n\n${prompt}`;
+
+    const contentParts: any[] = [
+      {
+        inlineData: {
+          mimeType: productMimeType || "image/png",
+          data: optimizedBase64,
+        },
+      },
+      { text: posterPrompt },
+    ];
+
+    console.log(`[GeminiService] Poster generation starting with ${posterModel}, ratio: ${ratioLabel}`);
+
+    const result = await withRetry(
+      async () => genModel.generateContent(contentParts),
+      { maxRetries: 2, initialDelayMs: 3000, maxDelayMs: 30000, context: "GeminiService.generatePoster" }
+    ) as any;
+
+    const response = result.response;
+    const candidate = response?.candidates?.[0];
+
+    if (!candidate?.content?.parts) {
+      throw new GeminiBlockedError("Poster görseli üretilemedi — boş yanıt", "NO_CONTENT");
+    }
+
+    // Görsel içeriği bul
+    const imagePart = candidate.content.parts.find((part: any) => part.inlineData);
+
+    if (!imagePart?.inlineData) {
+      // Metin yanıtı varsa logla
+      const textPart = candidate.content.parts.find((part: any) => part.text);
+      if (textPart?.text) {
+        console.log("[GeminiService] Poster text response:", textPart.text);
+      }
+      throw new GeminiBlockedError("Poster görseli üretilemedi — görsel döndürülmedi", "NO_IMAGE");
+    }
+
+    // Maliyet hesapla
+    const usageMetadata = (response as any).usageMetadata || null;
+    const promptTokenCount = usageMetadata?.promptTokenCount || 0;
+    const candidatesTokenCount = usageMetadata?.candidatesTokenCount || 0;
+    const cost = (promptTokenCount * 0.00001 + candidatesTokenCount * 0.00004);
+
+    console.log(`[GeminiService] Poster generated successfully (${promptTokenCount} input, ${candidatesTokenCount} output tokens)`);
+
+    return {
+      imageBase64: imagePart.inlineData.data,
+      mimeType: imagePart.inlineData.mimeType || "image/png",
+      cost,
+    };
   }
 }

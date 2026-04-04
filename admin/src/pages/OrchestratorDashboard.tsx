@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../services/api";
 import { useLoading } from "../contexts/LoadingContext";
 import type {
@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import { ISSUE_CATEGORIES } from "../types";
 import VisualCriticModal from "../components/VisualCriticModal";
+import { useNavigate } from "react-router-dom";
 
 // Instagram aspect ratio seçenekleri
 // Gemini desteklediği formatlar: 1:1, 3:4, 9:16
@@ -67,6 +68,7 @@ const GRID_CONFIG: Record<GridSize, { cols: string; aspectRatio: string; label: 
 };
 
 export default function OrchestratorDashboard() {
+  const navigate = useNavigate();
   // Global loading context
   const { startLoading, stopLoading } = useLoading();
 
@@ -96,6 +98,7 @@ export default function OrchestratorDashboard() {
   // Senaryo seçimi
   const [scenarios, setScenarios] = useState<Array<{ id: string; name: string; description?: string; isInterior?: boolean; petAllowed?: boolean; accessoryAllowed?: boolean }>>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("");
+  const [scenarioSearch, setScenarioSearch] = useState<string>("");
 
   // Template seçimi kaldırıldı — slot konfigürasyonu artık Senaryo'da
 
@@ -137,8 +140,20 @@ export default function OrchestratorDashboard() {
   // Asset Override (Pre-flight modal'da slot tıklayarak asset değiştirme)
   const [assetOverrides, setAssetOverrides] = useState<Record<string, { id: string; filename: string; url: string }>>({});
   const [assetPickerSlot, setAssetPickerSlot] = useState<{ key: string; label: string; category: string } | null>(null);
+  // Slot checkbox — hangi slot'lar görselden çıkarılacak (ürün hariç)
+  const [disabledSlots, setDisabledSlots] = useState<Set<string>>(new Set());
   const [pickerAssets, setPickerAssets] = useState<OrchestratorAsset[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
+
+  // Sahne Önizleme (Pre-flight modal içinde)
+  const [previewImages, setPreviewImages] = useState<Array<{ imageBase64: string; mimeType: string } | null>>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [selectedPreviewIndex, setSelectedPreviewIndex] = useState<number | null>(null);
+  const [previewProductUsed, setPreviewProductUsed] = useState<{ id: string; filename: string } | null>(null);
+  const [previewCount, setPreviewCount] = useState<1 | 2 | 4>(4);
+
+  const previewAbortRef = useRef<AbortController | null>(null);
 
   const loadData = useCallback(async (showGlobalLoading = false) => {
     setLoading(true);
@@ -245,11 +260,18 @@ export default function OrchestratorDashboard() {
 
     try {
       const overrides = Object.keys(assetOverrides).length > 0 ? assetOverrides : undefined;
+      const disabled = disabledSlots.size > 0 ? Array.from(disabledSlots) : undefined;
+      // Seçili preview varsa base64'ünü gönder
+      const selectedBase64 = selectedPreviewIndex !== null && previewImages[selectedPreviewIndex]
+        ? previewImages[selectedPreviewIndex]!.imageBase64
+        : undefined;
       const result = await api.orchestratorGenerateNow(
         selectedScenarioId || undefined,
         selectedAspectRatio,
         isRandomMode || undefined,
-        overrides
+        overrides,
+        disabled,
+        selectedBase64
       );
       setCurrentSlotId(result.slotId);
 
@@ -295,6 +317,32 @@ export default function OrchestratorDashboard() {
       setValidationWarnings(validation.warnings);
       setPreFlightData(validation.preFlightData || null);
       setAssetOverrides({});
+      // Varsayılan: ürün hariç tüm slot'lar kapalı başlar
+      // Senaryo'daki compositionSlots'tan sadece "random" (aktif) olanlar açık kalır
+      const scenarioSlots = (validation.preFlightData?.scenario as any)?.compositionSlots as Record<string, { state: string }> | undefined;
+      const allSlotKeys = validation.preFlightData?.assets?.slots
+        ? Object.keys(validation.preFlightData.assets.slots)
+        : ["surface", "dish", "drinkware"];
+      if (scenarioSlots) {
+        // Senaryo'da tanımlı slot'lardan sadece "disabled" olanları kapa
+        const initialDisabled = new Set(
+          Object.entries(scenarioSlots)
+            .filter(([, config]) => config.state === "disabled")
+            .map(([key]) => key)
+        );
+        // Senaryoda tanımlı olmayan slot'ları da kapa
+        for (const key of allSlotKeys) {
+          if (!scenarioSlots[key]) initialDisabled.add(key);
+        }
+        setDisabledSlots(initialDisabled);
+      } else {
+        // compositionSlots tanımlı değilse tüm slot'lar kapalı (ürün hariç)
+        setDisabledSlots(new Set(allSlotKeys));
+      }
+      setPreviewImages([]);
+      setPreviewError(null);
+      setSelectedPreviewIndex(null);
+      setPreviewProductUsed(null);
       setShowValidationModal(true);
     } catch {
       runGenerateAfterValidation();
@@ -477,6 +525,16 @@ export default function OrchestratorDashboard() {
     });
   };
 
+  // Slot checkbox toggle (ürün hariç — ürün her zaman dahil)
+  const toggleSlot = (slotKey: string) => {
+    setDisabledSlots(prev => {
+      const next = new Set(prev);
+      if (next.has(slotKey)) next.delete(slotKey);
+      else next.add(slotKey);
+      return next;
+    });
+  };
+
   const formatElapsedTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -562,12 +620,12 @@ export default function OrchestratorDashboard() {
                 {/* Asset Havuzu */}
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="text-xs font-medium text-gray-500 mb-2">
-                    Referans Görseller <span className="font-normal text-gray-400">— 4 görsel Gemini'ye gider, diğerleri sadece metin</span>
+                    Referans Görseller <span className="font-normal text-gray-400">— tüm görseller Gemini'ye gider</span>
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-4 gap-3 pt-2 overflow-visible">
                     {([
-                      // Ürün kartı (sabit — slot dışı, tıklanamaz)
-                      { slotKey: null, label: "Ürün", total: preFlightData.assets.products.total, preferred: undefined, tags: preFlightData.scenario.suggestedProducts.length > 0 ? preFlightData.scenario.suggestedProducts : undefined, preview: preFlightData.assets.products.preview, matchDetails: undefined, category: undefined, subType: undefined },
+                      // Ürün kartı (tıklanabilir — ürün değiştirilebilir)
+                      { slotKey: "product", label: "Ürün", total: preFlightData.assets.products.total, preferred: undefined, tags: preFlightData.scenario.suggestedProducts.length > 0 ? preFlightData.scenario.suggestedProducts : undefined, preview: preFlightData.assets.products.preview, matchDetails: undefined, category: "products", subType: preFlightData.scenario.suggestedProducts?.[0] },
                       // Slot kartları (dinamik — slots varsa oradan, yoksa eski alanlardan)
                       ...(preFlightData.assets.slots
                         ? Object.entries(preFlightData.assets.slots)
@@ -586,15 +644,15 @@ export default function OrchestratorDashboard() {
                             }))
                         : [
                             // Eski format fallback
-                            { slotKey: "surface" as string | null, label: "Masa", total: preFlightData.assets.tables?.total || 0, preferred: preFlightData.assets.tables?.preferred, tags: preFlightData.scenario.preferredTags?.table, preview: preFlightData.assets.tables?.preview, matchDetails: preFlightData.assets.tables?.matchDetails, category: "furniture" as string | undefined, subType: "tables" as string | undefined },
-                            { slotKey: "dish" as string | null, label: "Tabak", total: preFlightData.assets.plates?.total || 0, preferred: preFlightData.assets.plates?.preferred, tags: preFlightData.scenario.preferredTags?.plate, preview: preFlightData.assets.plates?.preview, matchDetails: preFlightData.assets.plates?.matchDetails, category: "props" as string | undefined, subType: "plates" as string | undefined },
-                            { slotKey: "drinkware" as string | null, label: "Fincan", total: preFlightData.assets.cups?.total || 0, preferred: preFlightData.assets.cups?.preferred, tags: preFlightData.scenario.preferredTags?.cup, preview: preFlightData.assets.cups?.preview, matchDetails: preFlightData.assets.cups?.matchDetails, category: "props" as string | undefined, subType: "cups" as string | undefined },
+                            { slotKey: "surface", label: "Masa", total: preFlightData.assets.tables?.total || 0, preferred: preFlightData.assets.tables?.preferred, tags: preFlightData.scenario.preferredTags?.table, preview: preFlightData.assets.tables?.preview, matchDetails: preFlightData.assets.tables?.matchDetails, category: "furniture" as string | undefined, subType: "tables" as string | undefined },
+                            { slotKey: "dish", label: "Tabak", total: preFlightData.assets.plates?.total || 0, preferred: preFlightData.assets.plates?.preferred, tags: preFlightData.scenario.preferredTags?.plate, preview: preFlightData.assets.plates?.preview, matchDetails: preFlightData.assets.plates?.matchDetails, category: "props" as string | undefined, subType: "plates" as string | undefined },
+                            { slotKey: "drinkware", label: "Fincan", total: preFlightData.assets.cups?.total || 0, preferred: preFlightData.assets.cups?.preferred, tags: preFlightData.scenario.preferredTags?.cup, preview: preFlightData.assets.cups?.preview, matchDetails: preFlightData.assets.cups?.matchDetails, category: "props" as string | undefined, subType: "cups" as string | undefined },
                           ]
                       ),
-                    ] as Array<{ slotKey: string | null; label: string; total: number; preferred: number | undefined; tags: string[] | undefined; preview: { id: string; filename: string; url: string; tags: string[] } | undefined; matchDetails: { bestScore: string; matchedTags: string[]; missedTags: string[]; bestAsset?: { id: string; filename: string; url: string; tags: string[] } } | undefined; category: string | undefined; subType: string | undefined }>)
+                    ] as Array<{ slotKey: string; label: string; total: number; preferred: number | undefined; tags: string[] | undefined; preview: { id: string; filename: string; url: string; tags: string[] } | undefined; matchDetails: { bestScore: string; matchedTags: string[]; missedTags: string[]; bestAsset?: { id: string; filename: string; url: string; tags: string[] } } | undefined; category: string | undefined; subType: string | undefined }>)
                     // Referans görsel olarak gönderilen slot'lar önce, sadece metin olanlar sonra
                     .sort((a, b) => {
-                      const refSlots = new Set([null, "surface", "dish", "drinkware"]); // null = ürün
+                      const refSlots = new Set(["product", "surface", "dish", "drinkware"]);
                       const aIsRef = refSlots.has(a.slotKey);
                       const bIsRef = refSlots.has(b.slotKey);
                       if (aIsRef && !bIsRef) return -1;
@@ -606,10 +664,10 @@ export default function OrchestratorDashboard() {
                       const activeTags = item.tags?.filter(t => t !== "__none__") || [];
                       const override = item.slotKey ? assetOverrides[item.slotKey] : undefined;
                       const isOverridden = !!override;
-                      const isClickable = !!item.slotKey && !isNone;
-                      // Referans görsel olarak Gemini'ye gönderilen slot'lar (product + table + cup)
-                      const isReferenceImage = item.slotKey === null || item.slotKey === "surface" || item.slotKey === "dish" || item.slotKey === "drinkware";
-                      const isTextOnly = !isReferenceImage && !isNone;
+                      const isSlotDisabled = item.slotKey !== "product" && disabledSlots.has(item.slotKey);
+                      const isClickable = !!item.slotKey && !isNone && !isSlotDisabled;
+                      // Tüm slot'lar referans görsel olarak Gemini'ye gönderiliyor
+                      const isTextOnly = false;
                       // Eşleşme durumu renk sınıfı
                       const matchBorderClass = isOverridden
                         ? "border-blue-400 ring-1 ring-blue-200"
@@ -626,9 +684,18 @@ export default function OrchestratorDashboard() {
                       return (
                         <div
                           key={item.label}
-                          className={`bg-white rounded-lg p-2 border ${isNone ? "opacity-50 bg-gray-50" : isTextOnly ? "opacity-60 border-dashed border-gray-300" : matchBorderClass} ${isClickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""} relative`}
-                          onClick={isClickable ? () => openAssetPicker(item.slotKey!, item.label, item.category) : undefined}
+                          className={`bg-white rounded-lg p-2 border ${isSlotDisabled ? "opacity-40 grayscale" : isNone ? "opacity-50 bg-gray-50" : isTextOnly ? "opacity-60 border-dashed border-gray-300" : matchBorderClass} ${isClickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""} relative`}
+                          onClick={isClickable ? () => openAssetPicker(item.slotKey, item.label, item.category) : undefined}
                         >
+                          {/* Slot checkbox — ürün hariç, kartın dışında sol üstte */}
+                          {item.slotKey !== "product" && !isNone && (
+                            <label className="absolute -top-2 -left-2 z-20 bg-white rounded-full shadow-sm border border-gray-200 p-0.5 cursor-pointer hover:shadow-md transition-shadow" onClick={(e) => e.stopPropagation()}>
+                              <input type="checkbox"
+                                checked={!disabledSlots.has(item.slotKey)}
+                                onChange={() => toggleSlot(item.slotKey)}
+                                className="w-4 h-4 rounded text-emerald-600 cursor-pointer" />
+                            </label>
+                          )}
                           {/* Text-only badge */}
                           {isTextOnly && !isNone && (
                             <div className="absolute -top-1.5 -right-1.5 z-10">
@@ -796,14 +863,178 @@ export default function OrchestratorDashboard() {
               </div>
             )}
 
+            {/* Sahne Önizleme */}
+            {preFlightData && !validationWarnings.some(w => w.type === "error") && (
+              <div className="border border-indigo-200 rounded-lg p-4 bg-indigo-50/30 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-indigo-700">Sahne Önizleme</h4>
+                    <p className="text-xs text-gray-500">Referans asset'lerle varyasyon üret</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Önizleme sayısı seçimi */}
+                    <div className="flex rounded-lg border border-indigo-200 overflow-hidden">
+                      {([1, 2, 4] as const).map((count) => (
+                        <button
+                          key={count}
+                          type="button"
+                          onClick={() => setPreviewCount(count)}
+                          disabled={previewLoading}
+                          className={`px-2.5 py-1.5 text-xs font-medium transition ${
+                            previewCount === count
+                              ? "bg-indigo-600 text-white"
+                              : "bg-white text-indigo-600 hover:bg-indigo-50"
+                          } disabled:opacity-40`}
+                        >
+                          {count}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        // Önceki isteği iptal et
+                        previewAbortRef.current?.abort();
+                        const controller = new AbortController();
+                        previewAbortRef.current = controller;
+
+                        setPreviewLoading(true);
+                        setPreviewError(null);
+                        setPreviewImages([]);
+                        setPreviewProductUsed(null);
+                        setSelectedPreviewIndex(null);
+                        try {
+                          // compositionConfig oluştur (assetOverrides + disabledSlots)
+                          const slots: Record<string, { state: string; assetId: string; source: string }> = {};
+                          for (const [key, override] of Object.entries(assetOverrides)) {
+                            if (key === "product") continue;
+                            slots[key] = { state: "manual", assetId: override.id, source: "override" };
+                          }
+                          for (const slotKey of disabledSlots) {
+                            slots[slotKey] = { state: "disabled", assetId: "", source: "override" };
+                          }
+
+                          const result = await api.generateScenePreview({
+                            scenarioId: selectedScenarioId,
+                            compositionConfig: Object.keys(slots).length > 0 ? { slots } : undefined,
+                            productOverrideId: assetOverrides["product"]?.id,
+                            aspectRatio: selectedAspectRatio,
+                            previewCount,
+                          }, controller.signal);
+                          setPreviewImages(result.previews);
+                          setPreviewProductUsed(result.productUsed);
+                        } catch (err) {
+                          // AbortError ise sessizce ignore et (yeni istek zaten başladı)
+                          if (err instanceof DOMException && err.name === "AbortError") return;
+                          setPreviewError(err instanceof Error ? err.message : "Önizleme üretimi başarısız");
+                          console.error("[ScenePreview]", err);
+                        } finally {
+                          setPreviewLoading(false);
+                        }
+                      }}
+                      disabled={previewLoading}
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition"
+                    >
+                      {previewLoading ? (
+                        <>
+                          <span className="animate-spin">&#9696;</span>
+                          Üretiliyor...
+                        </>
+                      ) : (
+                        <>Önizle</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Skeleton loading */}
+                {previewLoading && (
+                  <div className={`grid gap-3 ${previewCount === 1 ? "grid-cols-1 max-w-sm" : "grid-cols-2"}`}>
+                    {Array.from({ length: previewCount }).map((_, i) => (
+                      <div key={i} className="aspect-square bg-indigo-100 rounded-lg animate-pulse flex items-center justify-center">
+                        <span className="text-indigo-300 text-sm">Varyasyon {i + 1}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Hata */}
+                {previewError && (
+                  <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg">
+                    {previewError}
+                  </div>
+                )}
+
+                {/* Sonuçlar: 2x2 grid */}
+                {!previewLoading && previewImages.length > 0 && (
+                  <>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Bir varyasyon seçerek pipeline'da kullanabilirsiniz:
+                      {previewProductUsed && (
+                        <span className="ml-2 text-indigo-600 font-medium">Ürün: {previewProductUsed.filename}</span>
+                      )}
+                    </p>
+                    <div className={`grid gap-3 ${previewImages.length === 1 ? "grid-cols-1 max-w-sm" : "grid-cols-2"}`}>
+                      {previewImages.map((img, i) => (
+                        <div
+                          key={i}
+                          className={`aspect-square rounded-lg overflow-hidden border-2 bg-gray-50 relative cursor-pointer transition ${
+                            selectedPreviewIndex === i
+                              ? "border-indigo-500 ring-2 ring-indigo-300"
+                              : "border-gray-200 hover:border-indigo-300"
+                          }`}
+                          onClick={() => {
+                            if (!img) return;
+                            setSelectedPreviewIndex(selectedPreviewIndex === i ? null : i);
+                          }}
+                        >
+                          {img ? (
+                            <>
+                              <img
+                                src={`data:${img.mimeType};base64,${img.imageBase64}`}
+                                alt={`Varyasyon ${i + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                              {selectedPreviewIndex === i && (
+                                <div className="absolute top-2 right-2 w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center">
+                                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-red-50">
+                              <div className="text-center">
+                                <span className="text-red-400 text-2xl block mb-1">&#10006;</span>
+                                <span className="text-xs text-red-500">Engellenmiş</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-3">
               {!validationWarnings.some(w => w.type === "error") && (
-                <button
-                  onClick={() => { setShowValidationModal(false); runGenerateAfterValidation(); }}
-                  className="flex-1 btn-primary"
-                >
-                  Devam Et
-                </button>
+                <>
+                  <button
+                    onClick={() => { setShowValidationModal(false); runGenerateAfterValidation(); }}
+                    className="flex-1 btn-primary"
+                  >
+                    {selectedPreviewIndex !== null ? "Seçili Görselle Devam Et" : "Devam Et"}
+                  </button>
+                  <button
+                    onClick={() => navigate("/admin/poster")}
+                    className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-700 text-white rounded-xl text-sm font-medium hover:shadow-lg transition"
+                  >
+                    🎨 Poster
+                  </button>
+                </>
               )}
               <button
                 onClick={() => setShowValidationModal(false)}
@@ -1058,6 +1289,20 @@ export default function OrchestratorDashboard() {
                   </div>
                 )}
 
+                {/* Pipeline Adımları */}
+                {selectedSlot.pipelineResult?.status?.completedStages && selectedSlot.pipelineResult.status.completedStages.length > 0 && (
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Pipeline Adımları</h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedSlot.pipelineResult.status.completedStages.map((stage: string) => (
+                        <span key={stage} className="px-2 py-0.5 bg-green-50 text-green-700 text-xs rounded border border-green-200">
+                          {STAGE_LABELS[stage] || stage}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Maliyet */}
                 {selectedSlot.pipelineResult?.totalCost !== undefined && (
                   <div className="p-3 bg-amber-50 rounded-xl flex items-center justify-between">
@@ -1287,6 +1532,7 @@ export default function OrchestratorDashboard() {
         />
       )}
 
+
       {/* ==================== MAIN CONTENT ==================== */}
 
       {/* Header */}
@@ -1361,10 +1607,25 @@ export default function OrchestratorDashboard() {
               </label>
             </div>
 
-            {/* Senaryo kartları */}
+            {/* Senaryo arama + kartları */}
             {scenarios.length > 0 && (
-              <div className="p-2 space-y-1.5 max-h-[380px] overflow-y-auto">
+              <div>
+                {/* Arama */}
+                {scenarios.length > 5 && (
+                  <div className="px-2 pt-2">
+                    <input
+                      type="text"
+                      placeholder="Senaryo ara..."
+                      value={scenarioSearch}
+                      onChange={(e) => setScenarioSearch(e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-brand-blue focus:border-brand-blue"
+                    />
+                  </div>
+                )}
+
+                <div className="p-2 space-y-1.5 max-h-[380px] overflow-y-auto">
                 {/* Senaryo Yok */}
+                {!scenarioSearch && (
                 <button
                   onClick={() => setSelectedScenarioId("")}
                   className={`w-full p-2.5 rounded-xl border text-left transition-all ${
@@ -1381,9 +1642,10 @@ export default function OrchestratorDashboard() {
                     </div>
                   </div>
                 </button>
+                )}
 
                 {/* Senaryo Kartları */}
-                {scenarios.map((scenario) => (
+                {scenarios.filter((s) => !scenarioSearch || s.name.toLowerCase().includes(scenarioSearch.toLowerCase()) || s.description?.toLowerCase().includes(scenarioSearch.toLowerCase())).map((scenario) => (
                   <button
                     key={scenario.id}
                     onClick={() => setSelectedScenarioId(scenario.id)}
@@ -1406,6 +1668,7 @@ export default function OrchestratorDashboard() {
                     )}
                   </button>
                 ))}
+                </div>
               </div>
             )}
 
@@ -1441,6 +1704,20 @@ export default function OrchestratorDashboard() {
                 <div className="mb-3">
                   <p className="text-2xl font-bold text-gray-900">${stats.aiStatsMonthly.totalCost?.toFixed(2) || "0.00"}</p>
                   <p className="text-xs text-gray-500">Son 30 gün · {stats.aiStatsMonthly.geminiCalls || 0} çağrı</p>
+                  {/* Token bilgisi (30 gün) */}
+                  {(stats.aiStatsMonthly.totalInputTokens || stats.aiStatsMonthly.totalOutputTokens) ? (
+                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-gray-400">
+                      <span>{((stats.aiStatsMonthly.totalInputTokens || 0) / 1000).toFixed(0)}K in</span>
+                      <span>·</span>
+                      <span>{((stats.aiStatsMonthly.totalOutputTokens || 0) / 1000).toFixed(0)}K out</span>
+                      {(stats.aiStatsMonthly.imageGenerationCount || 0) > 0 && (
+                        <>
+                          <span>·</span>
+                          <span>${((stats.aiStatsMonthly.totalCost || 0) / (stats.aiStatsMonthly.imageGenerationCount || 1)).toFixed(3)}/görsel</span>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               )}
 
@@ -1449,6 +1726,11 @@ export default function OrchestratorDashboard() {
                   <div className="bg-gray-50 rounded-lg p-2.5">
                     <p className="text-sm font-semibold text-gray-800">${stats.aiStats.totalCost?.toFixed(4) || "0"}</p>
                     <p className="text-[10px] text-gray-500">Bugün</p>
+                    {(stats.aiStats.totalInputTokens || stats.aiStats.totalOutputTokens) ? (
+                      <p className="text-[9px] text-gray-400 mt-0.5">
+                        {((stats.aiStats.totalInputTokens || 0) / 1000).toFixed(0)}K/{((stats.aiStats.totalOutputTokens || 0) / 1000).toFixed(0)}K tok
+                      </p>
+                    ) : null}
                   </div>
                   <div className="bg-gray-50 rounded-lg p-2.5">
                     <p className="text-sm font-semibold text-gray-800">{stats.aiStats.successRate?.toFixed(0) || 0}%</p>

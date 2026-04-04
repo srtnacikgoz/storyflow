@@ -271,7 +271,9 @@ export class OrchestratorScheduler {
     overrideScenarioId?: string,
     overrideAspectRatio?: "1:1" | "3:4" | "9:16",
     isRandomMode?: boolean,
-    compositionConfig?: CompositionConfig
+    compositionConfig?: CompositionConfig,
+    productOverrideId?: string,
+    preGeneratedImageBase64?: string
   ): Promise<void> {
     const orchestrator = new Orchestrator(this.config);
 
@@ -311,7 +313,9 @@ export class OrchestratorScheduler {
         overrideAspectRatio,
         undefined, // isManual
         isRandomMode,
-        compositionConfig
+        compositionConfig,
+        productOverrideId,
+        preGeneratedImageBase64
       );
 
       // Slot'u güncelle (imageBase64 strip — zaten Storage'da, Firestore 1MB limitini aşar)
@@ -391,7 +395,9 @@ export class OrchestratorScheduler {
     overrideAspectRatio?: "1:1" | "3:4" | "9:16",
     productType?: ProductType,
     isRandomMode?: boolean,
-    compositionConfig?: CompositionConfig
+    compositionConfig?: CompositionConfig,
+    productOverrideId?: string,
+    preGeneratedImageBase64?: string
   ): Promise<{
     slotId: string;
     success: boolean;
@@ -418,7 +424,7 @@ export class OrchestratorScheduler {
     try {
       // Pipeline'ı bekleyerek çalıştır (scenarioId ve aspectRatio override ile)
       // NOT: await ZORUNLU - Cloud Functions HTTP request bitince instance kapanır
-      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideScenarioId, overrideAspectRatio, isRandomMode, compositionConfig);
+      await this.runPipelineAsync(tempRule, slot.id, undefined, overrideScenarioId, overrideAspectRatio, isRandomMode, compositionConfig, productOverrideId, preGeneratedImageBase64);
 
       return {
         slotId: slot.id,

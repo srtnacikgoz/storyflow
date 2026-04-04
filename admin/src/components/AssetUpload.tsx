@@ -80,7 +80,7 @@ async function optimizeImage(file: File): Promise<Blob> {
 
 interface AssetUploadProps {
   type: AssetType;
-  onUploadComplete: (url: string, filename: string) => void;
+  onUploadComplete: (url: string, filename: string, cloudinaryMeta?: { publicId: string; version: string }) => void;
   onError?: (error: string) => void;
   folder?: string;
   // Cloudinary upload için gerekli alanlar
@@ -270,9 +270,12 @@ export default function AssetUpload({
         setProgress(100);
         console.log("[AssetUpload] Cloudinary upload complete:", result.data?.cloudinaryUrl);
 
-        // Cloudinary URL'ini parent'a bildir
+        // Cloudinary URL + metadata'yı parent'a bildir
         const cloudinaryUrl = result.data?.cloudinaryUrl || "";
-        onUploadCompleteRef.current(cloudinaryUrl, file.name);
+        onUploadCompleteRef.current(cloudinaryUrl, file.name, {
+          publicId: result.data?.cloudinaryPublicId || "",
+          version: result.data?.cloudinaryVersion || "",
+        });
         setIsUploading(false);
       } catch (error) {
         console.error("[AssetUpload] Cloudinary upload error:", error);

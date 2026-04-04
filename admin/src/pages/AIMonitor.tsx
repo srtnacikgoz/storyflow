@@ -51,6 +51,21 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
   );
 }
 
+// Model kısa isim helper
+const getModelShortName = (model?: string): string => {
+  if (!model) return "";
+  if (model.includes("flash")) return "Flash 3.1";
+  if (model.includes("pro")) return "Pro";
+  return model;
+};
+
+// Model badge rengi
+const getModelBadgeClass = (model?: string): string => {
+  if (!model) return "bg-gray-100 text-gray-600";
+  if (model.includes("flash")) return "bg-sky-100 text-sky-800";
+  return "bg-emerald-100 text-emerald-800";
+};
+
 // Stage renkleri
 const STAGE_COLORS: Record<AILogStage, string> = {
   "config-snapshot": "bg-slate-100 text-slate-800",
@@ -133,6 +148,7 @@ interface PipelineGroup {
   hasError: boolean;
   productType?: string;
   slotId?: string;
+  model?: string;
 }
 
 export default function AIMonitor() {
@@ -193,6 +209,7 @@ export default function AIMonitor() {
       if (log.status === "error") group.hasError = true;
       if (!group.productType && log.productType) group.productType = log.productType;
       if (!group.slotId && log.slotId) group.slotId = log.slotId;
+      if (!group.model && log.model) group.model = log.model;
     });
 
     // Her grup içindeki logları stage sırasına göre sırala
@@ -416,6 +433,11 @@ export default function AIMonitor() {
                     )}
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-gray-500">{formatShortDate(group.startTime)}</span>
+                      {group.model && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${getModelBadgeClass(group.model)}`}>
+                          {getModelShortName(group.model)}
+                        </span>
+                      )}
                       {group.productType && (
                         <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
                           {group.productType}
@@ -526,11 +548,11 @@ export default function AIMonitor() {
                                   {STAGE_LABELS[log.stage]}
                                 </span>
 
-                                {/* Provider */}
+                                {/* Provider + Model */}
                                 <span
-                                  className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800`}
+                                  className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${getModelBadgeClass(log.model)}`}
                                 >
-                                  Gemini
+                                  {getModelShortName(log.model) || "Gemini"}
                                 </span>
                               </div>
 
@@ -584,7 +606,7 @@ export default function AIMonitor() {
                 Zaman
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Provider
+                Model
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Aşama
@@ -637,9 +659,9 @@ export default function AIMonitor() {
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800`}
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getModelBadgeClass(log.model)}`}
                     >
-                      Gemini
+                      {getModelShortName(log.model) || "Gemini"}
                     </span>
                   </td>
                   <td className="px-4 py-3">

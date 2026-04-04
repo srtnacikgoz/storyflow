@@ -95,7 +95,21 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(npx firebase functions:log:*)",
       "Bash(npx firebase:*)",
-      "WebFetch(domain:deepwiki.com)"
+      "WebFetch(domain:deepwiki.com)",
+      "Bash(npx vite:*)",
+      "Bash(open:*)",
+      "WebFetch(domain:hookdeck.com)",
+      "WebFetch(domain:skywork.ai)",
+      "WebFetch(domain:help.apiyi.com)",
+      "WebFetch(domain:blog.laozhang.ai)",
+      "Bash(FIREBASE_DEBUG=true firebase deploy --only functions)",
+      "Bash(node --trace-warnings -e \":*)",
+      "Bash(npm run:*)",
+      "Bash(pkill -f \"firebase deploy\")",
+      "Bash(FUNCTIONS_DISCOVERY_TIMEOUT=120000 firebase deploy --only functions:generatePoster)",
+      "WebFetch(domain:apps.apple.com)",
+      "Bash([ -f \"$WT1/functions/src/controllers/orchestrator/$f\" ])",
+      "Bash(cp /Users/sertanacikgoz/Desktop/InstagramPaylaşımOtomosyonu/.claude/worktrees/agent-ad0d2a3f/functions/src/controllers/orchestrator/__TRACKED_VAR__ /Users/sertanacikgoz/Desktop/InstagramPaylaşımOtomosyonu/functions/src/controllers/orchestrator/__TRACKED_VAR__)"
     ]
   },
   "hooks": {}

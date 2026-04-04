@@ -218,7 +218,7 @@ export async function suggestMoodForTime(timeOfDay: string): Promise<GeminiMoodD
   if (!presets) return null;
 
   // timeOfDay'e uygun mood bul
-  const suitable = presets.moods.find(m => m.timeOfDay.includes(timeOfDay));
+  const suitable = presets.moods.find(m => m.timeOfDay?.includes(timeOfDay));
 
   // Bulamazsa fallback
   return suitable || presets.moods[0] || null;
@@ -232,7 +232,7 @@ export async function suggestLightingForProduct(productType: string): Promise<Ge
   if (!presets) return null;
 
   // Ürün tipine uygun ışık bul
-  const suitable = presets.lighting.find(l => l.bestFor.includes(productType));
+  const suitable = presets.lighting.find(l => l.bestFor?.includes(productType));
 
   // Bulamazsa ilk preset'i kullan (soft-diffused genelde güvenli)
   return suitable || presets.lighting[0] || null;
@@ -625,6 +625,15 @@ export async function buildGeminiPrompt(params: {
   accessoryOptions?: string[];
   // Shallow depth of field — ürün net, arka plan blur
   shallowDepthOfField?: boolean;
+  // El / kişi dahil et
+  includesHands?: boolean;
+  // Dinamik el stili prompt'u (Firestore'dan)
+  handStylePrompt?: string;
+  // Disable edilmiş slot key'leri — bu objeler sahnede olmamalı
+  disabledSlotKeys?: string[];
+  // Patlatılmış görünüm (exploded/deconstructed view)
+  isExplodedView?: boolean;
+  explodedViewDescription?: string;
 }): Promise<{
   mainPrompt: string;
   negativePrompt: string;
@@ -840,31 +849,26 @@ export async function buildGeminiPrompt(params: {
     });
   }
 
-  // === PROMPT OLUŞTURMA ===
-  const promptParts: string[] = [];
+  // === PROMPT OLUŞTURMA (v4.0 — "Göster, Tarif Etme") ===
+  // Referans görseller sahneyi anlatır, metin sadece atmosfer/yön verir.
+  // Section header'sız, tek paragraf, ~40-60 kelime hedefi.
+  const parts: string[] = [];
 
-  // 1. Format ve context
-  promptParts.push("Using uploaded image as reference for the product.");
-  promptParts.push("");
-  promptParts.push("Professional lifestyle Instagram photo for Sade Patisserie.");
-  promptParts.push("");
-
-  // 2. Atmosfer (mood)
+  // Atmosfer (mood)
+  let lightingSource = "none";
   if (mood) {
-    promptParts.push(`ATMOSPHERE: ${mood.geminiAtmosphere}`);
-    promptParts.push(`Color palette: ${mood.colorPalette.join(", ")}`);
-    promptParts.push("");
+    parts.push(mood.geminiAtmosphere);
+    if (mood.colorPalette?.length > 0) {
+      parts.push(`Color palette: ${mood.colorPalette.join(", ")}.`);
+    }
   }
 
-  // 3. Işık — sadeleştirildi (v3.0): 1 satır talimat + color temp
-  let lightingSource = "none";
+  // Işık
   if (lighting) {
-    promptParts.push(`LIGHTING: ${lighting.geminiPrompt}, ${lighting.temperature} tones.`);
-    promptParts.push("");
+    parts.push(`${lighting.geminiPrompt}, ${lighting.temperature} tones.`);
     lightingSource = "preset";
   } else if (mood && mood.lighting) {
-    promptParts.push(`LIGHTING: ${mood.lighting}`);
-    promptParts.push("");
+    parts.push(mood.lighting);
     lightingSource = "mood-fallback";
   }
 
@@ -882,76 +886,18 @@ export async function buildGeminiPrompt(params: {
     details: { source: lightingSource },
   });
 
-  // 4. Ürün dokusu — KALDIRILDI (v3.0)
-  // Ürün zaten [1] referans görsel olarak gidiyor.
-  // Metin ile doku tarif etmek referans görselle çelişki yaratıyordu.
-
-  // 5.5 Atmospheric Color Grading (Sıcaklık/Renk Uyumu Ayarlamaları)
-  // Sadece ciddi renk çelişkisi varsa color grading ekle (v3.0)
-  // Hafif çelişkilerde Gemini'nin kendi dengesine güven
-  if (atmosphericAnalysis && atmosphericAnalysis.temperatureConflict.severity === "severe") {
-    promptParts.push(`COLOR GRADING: Ensure product colors remain appetizing despite cool atmosphere.`);
-    atmosphericAnalysis.promptAdjustments.forEach(adj => {
-      promptParts.push(`- ${adj}`);
-    });
-    promptParts.push("");
-  }
-
-  // 5.6 Asset Etiketleri — KALDIRILDI (v3.0)
-  // Asset'ler zaten referans görseller olarak [2][3][4]... şeklinde gönderiliyor.
-  // Metin ile "PLATE: renkli tabak" demek, referans görselle çelişki yaratıyordu.
-  // Decision log'a asset tag bilgisi yine kaydedilsin (debugging için)
-  if (params.assetTags) {
-    const tagCount = Object.values(params.assetTags).filter(v => v && v.length > 0).length;
-    if (tagCount > 0) {
-      decisions.push({
-        step: "asset-tags",
-        input: JSON.stringify(params.assetTags),
-        matched: true,
-        result: `${tagCount} asset tipi için referans görseller mevcut (prompt'a metin eklenmedi — v3.0)`,
-        fallback: false,
-        details: { tagCount, tags: params.assetTags, note: "Tags only used for asset selection, not in prompt text" },
-      });
-    }
-  }
-
-  // 5.6a Aksesuar Yönlendirmesi — kullanıcının seçtiği aksesuarları prompt'a ekle
-  if (params.accessoryAllowed && params.accessoryOptions && params.accessoryOptions.length > 0) {
-    const accessoryList = params.accessoryOptions.join(", ");
-    const accessoryInstruction = `\nACCESSORIES: Include the following decorative accessories naturally in the scene: ${accessoryList}. Place them organically on the table surface, complementing the main composition.`;
-    promptParts.push(accessoryInstruction);
+  // Sahne yönlendirmesi (senaryo) — exploded view aktifken atla (katman açıklaması yeterli)
+  if (params.isExplodedView && params.explodedViewDescription) {
     decisions.push({
-      step: "accessory-direction",
-      input: `accessoryOptions: [${accessoryList}]`,
-      matched: true,
-      result: accessoryInstruction.trim(),
+      step: "scenario-description",
+      input: params.scenarioDescription || null,
+      matched: false,
+      result: "Exploded view aktif — scenarioDescription atlandı, katman açıklaması kullanılacak",
       fallback: false,
-      details: { source: "scenario.accessoryOptions", options: params.accessoryOptions },
+      details: { skippedBecause: "isExplodedView" },
     });
-  }
-
-  // 5.6b Shallow Depth of Field — ürün net, arka plan bokeh
-  if (params.shallowDepthOfField) {
-    promptParts.push(`\nDEPTH OF FIELD: Use a very shallow depth of field (wide aperture, f/1.8-f/2.8). The main product must be tack-sharp with crisp detail. All background elements (cups, plates, props, environment) should be smoothly blurred with beautiful circular bokeh. Create a strong separation between the sharp foreground subject and the soft, dreamy background.`);
-    decisions.push({
-      step: "shallow-depth-of-field",
-      input: "shallowDepthOfField: true",
-      matched: true,
-      result: "Shallow DOF talimatı eklendi — ürün net, arka plan bokeh",
-      fallback: false,
-      details: { source: "scenario.shallowDepthOfField" },
-    });
-  }
-
-  // beverageType kaldırıldı — içecek seçimi artık etiket bazlı (orchestrator.ts beverageKeywords)
-
-  // 5.7 Sahne Yönlendirmesi — v3.0: Senaryo + Tema birleşik, prompt ana gövdesi
-  // Kompozisyon her zaman eklenir, senaryo ve tema açıklamaları varsa birleştirilir
-  promptParts.push(`SCENE DIRECTION:`);
-  promptParts.push(`Composition: Rule-of-thirds placement, negative space in top third for typography.`);
-
-  if (params.scenarioDescription) {
-    promptParts.push(params.scenarioDescription);
+  } else if (params.scenarioDescription) {
+    parts.push(params.scenarioDescription);
 
     decisions.push({
       step: "scenario-description",
@@ -961,7 +907,7 @@ export async function buildGeminiPrompt(params: {
       fallback: false,
       details: {
         content: params.scenarioDescription.substring(0, 100),
-        approach: "unified-scene-direction-v3",
+        approach: "minimal-prompt-v4",
       },
     });
   } else {
@@ -969,29 +915,52 @@ export async function buildGeminiPrompt(params: {
       step: "scenario-description",
       input: null,
       matched: false,
-      result: "Senaryo açıklaması yok, sadece kompozisyon kuralı eklendi",
+      result: "Senaryo açıklaması yok",
       fallback: false,
       details: {},
     });
   }
 
-  // Tema sahne ayarlarını senaryo açıklamasıyla birleştir (ayrı blok değil)
+  // Patlatılmış görünüm (exploded/deconstructed view)
+  if (params.isExplodedView && params.explodedViewDescription) {
+    const explodedPrompt = `EXPLODED/DECONSTRUCTED VIEW:
+Create a dramatic exploded view of the product. The product should be cut horizontally in half — top piece floating at the upper portion of the frame, bottom piece at the lower portion. Between the two halves, show the following layers floating in mid-air, separated with visible gaps:
+
+${params.explodedViewDescription}
+
+STYLE: Clean white/off-white background. Each layer clearly visible and separated. Dramatic studio lighting from above. Slight shadows beneath floating elements for depth. Professional food photography, hyper-realistic.`;
+    parts.push(explodedPrompt);
+
+    decisions.push({
+      step: "exploded-view",
+      input: params.explodedViewDescription,
+      matched: true,
+      result: `Exploded view talimatı eklendi (${params.explodedViewDescription.length} karakter)`,
+      fallback: false,
+      details: {
+        content: params.explodedViewDescription.substring(0, 100),
+      },
+    });
+  }
+
+  // Tema sahne ayarları (header'sız)
   if (params.themeSetting) {
     const sceneSettingLines = buildSceneSettingFromTheme(params.themeSetting);
     if (sceneSettingLines.length > 0) {
-      // "SCENE SETTING:" header'ı atla, sadece içerik satırlarını ekle
       const contentLines = sceneSettingLines.filter(line =>
         !line.startsWith("SCENE SETTING:") && line.trim() !== ""
       );
-      if (contentLines.length > 0) {
-        promptParts.push(...contentLines);
+      // "- " prefix'ini kaldır, düz cümle olarak ekle
+      const cleanLines = contentLines.map(l => l.startsWith("- ") ? l.substring(2) : l);
+      if (cleanLines.length > 0) {
+        parts.push(...cleanLines);
       }
 
       decisions.push({
         step: "theme-scene-setting",
         input: JSON.stringify(params.themeSetting),
         matched: true,
-        result: `Scene setting birleştirildi (${contentLines.length} satır)`,
+        result: `Scene setting birleştirildi (${cleanLines.length} satır)`,
         fallback: false,
         details: {
           weatherPreset: params.themeSetting.weatherPreset || null,
@@ -1002,44 +971,133 @@ export async function buildGeminiPrompt(params: {
     }
   }
 
-  promptParts.push("");
+  // Kompozisyon talimatı (composition template geminiPrompt'u)
+  if (composition) {
+    parts.push(composition.geminiPrompt);
+    decisions.push({
+      step: "composition-prompt",
+      input: composition.id,
+      matched: true,
+      result: `Kompozisyon talimatı eklendi: ${composition.name} (${composition.geminiPrompt.length} karakter)`,
+      fallback: false,
+      details: { compositionId: composition.id, promptLength: composition.geminiPrompt.length },
+    });
+  }
 
-  // 6. İşletme Bağlamı - Sadece negatif kısıtlamalar eklenir (ortam tarifi YASAK)
-  // Referans görselleri override eden tarifler yerine, sadece "yapma" kuralları eklenir.
-  // Örn: "NO high-rise views" referans görselle çakışmaz, ama "ground floor patisserie" çakışır.
+  // Color grading (sadece severe conflict'te)
+  if (atmosphericAnalysis && atmosphericAnalysis.temperatureConflict.severity === "severe") {
+    parts.push("Ensure product colors remain appetizing despite cool atmosphere.");
+    atmosphericAnalysis.promptAdjustments.forEach(adj => parts.push(adj));
+  }
+
+  // Disable edilmiş slot'ları sahneden çıkar
+  if (params.disabledSlotKeys && params.disabledSlotKeys.length > 0) {
+    const slotLabelMap: Record<string, string> = {
+      dish: "plate/dish/serving plate",
+      surface: "table/surface/countertop",
+      drinkware: "cup/glass/drink/coffee",
+      textile: "napkin/textile/cloth",
+      decor: "accessory/decoration/vase/flowers",
+    };
+    const excluded = params.disabledSlotKeys.map(k => slotLabelMap[k] || k).join(", ");
+    parts.push(`EXCLUDED ITEMS: Do NOT include ${excluded} in the scene. The scene must NOT contain these objects even if mentioned elsewhere in this prompt.`);
+
+    decisions.push({
+      step: "excluded-items",
+      input: params.disabledSlotKeys.join(", "),
+      matched: true,
+      result: `${params.disabledSlotKeys.length} slot excluded: ${excluded}`,
+      fallback: false,
+      details: { disabledSlotKeys: params.disabledSlotKeys, excludedLabels: excluded },
+    });
+  }
+
+  // Aksesuar
+  if (params.accessoryAllowed && params.accessoryOptions && params.accessoryOptions.length > 0) {
+    const accessoryList = params.accessoryOptions.join(", ");
+    parts.push(`Include: ${accessoryList}, placed naturally.`);
+    decisions.push({
+      step: "accessory-direction",
+      input: `accessoryOptions: [${accessoryList}]`,
+      matched: true,
+      result: `Include: ${accessoryList}, placed naturally.`,
+      fallback: false,
+      details: { source: "scenario.accessoryOptions", options: params.accessoryOptions },
+    });
+  }
+
+  // Depth of field (kısaltılmış)
+  if (params.shallowDepthOfField) {
+    parts.push("Use f/1.8 shallow depth of field. The main product must be razor-sharp, everything else progressively out of focus with creamy bokeh. Background should be a soft blur.");
+    decisions.push({
+      step: "shallow-depth-of-field",
+      input: "shallowDepthOfField: true",
+      matched: true,
+      result: "Shallow DOF talimatı eklendi — ürün net, arka plan bokeh",
+      fallback: false,
+      details: { source: "scenario.shallowDepthOfField" },
+    });
+  }
+
+  // El / kişi dahil et
+  if (params.includesHands) {
+    const handPrompt = params.handStylePrompt || "A hand gently holding or resting near the product.";
+    parts.push(handPrompt);
+    decisions.push({
+      step: "includes-hands",
+      input: `includesHands: true, handStylePrompt: ${params.handStylePrompt ? "custom" : "default"}`,
+      matched: true,
+      result: `El talimatı eklendi — ${handPrompt.substring(0, 60)}...`,
+      fallback: !params.handStylePrompt,
+      details: { source: params.handStylePrompt ? "handStyles config" : "default fallback" },
+    });
+  }
+
+  // Asset tag'leri — sadece decision log'a (prompt'a metin eklenmez)
+  if (params.assetTags) {
+    const tagCount = Object.values(params.assetTags).filter(v => v && v.length > 0).length;
+    if (tagCount > 0) {
+      decisions.push({
+        step: "asset-tags",
+        input: JSON.stringify(params.assetTags),
+        matched: true,
+        result: `${tagCount} asset tipi için referans görseller mevcut (prompt'a metin eklenmedi — v4.0)`,
+        fallback: false,
+        details: { tagCount, tags: params.assetTags, note: "Tags only used for asset selection, not in prompt text" },
+      });
+    }
+  }
+
+  // Ortam kısıtlamaları (header'sız)
+  // İzole/stüdyo modlarda (surface disabled) mekan bilgisi eklenmez — çakışma önlenir
+  const isIsolatedMode = params.disabledSlotKeys?.includes("surface") ?? false;
+
   try {
     const businessContext = await getBusinessContext();
-    if (businessContext.isEnabled && businessContext.floorLevel) {
-      // Kat seviyesine göre negatif kısıtlamalar
+    if (businessContext.isEnabled && businessContext.floorLevel && !isIsolatedMode) {
       const floorConstraints: Record<string, string[]> = {
         ground: [
-          "NO high-rise views, NO skyscraper backgrounds, NO aerial city views",
-          "Window views must show street-level perspective (ground floor)",
+          "NO high-rise views, NO skyscraper backgrounds, NO aerial city views.",
+          "Window views must show street-level perspective.",
         ],
         upper: [
-          "NO street-level views, show elevated perspective",
+          "NO street-level views, show elevated perspective.",
         ],
         basement: [
-          "NO window views, NO natural light from windows",
+          "NO window views, NO natural light from windows.",
         ],
         outdoor: [
-          "Outdoor setting, NO interior walls or ceilings",
+          "Outdoor setting, NO interior walls or ceilings.",
         ],
       };
 
       const constraints = floorConstraints[businessContext.floorLevel] || [];
-      if (constraints.length > 0 || businessContext.promptContext) {
-        promptParts.push(`ENVIRONMENT CONSTRAINTS:`);
-        constraints.forEach(c => promptParts.push(`- ${c}`));
-
-        // promptContext: kullanıcının serbest metin kısıtlamaları
-        if (businessContext.promptContext && businessContext.promptContext.trim()) {
-          promptParts.push(`- ${businessContext.promptContext.trim()}`);
-          console.log(`[GeminiPromptBuilder] Business context: promptContext injected (${businessContext.promptContext.length} chars)`);
-        }
-
-        promptParts.push("");
-        console.log(`[GeminiPromptBuilder] Business context: floorLevel=${businessContext.floorLevel}, ${constraints.length} floor constraints + promptContext`);
+      if (constraints.length > 0) {
+        parts.push(...constraints);
+      }
+      if (businessContext.promptContext && businessContext.promptContext.trim()) {
+        parts.push(businessContext.promptContext.trim());
+        console.log(`[GeminiPromptBuilder] Business context: promptContext injected (${businessContext.promptContext.length} chars)`);
       }
 
       decisions.push({
@@ -1061,9 +1119,11 @@ export async function buildGeminiPrompt(params: {
         step: "business-context",
         input: null,
         matched: false,
-        result: "Business context disabled or no floorLevel",
+        result: isIsolatedMode
+          ? "İzole/stüdyo mod — business context atlandı (surface disabled)"
+          : "Business context disabled or no floorLevel",
         fallback: false,
-        details: { isEnabled: businessContext?.isEnabled },
+        details: { isEnabled: businessContext?.isEnabled, isIsolatedMode },
       });
     }
   } catch (error) {
@@ -1078,24 +1138,11 @@ export async function buildGeminiPrompt(params: {
     });
   }
 
-  // 7. Kurallar
-  promptParts.push(`RULES:`);
-  promptParts.push(`- Use ONLY assets from reference images`);
-  promptParts.push(`- Product clearly recognizable from reference`);
-  promptParts.push(`- Single product, natural setting`);
-  promptParts.push(`- NO steam, NO smoke`);
-  promptParts.push("");
-
-  // 7. Format - POLLUTION TERMS DÜZELTİLDİ (2026-02-03)
-  // "8K photorealistic" yerine Gemini-native terimler kullanıldı
-  promptParts.push(`9:16 vertical for Instagram Stories. Sharp focus on details, crisp textures.`);
-
   // Negative prompt oluştur
   const negativePrompt = await buildNegativePrompt(["always"]);
 
-  // === PROMPT POLLUTION KONTROLÜ ===
-  // Oluşturulan prompt'u pollution terimler için kontrol et
-  const rawPrompt = promptParts.join("\n");
+  // Parçaları birleştir — tek paragraf, boş olmayanlar, space ile ayrılmış
+  const rawPrompt = parts.filter(p => p.trim()).join(" ");
   const pollutionCheck = cleanPromptPollution(rawPrompt, "warn"); // Sadece uyar, temizleme yapma
 
   if (pollutionCheck.foundTerms.length > 0) {

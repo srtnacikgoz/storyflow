@@ -837,12 +837,16 @@ function AssetModal({
     }
   }, [asset]);
 
+  // Cloudinary metadata (upload sonrası createAsset'e gönderilecek)
+  const [cloudinaryMeta, setCloudinaryMeta] = useState<{ publicId: string; version: string } | null>(null);
+
   // useCallback ile stabil referans - upload sırasında parent re-render olsa bile callback çalışır
-  const handleUploadComplete = useCallback((url: string, uploadedFilename: string) => {
+  const handleUploadComplete = useCallback((url: string, uploadedFilename: string, meta?: { publicId: string; version: string }) => {
     console.log("[AssetModal] Upload complete:", { url: url.substring(0, 50) + "...", uploadedFilename });
     setStorageUrl(url);
     setFilename(uploadedFilename);
     setUploadError(null);
+    if (meta) setCloudinaryMeta(meta);
   }, []);
 
   const handleUploadError = useCallback((error: string) => {
@@ -879,7 +883,16 @@ function AssetModal({
         subType,
         filename,
         storageUrl,
+        thumbnailUrl: "",
         tags: currentTags,
+        // Cloudinary metadata (upload'tan gelen bilgiler)
+        ...(cloudinaryMeta && {
+          cloudinaryPublicId: cloudinaryMeta.publicId,
+          cloudinaryUrl: storageUrl,
+          cloudinaryVersion: typeof cloudinaryMeta.version === "string" ? parseInt(cloudinaryMeta.version, 10) : cloudinaryMeta.version,
+          migrationStatus: "migrated" as const,
+          migratedAt: Date.now(),
+        }),
         // Sadece products kategorisinde yeme/tutma/içecek özellikleri kaydedilir
         ...(category === "products" && {
           eatingMethod,
