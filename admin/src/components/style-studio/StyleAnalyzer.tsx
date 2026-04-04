@@ -19,20 +19,27 @@ export default function StyleAnalyzer({ onAnalysisComplete }: StyleAnalyzerProps
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Görsel boyutu 5MB'ı aşamaz");
-      return;
-    }
-
-    setImageMimeType(file.type);
     setError(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImageBase64((reader.result as string).split(",")[1]);
-      setImagePreview(reader.result as string);
+    setImageMimeType("image/jpeg");
+
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1536;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      setImageBase64(dataUrl.split(",")[1]);
+      setImagePreview(dataUrl);
     };
-    reader.readAsDataURL(file);
+    img.src = URL.createObjectURL(file);
   };
 
   const handleReset = () => {
