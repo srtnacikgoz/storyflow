@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { api } from "../../services/api";
-import type { SceneAnalysisResult } from "../../types";
+import type { ProductAnalysisResult } from "../../types";
 
-interface StyleAnalyzerProps {
-  onAnalysisComplete: (result: SceneAnalysisResult, imagePreview: string) => void;
+interface ProductAnalyzerProps {
+  onAnalysisComplete: (result: ProductAnalysisResult, imagePreview: string) => void;
 }
 
 /**
- * Görsel stil analiz bileşeni — görsel yükle, görsel stilini AI ile analiz et
+ * Ürün görseli yükleme ve analiz bileşeni
  */
-export default function StyleAnalyzer({ onAnalysisComplete }: StyleAnalyzerProps) {
+export default function ProductAnalyzer({ onAnalysisComplete }: ProductAnalyzerProps) {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageMimeType, setImageMimeType] = useState("image/jpeg");
@@ -46,7 +46,7 @@ export default function StyleAnalyzer({ onAnalysisComplete }: StyleAnalyzerProps
     setAnalyzing(true);
     setError(null);
     try {
-      const result = await api.analyzeScene(imageBase64, imageMimeType);
+      const result = await api.analyzeProduct(imageBase64, imageMimeType);
       onAnalysisComplete(result, imagePreview);
     } catch (err: any) {
       setError(err.message || "Analiz başarısız. Lütfen tekrar deneyin.");
@@ -59,21 +59,25 @@ export default function StyleAnalyzer({ onAnalysisComplete }: StyleAnalyzerProps
     <div className="space-y-4">
       {/* Adım başlığı */}
       <div className="flex items-center gap-2">
-        <span className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-        <span className="text-sm font-semibold text-gray-700">Sahne / Arkaplan</span>
+        <span className="w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
+        <span className="text-sm font-semibold text-gray-700">Ürün Görseli</span>
       </div>
 
       {/* Görsel yükleme alanı */}
       {!imagePreview ? (
-        <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl p-8 cursor-pointer hover:border-brand-blue/60 hover:bg-brand-blue/5 transition-all group">
+        <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl p-8 cursor-pointer hover:border-orange-400/60 hover:bg-orange-50/50 transition-all group">
           <div className="text-center">
-            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 group-hover:bg-brand-blue/10 flex items-center justify-center transition-colors">
-              <svg className="w-6 h-6 text-gray-400 group-hover:text-brand-blue transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 group-hover:bg-orange-100 flex items-center justify-center transition-colors">
+              {/* Pasta/cupcake SVG ikonu */}
+              <svg className="w-6 h-6 text-gray-400 group-hover:text-orange-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2v-1h18v1z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 14V9a2 2 0 012-2h14a2 2 0 012 2v5" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V5c0-1.1.9-2 2-2h4a2 2 0 012 2v2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v2M9.5 5.5c0 0 .5-1 1.5-.5M13 5c1-.5 1.5.5 1.5.5" />
               </svg>
             </div>
-            <p className="text-sm font-medium text-gray-700 group-hover:text-brand-blue transition-colors">
-              Sahne/arkaplan görseli yükle
+            <p className="text-sm font-medium text-gray-700 group-hover:text-orange-600 transition-colors">
+              Ürün fotoğrafı yükle
             </p>
             <p className="text-xs text-gray-400 mt-1">PNG, JPG, WebP — tıkla veya sürükle</p>
           </div>
@@ -85,8 +89,8 @@ export default function StyleAnalyzer({ onAnalysisComplete }: StyleAnalyzerProps
           <div className="relative flex-shrink-0">
             <img
               src={imagePreview}
-              alt="Referans görsel"
-              className="w-28 h-28 object-cover rounded-xl border border-gray-200"
+              alt="Ürün görseli"
+              className="w-24 h-24 object-cover rounded-xl border border-gray-200"
             />
             {/* Sıfırlama butonu */}
             <button
@@ -102,11 +106,11 @@ export default function StyleAnalyzer({ onAnalysisComplete }: StyleAnalyzerProps
 
           {/* Analiz butonu */}
           <div className="flex-1 flex flex-col justify-center gap-2">
-            <p className="text-xs text-gray-500">Görsel hazır. Sahneyi analiz etmek için butona tıkla.</p>
+            <p className="text-xs text-gray-500">Görsel hazır. Ürünü analiz etmek için butona tıkla.</p>
             <button
               onClick={handleAnalyze}
               disabled={analyzing}
-              className="btn-primary flex items-center justify-center gap-2 disabled:opacity-60"
+              className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
             >
               {analyzing ? (
                 <>
@@ -114,10 +118,10 @@ export default function StyleAnalyzer({ onAnalysisComplete }: StyleAnalyzerProps
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Sahne analiz ediliyor...
+                  Ürün analiz ediliyor...
                 </>
               ) : (
-                "Sahneyi Analiz Et"
+                "Ürünü Analiz Et"
               )}
             </button>
           </div>
