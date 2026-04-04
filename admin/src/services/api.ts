@@ -3089,7 +3089,7 @@ class ApiService {
     return res;
   }
 
-  // ── Visual Standards (Stil Stüdyosu) ────────────────────────
+  // ── Style Studio v2 ────────────────────────────────────────
 
   async listVisualStandards(): Promise<any[]> {
     const res = await this.fetch<{ success: boolean; data: any[] }>("listVisualStandards");
@@ -3118,7 +3118,7 @@ class ApiService {
     });
   }
 
-  async analyzeVisualStyle(imageBase64: string, imageMimeType?: string): Promise<any> {
+  async analyzeScene(imageBase64: string, imageMimeType?: string): Promise<any> {
     const res = await this.fetch<{ success: boolean; data: any }>("analyzeVisualStyle", {
       method: "POST",
       body: JSON.stringify({ imageBase64, imageMimeType }),
@@ -3126,13 +3126,21 @@ class ApiService {
     return res.data;
   }
 
-  async generateStandardPrompt(params: {
+  async analyzeProduct(imageBase64: string, imageMimeType?: string): Promise<any> {
+    const res = await this.fetch<{ success: boolean; data: any }>("analyzeProductImage", {
+      method: "POST",
+      body: JSON.stringify({ imageBase64, imageMimeType }),
+    });
+    return res.data;
+  }
+
+  async generateStudioPrompt(params: {
     standardId: string;
-    productName: string;
-    productDescription?: string;
+    productAnalysis: any;
     targetModel?: string;
-  }): Promise<{ prompt: string; basePrompt: string; targetModel: string; standardName: string }> {
-    const res = await this.fetch<{ success: boolean; data: { prompt: string; basePrompt: string; targetModel: string; standardName: string } }>("generateStandardPrompt", {
+    productName?: string;
+  }): Promise<any> {
+    const res = await this.fetch<{ success: boolean; data: any }>("generateStudioPrompt", {
       method: "POST",
       body: JSON.stringify(params),
     });
