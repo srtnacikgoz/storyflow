@@ -226,6 +226,9 @@ export {
   listPosterAspectRatios,
   listPosterTypographies,
   listPosterLayouts,
+  listCameraAngles,
+  listLightingTypes,
+  listBackgrounds,
   listPosterGallery,
   deletePosterGalleryItem,
   submitPosterFeedback,
@@ -255,3 +258,14 @@ export {
   listUpscaleOptions,
   upscaleImage,
 } from "./upscaleController";
+
+// Style Studio Controller (Stil Stüdyosu)
+export {
+  listVisualStandards,
+  createVisualStandard,
+  updateVisualStandard,
+  deleteVisualStandard,
+  analyzeVisualStyle,
+  generateStandardPrompt,
+  seedVisualStandards,
+} from "./styleStudioController";

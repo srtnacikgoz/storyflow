@@ -187,12 +187,24 @@ export {
   listPosterAspectRatios,
   listPosterTypographies,
   listPosterLayouts,
+  listCameraAngles,
+  listLightingTypes,
+  listBackgrounds,
   listPosterGallery,
   deletePosterGalleryItem,
   submitPosterFeedback,
   getPosterGlobalRules,
   updatePosterGlobalRules,
   triggerPosterLearning,
+
+  // Style Studio Controller (Stil Stüdyosu)
+  listVisualStandards,
+  createVisualStandard,
+  updateVisualStandard,
+  deleteVisualStandard,
+  analyzeVisualStyle,
+  generateStandardPrompt,
+  seedVisualStandards,
 } from "./orchestrator";
 
 // Visual Critic
