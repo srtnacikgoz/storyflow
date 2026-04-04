@@ -1576,57 +1576,111 @@ export interface EnhancementJob {
   updatedAt: number;
 }
 
-// ── Visual Standard (Stil Stüdyosu) ──────────────────────────
-export interface VisualStandardBackground {
-  type: string;       // "marble" | "wood" | "concrete" | "fabric" | "solid" | "gradient"
-  color: string;      // dominant hex
+// ── Style Studio v2 ──────────────────────────────────────────
+
+export interface SceneBackground {
+  type: string;
+  color: string;
   description: string;
 }
 
-export interface VisualStandardLighting {
-  direction: string;    // "overhead" | "side-left" | "side-right" | "backlit" | "front"
-  quality: string;      // "soft-diffused" | "hard-directional" | "natural"
-  temperature: string;  // "warm" | "neutral" | "cool"
+export interface SceneLighting {
+  direction: string;
+  quality: string;
+  temperature: string;
+  shadowCharacter: string;
   description: string;
 }
 
-export interface VisualStandardSurface {
-  material: string;   // "marble" | "wood" | "concrete" | "linen" | "ceramic" | "slate"
-  texture: string;    // "smooth" | "rough" | "glossy" | "matte"
+export interface SceneSurface {
+  material: string;
+  texture: string;
   description: string;
 }
 
-export interface VisualStandardAmbiance {
-  mood: string;       // "minimal" | "cozy" | "luxurious" | "rustic" | "modern" | "editorial"
+export interface SceneAmbiance {
+  mood: string;
   adjectives: string[];
   description: string;
 }
 
-export interface VisualStandard {
+export interface SceneServingBase {
+  type: string;
+  shape: string;
+  color: string;
+  heightCm: number;
+  description: string;
+}
+
+export interface ScenePropRules {
+  allowed: boolean;
+  types: string[];
+  maxCount: number;
+  description: string;
+}
+
+export interface SceneDepthOfField {
+  foreground: string;
+  background: string;
+  description: string;
+}
+
+export interface SceneStandard {
   id: string;
   name: string;
   description: string;
-  thumbnail: string;          // base64 data URI of reference image
-  background: VisualStandardBackground;
-  lighting: VisualStandardLighting;
-  colorPalette: string[];     // 3-5 hex colors
-  surface: VisualStandardSurface;
-  ambiance: VisualStandardAmbiance;
-  cameraAngle: string;        // "flat-lay" | "45-degree" | "hero-shot" | "close-up"
-  promptTemplate: string;     // AI-generated base prompt template
+  referenceImage: string;
+  background: SceneBackground;
+  lighting: SceneLighting;
+  colorPalette: string[];
+  surface: SceneSurface;
+  ambiance: SceneAmbiance;
+  servingBase: SceneServingBase;
+  propRules: ScenePropRules;
+  depthOfField: SceneDepthOfField;
+  cameraAngle: string;
+  productFrameRatio: number;
+  scenePrompt: string;
   isActive: boolean;
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
 }
 
-export interface VisualStyleAnalysisResult {
-  background: VisualStandardBackground;
-  lighting: VisualStandardLighting;
+export interface SceneAnalysisResult {
+  background: SceneBackground;
+  lighting: SceneLighting;
   colorPalette: string[];
-  surface: VisualStandardSurface;
-  ambiance: VisualStandardAmbiance;
+  surface: SceneSurface;
+  ambiance: SceneAmbiance;
+  servingBase: SceneServingBase;
+  propRules: ScenePropRules;
+  depthOfField: SceneDepthOfField;
   cameraAngle: string;
+  productFrameRatio: number;
+  scenePrompt: string;
   overallDescription: string;
-  promptTemplate: string;
+}
+
+export interface ProductAnalysisResult {
+  name: string;
+  type: string;
+  shape: string;
+  sizeCm: string;
+  surfaceTexture: string;
+  colors: string[];
+  toppings: string[];
+  garnish: string;
+  layers: string;
+  distinguishingFeatures: string;
+  productPrompt: string;
+}
+
+export interface ComposedPromptResult {
+  finalPrompt: string;
+  scenePrompt: string;
+  productPrompt: string;
+  targetModel: string;
+  sceneName: string;
+  productName: string;
 }
