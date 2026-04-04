@@ -62,7 +62,7 @@ export default function StandardPromptGenerator({
         {/* Header */}
         <div className="p-5 border-b flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Prompt Uret</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Prompt Üret</h2>
             <p className="text-sm text-gray-500 mt-0.5">{standardName}</p>
           </div>
           <button
@@ -78,29 +78,29 @@ export default function StandardPromptGenerator({
 
         {/* Body */}
         <div className="p-5 space-y-5">
-          {/* Urun adi */}
+          {/* Ürün adı */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Urun Adi <span className="text-red-500">*</span>
+              Ürün Adı <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               className="input"
-              placeholder="orn. Frambuazli Tart"
+              placeholder="örn. Frambuazlı Tart"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
             />
           </div>
 
-          {/* Urun aciklamasi */}
+          {/* Ürün açıklaması */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Urun Aciklamasi <span className="text-gray-400 font-normal">(opsiyonel)</span>
+              Ürün Açıklaması <span className="text-gray-400 font-normal">(opsiyonel)</span>
             </label>
             <textarea
               className="input resize-none"
               rows={2}
-              placeholder="orn. Taze frambuaz ile suslenmis klasik Fransiz tart"
+              placeholder="örn. Taze frambuaz ile süslenmiş klasik Fransız tart"
               value={productDescription}
               onChange={(e) => setProductDescription(e.target.value)}
             />
@@ -136,18 +136,18 @@ export default function StandardPromptGenerator({
             </div>
           )}
 
-          {/* Uretilen prompt */}
+          {/* Üretilen prompt */}
           {generatedPrompt && (
             <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  Uretilen Prompt
+                  Üretilen Prompt
                 </span>
                 <button
                   onClick={handleCopy}
                   className="text-xs font-medium text-brand-blue hover:text-brand-blue/80 transition-colors"
                 >
-                  {copied ? "Kopyalandi!" : "Kopyala"}
+                  {copied ? "Kopyalandı!" : "Kopyala"}
                 </button>
               </div>
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words">
@@ -156,13 +156,13 @@ export default function StandardPromptGenerator({
             </div>
           )}
 
-          {/* Uret butonu */}
+          {/* Üret butonu */}
           <button
             onClick={handleGenerate}
             disabled={loading || !productName.trim()}
             className="btn-primary w-full disabled:opacity-50"
           >
-            {loading ? "Uretiliyor..." : "Prompt Uret"}
+            {loading ? "Üretiliyor..." : "Prompt Oluştur"}
           </button>
         </div>
       </div>

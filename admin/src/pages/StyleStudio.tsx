@@ -92,8 +92,8 @@ export default function StyleStudio() {
       setStandards((prev) =>
         prev.map((s) => s.id === standard.id ? { ...s, isActive: !s.isActive } : s)
       );
-    } catch {
-      // hata sessiz geçmesin ama UI'yı bloklamasın
+    } catch (err: any) {
+      setError(err.message ?? "Durum güncellenemedi");
     }
   };
 
