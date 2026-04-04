@@ -41,6 +41,7 @@ export default function QRCodePage() {
   const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
   const [qrX, setQrX] = useState(75); // % cinsinden sol konum
   const [qrY, setQrY] = useState(75); // % cinsinden ust konum
+  const [guides, setGuides] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
   const [qrScale, setQrScale] = useState(22); // poster genisliginin %'si
   const [bgColor, setBgColor] = useState("#FFFDF9");
   const [bgOpacity, setBgOpacity] = useState(92); // 0-100
@@ -104,8 +105,17 @@ export default function QRCodePage() {
       if (dragState.current.dragging) {
         const dx = ((clientX - dragState.current.startX) / rect.width) * 100;
         const dy = ((clientY - dragState.current.startY) / rect.height) * 100;
-        const newX = Math.max(0, Math.min(100 - dragState.current.startScale, dragState.current.startQrX + dx));
-        const newY = Math.max(0, Math.min(100 - dragState.current.startScale, dragState.current.startQrY + dy));
+        let newX = Math.max(0, Math.min(100 - dragState.current.startScale, dragState.current.startQrX + dx));
+        let newY = Math.max(0, Math.min(100 - dragState.current.startScale, dragState.current.startQrY + dy));
+        // Snap to center guides (QR merkezini poster merkezine hizala)
+        const SNAP = 1.5; // % tolerans
+        const qrCenterX = newX + dragState.current.startScale / 2;
+        const qrCenterY = newY + dragState.current.startScale / 2;
+        const snapX = Math.abs(qrCenterX - 50) < SNAP;
+        const snapY = Math.abs(qrCenterY - 50) < SNAP;
+        if (snapX) newX = 50 - dragState.current.startScale / 2;
+        if (snapY) newY = 50 - dragState.current.startScale / 2;
+        setGuides({ x: snapX, y: snapY });
         setQrX(newX);
         setQrY(newY);
       }
@@ -117,7 +127,7 @@ export default function QRCodePage() {
       }
     };
 
-    const handleEnd = () => { dragState.current = null; };
+    const handleEnd = () => { dragState.current = null; setGuides({ x: false, y: false }); };
 
     document.addEventListener("mousemove", handleMove);
     document.addEventListener("mouseup", handleEnd);
@@ -278,6 +288,10 @@ export default function QRCodePage() {
               style={{ cursor: "default" }}
             >
               <img src={posterImage} alt="Poster" className="w-full block" draggable={false} />
+
+              {/* Snap guide cizgileri */}
+              {guides.x && <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(59,130,246,0.7)", pointerEvents: "none", zIndex: 20 }} />}
+              {guides.y && <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgba(59,130,246,0.7)", pointerEvents: "none", zIndex: 20 }} />}
 
               {/* QR overlay — sureklenebilir */}
               {qrBlobUrl && (
