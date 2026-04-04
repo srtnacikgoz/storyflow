@@ -2239,6 +2239,7 @@ class ApiService {
     textModel?: string;
     imageModel: string;
     promptOptimizerModel?: string;
+    posterAnalysisModel?: string;
     anthropicApiKey?: string;
     openaiApiKey?: string;
     openaiBaseUrl?: string;
@@ -2259,6 +2260,7 @@ class ApiService {
         textModel: string;
         imageModel: string;
         promptOptimizerModel?: string;
+        posterAnalysisModel?: string;
         anthropicApiKey?: string;
         openaiApiKey?: string;
         openaiBaseUrl?: string;
@@ -2823,6 +2825,21 @@ class ApiService {
     return res.data;
   }
 
+  async listCameraAngles(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listCameraAngles");
+    return res.data;
+  }
+
+  async listLightingTypes(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listLightingTypes");
+    return res.data;
+  }
+
+  async listBackgrounds(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listBackgrounds");
+    return res.data;
+  }
+
   async seedPosterConfig(): Promise<any> {
     const res = await this.fetch<{ success: boolean; data: any }>("seedPosterConfig", {
       method: "POST",
@@ -2924,6 +2941,7 @@ class ApiService {
     moodId?: string;
     aspectRatioId?: string;
     typographyId?: string;
+    subtitleTypographyId?: string;
     layoutId?: string;
     title?: string;
     subtitle?: string;
@@ -2931,7 +2949,14 @@ class ApiService {
     targetModel: string;
     includeText?: boolean;
     additionalNotes?: string;
-  }): Promise<{ prompt: string; analysis: string; targetModel: string; style: string; mood: string; cost: number }> {
+    referenceImageBase64?: string;
+    referenceImageMimeType?: string;
+    cameraAngleId?: string;
+    lightingTypeId?: string;
+    backgroundId?: string;
+    negativePrompt?: string;
+    qualityMode?: string;
+  }): Promise<{ prompt: string; analysis: string; targetModel: string; style: string; mood: string; cost: number; negativePrompt?: string }> {
     const res = await this.fetch<{ success: boolean; data: any }>("generatePosterPrompt", {
       method: "POST",
       body: JSON.stringify(params),
@@ -3062,6 +3087,63 @@ class ApiService {
       body: JSON.stringify(params),
     });
     return res;
+  }
+
+  // ── Visual Standards (Stil Stüdyosu) ────────────────────────
+
+  async listVisualStandards(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listVisualStandards");
+    return res.data;
+  }
+
+  async createVisualStandard(standard: Record<string, any>): Promise<{ id: string }> {
+    const res = await this.fetch<{ success: boolean; data: { id: string } }>("createVisualStandard", {
+      method: "POST",
+      body: JSON.stringify(standard),
+    });
+    return res.data;
+  }
+
+  async updateVisualStandard(id: string, updates: Record<string, any>): Promise<void> {
+    await this.fetch("updateVisualStandard", {
+      method: "POST",
+      body: JSON.stringify({ id, ...updates }),
+    });
+  }
+
+  async deleteVisualStandard(id: string): Promise<void> {
+    await this.fetch("deleteVisualStandard", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  async analyzeVisualStyle(imageBase64: string, imageMimeType?: string): Promise<any> {
+    const res = await this.fetch<{ success: boolean; data: any }>("analyzeVisualStyle", {
+      method: "POST",
+      body: JSON.stringify({ imageBase64, imageMimeType }),
+    });
+    return res.data;
+  }
+
+  async generateStandardPrompt(params: {
+    standardId: string;
+    productName: string;
+    productDescription?: string;
+    targetModel?: string;
+  }): Promise<{ prompt: string; basePrompt: string; targetModel: string; standardName: string }> {
+    const res = await this.fetch<{ success: boolean; data: { prompt: string; basePrompt: string; targetModel: string; standardName: string } }>("generateStandardPrompt", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+    return res.data;
+  }
+
+  async seedVisualStandards(): Promise<any> {
+    const res = await this.fetch<{ success: boolean; data: any }>("seedVisualStandards", {
+      method: "POST",
+    });
+    return res.data;
   }
 }
 
