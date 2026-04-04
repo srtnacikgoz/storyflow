@@ -1508,6 +1508,8 @@ export interface EnhancementPreset {
   shadowPrompt: string;
   lightingDirection: string;
   colorTemperature: string;
+  referenceImageUrl?: string;
+  referenceStoragePath?: string;
   isActive: boolean;
   order: number;
   createdAt: number;
@@ -1572,4 +1574,59 @@ export interface EnhancementJob {
   error?: string;
   createdAt: number;
   updatedAt: number;
+}
+
+// ── Visual Standard (Stil Stüdyosu) ──────────────────────────
+export interface VisualStandardBackground {
+  type: string;       // "marble" | "wood" | "concrete" | "fabric" | "solid" | "gradient"
+  color: string;      // dominant hex
+  description: string;
+}
+
+export interface VisualStandardLighting {
+  direction: string;    // "overhead" | "side-left" | "side-right" | "backlit" | "front"
+  quality: string;      // "soft-diffused" | "hard-directional" | "natural"
+  temperature: string;  // "warm" | "neutral" | "cool"
+  description: string;
+}
+
+export interface VisualStandardSurface {
+  material: string;   // "marble" | "wood" | "concrete" | "linen" | "ceramic" | "slate"
+  texture: string;    // "smooth" | "rough" | "glossy" | "matte"
+  description: string;
+}
+
+export interface VisualStandardAmbiance {
+  mood: string;       // "minimal" | "cozy" | "luxurious" | "rustic" | "modern" | "editorial"
+  adjectives: string[];
+  description: string;
+}
+
+export interface VisualStandard {
+  id: string;
+  name: string;
+  description: string;
+  thumbnail: string;          // base64 data URI of reference image
+  background: VisualStandardBackground;
+  lighting: VisualStandardLighting;
+  colorPalette: string[];     // 3-5 hex colors
+  surface: VisualStandardSurface;
+  ambiance: VisualStandardAmbiance;
+  cameraAngle: string;        // "flat-lay" | "45-degree" | "hero-shot" | "close-up"
+  promptTemplate: string;     // AI-generated base prompt template
+  isActive: boolean;
+  isDefault: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface VisualStyleAnalysisResult {
+  background: VisualStandardBackground;
+  lighting: VisualStandardLighting;
+  colorPalette: string[];
+  surface: VisualStandardSurface;
+  ambiance: VisualStandardAmbiance;
+  cameraAngle: string;
+  overallDescription: string;
+  promptTemplate: string;
 }
