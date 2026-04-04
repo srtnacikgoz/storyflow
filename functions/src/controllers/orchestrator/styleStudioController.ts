@@ -8,7 +8,7 @@ import { getSystemSettings } from "../../services/configService";
 import { clearConfigCache } from "../../services/config/configCache";
 import { buildDefaultVisualStandards } from "./styleStudioSeedData";
 
-const VISUAL_STANDARDS_PATH = "global/config/visual-standards/items";
+const VISUAL_STANDARDS_PATH = "global/config/style-studio/standards/items";
 
 // ─── Görsel standart tipi ───────────────────────────────────────────────────
 
