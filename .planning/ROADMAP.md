@@ -44,6 +44,9 @@ Monolitik İçerik Üretici modalı (32+ state) 3 bağımsız sayfaya bölünüy
 - Scheduler kayıtlı Builder config'lerini kullanır
 - TimeSlotRule'a `buildConfigId` field'ı
 
+### Yakında — Öncelikli
+- **Stil Stüdyosu: Gemini Referans Görsel Entegrasyonu** ⭐ — Prompt birleştirme aşamasında sahne + ürün referans görsellerini Gemini API'ye doğrudan gönder (metin prompt'a ek olarak). Gemini 3 Pro 6 obje referansı destekliyor. Sadece prompt'a güvenmek yerine görsel referans ile çok daha tutarlı sonuç. nano-banana-2-skill yaklaşımından ilham. Plan: `generateStudioPrompt` → Gemini `generate_content` çağrısına `referenceImage` + `productImage` base64 ekle.
+
 ### Yakında — Diğer
 - **Şeffaf Arka Plan + Gölge** — Ürünü izole et, PNG çıktı, her yerde kullan
 - **AI Görsel İşleme Araştırması** — Pixury ve benzeri uygulamalar detaylı araştırma
