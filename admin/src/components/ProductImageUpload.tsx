@@ -32,6 +32,7 @@ export default function ProductImageUpload({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const isProcessingRef = useRef(false);
 
   const processFile = useCallback(
     async (file: File) => {
@@ -51,21 +52,24 @@ export default function ProductImageUpload({
         return;
       }
 
+      isProcessingRef.current = true;
       setIsProcessing(true);
       try {
         const options = { ...COMPRESSION_OPTIONS, fileType: file.type };
         const compressed = await imageCompression(file, options);
 
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = reader.result as string;
-          const base64 = dataUrl.split(",")[1];
-          onImageReady(base64, compressed.type, dataUrl);
-        };
-        reader.readAsDataURL(compressed);
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Dosya okunamadı"));
+          reader.readAsDataURL(compressed);
+        });
+        const base64 = dataUrl.split(",")[1];
+        onImageReady(base64, compressed.type, dataUrl);
       } catch (err: any) {
         setError("Görsel işlenemedi: " + (err.message || "bilinmeyen hata"));
       } finally {
+        isProcessingRef.current = false;
         setIsProcessing(false);
       }
     },
@@ -74,7 +78,7 @@ export default function ProductImageUpload({
 
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
-      if (previewUrl) return;
+      if (previewUrl || isProcessingRef.current) return;
       const items = e.clipboardData?.items;
       if (!items) return;
       for (const item of Array.from(items)) {
@@ -141,7 +145,7 @@ export default function ProductImageUpload({
             {accentColor === "violet" && (
               <p className="text-xs text-violet-600 font-medium mb-1">Referans poster yüklendi</p>
             )}
-            <button onClick={onClear} className="text-xs text-red-500 hover:text-red-700">
+            <button type="button" onClick={onClear} className="text-xs text-red-500 hover:text-red-700">
               Değiştir
             </button>
           </div>
@@ -153,6 +157,15 @@ export default function ProductImageUpload({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => !isProcessing && fileInputRef.current?.click()}
+          tabIndex={0}
+          role="button"
+          aria-label="Görsel yükle — sürükle bırak veya tıkla"
+          onKeyDown={(e) => {
+            if (!isProcessing && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer transition-colors ${borderClass} ${
             isProcessing ? "pointer-events-none opacity-70" : ""
           }`}
