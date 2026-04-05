@@ -37,6 +37,8 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
   const [result, setResult] = useState<{ prompt: string; analysis: string; targetModel: string; cost: number; logs?: any[]; negativePrompt?: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<{ base64: string; mimeType: string; cost: number; durationMs: number } | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [logsCopied, setLogsCopied] = useState(false);
 
@@ -97,6 +99,27 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
       setError(err.message || "Prompt üretimi başarısız");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleGenerateImage = async () => {
+    if (!result || !props.productImageBase64) return;
+    setGeneratingImage(true);
+    setGeneratedImage(null);
+    setError(null);
+    try {
+      const img = await api.generatePosterImage({
+        prompt: result.prompt,
+        productImageBase64: props.productImageBase64,
+        productMimeType: props.productMimeType,
+        referenceImageBase64: props.referenceImageBase64 || undefined,
+        referenceImageMimeType: props.referenceImageMimeType || undefined,
+      });
+      setGeneratedImage({ base64: img.imageBase64, mimeType: img.mimeType, cost: img.cost, durationMs: img.durationMs });
+    } catch (err: any) {
+      setError(err.message || "Görsel üretimi başarısız");
+    } finally {
+      setGeneratingImage(false);
     }
   };
 
@@ -268,6 +291,48 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
               <p className="text-xs text-gray-400 text-center">
                 Maliyet: ${result.cost.toFixed(4)} — {result.targetModel.toUpperCase()} formatında
               </p>
+
+              {/* Gemini ile doğrudan görsel üret — sadece gemini modelinde */}
+              {result.targetModel === "gemini" && (
+                <div className="border-t border-gray-100 pt-3 space-y-3">
+                  <button
+                    onClick={handleGenerateImage}
+                    disabled={generatingImage}
+                    className="w-full bg-gradient-to-r from-blue-600 to-violet-600 text-white py-2.5 rounded-xl font-medium text-sm hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {generatingImage ? (
+                      <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Gemini üretiyor...</>
+                    ) : (
+                      "Gemini ile Direkt Üret"
+                    )}
+                  </button>
+                  <p className="text-xs text-gray-400 text-center">
+                    Prompt + ürün görseli{props.referenceImageBase64 ? " + referans poster" : ""} Gemini'ye gönderilir
+                  </p>
+
+                  {generatedImage && (
+                    <div className="space-y-2">
+                      <img
+                        src={`data:${generatedImage.mimeType};base64,${generatedImage.base64}`}
+                        alt="Gemini poster"
+                        className="w-full rounded-xl border border-gray-200 shadow"
+                      />
+                      <div className="flex gap-2 items-center">
+                        <a
+                          href={`data:${generatedImage.mimeType};base64,${generatedImage.base64}`}
+                          download="poster.png"
+                          className="flex-1 bg-gray-900 text-white py-2 rounded-lg text-sm font-medium text-center hover:bg-gray-800"
+                        >
+                          İndir
+                        </a>
+                        <p className="flex-1 text-xs text-gray-400 text-center">
+                          ~${generatedImage.cost.toFixed(3)} · {(generatedImage.durationMs / 1000).toFixed(1)}sn
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Log Paneli */}
               {result.logs && result.logs.length > 0 && (

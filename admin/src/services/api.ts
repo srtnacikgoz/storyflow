@@ -2240,6 +2240,12 @@ class ApiService {
     imageModel: string;
     promptOptimizerModel?: string;
     posterAnalysisModel?: string;
+    posterPromptModel?: string;
+    posterLearningModel?: string;
+    posterImageModel?: string;
+    previewImageModel?: string;
+    visualCriticModel?: string;
+    analysisModel?: string;
     anthropicApiKey?: string;
     openaiApiKey?: string;
     openaiBaseUrl?: string;
@@ -2261,6 +2267,12 @@ class ApiService {
         imageModel: string;
         promptOptimizerModel?: string;
         posterAnalysisModel?: string;
+        posterPromptModel?: string;
+        posterLearningModel?: string;
+        posterImageModel?: string;
+        previewImageModel?: string;
+        visualCriticModel?: string;
+        analysisModel?: string;
         anthropicApiKey?: string;
         openaiApiKey?: string;
         openaiBaseUrl?: string;
@@ -2933,6 +2945,29 @@ class ApiService {
     });
   }
 
+  // Poster Mood CRUD
+  async createPosterMood(data: any): Promise<{ id: string }> {
+    const res = await this.fetch<{ success: boolean; data: { id: string } }>("createPosterMood", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  }
+
+  async updatePosterMood(id: string, updates: any): Promise<void> {
+    await this.fetch("updatePosterMood", {
+      method: "POST",
+      body: JSON.stringify({ id, ...updates }),
+    });
+  }
+
+  async deletePosterMood(id: string): Promise<void> {
+    await this.fetch("deletePosterMood", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  }
+
   async generatePosterPrompt(params: {
     productImageBase64?: string;
     productImageUrl?: string;
@@ -2961,6 +2996,21 @@ class ApiService {
       method: "POST",
       body: JSON.stringify(params),
     });
+    return res.data;
+  }
+
+  async generatePosterImage(params: {
+    prompt: string;
+    productImageBase64: string;
+    productMimeType?: string;
+    referenceImageBase64?: string;
+    referenceImageMimeType?: string;
+  }): Promise<{ imageBase64: string; mimeType: string; model: string; cost: number; durationMs: number }> {
+    const res = await this.fetch<{ success: boolean; data: { imageBase64: string; mimeType: string; model: string; cost: number; durationMs: number } }>("generatePosterImage", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+    if (!res.success) throw new Error((res as any).error || "Görsel üretimi başarısız");
     return res.data;
   }
 
@@ -3136,9 +3186,11 @@ class ApiService {
 
   async generateStudioPrompt(params: {
     standardId: string;
-    productAnalysis: any;
+    productAnalysis?: any;
     targetModel?: string;
     productName?: string;
+    productBase64?: string;
+    productMimeType?: string;
   }): Promise<any> {
     const res = await this.fetch<{ success: boolean; data: any }>("generateStudioPrompt", {
       method: "POST",
@@ -3152,6 +3204,55 @@ class ApiService {
       method: "POST",
     });
     return res.data;
+  }
+
+  // ── Carousel Studio ────────────────────────────────────────────────────────
+
+  async listCarouselFrameworks(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listCarouselFrameworks");
+    return res.data;
+  }
+
+  async seedCarouselFrameworks(): Promise<{ message: string }> {
+    const res = await this.fetch<{ success: boolean; message: string }>("seedCarouselFrameworks", {
+      method: "POST",
+    });
+    return { message: res.message };
+  }
+
+  async generateCarouselContent(params: {
+    brandId: string;
+    carouselType: string;
+    productName: string;
+    productDescription?: string;
+  }): Promise<{ slideNumber: number; role: string; headline: string; body: string }[]> {
+    const res = await this.fetch<{
+      success: boolean;
+      slides: { slideNumber: number; role: string; headline: string; body: string }[];
+    }>("generateCarouselContent", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+    return res.slides;
+  }
+
+  async getCarouselBrandConfig(): Promise<{
+    name: string;
+    colors: { name: string; hex: string }[];
+    typography: { heading: string; body: string };
+    channels: { name: string; handle: string }[];
+    voiceRules: string[];
+    prohibitedWords: string[];
+  }> {
+    const res = await this.fetch<{ success: boolean; data: any }>("getCarouselBrandConfig");
+    return res.data;
+  }
+
+  async seedBrandConfig(): Promise<{ message: string }> {
+    const res = await this.fetch<{ success: boolean; message: string }>("seedBrandConfig", {
+      method: "POST",
+    });
+    return { message: res.message };
   }
 }
 

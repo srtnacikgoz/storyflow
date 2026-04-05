@@ -1,6 +1,6 @@
 # Roadmap: Sade Storyflow
 
-> Son güncelleme: 2026-03-29
+> Son güncelleme: 2026-04-05
 
 ## Güncel Vizyon
 
@@ -45,6 +45,8 @@ Monolitik İçerik Üretici modalı (32+ state) 3 bağımsız sayfaya bölünüy
 - TimeSlotRule'a `buildConfigId` field'ı
 
 ### Yakında — Öncelikli
+- **UI Component Sistemi** ⭐⭐ — Admin Panel'i atomik, tekrar kullanılabilir component kütüphanesine geçir. Şu an 7 sayfa 400+ satır limitini aşıyor (en büyüğü 2011 satır), her sayfada buton/modal/tablo/form yeniden yazılıyor. Component sistemiyle yeni sayfa eklemek ucuzlar, görsel tutarlılık sağlanır, bakım kolaylaşır. Detay: Phase 26.
+- **Ürün Kataloğu Görsel Standardizasyonu** ⭐⭐ — QR menü ve Sade POS için tüm ürün fotoğraflarını aynı görsel dilde standartlaştır. Sabit arka plan, ışık, çekim açısı, crop kuralları. Personelin gözü yorulmaz, müşteri profesyonel katalog görür. Mevcut Enhancement pipeline üzerine binen bir katman. Detay: Phase 25.
 - **Stil Stüdyosu: Gemini Referans Görsel Entegrasyonu** ⭐ — Prompt birleştirme aşamasında sahne + ürün referans görsellerini Gemini API'ye doğrudan gönder (metin prompt'a ek olarak). Gemini 3 Pro 6 obje referansı destekliyor. Sadece prompt'a güvenmek yerine görsel referans ile çok daha tutarlı sonuç. nano-banana-2-skill yaklaşımından ilham. Plan: `generateStudioPrompt` → Gemini `generate_content` çağrısına `referenceImage` + `productImage` base64 ekle.
 
 ### Yakında — Diğer
@@ -59,7 +61,25 @@ Monolitik İçerik Üretici modalı (32+ state) 3 bağımsız sayfaya bölünüy
 
 ---
 
-## Milestone: Teknik Bakım
+## Milestone: Teknik Bakım & Altyapı
+
+### Phase 26: UI Component Sistemi
+**Goal:** Admin Panel'i atomik, tekrar kullanılabilir component kütüphanesine geçir — yeni sayfa eklemek ucuz, görsel tutarlılık garantili, bakım kolay
+**Depends on:** —
+**Status:** Planlandı
+**Zorluk:** Orta
+**Öncelik:** YÜKSEK — Tüm yeni sayfalar (Katalog Standardizasyonu, Builder, Lab, Learn) bu altyapıyı kullanacak
+
+Mevcut durum: 7 sayfa 400+ satır limitini aşıyor, en büyüğü OrchestratorDashboard 2011 satır. 26.419 satır toplam TSX. Her sayfada buton, modal, tablo, form, boş durum, loading state yeniden yazılıyor.
+
+Planlar:
+- [ ] **26-01: Primitives (Temel Atomlar)** — `Button` (primary/secondary/danger/ghost, size, loading, disabled), `Input`, `Select`, `Textarea` (label + error + helper text dahil), `Badge`/`Tag`, `Modal` (tüm sayfaların farklı dialog'unu tek versiyona indir), `Card`, `Spinner`/`Skeleton`. Hepsi `admin/src/components/ui/` altında. Tailwind class'ları sadece burada tanımlanır, sayfalarda inline class yazılmaz.
+- [ ] **26-02: Compounds (Bileşik Parçalar)** — `DataTable` (sıralama, filtreleme, pagination, boş durum), `FormField` (label + input + error bir arada), `EmptyState` (görsel + mesaj + aksiyon butonu), `PageHeader` (başlık + açıklama + aksiyon butonları), `StatusBadge` (renk kodlu durum), `SearchFilter` (arama + filtre bar'ı), `ConfirmAction` (mevcut ConfirmDialog genelleştirilmiş hali).
+- [ ] **26-03: Patterns (Sayfa Kalıpları)** — `CRUDPage` kalıbı (liste + ekle/düzenle/sil — Assets, Scenarios, Themes, Templates hepsi bu pattern). Sayfa sadece config ve iş mantığı verir, iskelet otomatik. Bu adım opsiyonel — primitives + compounds yeterliyse atlanabilir.
+- [ ] **26-04: Migrasyon — Büyük Sayfalar** — OrchestratorDashboard (2011→~400), Scenarios (1464→~350), AIMonitor (1310→~300), Poster (1300→~350), Themes (1223→~300), Assets (1219→~300), TimeSlots (1084→~250) sayfalarını yeni component'lere geçir. Her sayfa bağımsız PR/commit, kademeli geçiş.
+- [ ] **26-05: Stil Rehberi & Dokümantasyon** — Component kullanım örnekleri, variant listesi, do/don't. Yeni sayfa yazarken "hangi component'i kullanmalıyım" sorusunun cevabı net olsun. Basit bir `/admin/src/components/ui/README.md` yeterli.
+
+---
 
 ### Phase 24: Model Config Centralization
 **Goal:** Tüm hardcoded model string'lerini Firestore-driven hale getir — Admin Panel'den deploy gerektirmeden değiştirilebilir
@@ -70,6 +90,27 @@ Monolitik İçerik Üretici modalı (32+ state) 3 bağımsız sayfaya bölünüy
 Planlar:
 - [ ] **24-01: Backend** — SystemSettings tip genişletmesi, visualCriticService/posterLearningService/posterSmartController/enhancementController hardcoded fix, shared.ts + scheduler Firestore entegrasyonu
 - [ ] **24-02: Admin Panel** — APISettingsSection'dan model seçimler kaldır, AIModelSection'a 8 model görevi ekle (İçerik, Önizleme, Poster Görsel, Poster Prompt, Poster Analiz, Enhancement Analiz, Visual Critic, Learning)
+
+---
+
+## Milestone: Ürün Kataloğu Görsel Standardizasyonu ⭐⭐
+
+> **Vizyon:** QR menü ve Sade POS'taki tüm ürün görselleri aynı görsel dilde — aynı arka plan, ışık, açı, crop. Personel hızlıca tanır, müşteri profesyonel katalog görür, marka tutarlılığı korunur.
+> **Öncelik:** YÜKSEK — Doğrudan müşteri ve personel deneyimini etkiler.
+
+### Phase 25: Ürün Kataloğu Görsel Standardizasyonu
+**Goal:** Tüm ürün fotoğraflarını belirlenen tek bir görsel standarda dönüştüren sistem — AI ile otomatik, toplu, tutarlı
+**Depends on:** Mevcut Enhancement Pipeline (kısmen)
+**Status:** Planlandı
+**Zorluk:** Orta
+
+Planlar:
+- [ ] **25-01: Katalog Stil Şablonu Tanımı** — Admin Panel'den "Katalog Stili" belirlenir. Firestore `catalog-style-presets` koleksiyonu + seed data. Her preset: arka plan (renk/doku), ışık tipi (soft diffused, stüdyo, doğal), çekim açısı (45° overhead, straight-on, flat lay), crop kuralları (ürün frame'in %70-80'i, eşit boşluk), renk profili (beyaz dengesi, doygunluk). Kategori bazlı varyasyon desteği (pastalar: overhead, içecekler: straight-on).
+- [ ] **25-02: AI Standardizasyon Pipeline** — Yüklenen ürün fotoğrafını seçili katalog stiline dönüştürür. Adımlar: arka plan kaldırma → belirlenen arka plana yerleştirme → ışık normalizasyonu → crop standardizasyonu → renk profili uygulama. Mevcut Enhancement pipeline'ının üzerine katalog-spesifik kurallar katmanı.
+- [ ] **25-03: Toplu İşlem (Batch)** — Birden fazla ürün fotoğrafını tek seferde aynı preset ile dönüştür. Kuyruk sistemi, ilerleme çubuğu, hata yönetimi. "50 ürünü standartlaştır" tek tıkla.
+- [ ] **25-04: Çıktı Formatları** — Aynı kaynak görselden farklı boyutlar: POS thumbnail (küçük kare, hızlı yüklenir), QR Menü (daha büyük, detaylı), Instagram/Poster (farklı crop ve kalite). Otomatik resize + optimize.
+- [ ] **25-05: Yeni Ürün Ekleme Akışı** — Personel fotoğraf çeker/yükler → AI otomatik katalog standardına dönüştürür → önizleme + onay → POS ve QR menüye yansır. Before/After karşılaştırma.
+- [ ] **25-06: Admin Panel UI** — Katalog stil yönetimi sayfası: preset oluştur/düzenle/sil, canlı önizleme, kategori-preset eşleştirme, toplu dönüştürme butonu, sonuç galerisi (grid view, before/after).
 
 ---
 
@@ -268,6 +309,10 @@ Telegram'a önizleme + butonlar gönderilir
 | 18. Multi-AI Provider | 0/5 | 📋 Planlandı | - |
 | 19. Video İçerik | 0/5 | 📋 Planlandı | - |
 | 20. Multi-Tenant SaaS | 0/6 | 📋 Planlandı | - |
+| **Teknik Bakım & Altyapı Milestone** ⭐⭐ | | | |
+| 26. UI Component Sistemi | 0/5 | 📋 Planlandı (Öncelikli) | - |
+| **Ürün Kataloğu Görsel Standardizasyonu Milestone** ⭐⭐ | | | |
+| 25. Katalog Görsel Standardizasyonu | 0/6 | 📋 Planlandı (Öncelikli) | - |
 | **Poster Prompt Studio V2 Milestone** | | | |
 | 21. Görsel Parametreler | 0/6 | 📋 Planlandı | - |
 | 22. UX & Akış İyileştirmeleri | 0/5 | 📋 Planlandı | - |
@@ -290,6 +335,8 @@ Telegram'a önizleme + butonlar gönderilir
 - **Milestone v10.0 (Multi-Provider & Video):** 📋 PLANLANDI - Phase 18-19
 - **Milestone v11.0 (SaaS):** 📋 PLANLANDI - Phase 20
 - **Milestone v12.0 (Poster Prompt Studio V2):** 📋 PLANLANDI - Phase 21-23
+- **Milestone v13.0 (Katalog Görsel Standardizasyonu):** 📋 PLANLANDI (ÖNCELİKLİ) - Phase 25
+- **Milestone v14.0 (UI Component Sistemi):** 📋 PLANLANDI (ÖNCELİKLİ) - Phase 26
 - **Region:** europe-west1 (Belçika)
 - **AI Enhancement:** Gemini 2.0 Flash Experimental (img2img)
 - **Cost Estimate:** ~$0/ay (Gemini şimdilik ücretsiz)

@@ -31,6 +31,7 @@ const Poster = lazy(() => import("./pages/Poster"));
 const PosterGallery = lazy(() => import("./pages/PosterGallery"));
 const QRCode = lazy(() => import("./pages/QRCode"));
 const StyleStudio = lazy(() => import("./pages/StyleStudio"));
+const CarouselStudio = lazy(() => import("./pages/CarouselStudio"));
 
 // Loading fallback component
 function PageLoader() {
@@ -75,6 +76,7 @@ function App() {
             <Route path="poster-gallery" element={<Suspense fallback={<PageLoader />}><PosterGallery /></Suspense>} />
             <Route path="qr-code" element={<Suspense fallback={<PageLoader />}><QRCode /></Suspense>} />
             <Route path="style-studio" element={<Suspense fallback={<PageLoader />}><StyleStudio /></Suspense>} />
+            <Route path="carousel-studio" element={<Suspense fallback={<PageLoader />}><CarouselStudio /></Suspense>} />
             {/* composition-templates route kaldırıldı — slot konfigürasyonu Senaryolar'a taşındı */}
           </Route>
         </Routes>

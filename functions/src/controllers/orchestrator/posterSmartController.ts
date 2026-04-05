@@ -178,33 +178,123 @@ export const analyzePosterDesign = createHttpFunction(async (req, res) => {
   const moodNames = moodsSnap.docs.map(d => `${d.id}: ${d.data().name}`);
   const typoNames = typoSnap.docs.map(d => `${d.id}: ${d.data().name} — ${d.data().description}`);
 
-  // Teknik analiz prompt'u — felsefi değil, pixel-level spesifik
-  const systemPrompt = `You analyze poster designs and extract precise technical visual characteristics.
+  // ── ANAYASA MADDE 1 & 2: Sonnet kapasitesi tam kullanılır, çıktı doğrudan prompt'a enjekte edilebilir ──
+  const systemPrompt = `You are a world-class art director and design forensics expert. You analyze poster images with the precision of a professional cinematographer, typographer, and color theorist combined.
 
-Return ONLY valid JSON:
+CRITICAL MISSION: Your analysis output will be fed DIRECTLY into an AI image generator (Gemini) to recreate this poster with a different product. If your values are vague, the recreation will fail. Every single field must be specific enough that an AI can reconstruct the identical visual style without seeing the original.
+
+FORBIDDEN VAGUE TERMS (never use these):
+- "warm colors", "nice lighting", "clean look", "modern font", "minimal design"
+- Any description without a measurement, hex code, Kelvin value, or ratio
+
+REQUIRED: Return ONLY valid JSON. No markdown fences, no preamble, no explanation.
+
 {
-  "styleId": "closest-style-id",
+  "styleId": "exact-id from provided list",
   "styleName": "Style Name",
-  "moodId": "closest-mood-id",
+  "moodId": "exact-id from provided list",
   "moodName": "Mood Name",
-  "typographyId": "closest-typography-id",
+  "typographyId": "exact-id from provided list",
   "typographyName": "Typography Name",
-  "analysis": {
-    "background": "exact description: color (warm/cool/neutral + approximate hex), texture presence (none/subtle paper/heavy grain/concrete/fabric), gradient (yes/no + direction), any geometric patterns",
-    "typography": "font classification (serif/sans-serif/script), weight (light/regular/bold/black), capitalization (all-caps/mixed/lowercase), letter-spacing (tight/normal/wide), text color",
-    "colorPalette": "3-5 dominant colors with roles: e.g. '#F5EDE0 background, #3D1C0A title text, #8B4513 accent'",
-    "layout": "product vertical position (top third/center/bottom third), product scale (small/medium/large relative to frame), text zone (top/bottom/overlay), white space (generous/moderate/tight)",
-    "lighting": "direction (overhead/side/front/backlit), quality (soft diffused/hard directional), color temperature (warm 2700-3500K/neutral 4000K/cool 5000K+), shadow presence (yes/no)",
-    "overallFeel": "2-3 precise adjectives: e.g. 'minimal, editorial, warm' or 'rustic, textured, cozy'"
+
+  "colorDNA": {
+    "dominantColors": [
+      { "role": "background", "hex": "#F2EDE0", "percentage": 65, "temperature": "warm 3200K equivalent", "saturation": "muted" },
+      { "role": "primary text", "hex": "#1A1008", "percentage": 8 },
+      { "role": "accent", "hex": "#C4934A", "percentage": 5 }
+    ],
+    "harmonyType": "analogous | complementary | triadic | split-complementary | monochromatic",
+    "overallTemperature": "warm (2700-3500K) | neutral (4000K) | cool (5500K+)",
+    "saturationLevel": "vivid | moderate | muted | desaturated",
+    "contrastRatio": "high (7:1+) | medium (4.5:1) | low (2:1) | flat (1.5:1)",
+    "colorGrade": "describe as a film color grade — e.g. 'faded highlights, lifted blacks, warm midtones' or 'cool teal shadows, orange highlights, desaturated mids'"
   },
-  "suggestions": "2-3 specific technical sentences about the visual choices that make this poster effective"
+
+  "typographyDNA": {
+    "primaryFont": {
+      "classification": "geometric sans-serif | humanist sans | grotesque | transitional serif | old-style serif | didone (high-contrast serif) | slab serif | script | display | monospace",
+      "serifSubclass": "old-style | transitional | didone | slab | null (if sans)",
+      "strokeContrast": "none (1:1) | low (1:2) | medium (1:3) | high (1:5) | extreme (1:8+, Didone)",
+      "weight": "thin (100) | light (300) | regular (400) | medium (500) | semibold (600) | bold (700) | black (900)",
+      "capitalization": "ALL-CAPS | Title Case | Sentence case | lowercase",
+      "letterSpacing": "very tight (-0.05em) | tight (-0.02em) | normal (0em) | wide (0.08em) | very wide (0.2em+)",
+      "axisStress": "diagonal (humanist) | vertical (rational/didone) | horizontal",
+      "xHeightRatio": "low (<0.5, classical) | medium (0.5-0.65) | high (>0.65, screen-optimized)",
+      "textColor": "#hex exact value",
+      "promptDescription": "Write this as a complete image-gen prompt phrase, e.g.: 'high-contrast Didone serif headline, ultra-thin hairlines with heavy verticals, all-caps, tight letter-spacing, fashion editorial style, deep brown #1A1008'"
+    },
+    "secondaryFont": "describe if present, null if not",
+    "textHierarchyCount": "number of distinct text sizes/roles visible"
+  },
+
+  "compositionDNA": {
+    "gridType": "rule-of-thirds | golden-ratio | centered-symmetry | dynamic-diagonal | modular-grid | free-form",
+    "balance": "symmetrical | asymmetrical | radial | all-over",
+    "focalPoint": {
+      "position": "describe as clock position and grid zone, e.g. 'center-top, upper-third intersection'",
+      "xPercent": 50,
+      "yPercent": 33
+    },
+    "productScale": "product fills approximately X% of frame height",
+    "productPlacement": "upper-left | upper-center | upper-right | center-left | dead-center | center-right | lower-left | lower-center | lower-right",
+    "textZone": "where text lives relative to product: above / below / left / right / overlay-bottom / overlay-top / surrounding",
+    "negativeSpaceRatio": "generous (60%+) | moderate (40-60%) | tight (20-40%) | packed (<20%)",
+    "visualFlow": "left-to-right | top-to-bottom | circular | Z-pattern | static",
+    "promptDescription": "Write as image-gen phrase: e.g. 'asymmetric rule-of-thirds composition, product in upper-left quadrant at 40% frame height, generous white space on right, text anchored to lower-third'"
+  },
+
+  "lightingDNA": {
+    "pattern": "rembrandt | butterfly | split | loop | broad | short | flat | rim | backlit | natural-window | overhead | under-lit",
+    "quality": "hard (sharp shadow edges) | soft (graduated shadows) | diffused (shadowless) | specular (hot spots)",
+    "direction": "top-left 45° | top-right 45° | overhead | side-left 90° | side-right 90° | front | back | under",
+    "colorTemperature": "exact Kelvin range, e.g. '2800-3200K tungsten warm' or '5500K daylight neutral' or '7000K shade cool'",
+    "keyToFillRatio": "flat (1:1) | low-contrast (2:1) | medium (4:1) | dramatic (6:1) | extreme chiaroscuro (8:1+)",
+    "shadowDescription": "sharp and defined | soft and graduated | minimal | absent | colored shadows",
+    "rimLight": "yes — describe color and intensity | none",
+    "promptDescription": "Write as image-gen phrase: e.g. '45-degree top-left Rembrandt key light, soft diffused quality, 3000K tungsten warmth, 4:1 key-to-fill ratio, soft shadow falling to lower-right, subtle warm rim light'"
+  },
+
+  "atmosphereDNA": {
+    "moodAdjectives": ["specific", "evocative", "adjective — max 4, never generic"],
+    "grainLevel": "none | subtle film grain | moderate | heavy analog grain",
+    "textureOverlay": "none | subtle paper | linen | concrete | marble | aged paper | halftone dots | fabric weave",
+    "vignetteStrength": "none | very subtle | moderate | strong",
+    "depthEffect": "flat (all in focus) | shallow DOF (background blur) | deep focus | tilt-shift",
+    "styleEra": "contemporary | retro (specify decade) | vintage | timeless | futuristic",
+    "promptDescription": "Write as image-gen phrase: e.g. 'quiet Sunday-morning intimacy, subtle aged paper texture overlay, very gentle vignette at edges, shallow depth of field with soft bokeh background, timeless quality'"
+  },
+
+  "generationPrompt": {
+    "highLevel": "One sentence: subject + composition + overall style direction. This sets the scene. E.g.: 'Editorial product poster with artisan pastry as hero, asymmetric rule-of-thirds composition, quiet luxury editorial style'",
+    "lowLevel": "Technical details paragraph: color + lighting + typography + texture + atmosphere. Everything except the product itself. This is copy-pasteable into Gemini. Must be 80-120 words.",
+    "negativeGuide": "What to explicitly avoid: e.g. 'avoid flat lighting, avoid saturated colors, avoid centered symmetry, avoid heavy drop shadows'"
+  },
+
+  "reproducibility": {
+    "score": 85,
+    "comment": "One sentence on overall fidelity expectation",
+    "highFidelity": ["background color", "lighting direction", "composition structure"],
+    "mediumFidelity": ["typography weight (no exact font match)", "texture intensity"],
+    "lowFidelity": ["exact font name", "product-specific reflections"]
+  },
+
+  "technicalNotes": "2-3 sentences: what specific choices make this poster uniquely effective, and what would break if changed."
 }`;
 
-  const userText = `Analyze this poster design. Match it to the closest options:
+  const userText = `Analyze this poster image with full forensic precision. Every field must be actionable for an AI image generator.
 
-STYLES:\n${styleNames.join("\n")}
-MOODS:\n${moodNames.join("\n")}
-TYPOGRAPHY:\n${typoNames.join("\n")}
+PRESET MATCHING — select the closest IDs from these lists:
+
+STYLES:
+${styleNames.join("\n")}
+
+MOODS:
+${moodNames.join("\n")}
+
+TYPOGRAPHIES:
+${typoNames.join("\n")}
+
+REMEMBER: vague terms = failed recreation. Be the art director who sees hex codes and Kelvin values, not just "warm and minimal".
 
 Return JSON only.`;
 
@@ -214,12 +304,11 @@ Return JSON only.`;
 
   try {
     if (isAnthropicModel) {
-      // Anthropic SDK — doğrudan
       const Anthropic = (await import("@anthropic-ai/sdk")).default;
       const anthropic = new Anthropic({ apiKey: anthropicApiKey });
       const result = await anthropic.messages.create({
         model: analysisModel,
-        max_tokens: 900,
+        max_tokens: 4000,
         system: systemPrompt,
         messages: [{
           role: "user",
@@ -240,7 +329,6 @@ Return JSON only.`;
         .filter((b): b is { type: "text"; text: string } => b.type === "text")
         .map(b => b.text).join("").trim();
     } else {
-      // OpenRouter — OpenAI-compatible API
       const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -250,7 +338,7 @@ Return JSON only.`;
         },
         body: JSON.stringify({
           model: analysisModel,
-          max_tokens: 900,
+          max_tokens: 4000,
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -292,7 +380,7 @@ Return JSON only.`;
   }
 
   res.json({ success: true, data: analysis });
-}, { timeoutSeconds: 60, memory: "512MiB" });
+}, { timeoutSeconds: 90, memory: "512MiB" });
 
 // Hedef model bazlı prompt format talimatları (araştırma bazlı — OpenAI Cookbook, Midjourney Docs, Google Developers Blog)
 const TARGET_MODEL_INSTRUCTIONS: Record<string, string> = {

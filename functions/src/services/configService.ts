@@ -22,3 +22,4 @@ export * from "./config/compositionConfig";
 export * from "./config/handStylesConfig";
 export * from "./config/scenarioCrud";
 export * from "./config/configSeed";
+export * from "./config/brandConfig";

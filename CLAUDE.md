@@ -131,6 +131,7 @@ cd functions && npm run build && firebase deploy --only functions
 ## 📚 Referans Dökümanlar
 
 Gerektiğinde `.claude/references/` klasöründen oku:
+- `BRAND_REFERENCE.md` - **Sade Patisserie marka kimliği** (renkler, tipografi, ses tonu, kanallar) — TÜM içerik ve görsel üretiminde referans
 - `KURALLAR.md` - Görsel üretim kuralları
 - `ORCHESTRATOR.md` - AI orchestrator senaryoları
 - Diğer detaylı dökümanlar

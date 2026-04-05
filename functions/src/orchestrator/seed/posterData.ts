@@ -14,7 +14,7 @@ export const POSTER_STYLES: Omit<PosterStyle, "id">[] = [
   {
     name: "Bold Minimal",
     nameTr: "Cesur Minimal",
-    description: "Cesur tipografi, tek güçlü görsel, amaçlı negatif alan, yüksek kontrast",
+    description: "Tamamen boş arka plan, ortada tek büyük ürün, kalın güçlü yazı. Vitrin afişi — hiçbir şey fazla, her piksel kasıtlı.",
     promptDirections: {
       background: "Clean solid background — pure white, deep black, or a single bold color. No textures, no gradients. The emptiness is intentional and powerful.",
       typography: "Bold condensed sans-serif typeface. Title is large and commanding — it should feel like a magazine cover headline. High contrast between text and background. Minimal text: one title, one subtitle max.",
@@ -31,7 +31,7 @@ export const POSTER_STYLES: Omit<PosterStyle, "id">[] = [
   {
     name: "Editorial Kinfolk",
     nameTr: "Editöryal Kinfolk",
-    description: "Çok boşluk, pastel tonlar, analog fotoğraf hissi, sıcak minimalizm",
+    description: "Krem-bej zemin, ince zarif yazı, ürün mütevazı ve sıcak. Prestijli lifestyle dergisi sayfası gibi — nefes alıyor, bastırmıyor.",
     promptDirections: {
       background: "Warm off-white, soft cream, or pale linen. Subtle paper texture like premium uncoated stock. Feels tactile and organic, like a high-end lifestyle magazine spread.",
       typography: "Elegant thin serif typeface — think Freight Display or Cormorant. Understated, not shouting. Title is medium-sized, refined. Generous letter-spacing. Small-caps for subtitles.",
@@ -48,7 +48,7 @@ export const POSTER_STYLES: Omit<PosterStyle, "id">[] = [
   {
     name: "Neo Deco",
     nameTr: "Neo Deco / Lüks",
-    description: "Art Deco'nun modern yorumu: geometrik motifler, zarif serif tipografi, altın aksanlar",
+    description: "Koyu lacivert ya da siyah zemin, altın çerçeve ve süslemeler, lüks serif yazı. Ladurée ya da Cartier afişi — daveti fısıldıyor.",
     promptDirections: {
       background: "Deep, rich background — midnight navy, forest green, burgundy, or matte black. Optional: subtle geometric Art Deco pattern (thin gold lines, fan shapes, or chevrons) as a border or frame element.",
       typography: "Elegant high-contrast serif with Art Deco influence — geometric, structured, luxurious. Title is grand but not oversized. Gold or cream colored text on dark background. Tracked uppercase for subtitles.",
@@ -65,7 +65,7 @@ export const POSTER_STYLES: Omit<PosterStyle, "id">[] = [
   {
     name: "Swiss International",
     nameTr: "Swiss / Uluslararası",
-    description: "Grid sistemi, temiz sans-serif, asimetrik layout, bilgi hiyerarşisi",
+    description: "Beyaz veya düz renkli zemin, sol hizalı temiz yazı, ürün matematiksel konumlandırılmış. Braun ve Apple tasarımı gibi — rasyonel güzellik.",
     promptDirections: {
       background: "Clean, flat color — white, light gray, or a single saturated color (red, blue, yellow). No texture, no gradient. The background is a canvas for the grid.",
       typography: "Clean geometric sans-serif — Helvetica, Akzidenz-Grotesk style. Flush-left alignment, ragged-right. Title is bold but follows the grid. Numbers and details are treated as design elements. Strong hierarchy through size contrast.",
@@ -82,7 +82,7 @@ export const POSTER_STYLES: Omit<PosterStyle, "id">[] = [
   {
     name: "Monochrome",
     nameTr: "Monokrom",
-    description: "Tek rengin tüm tonları, dramatik, güçlü hiyerarşi",
+    description: "Tek bir renk ailesinin açıktan koyuya tüm tonları kullanılır. Kahverenginin kreminden espressosuna kadar — renk uyumu otomatik mükemmel.",
     promptDirections: {
       background: "Single color in its full tonal range — from lightest tint to deepest shade. Could be all-blue (sky to navy), all-terracotta (peach to burnt sienna), all-green (mint to forest). Background and foreground are the same color family.",
       typography: "Bold, confident typeface — works in both serif and sans-serif. Text in the lightest or darkest tone of the chosen color. High contrast within the monochrome spectrum. Title is strong and clear.",
@@ -99,7 +99,7 @@ export const POSTER_STYLES: Omit<PosterStyle, "id">[] = [
   {
     name: "Gradient Duotone",
     nameTr: "Gradient / Duotone",
-    description: "Renk geçişleri, mesh gradient, grenli doku, modern dijital estetik",
+    description: "Arka plan iki renkten birbirine akıyor — mordan turuncuya, maviden yeşile. Spotify kapak afişi enerjisi — dijital, genç, sosyal medyaya uygun.",
     promptDirections: {
       background: "Smooth gradient or mesh gradient background — two or three colors flowing into each other. Add subtle grain/noise texture for depth (like Spotify's brand aesthetic). Colors can be bold (electric blue to magenta) or subtle (peach to lavender).",
       typography: "Modern sans-serif, medium weight. White or very light text works best against gradient backgrounds. Title is clean and readable — not competing with the color play. Subtle text shadow for legibility if needed.",
@@ -116,7 +116,7 @@ export const POSTER_STYLES: Omit<PosterStyle, "id">[] = [
   {
     name: "Floating Product",
     nameTr: "Havada Süzen Ürün",
-    description: "Ürün havada süzülüyor, gölge ile derinlik, temiz arka plan",
+    description: "Ürün beyaz zemin üzerinde havada asılı gibi durur — altında gerçekçi gölge. Apple ürün lansmanı afişi: ürün tek kral, başka hiçbir şey yok.",
     promptDirections: {
       background: "Clean, solid, light background — white, very pale gray, or soft pastel. The background is intentionally empty to make the floating effect dramatic. No patterns, no distractions.",
       typography: "Versatile — works with both serif and sans-serif. Text is secondary to the floating product effect. Clean, well-spaced, elegant. Positioned below the product with good separation.",
@@ -133,7 +133,7 @@ export const POSTER_STYLES: Omit<PosterStyle, "id">[] = [
   {
     name: "Type Hero",
     nameTr: "Tipografi Kahraman",
-    description: "Tipografi ana görsel olarak, büyük/gerilmiş/dondurulmuş harfler, ürün küçük",
+    description: "Ürün adı ya da bir söz posterın yarısını kaplayan dev harflerle yazılmış. Ürün küçük ama sahne onunla tamamlanıyor — moda kampanyası veya albüm kapağı enerjisi.",
     promptDirections: {
       background: "Background serves the typography — solid color that creates maximum contrast with the letter forms. Can be bold (red, black, navy) or neutral (white, cream). No busy textures that compete with the letters.",
       typography: "TYPOGRAPHY IS THE HERO. The product name or title fills 40-60% of the poster area. Letters are oversized, potentially cropped at edges, stretched, or stylized. Experimental but readable. This is where the design lives.",

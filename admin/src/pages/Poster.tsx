@@ -7,6 +7,16 @@ import ProductImageUpload from "../components/ProductImageUpload";
 interface PosterStyle {
   id: string; name: string; nameTr: string; description: string;
   thumbnailUrl?: string; isActive: boolean; sortOrder: number;
+  examplePromptFragment?: string;
+  promptDirections?: {
+    background?: string;
+    typography?: string;
+    layout?: string;
+    colorPalette?: string;
+    productPlacement?: string;
+    lighting?: string;
+    overallFeel?: string;
+  };
 }
 interface PosterMood {
   id: string; name: string; nameTr: string;
@@ -408,6 +418,16 @@ export default function Poster() {
   // Thumbnail düzenleme
   const [editingThumbnail, setEditingThumbnail] = useState<string | null>(null);
   const [thumbnailInput, setThumbnailInput] = useState("");
+
+  // Stil düzenleme modalı
+  const [editingStyle, setEditingStyle] = useState<PosterStyle | null>(null);
+  const [styleEditForm, setStyleEditForm] = useState<{
+    name: string; nameTr: string; description: string; examplePromptFragment: string;
+    background: string; typography: string; layout: string;
+    colorPalette: string; productPlacement: string; lighting: string; overallFeel: string;
+  }>({ name: "", nameTr: "", description: "", examplePromptFragment: "", background: "", typography: "", layout: "", colorPalette: "", productPlacement: "", lighting: "", overallFeel: "" });
+  const [styleEditSaving, setStyleEditSaving] = useState(false);
+  const [styleEditError, setStyleEditError] = useState<string | null>(null);
   // Form
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -486,6 +506,55 @@ export default function Poster() {
     }
   };
 
+  const handleSaveStyleEdit = async () => {
+    if (!editingStyle) return;
+    setStyleEditSaving(true);
+    setStyleEditError(null);
+    try {
+      await api.updatePosterStyle(editingStyle.id, {
+        name: styleEditForm.name,
+        nameTr: styleEditForm.nameTr,
+        description: styleEditForm.description,
+        examplePromptFragment: styleEditForm.examplePromptFragment,
+        promptDirections: {
+          background: styleEditForm.background,
+          typography: styleEditForm.typography,
+          layout: styleEditForm.layout,
+          colorPalette: styleEditForm.colorPalette,
+          productPlacement: styleEditForm.productPlacement,
+          lighting: styleEditForm.lighting,
+          overallFeel: styleEditForm.overallFeel,
+        },
+      });
+      // Yerel state'i güncelle
+      setStyles(prev => prev.map(s =>
+        s.id === editingStyle.id
+          ? {
+              ...s,
+              name: styleEditForm.name,
+              nameTr: styleEditForm.nameTr,
+              description: styleEditForm.description,
+              examplePromptFragment: styleEditForm.examplePromptFragment,
+              promptDirections: {
+                background: styleEditForm.background,
+                typography: styleEditForm.typography,
+                layout: styleEditForm.layout,
+                colorPalette: styleEditForm.colorPalette,
+                productPlacement: styleEditForm.productPlacement,
+                lighting: styleEditForm.lighting,
+                overallFeel: styleEditForm.overallFeel,
+              },
+            }
+          : s
+      ));
+      setEditingStyle(null);
+    } catch (err: any) {
+      setStyleEditError(err.message || "Kaydedilemedi");
+    } finally {
+      setStyleEditSaving(false);
+    }
+  };
+
   // Prompt Generator'a gönderilecek birleşik notlar
   const combinedAdditionalNotes = [
     additionalNotes,
@@ -523,14 +592,7 @@ export default function Poster() {
           <h1 className="text-2xl font-bold text-gray-900">Poster Prompt Üret</h1>
           <p className="text-sm text-gray-500 mt-1">ChatGPT, Midjourney veya DALL-E için optimize edilmiş prompt</p>
         </div>
-        <PosterAnalyzer
-          onApplyStyle={(sId, mId, tId) => {
-            if (sId) setSelectedStyle(sId);
-            if (mId) setSelectedMood(mId);
-            if (tId) setSelectedTitleTypography(tId);
-          }}
-          onStyleSaved={loadConfig}
-        />
+        <PosterAnalyzer onStyleSaved={loadConfig} />
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-6">
@@ -653,6 +715,33 @@ export default function Poster() {
                         </svg>
                       </button>
                     )}
+                    {/* Düzenle */}
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setEditingStyle(s);
+                        setStyleEditForm({
+                          name: s.name,
+                          nameTr: s.nameTr,
+                          description: s.description,
+                          examplePromptFragment: s.examplePromptFragment || "",
+                          background: s.promptDirections?.background || "",
+                          typography: s.promptDirections?.typography || "",
+                          layout: s.promptDirections?.layout || "",
+                          colorPalette: s.promptDirections?.colorPalette || "",
+                          productPlacement: s.promptDirections?.productPlacement || "",
+                          lighting: s.promptDirections?.lighting || "",
+                          overallFeel: s.promptDirections?.overallFeel || "",
+                        });
+                        setStyleEditError(null);
+                      }}
+                      className="w-6 h-6 rounded-md bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-400 hover:text-violet-600 hover:border-violet-300 transition-colors"
+                      title="Düzenle"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
                     {/* Sil */}
                     <button
                       onClick={async e => {
@@ -1047,6 +1136,158 @@ export default function Poster() {
           negativePrompt={negativePrompt || undefined}
         />
       </div>
+
+      {/* Stil Düzenleme Modalı */}
+      {editingStyle && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            {/* Başlık */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Stil Düzenle</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{editingStyle.nameTr}</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    const lines = [
+                      `İsim (EN): ${styleEditForm.name}`,
+                      `İsim (TR): ${styleEditForm.nameTr}`,
+                      `Açıklama: ${styleEditForm.description}`,
+                      `Örnek Prompt Parçası: ${styleEditForm.examplePromptFragment}`,
+                      ``,
+                      `--- Prompt Yönlendirmeleri ---`,
+                      `Arka Plan: ${styleEditForm.background}`,
+                      `Tipografi: ${styleEditForm.typography}`,
+                      `Kompozisyon: ${styleEditForm.layout}`,
+                      `Renk Paleti: ${styleEditForm.colorPalette}`,
+                      `Ürün Yerleşimi: ${styleEditForm.productPlacement}`,
+                      `Işık: ${styleEditForm.lighting}`,
+                      `Genel Hava: ${styleEditForm.overallFeel}`,
+                    ].filter(l => l === "" || l.startsWith("---") || !l.endsWith(": ")).join("\n");
+                    navigator.clipboard.writeText(lines);
+                  }}
+                  title="Tümünü kopyala"
+                  className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-violet-600 transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setEditingStyle(null)}
+                  className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              {/* Temel bilgiler */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">İsim (EN)</label>
+                  <input
+                    type="text"
+                    value={styleEditForm.name}
+                    onChange={e => setStyleEditForm(f => ({ ...f, name: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">İsim (TR)</label>
+                  <input
+                    type="text"
+                    value={styleEditForm.nameTr}
+                    onChange={e => setStyleEditForm(f => ({ ...f, nameTr: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Açıklama</label>
+                <textarea
+                  rows={2}
+                  value={styleEditForm.description}
+                  onChange={e => setStyleEditForm(f => ({ ...f, description: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-400 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Örnek Prompt Parçası</label>
+                <textarea
+                  rows={2}
+                  value={styleEditForm.examplePromptFragment}
+                  onChange={e => setStyleEditForm(f => ({ ...f, examplePromptFragment: e.target.value }))}
+                  placeholder="photorealistic, ultra-detailed, golden hour lighting..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-400 resize-none font-mono"
+                />
+              </div>
+
+              {/* Prompt Directions */}
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-700 mb-3 uppercase tracking-wide">Prompt Yönlendirmeleri</p>
+                <div className="space-y-3">
+                  {(
+                    [
+                      { key: "background", label: "Arka Plan (background)" },
+                      { key: "typography", label: "Tipografi (typography)" },
+                      { key: "layout", label: "Kompozisyon (layout)" },
+                      { key: "colorPalette", label: "Renk Paleti (colorPalette)" },
+                      { key: "productPlacement", label: "Ürün Yerleşimi (productPlacement)" },
+                      { key: "lighting", label: "Işık (lighting)" },
+                      { key: "overallFeel", label: "Genel Hava (overallFeel)" },
+                    ] as { key: keyof typeof styleEditForm; label: string }[]
+                  ).map(({ key, label }) => (
+                    <div key={key}>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                      <textarea
+                        rows={2}
+                        value={styleEditForm[key]}
+                        onChange={e => setStyleEditForm(f => ({ ...f, [key]: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-400 resize-none font-mono"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hata */}
+              {styleEditError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{styleEditError}</p>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-2 px-6 pb-5">
+              <button
+                onClick={() => setEditingStyle(null)}
+                disabled={styleEditSaving}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSaveStyleEdit}
+                disabled={styleEditSaving}
+                className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {styleEditSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Kaydediliyor...
+                  </>
+                ) : "Kaydet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

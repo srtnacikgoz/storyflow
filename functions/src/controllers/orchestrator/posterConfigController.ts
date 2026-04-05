@@ -144,12 +144,91 @@ export const listPosterStyles = createHttpFunction(async (req, res) => {
 });
 
 /**
+ * Poster stilini güncelle
+ * POST /updatePosterStyle
+ * Body: { id, name?, nameTr?, description?, examplePromptFragment?, promptDirections?: { background?, typography?, layout?, colorPalette?, productPlacement?, lighting?, overallFeel? } }
+ */
+export const updatePosterStyle = createHttpFunction(async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST gerekli" });
+    return;
+  }
+  const { id, ...updates } = req.body as { id: string; [key: string]: any };
+  if (!id) {
+    res.status(400).json({ success: false, error: "id zorunlu" });
+    return;
+  }
+  const ref = db.collection(`${POSTER_CONFIG_PATH}/styles/items`).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    res.status(404).json({ success: false, error: `Stil bulunamadı: ${id}` });
+    return;
+  }
+  // promptDirections nested merge
+  const updateData: Record<string, any> = { updatedAt: Date.now() };
+  if (updates.name !== undefined) updateData.name = updates.name;
+  if (updates.nameTr !== undefined) updateData.nameTr = updates.nameTr;
+  if (updates.description !== undefined) updateData.description = updates.description;
+  if (updates.examplePromptFragment !== undefined) updateData.examplePromptFragment = updates.examplePromptFragment;
+  if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
+  if (updates.sortOrder !== undefined) updateData.sortOrder = updates.sortOrder;
+  if (updates.promptDirections) {
+    const existing = (snap.data()?.promptDirections || {}) as Record<string, string>;
+    updateData.promptDirections = { ...existing, ...updates.promptDirections };
+  }
+  await ref.update(updateData);
+  res.json({ success: true });
+});
+
+/**
  * Poster mood'larını listele
  * GET /listPosterMoods
  */
 export const listPosterMoods = createHttpFunction(async (req, res) => {
   const moods = await getPosterMoods();
   res.json({ success: true, data: moods });
+});
+
+/**
+ * Poster mood oluştur
+ * POST /createPosterMood
+ */
+export const createPosterMood = createHttpFunction(async (req, res) => {
+  const data = req.body;
+  if (!data.name || !data.nameTr) {
+    res.status(400).json({ success: false, error: "name ve nameTr gerekli" });
+    return;
+  }
+  const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
+  await db.collection(`${POSTER_CONFIG_PATH}/moods/items`).doc(id).set({
+    ...data, id, isActive: data.isActive ?? true, sortOrder: data.sortOrder ?? 99, createdAt: Date.now(),
+  });
+  clearConfigCache();
+  res.json({ success: true, data: { id }, message: "Mood oluşturuldu" });
+});
+
+/**
+ * Poster mood güncelle
+ * POST /updatePosterMood
+ */
+export const updatePosterMood = createHttpFunction(async (req, res) => {
+  const { id, ...updates } = req.body;
+  if (!id) { res.status(400).json({ success: false, error: "id gerekli" }); return; }
+  await db.collection(`${POSTER_CONFIG_PATH}/moods/items`).doc(id).update({ ...updates, updatedAt: Date.now() });
+  clearConfigCache();
+  res.json({ success: true, message: "Mood güncellendi" });
+});
+
+/**
+ * Poster mood sil
+ * POST /deletePosterMood
+ */
+export const deletePosterMood = createHttpFunction(async (req, res) => {
+  const id = req.body?.id || req.query.id;
+  if (!id) { res.status(400).json({ success: false, error: "id gerekli" }); return; }
+  await db.collection(`${POSTER_CONFIG_PATH}/moods/items`).doc(id as string).delete();
+  clearConfigCache();
+  res.json({ success: true, message: "Mood silindi" });
 });
 
 /**

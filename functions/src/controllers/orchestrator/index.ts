@@ -218,11 +218,17 @@ export {
   generatePosterPrompt,
 } from "./posterSmartController";
 
+// Poster Image Controller (Gemini doğrudan görsel üretimi)
+export { generatePosterImage } from "./posterImageController";
+
 // Poster Config Controller (seed + listeleme + galeri + feedback + öğrenme)
 export {
   seedPosterConfig,
   listPosterStyles,
   listPosterMoods,
+  createPosterMood,
+  updatePosterMood,
+  deletePosterMood,
   listPosterAspectRatios,
   listPosterTypographies,
   listPosterLayouts,

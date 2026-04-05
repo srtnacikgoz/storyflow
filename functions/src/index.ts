@@ -14,6 +14,8 @@ export * from "./controllers/orchestratorController";
 export * from "./controllers/aiLogController";
 // Visual Critic - orchestratorController üzerinden export ediliyor
 export * from "./controllers/styleController";
+export * from "./controllers/carouselController";
+export * from "./controllers/carouselFrameworkController";
 
 // Enhancement & Upscale Controllers
 export {

@@ -179,11 +179,15 @@ export {
   deletePosterStyle,
   analyzePosterDesign,
   generatePosterPrompt,
+  generatePosterImage,
 
   // Poster Config Controller
   seedPosterConfig,
   listPosterStyles,
   listPosterMoods,
+  createPosterMood,
+  updatePosterMood,
+  deletePosterMood,
   listPosterAspectRatios,
   listPosterTypographies,
   listPosterLayouts,

@@ -59,7 +59,7 @@ export const MODEL_REGISTRY: Omit<ModelRegistryEntry, "isActive" | "sortOrder">[
     capabilities: ["prompt-writing", "analysis"],
   },
   {
-    id: "google/gemini-3.1-flash-lite",
+    id: "google/gemini-3.1-flash-lite-preview",
     name: "Gemini 3.1 Flash Lite",
     provider: "google",
     type: "text",
