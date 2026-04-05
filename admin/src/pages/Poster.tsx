@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import PosterAnalyzer from "../components/poster/PosterAnalyzer";
 import PromptGenerator from "../components/poster/PromptGenerator";
+import ProductImageUpload from "../components/ProductImageUpload";
 
 interface PosterStyle {
   id: string; name: string; nameTr: string; description: string;
-  isActive: boolean; sortOrder: number;
+  thumbnailUrl?: string; isActive: boolean; sortOrder: number;
 }
 interface PosterMood {
   id: string; name: string; nameTr: string;
@@ -404,6 +405,9 @@ export default function Poster() {
 
   // Stil açıklama detayı (hover/click ile full açıklama)
   const [expandedStyleDesc, setExpandedStyleDesc] = useState<string | null>(null);
+  // Thumbnail düzenleme
+  const [editingThumbnail, setEditingThumbnail] = useState<string | null>(null);
+  const [thumbnailInput, setThumbnailInput] = useState("");
   // Form
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -461,6 +465,18 @@ export default function Poster() {
     }
   };
 
+  const handleSaveThumbnail = async (styleId: string) => {
+    const url = thumbnailInput.trim();
+    try {
+      await api.updatePosterStyle(styleId, { thumbnailUrl: url || null });
+      setStyles(prev => prev.map(s => s.id === styleId ? { ...s, thumbnailUrl: url || undefined } : s));
+    } catch (err: any) {
+      alert("Thumbnail kaydedilemedi: " + err.message);
+    } finally {
+      setEditingThumbnail(null);
+    }
+  };
+
   const handleSeed = async () => {
     try {
       await api.seedPosterConfig();
@@ -470,33 +486,7 @@ export default function Poster() {
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setProductMimeType(file.type);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1];
-      setProductImageBase64(base64);
-      setProductPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
   // Prompt Generator'a gönderilecek birleşik notlar
-  const handleReferenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setReferenceImageMimeType(file.type);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1];
-      setReferenceImageBase64(base64);
-      setReferencePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
   const combinedAdditionalNotes = [
     additionalNotes,
     explodedLayers ? `EXPLODED VIEW LAYER ORDER (bottom to top):\n${explodedLayers}` : "",
@@ -545,48 +535,38 @@ export default function Poster() {
 
       <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-6">
         {/* Ürün Görseli */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Ürün Görseli *</label>
-          {productPreview ? (
-            <div className="flex items-center gap-3">
-              <img src={productPreview} alt="Ürün" className="w-20 h-20 object-cover rounded-lg border" />
-              <button onClick={() => { setProductPreview(null); setProductImageBase64(null); }} className="text-xs text-red-500 hover:text-red-700">Değiştir</button>
-            </div>
-          ) : (
-            <label className="flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-8 cursor-pointer hover:border-amber-400 transition">
-              <div className="text-center">
-                <p className="text-sm text-gray-500">Ürün fotoğrafı yükle</p>
-                <p className="text-xs text-gray-400 mt-1">PNG, JPG, WebP</p>
-              </div>
-              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-            </label>
-          )}
-        </div>
+        <ProductImageUpload
+          label="Ürün Görseli *"
+          previewUrl={productPreview}
+          onImageReady={(base64, mimeType, prevUrl) => {
+            setProductImageBase64(base64);
+            setProductMimeType(mimeType);
+            setProductPreview(prevUrl);
+          }}
+          onClear={() => {
+            setProductImageBase64(null);
+            setProductMimeType("image/jpeg");
+            setProductPreview(null);
+          }}
+        />
 
         {/* Referans Poster (opsiyonel) */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Referans Poster <span className="text-xs text-gray-400">(opsiyonel — "bu tarzda üret")</span>
-          </label>
-          {referencePreview ? (
-            <div className="flex items-center gap-3">
-              <img src={referencePreview} alt="Referans" className="w-20 h-28 object-cover rounded-lg border border-violet-300" />
-              <div>
-                <p className="text-xs text-violet-600 font-medium">Referans poster yüklendi</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">Stil, layout ve renk paleti bu posterden alınacak</p>
-                <button onClick={() => { setReferencePreview(null); setReferenceImageBase64(null); }} className="text-xs text-red-500 hover:text-red-700 mt-1">Kaldır</button>
-              </div>
-            </div>
-          ) : (
-            <label className="flex items-center justify-center border-2 border-dashed border-violet-200 rounded-lg p-4 cursor-pointer hover:border-violet-400 transition bg-violet-50/30">
-              <div className="text-center">
-                <p className="text-sm text-violet-500">Beğendiğin bir poster yükle</p>
-                <p className="text-[10px] text-gray-400 mt-1">Claude bu posterin stilini analiz edip prompt'a yansıtacak</p>
-              </div>
-              <input type="file" accept="image/*" onChange={handleReferenceUpload} className="hidden" />
-            </label>
-          )}
-        </div>
+        <ProductImageUpload
+          label="Referans Poster"
+          hint={`Opsiyonel — "bu tarzda üret". Claude stilini analiz edip prompt'a yansıtacak.`}
+          accentColor="violet"
+          previewUrl={referencePreview}
+          onImageReady={(base64, mimeType, prevUrl) => {
+            setReferenceImageBase64(base64);
+            setReferenceImageMimeType(mimeType);
+            setReferencePreview(prevUrl);
+          }}
+          onClear={() => {
+            setReferenceImageBase64(null);
+            setReferenceImageMimeType("image/jpeg");
+            setReferencePreview(null);
+          }}
+        />
 
         {/* Stil Seçimi */}
         <div>
@@ -595,12 +575,59 @@ export default function Poster() {
             {styles.map(s => (
               <div
                 key={s.id}
-                className={`relative group border rounded-xl transition ${
+                className={`relative group border rounded-xl transition overflow-hidden ${
                   selectedStyle === s.id
                     ? "border-violet-500 bg-violet-50 ring-1 ring-violet-500"
                     : "border-gray-200 hover:border-gray-300"
                 }`}
               >
+                {/* Thumbnail alanı */}
+                {editingThumbnail === s.id ? (
+                  <div className="p-2 bg-gray-50 border-b border-gray-200">
+                    <input
+                      type="text"
+                      value={thumbnailInput}
+                      onChange={e => setThumbnailInput(e.target.value)}
+                      placeholder="https://... görsel URL yapıştır"
+                      className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 mb-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400 bg-white"
+                      autoFocus
+                      onKeyDown={e => {
+                        if (e.key === "Enter") handleSaveThumbnail(s.id);
+                        if (e.key === "Escape") setEditingThumbnail(null);
+                      }}
+                    />
+                    <div className="flex gap-1">
+                      <button onClick={() => handleSaveThumbnail(s.id)} className="flex-1 text-xs bg-violet-600 text-white rounded-lg py-1 font-medium hover:bg-violet-700 transition">Kaydet</button>
+                      <button onClick={() => setEditingThumbnail(null)} className="flex-1 text-xs bg-gray-100 text-gray-600 rounded-lg py-1 hover:bg-gray-200 transition">İptal</button>
+                    </div>
+                  </div>
+                ) : s.thumbnailUrl ? (
+                  <div className="relative cursor-pointer" onClick={() => setSelectedStyle(s.id)}>
+                    <img src={s.thumbnailUrl} alt={s.nameTr} className="w-full h-24 object-cover" />
+                    <button
+                      onClick={e => { e.stopPropagation(); setEditingThumbnail(s.id); setThumbnailInput(s.thumbnailUrl || ""); }}
+                      className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/40 hover:bg-black/70 text-white rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Görseli değiştir"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={e => { e.stopPropagation(); setEditingThumbnail(s.id); setThumbnailInput(""); }}
+                    className="w-full h-10 flex items-center justify-center gap-1.5 text-gray-300 hover:text-violet-400 hover:bg-violet-50 border-b border-dashed border-gray-200 transition text-xs"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    örnek görsel ekle
+                  </button>
+                )}
+
                 {/* Üst satır: isim + aksiyon butonları */}
                 <div className="flex items-start justify-between gap-1 p-3 pb-1">
                   <button
@@ -630,15 +657,14 @@ export default function Poster() {
                     <button
                       onClick={async e => {
                         e.stopPropagation();
-                        // Optimistic: listeden hemen kaldır
                         const backup = [...styles];
                         setStyles(prev => prev.filter(x => x.id !== s.id));
                         if (selectedStyle === s.id) setSelectedStyle("");
                         if (expandedStyleDesc === s.id) setExpandedStyleDesc(null);
+                        if (editingThumbnail === s.id) setEditingThumbnail(null);
                         try {
                           await api.deletePosterStyle(s.id);
                         } catch {
-                          // Başarısızsa geri al
                           setStyles(backup);
                           alert("Silinemedi");
                         }
@@ -652,7 +678,7 @@ export default function Poster() {
                     </button>
                   </div>
                 </div>
-                {/* Kısa açıklama satırı — tıklanabilir alan */}
+                {/* Kısa açıklama satırı */}
                 {s.description && (
                   <button onClick={() => setSelectedStyle(s.id)} className="w-full px-3 pb-2 text-left">
                     <span className="text-xs text-gray-500 truncate block">{s.description}</span>
@@ -675,17 +701,34 @@ export default function Poster() {
           <label className="block text-sm font-medium text-gray-700 mb-2">Mood</label>
           <div className="grid grid-cols-3 gap-2">
             {moods.map(m => (
-              <button
+              <div
                 key={m.id}
-                onClick={() => setSelectedMood(m.id)}
-                className={`p-2.5 border rounded-xl text-left transition ${
+                className={`relative group border rounded-xl transition ${
                   selectedMood === m.id
                     ? "border-amber-500 bg-amber-50 ring-1 ring-amber-500"
                     : "border-gray-200 hover:border-gray-300"
                 }`}
               >
-                <span className="font-medium text-xs">{m.nameTr}</span>
-              </button>
+                <button onClick={() => setSelectedMood(m.id)} className="w-full p-2.5 text-left pr-8">
+                  <span className="font-medium text-xs">{m.nameTr}</span>
+                </button>
+                <button
+                  onClick={async e => {
+                    e.stopPropagation();
+                    const backup = [...moods];
+                    setMoods(prev => prev.filter(x => x.id !== m.id));
+                    if (selectedMood === m.id) setSelectedMood("");
+                    try { await api.deletePosterMood(m.id); }
+                    catch { setMoods(backup); alert("Silinemedi"); }
+                  }}
+                  className="absolute top-2 right-2 w-5 h-5 rounded-md bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Sil"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             ))}
           </div>
         </div>
