@@ -1,3 +1,17 @@
+/* Santana Font Family */
+@font-face {
+  font-family: 'Santana';
+  src: url('./assets/Santana.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Santana';
+  src: url('./assets/Santana-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
