@@ -5,8 +5,7 @@ import type { Category, CoffeeItem } from '../components/coffee-poster/CoffeePos
 
 // --- Sabitler ---
 
-let idCounter = 0;
-const nextId = () => `item-${++idCounter}`;
+const nextId = () => crypto.randomUUID();
 
 const POSTER_SIZES = [
   { key: 'a4', label: 'A4', desc: '21×29.7cm', width: 2480, height: 3508 },
@@ -158,7 +157,7 @@ export default function KahvePoster() {
     try {
       const size = POSTER_SIZES.find((s) => s.key === posterSize)!;
       const canvas = await html2canvas(posterRef.current, {
-        scale: size.width / posterRef.current.offsetWidth,
+        scale: size.width / (posterRef.current.offsetWidth * window.devicePixelRatio),
         useCORS: true,
         backgroundColor: '#FFFFFF',
       });
