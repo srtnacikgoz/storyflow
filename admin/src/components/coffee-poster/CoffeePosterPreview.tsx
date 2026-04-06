@@ -16,11 +16,14 @@ interface CoffeePosterPreviewProps {
   categories: Category[];
 }
 
-// html2canvas ile doğru render için tüm stiller inline olmalı
 const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>(
   ({ categories }, ref) => {
     const MUSTARD = '#D4A945';
     const GRAY = '#999999';
+
+    // Toplam ürün sayısına göre font ölçeği
+    const totalItems = categories.reduce((sum, c) => sum + c.items.length, 0);
+    const scale = totalItems > 10 ? 0.85 : totalItems > 7 ? 0.92 : 1;
 
     return (
       <div
@@ -29,7 +32,7 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
           backgroundColor: '#FFFFFF',
           aspectRatio: '3 / 4',
           width: '100%',
-          padding: '8% 10%',
+          padding: '10% 10%',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
@@ -37,13 +40,13 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
           overflow: 'hidden',
         }}
       >
-        {/* Logo Bölümü */}
-        <div style={{ textAlign: 'center', marginBottom: '5%' }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: `${6 * scale}%` }}>
           <div
             style={{
               fontFamily: "'Santana', Georgia, serif",
               fontWeight: 700,
-              fontSize: '4.5%',
+              fontSize: `${4.2 * scale}%`,
               letterSpacing: '0.12em',
               color: '#000000',
               lineHeight: 1.2,
@@ -55,7 +58,7 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
             style={{
               fontFamily: "'Santana', Georgia, serif",
               fontWeight: 400,
-              fontSize: '2%',
+              fontSize: `${1.8 * scale}%`,
               letterSpacing: '0.4em',
               color: '#000000',
               marginTop: '1%',
@@ -66,21 +69,21 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
           </div>
         </div>
 
-        {/* Ayraç — Üç Kesik Çizgi */}
+        {/* Ayraç */}
         <div
           style={{
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
             gap: '2%',
-            marginBottom: '5%',
+            marginBottom: `${6 * scale}%`,
           }}
         >
           {[0, 1, 2].map((i) => (
             <div
               key={i}
               style={{
-                width: '8%',
+                width: '6%',
                 height: '1.5px',
                 backgroundColor: MUSTARD,
               }}
@@ -89,36 +92,33 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
         </div>
 
         {/* Kategoriler */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4%' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           {categories.map((category) => (
             <div key={category.id}>
-              {/* Kategori Başlığı */}
+              {/* Kategori başlık */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '2%',
-                  marginBottom: '2%',
+                  marginBottom: `${2.5 * scale}%`,
                 }}
               >
-                {/* Hardal nokta */}
                 <div
                   style={{
-                    width: '7px',
-                    height: '7px',
+                    width: 7,
+                    height: 7,
                     borderRadius: '50%',
                     backgroundColor: MUSTARD,
                     flexShrink: 0,
                   }}
                 />
-
-                {/* Kategori adı */}
                 <span
                   style={{
                     fontFamily: 'Georgia, serif',
-                    fontSize: '2.5%',
+                    fontSize: `${2.2 * scale}%`,
                     fontWeight: 400,
-                    letterSpacing: '0.4em',
+                    letterSpacing: '0.35em',
                     textTransform: 'uppercase',
                     color: '#000000',
                     whiteSpace: 'nowrap',
@@ -126,15 +126,7 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
                 >
                   {category.name}
                 </span>
-
-                {/* Hardal yatay çizgi */}
-                <div
-                  style={{
-                    flex: 1,
-                    height: '1px',
-                    backgroundColor: MUSTARD,
-                  }}
-                />
+                <div style={{ flex: 1, height: '1px', backgroundColor: MUSTARD }} />
               </div>
 
               {/* Ürünler */}
@@ -143,7 +135,7 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
                   paddingLeft: '5%',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '1.5%',
+                  gap: `${1.8 * scale}%`,
                 }}
               >
                 {category.items.map((item) => (
@@ -151,10 +143,10 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
                     <div
                       style={{
                         fontFamily: 'Georgia, serif',
-                        fontSize: '3.4%',
+                        fontSize: `${3 * scale}%`,
                         fontWeight: 500,
                         color: '#000000',
-                        lineHeight: 1.3,
+                        lineHeight: 1.2,
                       }}
                     >
                       {item.name}
@@ -163,11 +155,11 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
                       <div
                         style={{
                           fontFamily: 'Georgia, serif',
-                          fontSize: '2.5%',
+                          fontSize: `${2.2 * scale}%`,
                           fontWeight: 400,
                           fontStyle: 'italic',
                           color: GRAY,
-                          lineHeight: 1.3,
+                          lineHeight: 1.2,
                           marginTop: '0.3%',
                         }}
                       >
