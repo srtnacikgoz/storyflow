@@ -88,11 +88,19 @@ export default function KahvePoster() {
   const [saving, setSaving] = useState(false);
   const [loadingMenus, setLoadingMenus] = useState(false);
 
-  // Menüleri yükle
+  // Menüleri yükle — en son güncellenen menüyü otomatik aç
   useEffect(() => {
     setLoadingMenus(true);
     api.getCoffeeMenus()
-      .then(setSavedMenus)
+      .then((menus) => {
+        setSavedMenus(menus);
+        if (menus.length > 0) {
+          const latest = menus[0]; // updatedAt desc sıralı
+          setCategories(latest.categories);
+          setActiveMenuId(latest.id);
+          setMenuName(latest.name);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoadingMenus(false));
   }, []);
