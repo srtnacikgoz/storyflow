@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import CoffeePosterPreview from '../components/coffee-poster/CoffeePosterPreview';
-import type { Category, CoffeeItem } from '../components/coffee-poster/CoffeePosterPreview';
+import type { Category, CoffeeItem, PosterColumns } from '../components/coffee-poster/CoffeePosterPreview';
 import { api } from '../services/api';
 import type { CoffeeMenuSaved } from '../services/api';
 
@@ -79,6 +79,7 @@ export default function KahvePoster() {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [posterSize, setPosterSize] = useState<PosterSizeKey>('a3');
   const [downloading, setDownloading] = useState(false);
+  const [columns, setColumns] = useState<PosterColumns>(2);
   const posterRef = useRef<HTMLDivElement>(null);
 
   // --- Kayıtlı Menüler ---
@@ -428,26 +429,62 @@ export default function KahvePoster() {
             Kategori Ekle
           </button>
 
-          {/* Poster Boyutu Seçici */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-sm font-semibold text-gray-700 mb-3">Poster Boyutu</p>
-            <div className="flex gap-2">
-              {POSTER_SIZES.map((s) => (
-                <button
-                  key={s.key}
-                  onClick={() => setPosterSize(s.key)}
-                  className={`flex-1 rounded-xl py-2 px-3 text-sm font-medium transition ${
-                    posterSize === s.key
-                      ? 'bg-amber-700 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  <div>{s.label}</div>
-                  <div className={`text-xs mt-0.5 ${posterSize === s.key ? 'text-amber-200' : 'text-gray-400'}`}>
-                    {s.desc}
-                  </div>
-                </button>
-              ))}
+          {/* Poster Ayarları */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            {/* Boyut */}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-3">Poster Boyutu</p>
+              <div className="flex gap-2">
+                {POSTER_SIZES.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => setPosterSize(s.key)}
+                    className={`flex-1 rounded-xl py-2 px-3 text-sm font-medium transition ${
+                      posterSize === s.key
+                        ? 'bg-amber-700 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <div>{s.label}</div>
+                    <div className={`text-xs mt-0.5 ${posterSize === s.key ? 'text-amber-200' : 'text-gray-400'}`}>
+                      {s.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Kolon */}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-3">Yerleşim</p>
+              <div className="flex gap-2">
+                {([1, 2] as PosterColumns[]).map((col) => (
+                  <button
+                    key={col}
+                    onClick={() => setColumns(col)}
+                    className={`flex-1 rounded-xl py-2.5 px-3 text-sm font-medium transition flex items-center justify-center gap-2 ${
+                      columns === col
+                        ? 'bg-amber-700 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {col === 1 ? (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                        Tek Sütun
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 4H5a1 1 0 00-1 1v14a1 1 0 001 1h4a1 1 0 001-1V5a1 1 0 00-1-1zm10 0h-4a1 1 0 00-1 1v14a1 1 0 001 1h4a1 1 0 001-1V5a1 1 0 00-1-1z" />
+                        </svg>
+                        İki Sütun
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -481,7 +518,7 @@ export default function KahvePoster() {
               Önizleme
             </p>
             <div className="rounded-xl overflow-hidden border border-gray-100">
-              <CoffeePosterPreview ref={posterRef} categories={categories} />
+              <CoffeePosterPreview ref={posterRef} categories={categories} columns={columns} />
             </div>
           </div>
         </div>
