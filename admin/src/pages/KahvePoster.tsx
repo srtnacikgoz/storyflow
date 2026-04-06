@@ -1,7 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import CoffeePosterPreview from '../components/coffee-poster/CoffeePosterPreview';
 import type { Category, CoffeeItem } from '../components/coffee-poster/CoffeePosterPreview';
+import { api } from '../services/api';
+import type { CoffeeMenuSaved } from '../services/api';
 
 // --- Sabitler ---
 
@@ -78,6 +80,73 @@ export default function KahvePoster() {
   const [posterSize, setPosterSize] = useState<PosterSizeKey>('a3');
   const [downloading, setDownloading] = useState(false);
   const posterRef = useRef<HTMLDivElement>(null);
+
+  // --- Kayıtlı Menüler ---
+  const [savedMenus, setSavedMenus] = useState<CoffeeMenuSaved[]>([]);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [menuName, setMenuName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loadingMenus, setLoadingMenus] = useState(false);
+
+  // Menüleri yükle
+  useEffect(() => {
+    setLoadingMenus(true);
+    api.getCoffeeMenus()
+      .then(setSavedMenus)
+      .catch(() => {})
+      .finally(() => setLoadingMenus(false));
+  }, []);
+
+  // Kaydet (yeni veya güncelle)
+  const handleSave = useCallback(async () => {
+    const name = menuName.trim() || 'İsimsiz Menü';
+    setSaving(true);
+    try {
+      if (activeMenuId) {
+        await api.updateCoffeeMenu(activeMenuId, { name, categories });
+        setSavedMenus((prev) =>
+          prev.map((m) => m.id === activeMenuId ? { ...m, name, categories, updatedAt: Date.now() } : m)
+        );
+      } else {
+        const created = await api.createCoffeeMenu({ name, categories });
+        setSavedMenus((prev) => [created, ...prev]);
+        setActiveMenuId(created.id);
+      }
+      setMenuName(name);
+    } catch {
+      alert('Kaydetme başarısız oldu');
+    } finally {
+      setSaving(false);
+    }
+  }, [activeMenuId, menuName, categories]);
+
+  // Yükle
+  const handleLoad = useCallback((menu: CoffeeMenuSaved) => {
+    setCategories(menu.categories);
+    setActiveMenuId(menu.id);
+    setMenuName(menu.name);
+  }, []);
+
+  // Sil
+  const handleDeleteMenu = useCallback(async (id: string) => {
+    try {
+      await api.deleteCoffeeMenu(id);
+      setSavedMenus((prev) => prev.filter((m) => m.id !== id));
+      if (activeMenuId === id) {
+        setActiveMenuId(null);
+        setMenuName('');
+      }
+    } catch {
+      alert('Silme başarısız oldu');
+    }
+  }, [activeMenuId]);
+
+  // Yeni menü başlat
+  const handleNewMenu = useCallback(() => {
+    setCategories([{ id: nextId(), name: 'Yeni Kategori', items: [{ id: nextId(), name: '', description: '' }] }]);
+    setActiveMenuId(null);
+    setMenuName('');
+  }, []);
 
   // --- Kategori CRUD ---
 
@@ -180,6 +249,73 @@ export default function KahvePoster() {
         <p className="text-gray-500 text-sm mt-1">
           Kahve menüsü kategorilerini düzenle, canlı önizle ve PNG olarak indir.
         </p>
+      </div>
+
+      {/* Kaydet / Yükle Bölümü */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Menü adı */}
+          <input
+            type="text"
+            value={menuName}
+            onChange={(e) => setMenuName(e.target.value)}
+            placeholder="Menü adı (ör: Ana Kahve Menüsü)"
+            className="flex-1 min-w-[200px] text-sm bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 focus:border-amber-300 focus:bg-white outline-none transition-colors"
+          />
+          {/* Kaydet */}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {saving ? (
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+            )}
+            {activeMenuId ? 'Güncelle' : 'Kaydet'}
+          </button>
+          {/* Yeni */}
+          <button
+            onClick={handleNewMenu}
+            className="px-4 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-sm font-medium transition-colors"
+          >
+            Yeni Menü
+          </button>
+        </div>
+
+        {/* Kayıtlı menüler */}
+        {loadingMenus ? (
+          <div className="mt-3 text-xs text-gray-400">Menüler yükleniyor...</div>
+        ) : savedMenus.length > 0 && (
+          <div className="mt-3 flex gap-2 flex-wrap">
+            {savedMenus.map((menu) => (
+              <div
+                key={menu.id}
+                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                  activeMenuId === menu.id
+                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                    : 'bg-gray-50 text-gray-600 border border-gray-100 hover:border-amber-200 hover:bg-amber-50'
+                }`}
+              >
+                <button onClick={() => handleLoad(menu)} className="truncate max-w-[150px]">
+                  {menu.name}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteMenu(menu.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+                  title="Sil"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* İki Kolon Grid */}

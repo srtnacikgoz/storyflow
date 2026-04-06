@@ -16,6 +16,7 @@ export * from "./controllers/aiLogController";
 export * from "./controllers/styleController";
 export * from "./controllers/carouselController";
 export * from "./controllers/carouselFrameworkController";
+export * from "./controllers/coffeeMenuController";
 
 // Enhancement & Upscale Controllers
 export {

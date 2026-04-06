@@ -3254,8 +3254,55 @@ class ApiService {
     });
     return { message: res.message };
   }
+  // ── Coffee Menu (Kahve Poster) ───────────────────────────
+
+  async getCoffeeMenus(): Promise<CoffeeMenuSaved[]> {
+    const res = await this.fetch<{ success: boolean; menus: CoffeeMenuSaved[] }>("getCoffeeMenus");
+    return res.menus;
+  }
+
+  async createCoffeeMenu(data: { name: string; categories: CoffeeMenuCategory[] }): Promise<CoffeeMenuSaved> {
+    const res = await this.fetch<{ success: boolean; menu: CoffeeMenuSaved }>("createCoffeeMenu", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.menu;
+  }
+
+  async updateCoffeeMenu(id: string, data: { name?: string; categories?: CoffeeMenuCategory[] }): Promise<void> {
+    await this.fetch<{ success: boolean }>(`updateCoffeeMenu?id=${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCoffeeMenu(id: string): Promise<void> {
+    await this.fetch<{ success: boolean }>(`deleteCoffeeMenu?id=${id}`, {
+      method: "DELETE",
+    });
+  }
 }
 
+// Coffee Menu types
+export interface CoffeeMenuItemSaved {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface CoffeeMenuCategory {
+  id: string;
+  name: string;
+  items: CoffeeMenuItemSaved[];
+}
+
+export interface CoffeeMenuSaved {
+  id: string;
+  name: string;
+  categories: CoffeeMenuCategory[];
+  createdAt: number;
+  updatedAt: number;
+}
 
 // Singleton instance
 export const api = new ApiService();
