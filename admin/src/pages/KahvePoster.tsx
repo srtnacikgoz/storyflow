@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import CoffeePosterPreview from '../components/coffee-poster/CoffeePosterPreview';
 import type { Category, CoffeeItem, PosterColumns } from '../components/coffee-poster/CoffeePosterPreview';
 import { api } from '../services/api';
@@ -234,14 +234,21 @@ export default function KahvePoster() {
     setDownloading(true);
     try {
       const size = POSTER_SIZES.find((s) => s.key === posterSize)!;
-      const canvas = await html2canvas(posterRef.current, {
-        scale: size.width / (posterRef.current.offsetWidth * window.devicePixelRatio),
-        useCORS: true,
+      const scale = size.width / posterRef.current.offsetWidth;
+      const dataUrl = await toPng(posterRef.current, {
+        width: size.width,
+        height: size.height,
+        style: {
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+          width: `${posterRef.current.offsetWidth}px`,
+          height: `${posterRef.current.offsetHeight}px`,
+        },
         backgroundColor: '#FFFFFF',
       });
       const link = document.createElement('a');
       link.download = `sade-kahve-poster-${posterSize}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
     } finally {
       setDownloading(false);

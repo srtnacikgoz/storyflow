@@ -33,6 +33,8 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [targetModel, setTargetModel] = useState("dall-e");
   const [includeText, setIncludeText] = useState(true);
+  const [removeBackground, setRemoveBackground] = useState(false);
+  const [keepObjects, setKeepObjects] = useState("");
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<{ prompt: string; analysis: string; targetModel: string; cost: number; logs?: any[]; negativePrompt?: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -93,6 +95,8 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
         lightingTypeId: props.lightingTypeId || undefined,
         backgroundId: props.backgroundId || undefined,
         negativePrompt: props.negativePrompt || undefined,
+        removeBackground: removeBackground || undefined,
+        keepObjects: removeBackground && keepObjects.trim() ? keepObjects.trim() : undefined,
       });
       setResult(res);
     } catch (err: any) {
@@ -195,6 +199,31 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
             </button>
           </div>
 
+          {/* Arka plan kaldır toggle */}
+          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Arka planı kaldır</p>
+                <p className="text-xs text-gray-400">Ürünü saydam arka plan ile izole et</p>
+              </div>
+              <button
+                onClick={() => setRemoveBackground(!removeBackground)}
+                className={`w-12 h-6 rounded-full transition ${removeBackground ? "bg-violet-600" : "bg-gray-300"}`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full shadow transition transform ${removeBackground ? "translate-x-6" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+            {removeBackground && (
+              <input
+                type="text"
+                value={keepObjects}
+                onChange={(e) => setKeepObjects(e.target.value)}
+                placeholder="Ürünle kalacak objeler (ör: bardak, peçete, çatal)"
+                className="w-full text-sm bg-white rounded-lg px-3 py-2 border border-gray-200 focus:border-violet-400 focus:outline-none"
+              />
+            )}
+          </div>
+
           {/* Referans poster indicator */}
           {props.referenceImageBase64 && (
             <div className="flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-lg p-3">
@@ -207,12 +236,13 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
           )}
 
           {/* Aktif parametreler özeti */}
-          {(props.cameraAngleId || props.lightingTypeId || props.backgroundId || props.negativePrompt) && (
+          {(props.cameraAngleId || props.lightingTypeId || props.backgroundId || props.negativePrompt || removeBackground) && (
             <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 space-y-1">
               <p className="font-medium text-gray-600 mb-1">Aktif Parametreler</p>
+              {removeBackground && <p>✂️ Arka plan kaldırma aktif{keepObjects.trim() ? ` (+ ${keepObjects.trim()})` : ""}</p>}
               {props.cameraAngleId && <p>📷 Çekim açısı seçildi</p>}
               {props.lightingTypeId && <p>💡 Aydınlatma seçildi</p>}
-              {props.backgroundId && <p>🖼 Arka plan seçildi</p>}
+              {props.backgroundId && !removeBackground && <p>🖼 Arka plan seçildi</p>}
               {props.negativePrompt && (
                 <p>🚫 Negatif: {props.negativePrompt.length > 40 ? props.negativePrompt.substring(0, 40) + "..." : props.negativePrompt}</p>
               )}

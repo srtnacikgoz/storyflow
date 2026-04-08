@@ -465,6 +465,7 @@ export const generatePosterPrompt = createHttpFunction(async (req, res) => {
     additionalNotes,
     includeText = true,
     referenceImageBase64, referenceImageMimeType,
+    removeBackground, keepObjects,
   } = req.body;
 
   log("INIT", "Prompt üretimi başladı", {
@@ -479,6 +480,8 @@ export const generatePosterPrompt = createHttpFunction(async (req, res) => {
     metinDahil: includeText,
     referansPoster: referenceImageBase64 ? "VAR" : "YOK",
     ekNotlar: additionalNotes || "(yok)",
+    arkaplanKaldır: removeBackground || false,
+    saklananObjeler: keepObjects || "(yok)",
   });
 
   if (!productImageBase64 && !productImageUrl) {
@@ -615,13 +618,27 @@ REFERENCE POSTER: A reference poster image is provided as the SECOND image. You 
 4. Observe its product positioning, angle, and negative space usage
 5. Replicate the same visual DNA in your prompt — but with the product from the FIRST image
 Do NOT describe the reference poster itself — use it as a style template for the new prompt.` : ""}
+${removeBackground ? `
+BACKGROUND REMOVAL MODE — ACTIVE:
+${keepObjects ? `Isolate the main product along with these objects: ${keepObjects}.` : "Isolate ONLY the main product (plate included if present)."}
+Remove the entire background.${targetModel === "dall-e" ? " Place on a pure white background, seamless, no shadows on background." : " Create a perfectly clean transparent background (alpha channel)."}
+Preserve realistic food textures: crispy bread, melted cheese flow, fresh greens, plate material quality.
+Keep subtle natural contact shadows directly under the product only.
+No floating look, no artificial drop shadow.
+Edges must be ultra-clean and precise — no halo, no white edges, no jagged mask, no color spill.
+Maintain color accuracy and lighting direction from the original photo.
+${targetModel !== "dall-e" ? "Export as high-resolution PNG with full transparency." : ""}
+Premium food photography cutout, editorial quality.
+The prompt you write MUST prominently include these background removal instructions. This overrides any background style selection.` : ""}
 
 CRITICAL — PRODUCT REFERENCE RULE:
 The user will upload the product photo directly to the AI image generator alongside your prompt.
 Therefore, do NOT describe the product's appearance in the prompt. No color, shape, texture, topping descriptions.
 Instead, refer to the product generically: "this product", "the product", "the pastry" etc.
-The prompt should ONLY describe: background, composition, lighting, atmosphere, layout, text placement, camera angle, mood — everything EXCEPT the product itself.
-The AI generator already sees the product photo — your job is to describe the SCENE and DESIGN around it.
+${removeBackground
+    ? "Since BACKGROUND REMOVAL MODE is active: Do NOT describe any background scene, environment, or setting. Focus entirely on isolating the product with clean edges, preserved textures, contact shadows, and transparent (or white) background."
+    : "The prompt should ONLY describe: background, composition, lighting, atmosphere, layout, text placement, camera angle, mood — everything EXCEPT the product itself."}
+The AI generator already sees the product photo — your job is to describe the ${removeBackground ? "isolation and cutout quality" : "SCENE and DESIGN around it"}.
 
 Analyze the product image carefully and write the prompt. Return EXACTLY:
 
@@ -629,7 +646,7 @@ ANALYSIS:
 (2-3 lines — what you observe about the product, for your own understanding only${referenceImageBase64 ? " + how you'll adapt the reference poster's style" : ""})
 
 PROMPT:
-(The optimized prompt for ${targetModel.toUpperCase()} — ready to copy-paste. Do NOT describe the product. Describe only the scene, composition, background, lighting, typography, and design elements around it.)`;
+(The optimized prompt for ${targetModel.toUpperCase()} — ready to copy-paste. Do NOT describe the product. ${removeBackground ? "Focus on background removal, edge quality, shadow handling, and transparency." : "Describe only the scene, composition, background, lighting, typography, and design elements around it."})`;
 
   log("PROMPT-BUILD", "System prompt hazırlandı", {
     uzunluk: `${systemPrompt.length} karakter`,

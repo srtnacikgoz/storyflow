@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useState, useCallback } from 'react';
 
 export interface CoffeeItem {
   id: string;
@@ -19,14 +19,46 @@ interface CoffeePosterPreviewProps {
   columns?: PosterColumns;
 }
 
+// Font boyutları container genişliğinin yüzdesi olarak tanımlanır
+const FONT_SCALE = {
+  brandName: 0.05,        // Sade Patisserie — %5
+  brandSub: 0.014,        // patisserie l'artisan — %1.4
+  categoryName: 0.022,    // Kategori başlık — %2.2
+  itemName: 0.028,        // Ürün adı — %2.8
+  itemDesc: 0.0238,       // Açıklama — ürün adının %85'i
+};
+
 const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>(
   ({ categories, columns = 2 }, ref) => {
     const MUSTARD = '#D4A945';
-    const GRAY = '#999999';
+    const DESC_COLOR = '#aaaaaa';
+    const [w, setW] = useState(600);
+
+    // Container genişliğini ölç
+    const measureRef = useCallback((node: HTMLDivElement | null) => {
+      if (!node) return;
+      const update = () => setW(node.offsetWidth);
+      update();
+      const ro = new ResizeObserver(update);
+      ro.observe(node);
+      return () => ro.disconnect();
+    }, []);
+
+    // ref birleştir (dışarıdan gelen ref + ölçüm ref)
+    const setRefs = useCallback(
+      (node: HTMLDivElement | null) => {
+        measureRef(node);
+        if (typeof ref === 'function') ref(node);
+        else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      },
+      [ref, measureRef]
+    );
+
+    const f = (scale: number) => Math.round(w * scale);
 
     return (
       <div
-        ref={ref}
+        ref={setRefs}
         style={{
           backgroundColor: '#FFFFFF',
           aspectRatio: '3 / 4',
@@ -45,7 +77,7 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
             style={{
               fontFamily: "'Santana', Georgia, serif",
               fontWeight: 700,
-              fontSize: '4%',
+              fontSize: f(FONT_SCALE.brandName),
               letterSpacing: '0.12em',
               color: '#000000',
               lineHeight: 1.2,
@@ -57,10 +89,10 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
             style={{
               fontFamily: "'Santana', Georgia, serif",
               fontWeight: 400,
-              fontSize: '1.8%',
+              fontSize: f(FONT_SCALE.brandSub),
               letterSpacing: '0.4em',
               color: '#000000',
-              marginTop: '1%',
+              marginTop: '0.8%',
               textTransform: 'lowercase',
             }}
           >
@@ -69,44 +101,46 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
         </div>
 
         {/* Kategoriler */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: '5%' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: '15%' }}>
           {categories.map((category) => (
             <div key={category.id}>
               {/* Kategori başlık */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '2.5%',
-                  marginBottom: '3%',
-                }}
-              >
-                <div
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    backgroundColor: MUSTARD,
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  style={{
-                    fontFamily: 'Georgia, serif',
-                    fontSize: '2.2%',
-                    fontWeight: 400,
-                    letterSpacing: '0.35em',
-                    textTransform: 'uppercase',
-                    color: '#000000',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {category.name}
-                </span>
-                <div style={{ flex: 1, height: '1px', backgroundColor: MUSTARD }} />
-              </div>
+              {(() => {
+                const catFs = f(FONT_SCALE.categoryName);
+                const dotSize = Math.round(catFs * 0.4);
+                const gapPx = Math.round(w * 0.025);
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: gapPx,
+                    marginBottom: '3%',
+                  }}>
+                    <div style={{
+                      width: dotSize,
+                      height: dotSize,
+                      borderRadius: '50%',
+                      backgroundColor: MUSTARD,
+                      flexShrink: 0,
+                    }} />
+                    <span style={{
+                      fontFamily: 'Georgia, serif',
+                      fontSize: catFs,
+                      lineHeight: 1,
+                      fontWeight: 400,
+                      letterSpacing: '0.35em',
+                      textTransform: 'uppercase',
+                      color: '#000000',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {category.name}
+                    </span>
+                    <div style={{ flex: 1, height: 1, backgroundColor: MUSTARD }} />
+                  </div>
+                );
+              })()}
 
-              {/* Ürünler — 2 sütunlu grid */}
+              {/* Ürünler */}
               <div
                 style={{
                   paddingLeft: '4%',
@@ -121,7 +155,7 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
                     <div
                       style={{
                         fontFamily: 'Georgia, serif',
-                        fontSize: '2.8%',
+                        fontSize: f(FONT_SCALE.itemName),
                         fontWeight: 500,
                         color: '#000000',
                         lineHeight: 1.2,
@@ -133,13 +167,13 @@ const CoffeePosterPreview = forwardRef<HTMLDivElement, CoffeePosterPreviewProps>
                     {item.description && (
                       <div
                         style={{
-                          fontFamily: 'Georgia, serif',
-                          fontSize: '2%',
+                          fontFamily: "'Cormorant Garamond', Georgia, serif",
+                          fontSize: f(FONT_SCALE.itemDesc),
                           fontWeight: 400,
-                          fontStyle: 'italic',
-                          color: GRAY,
-                          lineHeight: 1.3,
-                          marginTop: '0.5%',
+                          color: DESC_COLOR,
+                          lineHeight: 1.4,
+                          marginTop: f(FONT_SCALE.itemName) * 0.08,
+                          letterSpacing: '0.02em',
                         }}
                       >
                         {item.description}

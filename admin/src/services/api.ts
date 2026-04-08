@@ -2991,6 +2991,8 @@ class ApiService {
     backgroundId?: string;
     negativePrompt?: string;
     qualityMode?: string;
+    removeBackground?: boolean;
+    keepObjects?: string;
   }): Promise<{ prompt: string; analysis: string; targetModel: string; style: string; mood: string; cost: number; negativePrompt?: string }> {
     const res = await this.fetch<{ success: boolean; data: any }>("generatePosterPrompt", {
       method: "POST",

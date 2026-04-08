@@ -32,6 +32,9 @@ const PosterGallery = lazy(() => import("./pages/PosterGallery"));
 const QRCode = lazy(() => import("./pages/QRCode"));
 const StyleStudio = lazy(() => import("./pages/StyleStudio"));
 const CarouselStudio = lazy(() => import("./pages/CarouselStudio"));
+const MenuPoster = lazy(() => import("./pages/MenuPoster"));
+const KahvePoster = lazy(() => import("./pages/KahvePoster"));
+const CikolataPoster = lazy(() => import("./pages/CikolataPoster"));
 
 // Loading fallback component
 function PageLoader() {
@@ -73,6 +76,9 @@ function App() {
             <Route path="ideas" element={<Suspense fallback={<PageLoader />}><Ideas /></Suspense>} />
             <Route path="enhance" element={<Suspense fallback={<PageLoader />}><Enhance /></Suspense>} />
             <Route path="poster" element={<Suspense fallback={<PageLoader />}><Poster /></Suspense>} />
+            <Route path="poster/menu" element={<Suspense fallback={<PageLoader />}><MenuPoster /></Suspense>} />
+            <Route path="poster/kahve" element={<Suspense fallback={<PageLoader />}><KahvePoster /></Suspense>} />
+            <Route path="poster/cikolata" element={<Suspense fallback={<PageLoader />}><CikolataPoster /></Suspense>} />
             <Route path="poster-gallery" element={<Suspense fallback={<PageLoader />}><PosterGallery /></Suspense>} />
             <Route path="qr-code" element={<Suspense fallback={<PageLoader />}><QRCode /></Suspense>} />
             <Route path="style-studio" element={<Suspense fallback={<PageLoader />}><StyleStudio /></Suspense>} />

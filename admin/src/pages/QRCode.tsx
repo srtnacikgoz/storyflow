@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import QRCodeStyling from "qr-code-styling";
 
 const MENU_URL = "https://sade-patisserie-menu.web.app/menu";
@@ -13,17 +13,17 @@ const SADE_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="200" heigh
 
 const SADE_LOGO_URL = `data:image/svg+xml;base64,${btoa(SADE_LOGO_SVG)}`;
 
-const QR_CONFIG: ConstructorParameters<typeof QRCodeStyling>[0] = {
+const QR_CONFIG = {
   width: 400,
   height: 400,
   data: MENU_URL,
   image: SADE_LOGO_URL,
-  dotsOptions: { color: "#3D2314", type: "rounded" },
-  cornersSquareOptions: { color: "#3D2314", type: "extra-rounded" },
-  cornersDotOptions: { color: "#7B4F2E", type: "dot" },
+  dotsOptions: { color: "#3D2314", type: "rounded" as const },
+  cornersSquareOptions: { color: "#3D2314", type: "extra-rounded" as const },
+  cornersDotOptions: { color: "#7B4F2E", type: "dot" as const },
   backgroundOptions: { color: "#FFFDF9" },
-  imageOptions: { crossOrigin: "anonymous", margin: 6, imageSize: 0.28 },
-  qrOptions: { errorCorrectionLevel: "H" },
+  imageOptions: { crossOrigin: "anonymous" as const, margin: 6, imageSize: 0.28 },
+  qrOptions: { errorCorrectionLevel: "H" as const },
 };
 
 type DownloadFormat = "png" | "svg" | "jpeg";
@@ -45,6 +45,7 @@ export default function QRCodePage() {
   const [qrScale, setQrScale] = useState(22); // poster genisliginin %'si
   const [bgColor, setBgColor] = useState("#FFFDF9");
   const [bgOpacity, setBgOpacity] = useState(92); // 0-100
+  const [fgColor, setFgColor] = useState("#3D2314"); // QR kod ana rengi
   const [compositeUrl, setCompositeUrl] = useState<string | null>(null);
   const [compositing, setCompositing] = useState(false);
 
@@ -52,13 +53,30 @@ export default function QRCodePage() {
   const posterContainerRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ dragging: boolean; resizing: boolean; startX: number; startY: number; startQrX: number; startQrY: number; startScale: number } | null>(null);
 
+  // cornersDot rengi: fgColor'in daha açık tonu
+  const cornersDotColor = useMemo(() => {
+    const r = parseInt(fgColor.slice(1, 3), 16);
+    const g = parseInt(fgColor.slice(3, 5), 16);
+    const b = parseInt(fgColor.slice(5, 7), 16);
+    // %30 daha açık ton
+    const lighten = (v: number) => Math.min(255, Math.round(v + (255 - v) * 0.3));
+    return `#${lighten(r).toString(16).padStart(2, "0")}${lighten(g).toString(16).padStart(2, "0")}${lighten(b).toString(16).padStart(2, "0")}`;
+  }, [fgColor]);
+
   useEffect(() => {
-    qrRef.current = new QRCodeStyling({ ...QR_CONFIG, width: qrSize, height: qrSize });
+    qrRef.current = new QRCodeStyling({
+      ...QR_CONFIG,
+      width: qrSize,
+      height: qrSize,
+      dotsOptions: { ...(QR_CONFIG.dotsOptions ?? {}), color: fgColor },
+      cornersSquareOptions: { ...(QR_CONFIG.cornersSquareOptions ?? {}), color: fgColor },
+      cornersDotOptions: { ...(QR_CONFIG.cornersDotOptions ?? {}), color: cornersDotColor },
+    });
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
       qrRef.current.append(containerRef.current);
     }
-  }, [qrSize]);
+  }, [qrSize, fgColor, cornersDotColor]);
 
   // QR blob URL olustur (overlay onizleme icin)
   useEffect(() => {
@@ -67,7 +85,7 @@ export default function QRCodePage() {
       const url = URL.createObjectURL(blob);
       setQrBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
     });
-  }, [qrSize]);
+  }, [qrSize, fgColor, cornersDotColor]);
 
   const getQRBlob = useCallback((): Promise<Blob> => {
     return new Promise((resolve, reject) => {
@@ -333,8 +351,26 @@ export default function QRCodePage() {
               )}
             </div>
 
-            {/* Arka plan renk + saydamlik ayarlari */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Renk + saydamlik ayarlari */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1.5 block">QR Kod Rengi</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={fgColor}
+                    onChange={e => setFgColor(e.target.value)}
+                    className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5"
+                  />
+                  <div className="flex gap-1.5 flex-wrap">
+                    {["#3D2314", "#000000", "#1a1a1a", "#FFFFFF"].map(c => (
+                      <button key={c} onClick={() => setFgColor(c)}
+                        className={`w-7 h-7 rounded-lg border-2 transition-colors ${fgColor === c ? "border-amber-600" : "border-gray-200"}`}
+                        style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1.5 block">QR Arka Plan Rengi</label>
                 <div className="flex items-center gap-2">
@@ -344,7 +380,7 @@ export default function QRCodePage() {
                     onChange={e => setBgColor(e.target.value)}
                     className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5"
                   />
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1.5 flex-wrap">
                     {["#FFFDF9", "#FFFFFF", "#000000", "#1a1a1a"].map(c => (
                       <button key={c} onClick={() => setBgColor(c)}
                         className={`w-7 h-7 rounded-lg border-2 transition-colors ${bgColor === c ? "border-amber-600" : "border-gray-200"}`}

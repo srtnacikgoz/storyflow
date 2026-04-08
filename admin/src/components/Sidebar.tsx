@@ -15,11 +15,19 @@ const settingsItem = {
   ),
 };
 
+interface MenuItem {
+  path: string;
+  label: string;
+  end?: boolean;
+  icon: React.ReactNode;
+  children?: { path: string; label: string; end?: boolean; icon: React.ReactNode }[];
+}
+
 interface MenuGroup {
   title: string;
   defaultOpen: boolean;
   description?: string;
-  items: { path: string; label: string; end?: boolean; icon: React.ReactNode }[];
+  items: MenuItem[];
 }
 
 const menuGroups: MenuGroup[] = [
@@ -91,8 +99,30 @@ const menuGroups: MenuGroup[] = [
         icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>,
       },
       {
-        path: "/admin/poster", label: "Poster Üret",
+        path: "/admin/poster", label: "Poster",
         icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+        children: [
+          {
+            path: "/admin/poster", label: "Ürün Poster", end: true,
+            icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
+          },
+          {
+            path: "/admin/poster/menu", label: "Menü Poster",
+            icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>,
+          },
+          {
+            path: "/admin/poster/kahve", label: "Kahve Poster",
+            icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h12a2 2 0 012 2v2a2 2 0 01-2 2h-1v2a4 4 0 01-4 4H7a4 4 0 01-4-4V4zm14 4h1a2 2 0 010 4h-1V8zM5 18h8" /></svg>,
+          },
+          {
+            path: "/admin/poster/cikolata", label: "Çikolata Poster",
+            icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 6a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2zm0 6a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2z" /></svg>,
+          },
+          {
+            path: "/admin/poster-gallery", label: "Galeri",
+            icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>,
+          },
+        ],
       },
       {
         path: "/admin/carousel-studio", label: "Carousel Studio",
@@ -101,10 +131,6 @@ const menuGroups: MenuGroup[] = [
       {
         path: "/admin/qr-code", label: "QR Kod",
         icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>,
-      },
-      {
-        path: "/admin/poster-gallery", label: "Poster Galeri",
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>,
       },
       {
         path: "/admin/style-studio", label: "Stil Stüdyosu",
@@ -138,9 +164,14 @@ export default function Sidebar() {
     () => Object.fromEntries(menuGroups.map((g, i) => [i, g.defaultOpen]))
   );
   const [showSettings, setShowSettings] = useState(false);
+  const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
 
   const toggleGroup = (index: number) => {
     setOpenGroups(prev => ({ ...prev, [index]: !prev[index] }));
+  };
+
+  const toggleSubMenu = (path: string) => {
+    setOpenSubMenus(prev => ({ ...prev, [path]: !prev[path] }));
   };
 
   return (
@@ -181,22 +212,60 @@ export default function Sidebar() {
               {/* Icerik — acik/kapali */}
               {openGroups[groupIndex] && (
                 <div className="space-y-0.5 mb-2">
-                  {group.items.map((item) => (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      end={"end" in item ? item.end : undefined}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 text-sm ${isActive
-                          ? "bg-brand-blue/10 text-brand-blue font-semibold shadow-sm"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        }`
-                      }
-                    >
-                      {item.icon}
-                      {item.label}
-                    </NavLink>
-                  ))}
+                  {group.items.map((item) =>
+                    item.children ? (
+                      <div key={item.path}>
+                        <button
+                          onClick={() => toggleSubMenu(item.path)}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          {item.icon}
+                          <span className="flex-1 text-left">{item.label}</span>
+                          <svg
+                            className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openSubMenus[item.path] ? "rotate-180" : ""}`}
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {openSubMenus[item.path] && (
+                          <div className="ml-4 pl-3 border-l border-gray-100 space-y-0.5 mt-0.5">
+                            {item.children.map((child) => (
+                              <NavLink
+                                key={child.path}
+                                to={child.path}
+                                end={child.end}
+                                className={({ isActive }) =>
+                                  `flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all duration-200 text-[13px] ${isActive
+                                    ? "bg-brand-blue/10 text-brand-blue font-semibold"
+                                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                                  }`
+                                }
+                              >
+                                {child.icon}
+                                {child.label}
+                              </NavLink>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        end={"end" in item ? item.end : undefined}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 text-sm ${isActive
+                            ? "bg-brand-blue/10 text-brand-blue font-semibold shadow-sm"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          }`
+                        }
+                      >
+                        {item.icon}
+                        {item.label}
+                      </NavLink>
+                    )
+                  )}
                 </div>
               )}
             </div>
