@@ -7,8 +7,8 @@ import { getSystemSettings } from "../../services/configService";
  * POST /generatePosterImage
  *
  * Body:
- *   prompt               - Claude'un yazdığı poster prompt'u (zorunlu)
- *   productImageBase64   - Ürün görseli base64 (zorunlu)
+ *   prompt               - Poster/ürün prompt'u (zorunlu)
+ *   productImageBase64   - Ürün görseli base64 (opsiyonel — text-to-image için göndermeyebilirsin)
  *   productMimeType      - Ürün görsel MIME tipi (default: image/jpeg)
  *   referenceImageBase64 - Referans poster base64 (opsiyonel)
  *   referenceImageMimeType - Referans MIME tipi (opsiyonel, default: image/jpeg)
@@ -32,10 +32,6 @@ export const generatePosterImage = createHttpFunction(async (req, res) => {
 
   if (!prompt) {
     res.status(400).json({ success: false, error: "prompt zorunlu." });
-    return;
-  }
-  if (!productImageBase64) {
-    res.status(400).json({ success: false, error: "productImageBase64 zorunlu." });
     return;
   }
 
@@ -65,19 +61,18 @@ export const generatePosterImage = createHttpFunction(async (req, res) => {
 
   const genModel = client.getGenerativeModel({ model: imageModel, safetySettings });
 
-  // Content parts:
-  // [0] Ürün görseli
-  // [1] Referans poster (opsiyonel) — stil/kompozisyon için
-  // [2] Poster prompt + direktifler
+  // Content parts — ürün görseli ve referans poster opsiyonel
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contentParts: any[] = [
-    {
+  const contentParts: any[] = [];
+
+  if (productImageBase64) {
+    contentParts.push({
       inlineData: {
         mimeType: productMimeType || "image/jpeg",
         data: productImageBase64,
       },
-    },
-  ];
+    });
+  }
 
   if (referenceImageBase64) {
     contentParts.push({
@@ -88,15 +83,21 @@ export const generatePosterImage = createHttpFunction(async (req, res) => {
     });
   }
 
-  // Poster-specific prompt — Instagram pipeline'ın SECTION 1/2 yapısından farklı
-  const fullPrompt = referenceImageBase64
-    ? `IMAGE 1: The product to feature in the poster. Extract only this product.
+  // Prompt — görsellerin varlığına göre talimat değişir
+  let fullPrompt: string;
+  if (productImageBase64 && referenceImageBase64) {
+    fullPrompt = `IMAGE 1: The product to feature in the poster. Extract only this product.
 IMAGE 2: Reference poster — replicate its composition, color palette, lighting style, and visual hierarchy. Do NOT copy the product from it; only borrow its design DNA.
 
 ${prompt}
 
-Return ONLY the final poster image.`
-    : `${prompt}\n\nReturn ONLY the final poster image.`;
+Return ONLY the final poster image.`;
+  } else if (productImageBase64) {
+    fullPrompt = `${prompt}\n\nReturn ONLY the final poster image.`;
+  } else {
+    // Text-to-image modu (QR Menü gibi) — ürün görseli yok
+    fullPrompt = `${prompt}\n\nReturn ONLY the final product photograph.`;
+  }
 
   contentParts.push({ text: fullPrompt });
 

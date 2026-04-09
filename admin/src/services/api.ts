@@ -3003,7 +3003,7 @@ class ApiService {
 
   async generatePosterImage(params: {
     prompt: string;
-    productImageBase64: string;
+    productImageBase64?: string;
     productMimeType?: string;
     referenceImageBase64?: string;
     referenceImageMimeType?: string;
