@@ -179,6 +179,7 @@ class OpenAICompatibleOptimizer implements PromptOptimizer {
       throw new Error("OpenAI API key tanımlı değil — Settings'den girin");
     }
 
+    // @ts-ignore — openai paketi runtime'da yüklenir
     const OpenAIModule = await import("openai");
     const OpenAI = OpenAIModule.default || OpenAIModule.OpenAI;
 

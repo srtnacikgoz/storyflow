@@ -3,6 +3,7 @@ import { api } from "../services/api";
 import PosterAnalyzer from "../components/poster/PosterAnalyzer";
 import PromptGenerator from "../components/poster/PromptGenerator";
 import ProductImageUpload from "../components/ProductImageUpload";
+import InputWithRecent from "../components/InputWithRecent";
 
 interface PosterStyle {
   id: string; name: string; nameTr: string; description: string;
@@ -450,12 +451,12 @@ export default function Poster() {
     loadConfig();
   }, []);
 
-  const loadConfig = async () => {
+  const loadConfig = async (fresh = false) => {
     setConfigLoading(true);
     setConfigError(null);
     try {
       const [stylesData, moodsData, ratiosData, typoData, layoutData] = await Promise.all([
-        api.listPosterStyles(),
+        api.listPosterStyles(fresh),
         api.listPosterMoods(),
         api.listPosterAspectRatios(),
         api.listPosterTypographies(),
@@ -592,7 +593,7 @@ export default function Poster() {
           <h1 className="text-2xl font-bold text-gray-900">Poster Prompt Üret</h1>
           <p className="text-sm text-gray-500 mt-1">ChatGPT, Midjourney veya DALL-E için optimize edilmiş prompt</p>
         </div>
-        <PosterAnalyzer onStyleSaved={loadConfig} />
+        <PosterAnalyzer onStyleSaved={() => loadConfig(true)} />
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-6">
@@ -1065,12 +1066,13 @@ export default function Poster() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Katman Sıralaması <span className="text-xs text-gray-400">(alttan üste, her satır bir katman)</span>
             </label>
-            <textarea
+            <InputWithRecent
+              storageKey="poster_exploded_layers"
               value={explodedLayers}
-              onChange={e => setExplodedLayers(e.target.value)}
+              onChange={setExplodedLayers}
               placeholder={"Kroasan kase (alt)\nKaşar peynir\nOmlet\nFüme et\nMaydanoz (üst)"}
+              multiline
               rows={4}
-              className="w-full border rounded-lg px-3 py-2 text-sm resize-none"
             />
             <p className="text-[10px] text-gray-400 mt-1">Her satır bir katman. En alttaki malzeme ilk satır, en üstteki son satır.</p>
           </div>
@@ -1078,25 +1080,13 @@ export default function Poster() {
 
         {/* Metin Alanları */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Başlık <span className="text-gray-400">(boşsa AI önerir)</span></label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Taze Kruvasan" className="w-full border rounded-lg px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Alt Başlık <span className="text-gray-400">(boşsa AI önerir)</span></label>
-            <input type="text" value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="El yapımı, tereyağlı" className="w-full border rounded-lg px-3 py-2 text-sm" />
-          </div>
+          <InputWithRecent storageKey="poster_title" value={title} onChange={setTitle} placeholder="Taze Kruvasan" label="Başlık (boşsa AI önerir)" />
+          <InputWithRecent storageKey="poster_subtitle" value={subtitle} onChange={setSubtitle} placeholder="El yapımı, tereyağlı" label="Alt Başlık (boşsa AI önerir)" />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Fiyat <span className="text-gray-400">(opsiyonel)</span></label>
-            <input type="text" value={price} onChange={e => setPrice(e.target.value)} placeholder="₺85" className="w-full border rounded-lg px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Ek Notlar <span className="text-gray-400">(opsiyonel)</span></label>
-            <input type="text" value={additionalNotes} onChange={e => setAdditionalNotes(e.target.value)} placeholder="Bahar temalı..." className="w-full border rounded-lg px-3 py-2 text-sm" />
-          </div>
+          <InputWithRecent storageKey="poster_price" value={price} onChange={setPrice} placeholder="₺85" label="Fiyat (opsiyonel)" />
+          <InputWithRecent storageKey="poster_notes" value={additionalNotes} onChange={setAdditionalNotes} placeholder="Bahar temalı..." label="Ek Notlar (opsiyonel)" />
         </div>
 
         {/* Negatif Prompt */}
@@ -1104,12 +1094,11 @@ export default function Poster() {
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Negatif Prompt <span className="text-gray-400">(istemediğin öğeler — opsiyonel)</span>
           </label>
-          <input
-            type="text"
+          <InputWithRecent
+            storageKey="poster_negative"
             value={negativePrompt}
-            onChange={e => setNegativePrompt(e.target.value)}
+            onChange={setNegativePrompt}
             placeholder="blurry, text overlay, watermark, distorted..."
-            className="w-full border rounded-lg px-3 py-2 text-sm"
           />
           <p className="text-[10px] text-gray-400 mt-1">Midjourney'de --no prefix otomatik eklenir</p>
         </div>

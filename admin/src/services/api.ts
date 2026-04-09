@@ -2812,8 +2812,9 @@ class ApiService {
   // ==========================================
 
   // Poster config — stiller, mood'lar, aspect ratio'lar
-  async listPosterStyles(): Promise<any[]> {
-    const res = await this.fetch<{ success: boolean; data: any[] }>("listPosterStyles");
+  async listPosterStyles(fresh = false): Promise<any[]> {
+    const url = fresh ? "listPosterStyles?fresh=1" : "listPosterStyles";
+    const res = await this.fetch<{ success: boolean; data: any[] }>(url);
     return res.data;
   }
 

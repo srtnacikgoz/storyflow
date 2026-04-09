@@ -43,6 +43,7 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
   const [generatedImage, setGeneratedImage] = useState<{ base64: string; mimeType: string; cost: number; durationMs: number } | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [logsCopied, setLogsCopied] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Sürükleme
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -125,6 +126,52 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
     } finally {
       setGeneratingImage(false);
     }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!generatedImage) return;
+    setDownloadingPdf(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const img = new Image();
+      img.src = `data:${generatedImage.mimeType};base64,${generatedImage.base64}`;
+      await new Promise(resolve => { img.onload = resolve; });
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      // Görseli tam sayfa olarak yerleştir (mm cinsinden)
+      const pdfW = 210;
+      const pdfH = (h / w) * pdfW;
+      const doc = new jsPDF({
+        orientation: pdfH > pdfW ? "portrait" : "landscape",
+        unit: "mm",
+        format: [pdfW, pdfH],
+      });
+      doc.addImage(img.src, "PNG", 0, 0, pdfW, pdfH);
+      doc.save("poster.pdf");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadSvg = () => {
+    if (!generatedImage) return;
+    const img = new Image();
+    img.src = `data:${generatedImage.mimeType};base64,${generatedImage.base64}`;
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <image width="${w}" height="${h}" href="data:${generatedImage.mimeType};base64,${generatedImage.base64}"/>
+</svg>`;
+      const blob = new Blob([svg], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "poster.svg";
+      a.click();
+      URL.revokeObjectURL(url);
+    };
   };
 
   const handleCopy = () => {
@@ -347,15 +394,30 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
                         alt="Gemini poster"
                         className="w-full rounded-xl border border-gray-200 shadow"
                       />
-                      <div className="flex gap-2 items-center">
-                        <a
-                          href={`data:${generatedImage.mimeType};base64,${generatedImage.base64}`}
-                          download="poster.png"
-                          className="flex-1 bg-gray-900 text-white py-2 rounded-lg text-sm font-medium text-center hover:bg-gray-800"
-                        >
-                          İndir
-                        </a>
-                        <p className="flex-1 text-xs text-gray-400 text-center">
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <a
+                            href={`data:${generatedImage.mimeType};base64,${generatedImage.base64}`}
+                            download="poster.png"
+                            className="flex-1 bg-gray-900 text-white py-2 rounded-lg text-sm font-medium text-center hover:bg-gray-800"
+                          >
+                            PNG
+                          </a>
+                          <button
+                            onClick={handleDownloadPdf}
+                            disabled={downloadingPdf}
+                            className="flex-1 bg-red-700 text-white py-2 rounded-lg text-sm font-medium text-center hover:bg-red-600 disabled:opacity-50"
+                          >
+                            {downloadingPdf ? "..." : "PDF"}
+                          </button>
+                          <button
+                            onClick={handleDownloadSvg}
+                            className="flex-1 bg-violet-700 text-white py-2 rounded-lg text-sm font-medium text-center hover:bg-violet-600"
+                          >
+                            SVG
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-400 text-center">
                           ~${generatedImage.cost.toFixed(3)} · {(generatedImage.durationMs / 1000).toFixed(1)}sn
                         </p>
                       </div>

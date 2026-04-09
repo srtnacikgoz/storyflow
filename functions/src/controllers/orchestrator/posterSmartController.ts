@@ -101,14 +101,27 @@ export const createPosterStyle = createHttpFunction(async (req, res) => {
   }
 
   const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
+  const docPath = `${POSTER_CONFIG_PATH}/styles/items/${id}`;
+  console.log(`[createPosterStyle] Kaydediliyor: id=${id}, path=${docPath}, name=${data.name}`);
 
-  await db.collection(`${POSTER_CONFIG_PATH}/styles/items`).doc(id).set({
+  const docData = {
     ...data,
     id,
     isActive: data.isActive ?? true,
     sortOrder: data.sortOrder ?? 99,
     createdAt: Date.now(),
-  });
+  };
+  await db.collection(`${POSTER_CONFIG_PATH}/styles/items`).doc(id).set(docData);
+
+  // Doğrulama: kayıt gerçekten Firestore'da mı?
+  const verify = await db.collection(`${POSTER_CONFIG_PATH}/styles/items`).doc(id).get();
+  if (!verify.exists) {
+    console.error(`[createPosterStyle] HATA: Döküman kaydedildi ama doğrulanamadı! id=${id}`);
+    res.status(500).json({ success: false, error: "Stil kaydedilemedi — Firestore doğrulaması başarısız" });
+    return;
+  }
+  console.log(`[createPosterStyle] Doğrulandı: id=${id}, isActive=${verify.data()?.isActive}, sortOrder=${verify.data()?.sortOrder}`);
+
   clearConfigCache();
 
   res.json({ success: true, data: { id }, message: "Stil oluşturuldu" });
@@ -308,7 +321,7 @@ Return JSON only.`;
       const anthropic = new Anthropic({ apiKey: anthropicApiKey });
       const result = await anthropic.messages.create({
         model: analysisModel,
-        max_tokens: 4000,
+        max_tokens: 8192,
         system: systemPrompt,
         messages: [{
           role: "user",
@@ -338,7 +351,7 @@ Return JSON only.`;
         },
         body: JSON.stringify({
           model: analysisModel,
-          max_tokens: 4000,
+          max_tokens: 8192,
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -378,6 +391,12 @@ Return JSON only.`;
   } catch {
     analysis = { error: "Parse failed", raw: responseText };
   }
+
+  // Model adını yanıta ekle
+  if (analysis && !analysis.error) {
+    analysis._analysisModel = analysisModel;
+  }
+  console.log(`[analyzePosterDesign] v2 — Yanıt gönderiliyor, _analysisModel=${analysis?._analysisModel || "YOK"}, keys=${Object.keys(analysis || {}).slice(0, 5).join(",")}`);
 
   res.json({ success: true, data: analysis });
 }, { timeoutSeconds: 90, memory: "512MiB" });

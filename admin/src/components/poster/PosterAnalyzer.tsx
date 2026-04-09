@@ -382,6 +382,12 @@ export default function PosterAnalyzer({ onStyleSaved }: PosterAnalyzerProps) {
                               }`}>{dna.reproducibility.score}%</span>
                             </div>
                           )}
+                          {dna._analysisModel && (
+                            <div className="flex justify-between text-xs items-center">
+                              <span className="text-gray-500">Model</span>
+                              <span className="font-mono text-gray-600">{dna._analysisModel.replace("google/", "")}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

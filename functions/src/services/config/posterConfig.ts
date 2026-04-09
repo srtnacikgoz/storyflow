@@ -55,10 +55,11 @@ const POSTER_CONFIG_PATH = "global/config/poster-config";
 
 /**
  * Aktif poster stillerini getir
+ * @param skipCache — true ise in-memory cache'i atlar (listeleme endpoint'i için)
  */
-export async function getPosterStyles(): Promise<PosterStyle[]> {
+export async function getPosterStyles(skipCache = false): Promise<PosterStyle[]> {
   const now = Date.now();
-  if (stylesCache && now - stylesCacheTimestamp < CACHE_TTL) {
+  if (!skipCache && stylesCache && now - stylesCacheTimestamp < CACHE_TTL) {
     return stylesCache;
   }
 

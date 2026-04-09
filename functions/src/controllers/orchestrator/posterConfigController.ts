@@ -139,7 +139,9 @@ export const seedPosterConfig = createHttpFunction(async (req, res) => {
  * GET /listPosterStyles
  */
 export const listPosterStyles = createHttpFunction(async (req, res) => {
-  const styles = await getPosterStyles();
+  // fresh=1 → cache bypass (farklı Cloud Function instance'ında cache eski kalabiliyor)
+  const skipCache = req.query.fresh === "1";
+  const styles = await getPosterStyles(skipCache);
   res.json({ success: true, data: styles });
 });
 
