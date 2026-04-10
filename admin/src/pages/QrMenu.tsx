@@ -913,7 +913,7 @@ function StyleCard({ style, onChanged }: { style: any; onChanged: () => void }) 
                 type="text"
                 value={draft.backgroundHex}
                 onChange={e => setDraft(d => ({ ...d, backgroundHex: e.target.value }))}
-                placeholder={defaultHex ? `Boş → standart (${defaultHex})` : "#E8E4DF (boş bırakırsan renk zorlanmaz)"}
+                placeholder={defaultHex ? `Boş bırak → standart ${defaultHex} kullanılır` : "Boş bırak → standart renk kullanılır"}
                 className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-teal-400"
               />
               {draft.backgroundHex && (
@@ -928,9 +928,7 @@ function StyleCard({ style, onChanged }: { style: any; onChanged: () => void }) 
               )}
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
-              {defaultHex
-                ? "Özel renk girerek standardı geçici olarak değiştirebilirsin. Temizle → standart geri döner."
-                : "Bu stilin standart rengi yok. Girdiğin hex prompt'a zorunlu renk direktifi olarak eklenir."}
+              Boş bırakıp kaydedersen stilin standart rengi kalır. Hex girersen o renk standardı geçici olarak override eder — sonra tekrar boşaltıp kaydedersen standart geri döner.
             </p>
           </div>
 
