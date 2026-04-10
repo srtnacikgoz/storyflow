@@ -53,9 +53,27 @@ registerCacheClear(() => {
 
 const POSTER_CONFIG_PATH = "global/config/poster-config";
 
+// 6 karakterli hex yakalama — promptDirections.background metninden ilk geçen hex
+const HEX_EXTRACT_PATTERN = /#([0-9A-Fa-f]{6})\b/;
+
 /**
- * Aktif poster stillerini getir
+ * Stilin defaultBackgroundHex alanı yoksa, background metninden ilk hex'i çıkarıp döner.
+ * Çıkaramıyorsa null döner.
+ */
+function extractHexFromBackgroundText(background: string | undefined): string | null {
+  if (!background) return null;
+  const match = background.match(HEX_EXTRACT_PATTERN);
+  if (!match) return null;
+  return `#${match[1].toUpperCase()}`;
+}
+
+/**
+ * Aktif poster stillerini getir.
  * @param skipCache — true ise in-memory cache'i atlar (listeleme endpoint'i için)
+ *
+ * Self-healing: defaultBackgroundHex eksikse promptDirections.background metninden
+ * ilk hex'i çıkarır, bellekteki kopyayı günceller ve Firestore'a fire-and-forget yazar.
+ * Bu tek seferlik migration davranışıdır — bir kez set edildikten sonra tekrar tetiklenmez.
  */
 export async function getPosterStyles(skipCache = false): Promise<PosterStyle[]> {
   const now = Date.now();
@@ -76,10 +94,32 @@ export async function getPosterStyles(skipCache = false): Promise<PosterStyle[]>
     );
   }
 
-  stylesCache = snapshot.docs.map(doc => ({
+  const styles = snapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
   })) as PosterStyle[];
+
+  // Self-healing backfill — defaultBackgroundHex eksik stilleri tamamla
+  for (const style of styles) {
+    if (style.defaultBackgroundHex && style.defaultBackgroundHex.trim()) continue;
+    const extracted = extractHexFromBackgroundText(style.promptDirections?.background);
+    if (!extracted) continue;
+
+    // Bellekteki kopyayı hemen güncelle — bu isteğin sonucu anchor kullanır
+    style.defaultBackgroundHex = extracted;
+
+    // Firestore'a fire-and-forget yaz — cache sonraki okumada persist halde bulur
+    const ref = getDb().collection(`${POSTER_CONFIG_PATH}/styles/items`).doc(style.id);
+    ref.update({ defaultBackgroundHex: extracted, updatedAt: Date.now() })
+      .then(() => {
+        console.log(`[PosterConfig] Backfilled defaultBackgroundHex=${extracted} for style "${style.id}"`);
+      })
+      .catch(err => {
+        console.error(`[PosterConfig] Backfill failed for style "${style.id}":`, err);
+      });
+  }
+
+  stylesCache = styles;
   stylesCacheTimestamp = now;
 
   return stylesCache;

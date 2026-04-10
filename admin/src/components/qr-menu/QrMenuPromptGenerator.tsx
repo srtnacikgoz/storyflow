@@ -6,6 +6,8 @@ interface PosterStyle {
   name: string;
   nameTr: string;
   description?: string;
+  defaultBackgroundHex?: string; // Stilin doğal rengi — DNA'dan gelir, standart olarak yaşar
+  backgroundHex?: string;        // Kullanıcının opsiyonel override'ı
   promptDirections?: {
     background?: string;
     lighting?: string;
@@ -15,6 +17,7 @@ interface PosterStyle {
     overallFeel?: string;
     [key: string]: string | undefined;
   };
+  customSections?: Array<{ id: string; label: string; value: string }>;
   examplePromptFragment?: string;
 }
 
@@ -23,10 +26,29 @@ interface QrMenuPromptGeneratorProps {
 }
 
 /** Seçilen stilden + ürün adından Gemini prompt'u oluştur */
-function buildPrompt(style: PosterStyle, productName: string, productDesc: string): string {
+function buildPrompt(
+  style: PosterStyle,
+  productName: string,
+  visualNotes: string,
+  servingOnPlate: boolean,
+): string {
   const dirs = style.promptDirections || {};
 
-  const sections = [
+  // Renk anchor'ı — override > default sıralamasıyla etkin renk belirlenir
+  const effectiveHex = (style.backgroundHex && style.backgroundHex.trim())
+    || (style.defaultBackgroundHex && style.defaultBackgroundHex.trim())
+    || null;
+  const colorAnchor = effectiveHex
+    ? `BACKGROUND COLOR (MANDATORY): Exactly ${effectiveHex} — this hex is the authoritative background tone for the entire scene. Override any other color or tonal description mentioned below if there is any conflict.`
+    : null;
+
+  // Servis anchor'ı — kullanıcı "tabakta sun" seçtiyse stilin "NO plate" kuralını override eder
+  const servingAnchor = servingOnPlate
+    ? `SERVING OVERRIDE (MANDATORY): Present this product on an appropriate plate or dish that suits its form, size and eating method (a round ceramic plate for a slice, a shallow bowl for a dessert with sauce, a wooden board for a sandwich, etc.). A plate or dish IS required for this specific generation. Any instructions below that forbid plates, dishes, trays or props DO NOT apply to this product — plating is mandatory here and part of the composition. The plate's color and material must harmonize with the background tone described above, never compete with the product.`
+    : null;
+
+  // Standart 6 alan
+  const standardSections = [
     dirs.background,
     dirs.lighting,
     dirs.colorPalette,
@@ -35,16 +57,31 @@ function buildPrompt(style: PosterStyle, productName: string, productDesc: strin
     dirs.overallFeel,
   ].filter(Boolean);
 
+  // Kullanıcı-tanımlı ekstra bölümler (CRUD'dan gelen)
+  const customSections = (style.customSections || [])
+    .filter(s => s && s.value && s.value.trim())
+    .map(s => s.label ? `${s.label.toUpperCase()}: ${s.value}` : s.value);
+
+  const sections = [
+    colorAnchor,
+    servingAnchor,
+    ...standardSections,
+    ...customSections,
+  ].filter(Boolean);
+
   const envBlock = sections.join("\n\n");
-  const productLine = productDesc
-    ? `PRODUCT: "${productName}" — ${productDesc}`
+
+  // Ürün bloğu: ad zorunlu, notlar direktif olarak ayrı satırda
+  const productBlock = visualNotes
+    ? `PRODUCT: "${productName}"
+VISIBLE DETAILS / ACCENTS: ${visualNotes} These elements must physically appear in the scene — scattered around the base, on the surface, or as visible textures on the product itself. They are not background context; they are compositional elements.`
     : `PRODUCT: "${productName}"`;
 
   return `${envBlock}
 
-${productLine}
+${productBlock}
 
-Generate a professional product photograph of "${productName}" placed in the exact environment described above. The product must be the sole visual focus, presented on the plate as described. Maintain absolute consistency with the specified background surface, lighting setup, camera angle, and atmosphere. No text, no watermark, no branding elements in the image.`;
+Generate a professional product photograph of "${productName}" placed in the exact environment described above. The product must be the sole visual focus. Maintain absolute consistency with the specified background surface, lighting setup, camera angle, and atmosphere. No text, no watermark, no branding elements in the image.`;
 }
 
 export default function QrMenuPromptGenerator({ styles }: QrMenuPromptGeneratorProps) {
@@ -53,7 +90,8 @@ export default function QrMenuPromptGenerator({ styles }: QrMenuPromptGeneratorP
 
   // Ürün bilgileri
   const [productName, setProductName] = useState("");
-  const [productDesc, setProductDesc] = useState("");
+  const [visualNotes, setVisualNotes] = useState("");
+  const [servingOnPlate, setServingOnPlate] = useState(false);
 
   // Referans ürün fotoğrafı (opsiyonel)
   const [refBase64, setRefBase64] = useState<string | null>(null);
@@ -63,6 +101,7 @@ export default function QrMenuPromptGenerator({ styles }: QrMenuPromptGeneratorP
   // Prompt
   const [prompt, setPrompt] = useState("");
   const [promptReady, setPromptReady] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
 
   // Üretim
   const [generating, setGenerating] = useState(false);
@@ -75,12 +114,23 @@ export default function QrMenuPromptGenerator({ styles }: QrMenuPromptGeneratorP
 
   const handleBuildPrompt = () => {
     if (!selectedStyle || !productName.trim()) return;
-    const p = buildPrompt(selectedStyle, productName.trim(), productDesc.trim());
+    const p = buildPrompt(selectedStyle, productName.trim(), visualNotes.trim(), servingOnPlate);
     setPrompt(p);
     setPromptReady(true);
     setResultImage(null);
     setGenInfo(null);
     setError(null);
+  };
+
+  const handleCopyPrompt = async () => {
+    if (!prompt.trim()) return;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 1500);
+    } catch {
+      // sessiz — clipboard reddederse kullanıcı textarea'dan manuel kopyalayabilir
+    }
   };
 
   const handleGenerate = async () => {
@@ -169,23 +219,55 @@ export default function QrMenuPromptGenerator({ styles }: QrMenuPromptGeneratorP
                 type="text"
                 value={productName}
                 onChange={e => { setProductName(e.target.value); setPromptReady(false); }}
-                placeholder="ör: Brownie, Havuçlu Pasta, Eclair..."
+                placeholder="ör: Klasik Dilim Çikolatalı Pasta (~8cm), Havuçlu Pasta Dilimi, Çıtır Eclair..."
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400"
               />
+              <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                Ürün formunu ve boyutunu belirt. Sadece "Pasta" yazarsan model bunu petit four veya küçük bar kek olarak yorumlayabilir — "Klasik Dilim Pasta (~8cm yükseklik)" gibi form/ölçü ekle.
+              </p>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Açıklama <span className="text-gray-400 font-normal">(opsiyonel)</span>
+                Görsel İpuçları <span className="text-gray-400 font-normal">(opsiyonel — sahnede görünmesini istediğin detaylar)</span>
               </label>
-              <input
-                type="text"
-                value={productDesc}
-                onChange={e => { setProductDesc(e.target.value); setPromptReady(false); }}
-                placeholder="ör: Fıstıklı, çikolata ganajlı, frambuaz soslu..."
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400"
+              <textarea
+                rows={2}
+                value={visualNotes}
+                onChange={e => { setVisualNotes(e.target.value); setPromptReady(false); }}
+                placeholder={"ör: İçeride fındık ve Antep fıstığı var ama dışarıdan görünmüyor — yanına fındık parçaları ve fıstık kırıntıları serp. Üste pudra şekeri dökülsün.\n\nVeya: Katmanlar arasında açık kahve-bej tonda (~#C4A57B) sütlü çikolata kreması görünsün."}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400 resize-none leading-relaxed"
               />
+              <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                Modelin göremediği iç malzemeleri dışa yansıtmak için kullan — serpilen kırıntılar, görünür tabakalar, kesilmiş dilim, sos damlası.
+              </p>
+              <p className="text-[10px] text-amber-600 mt-1 leading-relaxed">
+                Belirsiz pastane terimleri için renk/ton belirt — "sütlü çikolata cremeux" yerine "açık kahve-bej tonda (~#C4A57B) sütlü çikolata kreması" gibi. Cremeux, ganaj, mousse, praline gibi teknik terimleri model görsel olarak yanlış yorumlayabiliyor; renk kodu ve doku açıklaması ekle.
+              </p>
             </div>
           </div>
+        </div>
+
+        {/* ── Servis Şekli ── */}
+        <div>
+          <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-teal-50/30 hover:border-teal-200 transition">
+            <input
+              type="checkbox"
+              checked={servingOnPlate}
+              onChange={e => { setServingOnPlate(e.target.checked); setPromptReady(false); }}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500 flex-shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-800">Tabakta sun</span>
+                {servingOnPlate && (
+                  <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium">aktif</span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                Bu üretimde ürün, formuna uygun bir tabak/kase/tahtada sunulur. Stilin "tabaksız" kuralı sadece bu paylaşım için geçersiz kılınır.
+              </p>
+            </div>
+          </label>
         </div>
 
         {/* ── Referans Fotoğraf (opsiyonel) ── */}
@@ -232,12 +314,39 @@ export default function QrMenuPromptGenerator({ styles }: QrMenuPromptGeneratorP
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-gray-600">Üretilecek Prompt</label>
-                <button
-                  onClick={handleReset}
-                  className="text-[10px] text-gray-400 hover:text-gray-600"
-                >
-                  Sıfırla
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopyPrompt}
+                    title="Prompt'u kopyala"
+                    className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md transition ${
+                      promptCopied
+                        ? "bg-emerald-50 text-emerald-600"
+                        : "text-gray-500 hover:text-teal-600 hover:bg-teal-50"
+                    }`}
+                  >
+                    {promptCopied ? (
+                      <>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Kopyalandı
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Kopyala
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="text-[10px] text-gray-400 hover:text-gray-600"
+                  >
+                    Sıfırla
+                  </button>
+                </div>
               </div>
               <textarea
                 rows={6}

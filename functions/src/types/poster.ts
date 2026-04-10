@@ -32,6 +32,10 @@ export interface PosterStyle {
   thumbnailUrl?: string;
   isActive: boolean;
   sortOrder: number;
+  // Arka plan renk anchor'ı — stilin doğal rengi (DNA'dan/metinden türetilir, standart olarak yaşar)
+  defaultBackgroundHex?: string;
+  // Kullanıcı override'ı — dolu ise defaultBackgroundHex yerine bu kullanılır
+  backgroundHex?: string;
   // Öğrenme sistemi — feedback'lerden türetilen düzeltmeler
   learnedCorrections?: Record<string, string>; // kategori → düzeltme notu
   lastLearnedAt?: number;    // Son öğrenme zamanı

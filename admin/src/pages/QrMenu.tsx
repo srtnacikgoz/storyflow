@@ -37,6 +37,18 @@ const VISUAL_FIELDS: { key: keyof VisualStyleForm; label: string; rows: number }
   { key: "examplePromptFragment", label: "Görsel Prompt Parçası", rows: 3 },
 ];
 
+/** DNA'nın dominant colors listesinden background rolündeki hex'i bulur (yoksa ilk hex'i döner) */
+function extractDefaultBackgroundHex(dna: any): string {
+  const colors = dna?.colorDNA?.dominantColors || [];
+  if (!Array.isArray(colors) || colors.length === 0) return "";
+  const bg = colors.find((c: any) => {
+    const r = (c?.role || "").toString().toLowerCase();
+    return r.includes("background") || r.includes("bg") || r.includes("surface");
+  });
+  const hex = (bg?.hex || colors[0]?.hex || "").toString().trim().toUpperCase();
+  return /^#[0-9A-F]{6}$/.test(hex) ? hex : "";
+}
+
 /** Backend DNA → görsel stil formu (tipografi atlanıyor) */
 function dnaToVisualForm(dna: any): VisualStyleForm {
   const color = dna.colorDNA || {};
@@ -198,11 +210,13 @@ export default function QrMenu() {
     setSaving(true);
     setSaveError(null);
     try {
+      const defaultBackgroundHex = extractDefaultBackgroundHex(dna);
       await api.createPosterStyle({
         name: styleForm.name,
         nameTr: styleForm.nameTr || styleForm.name,
         description: styleForm.description,
         examplePromptFragment: styleForm.examplePromptFragment,
+        ...(defaultBackgroundHex ? { defaultBackgroundHex } : {}),
         promptDirections: {
           background: styleForm.background,
           typography: "", // QR menüde tipografi yok
@@ -542,7 +556,7 @@ export default function QrMenu() {
               ) : (
                 <div className="space-y-2">
                   {styles.map((s: any) => (
-                    <StyleCard key={s.id} style={s} />
+                    <StyleCard key={s.id} style={s} onChanged={loadStyles} />
                   ))}
                 </div>
               )}
@@ -555,28 +569,225 @@ export default function QrMenu() {
 }
 
 /* ──── Stil Kartı ──── */
-function StyleCard({ style }: { style: any }) {
+type StandardFieldKey =
+  | "background"
+  | "lighting"
+  | "colorPalette"
+  | "layout"
+  | "productPlacement"
+  | "overallFeel";
+
+const EDITABLE_FIELDS: { key: StandardFieldKey; label: string }[] = [
+  { key: "background", label: "Arka Plan & Yüzey" },
+  { key: "lighting", label: "Işık" },
+  { key: "colorPalette", label: "Renk Paleti" },
+  { key: "layout", label: "Kompozisyon & Açı" },
+  { key: "productPlacement", label: "Ürün Yerleşimi" },
+  { key: "overallFeel", label: "Genel Atmosfer" },
+];
+
+interface CustomSection {
+  id: string;
+  label: string;
+  value: string;
+}
+
+interface StyleDraft {
+  nameTr: string;
+  description: string;
+  backgroundHex: string;
+  background: string;
+  lighting: string;
+  colorPalette: string;
+  layout: string;
+  productPlacement: string;
+  overallFeel: string;
+  customSections: CustomSection[];
+}
+
+const makeDraft = (style: any): StyleDraft => ({
+  nameTr: style.nameTr || style.name || "",
+  description: style.description || "",
+  backgroundHex: style.backgroundHex || "",
+  background: style.promptDirections?.background || "",
+  lighting: style.promptDirections?.lighting || "",
+  colorPalette: style.promptDirections?.colorPalette || "",
+  layout: style.promptDirections?.layout || "",
+  productPlacement: style.promptDirections?.productPlacement || "",
+  overallFeel: style.promptDirections?.overallFeel || "",
+  customSections: Array.isArray(style.customSections)
+    ? style.customSections.map((s: any) => ({
+        id: s.id || `cs_${Math.random().toString(36).slice(2, 9)}`,
+        label: s.label || "",
+        value: s.value || "",
+      }))
+    : [],
+});
+
+const HEX_PATTERN = /^#([0-9A-Fa-f]{6})$/;
+
+function StyleCard({ style, onChanged }: { style: any; onChanged: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<StyleDraft>(() => makeDraft(style));
+
   const dirs = style.promptDirections || {};
 
-  // promptDirections'tan görsel alanları göster (typography hariç)
-  const visualEntries = [
-    { label: "Arka Plan", value: dirs.background },
-    { label: "Işık", value: dirs.lighting },
-    { label: "Renk", value: dirs.colorPalette },
-    { label: "Kompozisyon", value: dirs.layout },
-    { label: "Ürün Yerleşimi", value: dirs.productPlacement },
-    { label: "Atmosfer", value: dirs.overallFeel },
-  ].filter(e => e.value);
+  // Renk katmanları: override > default
+  const overrideHex = (style.backgroundHex || "").trim();
+  const defaultHex = (style.defaultBackgroundHex || "").trim();
+  const effectiveHex = overrideHex || defaultHex;
+  const hasOverride = !!overrideHex;
+
+  // Gemini'ye giden prompt bloğu — QrMenuPromptGenerator.buildPrompt ile aynı sıra/format
+  const colorAnchor = effectiveHex
+    ? `BACKGROUND COLOR (MANDATORY): Exactly ${effectiveHex} — this hex is the authoritative background tone for the entire scene. Override any other color or tonal description mentioned below if there is any conflict.`
+    : null;
+
+  const standardSections = [
+    dirs.background,
+    dirs.lighting,
+    dirs.colorPalette,
+    dirs.layout,
+    dirs.productPlacement,
+    dirs.overallFeel,
+  ].filter(Boolean);
+
+  const extraSections = (Array.isArray(style.customSections) ? style.customSections : [])
+    .filter((s: any) => s && s.value && s.value.trim())
+    .map((s: any) => (s.label ? `${s.label.toUpperCase()}: ${s.value}` : s.value));
+
+  const modelPromptBlock = [colorAnchor, ...standardSections, ...extraSections]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const handleCopy = async () => {
+    if (!modelPromptBlock) return;
+    try {
+      await navigator.clipboard.writeText(modelPromptBlock);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // sessiz — clipboard reddederse kullanıcı seçip manuel kopyalayabilir
+    }
+  };
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraft(makeDraft(style));
+    setEditError(null);
+    setEditing(true);
+    setExpanded(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditError(null);
+  };
+
+  const addCustomSection = () => {
+    setDraft(d => ({
+      ...d,
+      customSections: [
+        ...d.customSections,
+        { id: `cs_${Math.random().toString(36).slice(2, 9)}`, label: "", value: "" },
+      ],
+    }));
+  };
+
+  const updateCustomSection = (id: string, patch: Partial<CustomSection>) => {
+    setDraft(d => ({
+      ...d,
+      customSections: d.customSections.map(s => (s.id === id ? { ...s, ...patch } : s)),
+    }));
+  };
+
+  const removeCustomSection = (id: string) => {
+    setDraft(d => ({
+      ...d,
+      customSections: d.customSections.filter(s => s.id !== id),
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!draft.nameTr.trim()) {
+      setEditError("Stil adı boş olamaz");
+      return;
+    }
+    const hexTrimmed = draft.backgroundHex.trim();
+    if (hexTrimmed && !HEX_PATTERN.test(hexTrimmed)) {
+      setEditError("Özel arka plan rengi 6 haneli hex olmalı (ör: #E8E4DF)");
+      return;
+    }
+    setSaving(true);
+    setEditError(null);
+    try {
+      const payload: any = {
+        nameTr: draft.nameTr.trim(),
+        description: draft.description,
+        backgroundHex: hexTrimmed || "",
+        promptDirections: {
+          ...(style.promptDirections || {}),
+          background: draft.background,
+          lighting: draft.lighting,
+          colorPalette: draft.colorPalette,
+          layout: draft.layout,
+          productPlacement: draft.productPlacement,
+          overallFeel: draft.overallFeel,
+        },
+        customSections: draft.customSections
+          .filter(s => s.label.trim() || s.value.trim())
+          .map(s => ({ id: s.id, label: s.label.trim(), value: s.value.trim() })),
+      };
+      // Tek seferlik geri dönük taşıma: eski stillerde defaultBackgroundHex yoksa
+      // ve ortada bir hex varsa, onu standart olarak kaydet. Böylece mevcut stiller
+      // yeni default/override modelini otomatik kazanır.
+      if (!defaultHex && hexTrimmed) {
+        payload.defaultBackgroundHex = hexTrimmed;
+      }
+      await api.updatePosterStyle(style.id, payload);
+      setEditing(false);
+      onChanged();
+    } catch (err: any) {
+      setEditError(err.message || "Güncellenemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.deletePosterStyle(style.id);
+      onChanged();
+    } catch (err: any) {
+      alert(err.message || "Silinemedi");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   return (
     <div className="border border-gray-100 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50/50 transition text-left"
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          {style.thumbnailUrl ? (
+      <div className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50/50 transition">
+        <button
+          onClick={() => !editing && setExpanded(!expanded)}
+          disabled={editing}
+          className="flex items-center gap-3 min-w-0 flex-1 text-left disabled:cursor-default"
+        >
+          {effectiveHex && HEX_PATTERN.test(effectiveHex) ? (
+            <div
+              className={`w-8 h-8 rounded-lg border flex-shrink-0 ${hasOverride ? "border-teal-400 ring-2 ring-teal-100" : "border-gray-200"}`}
+              style={{ backgroundColor: effectiveHex }}
+              title={hasOverride ? `Arka plan (özel): ${effectiveHex}` : `Arka plan (standart): ${effectiveHex}`}
+            />
+          ) : style.thumbnailUrl ? (
             <img src={style.thumbnailUrl} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
           ) : (
             <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center flex-shrink-0">
@@ -591,20 +802,282 @@ function StyleCard({ style }: { style: any }) {
               <p className="text-xs text-gray-400 truncate">{style.description}</p>
             )}
           </div>
-        </div>
-        <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+        </button>
 
-      {expanded && visualEntries.length > 0 && (
-        <div className="px-4 pb-3 space-y-2 border-t border-gray-50">
-          {visualEntries.map(({ label, value }) => (
-            <div key={label} className="pt-2">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
-              <p className="text-xs text-gray-600 font-mono leading-relaxed mt-0.5">{value}</p>
+        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+          {!editing && (
+            <>
+              <button
+                onClick={startEdit}
+                title="Düzenle"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+                title="Sil"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Silme onayı */}
+      {confirmDelete && (
+        <div className="px-4 py-3 bg-red-50 border-t border-red-100 flex items-center justify-between gap-3">
+          <p className="text-xs text-red-700">Bu stili silmek istediğine emin misin?</p>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 disabled:opacity-50"
+            >
+              Vazgeç
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md disabled:opacity-50"
+            >
+              {deleting ? "Siliniyor..." : "Sil"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Düzenleme formu */}
+      {editing && (
+        <div className="px-4 pb-4 pt-3 border-t border-gray-50 space-y-4 bg-teal-50/20">
+          {/* Temel bilgiler */}
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Stil Adı</label>
+            <input
+              type="text"
+              value={draft.nameTr}
+              onChange={e => setDraft(d => ({ ...d, nameTr: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Açıklama</label>
+            <input
+              type="text"
+              value={draft.description}
+              onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400"
+            />
+          </div>
+
+          {/* Arka plan rengi — standart (salt okunur) + override (düzenlenebilir) */}
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+              Arka Plan Rengi
+            </label>
+
+            {/* Standart renk göstergesi (defaultBackgroundHex) */}
+            {defaultHex && HEX_PATTERN.test(defaultHex) && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
+                <div
+                  className="w-6 h-6 rounded border border-gray-200 flex-shrink-0"
+                  style={{ backgroundColor: defaultHex }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-gray-500 leading-tight">Standart renk</p>
+                  <p className="text-xs font-mono text-gray-700">{defaultHex}</p>
+                </div>
+                <span className="text-[10px] text-gray-400 italic">sabit</span>
+              </div>
+            )}
+
+            {/* Override girişi */}
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={HEX_PATTERN.test(draft.backgroundHex) ? draft.backgroundHex : (defaultHex || "#E8E4DF")}
+                onChange={e => setDraft(d => ({ ...d, backgroundHex: e.target.value.toUpperCase() }))}
+                className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer flex-shrink-0"
+                title="Özel renk seç"
+              />
+              <input
+                type="text"
+                value={draft.backgroundHex}
+                onChange={e => setDraft(d => ({ ...d, backgroundHex: e.target.value }))}
+                placeholder={defaultHex ? `Boş → standart (${defaultHex})` : "#E8E4DF (boş bırakırsan renk zorlanmaz)"}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-teal-400"
+              />
+              {draft.backgroundHex && (
+                <button
+                  type="button"
+                  onClick={() => setDraft(d => ({ ...d, backgroundHex: "" }))}
+                  title="Özel rengi sil, standart geri dönsün"
+                  className="text-[10px] text-gray-500 hover:text-red-600 bg-gray-50 hover:bg-red-50 px-2 py-1 rounded"
+                >
+                  Temizle
+                </button>
+              )}
             </div>
-          ))}
+            <p className="text-[10px] text-gray-400 mt-1">
+              {defaultHex
+                ? "Özel renk girerek standardı geçici olarak değiştirebilirsin. Temizle → standart geri döner."
+                : "Bu stilin standart rengi yok. Girdiğin hex prompt'a zorunlu renk direktifi olarak eklenir."}
+            </p>
+          </div>
+
+          {/* Standart alanlar */}
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Standart Alanlar</p>
+            <div className="space-y-3">
+              {EDITABLE_FIELDS.map(({ key, label }) => (
+                <div key={key}>
+                  <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</label>
+                  <textarea
+                    rows={3}
+                    value={draft[key]}
+                    onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-400 resize-none leading-relaxed"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Ekstra bölümler — CRUD */}
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Ekstra Bölümler</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Standart alanların üstüne eklenecek özel prompt blokları</p>
+              </div>
+              <button
+                type="button"
+                onClick={addCustomSection}
+                className="text-[10px] font-medium text-teal-600 hover:text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-md transition flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                Ekle
+              </button>
+            </div>
+
+            {draft.customSections.length === 0 ? (
+              <p className="text-[10px] text-gray-400 italic text-center py-3 border border-dashed border-gray-200 rounded-lg">
+                Henüz ekstra bölüm yok
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {draft.customSections.map((section, idx) => (
+                  <div key={section.id} className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 font-mono flex-shrink-0">#{idx + 1}</span>
+                      <input
+                        type="text"
+                        value={section.label}
+                        onChange={e => updateCustomSection(section.id, { label: e.target.value })}
+                        placeholder="Bölüm başlığı (ör: Mood, Kamera, Texture Note)"
+                        className="flex-1 border border-gray-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCustomSection(section.id)}
+                        title="Bölümü sil"
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition flex-shrink-0"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={section.value}
+                      onChange={e => updateCustomSection(section.id, { value: e.target.value })}
+                      placeholder="Prompt içeriği..."
+                      className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs font-mono text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-400 resize-none leading-relaxed"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {editError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{editError}</p>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={cancelEdit}
+              disabled={saving}
+              className="flex-1 py-2 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+            >
+              Vazgeç
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Kaydediliyor...
+                </>
+              ) : "Kaydet"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Salt okunur prompt görüntüleme */}
+      {!editing && expanded && modelPromptBlock && (
+        <div className="px-4 pb-3 border-t border-gray-50">
+          <div className="pt-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                Görsel Modeline Giden Prompt
+              </p>
+              <button
+                onClick={handleCopy}
+                disabled={!modelPromptBlock}
+                title="Prompt'u kopyala"
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition disabled:opacity-30 ${
+                  copied
+                    ? "bg-emerald-50 text-emerald-600"
+                    : "text-gray-500 hover:text-teal-600 hover:bg-teal-50"
+                }`}
+              >
+                {copied ? (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Kopyalandı
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Kopyala
+                  </>
+                )}
+              </button>
+            </div>
+            <pre className="text-xs text-gray-600 font-mono leading-relaxed whitespace-pre-wrap bg-gray-50 border border-gray-100 rounded-lg p-3 select-all">
+{modelPromptBlock}
+            </pre>
+          </div>
         </div>
       )}
     </div>
