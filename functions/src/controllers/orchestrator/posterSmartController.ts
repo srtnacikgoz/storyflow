@@ -478,7 +478,7 @@ export const generatePosterPrompt = createHttpFunction(async (req, res) => {
 
   const {
     productImageBase64, productImageUrl, productMimeType,
-    styleId = "bold-minimal", moodId = "warm---intimate", aspectRatioId = "2-3",
+    styleId = "bold-minimal", moodId = "warm-intimate", aspectRatioId = "2-3",
     typographyId, subtitleTypographyId, layoutId, title, subtitle, price,
     targetModel = "gemini",
     additionalNotes,
