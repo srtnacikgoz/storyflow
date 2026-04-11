@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../services/api";
 import PosterAnalyzer from "../components/poster/PosterAnalyzer";
 import PromptGenerator from "../components/poster/PromptGenerator";
@@ -419,6 +420,7 @@ export default function Poster() {
   // Thumbnail düzenleme
   const [editingThumbnail, setEditingThumbnail] = useState<string | null>(null);
   const [thumbnailInput, setThumbnailInput] = useState("");
+  const [hoveredThumb, setHoveredThumb] = useState<{ id: string; rect: DOMRect } | null>(null);
 
   // Stil düzenleme modalı
   const [editingStyle, setEditingStyle] = useState<PosterStyle | null>(null);
@@ -665,7 +667,12 @@ export default function Poster() {
                     </div>
                   </div>
                 ) : s.thumbnailUrl ? (
-                  <div className="relative cursor-pointer" onClick={() => setSelectedStyle(s.id)}>
+                  <div
+                    className="relative cursor-pointer"
+                    onClick={() => setSelectedStyle(s.id)}
+                    onMouseEnter={e => setHoveredThumb({ id: s.id, rect: e.currentTarget.getBoundingClientRect() })}
+                    onMouseLeave={() => setHoveredThumb(null)}
+                  >
                     <img src={s.thumbnailUrl} alt={s.nameTr} className="w-full h-24 object-cover" />
                     <button
                       onClick={e => { e.stopPropagation(); setEditingThumbnail(s.id); setThumbnailInput(s.thumbnailUrl || ""); }}
@@ -1125,6 +1132,36 @@ export default function Poster() {
           negativePrompt={negativePrompt || undefined}
         />
       </div>
+
+      {/* Stil kartı görsel hover önizleme */}
+      {hoveredThumb && (() => {
+        const style = styles.find(s => s.id === hoveredThumb.id);
+        if (!style?.thumbnailUrl) return null;
+        const popupW = 320;
+        const popupH = 360; // 320 görsel + ~40 metin
+        const gap = 12;
+        const spaceAbove = hoveredThumb.rect.top;
+        const showAbove = spaceAbove > popupH + gap;
+        const top = showAbove
+          ? hoveredThumb.rect.top - popupH - gap
+          : hoveredThumb.rect.bottom + gap;
+        const centerX = hoveredThumb.rect.left + hoveredThumb.rect.width / 2 - popupW / 2;
+        const left = Math.max(8, Math.min(window.innerWidth - popupW - 8, centerX));
+        return createPortal(
+          <div
+            className="fixed z-[60] pointer-events-none bg-white rounded-xl shadow-2xl border border-gray-200 p-3"
+            style={{ top, left, width: popupW }}
+          >
+            <img
+              src={style.thumbnailUrl}
+              alt={style.nameTr}
+              className="w-full h-80 object-contain rounded-lg bg-gray-50"
+            />
+            <p className="text-xs text-gray-600 text-center mt-2 font-medium">{style.nameTr}</p>
+          </div>,
+          document.body
+        );
+      })()}
 
       {/* Stil Düzenleme Modalı */}
       {editingStyle && (
