@@ -59,6 +59,14 @@ Bu proje **config-driven** çalışır. Hardcoded veri YASAKTIR.
 - Kod yorumları Türkçe
 - Değişken/fonksiyon isimleri İngilizce
 
+### 4. Basit ve Net Anlatım (12 Yaş Kuralı)
+- Cevaplar **net, kısa ve sade** olacak. Gereksiz uzatma yok.
+- **12 yaşında bir çocuk bile anlayabilmeli**: Jargon, havalı kelime, şişirilmiş açıklama yok.
+- Teknik terim kullanman gerekiyorsa, yanına 1 cümlelik gündelik bir örnekle açıkla.
+- Uzun paragraf yerine kısa maddeler kullan. Bir cümlede iki fikir varsa ikiye böl.
+- Özet istenmiyorsa özet yazma. Soruya doğrudan cevap ver.
+- Süslü başlıklar, gereksiz tablolar, dolgu cümleleri yok.
+
 ---
 
 ## 📁 Proje Yapısı
