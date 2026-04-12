@@ -2994,10 +2994,11 @@ class ApiService {
     qualityMode?: string;
     removeBackground?: boolean;
     keepObjects?: string;
-  }): Promise<{ prompt: string; analysis: string; targetModel: string; style: string; mood: string; cost: number; negativePrompt?: string }> {
+  }, opts?: { signal?: AbortSignal }): Promise<{ prompt: string; analysis: string; targetModel: string; style: string; mood: string; cost: number; negativePrompt?: string }> {
     const res = await this.fetch<{ success: boolean; data: any }>("generatePosterPrompt", {
       method: "POST",
       body: JSON.stringify(params),
+      signal: opts?.signal,
     });
     return res.data;
   }
@@ -3008,10 +3009,11 @@ class ApiService {
     productMimeType?: string;
     referenceImageBase64?: string;
     referenceImageMimeType?: string;
-  }): Promise<{ imageBase64: string; mimeType: string; model: string; cost: number; durationMs: number }> {
+  }, opts?: { signal?: AbortSignal }): Promise<{ imageBase64: string; mimeType: string; model: string; cost: number; durationMs: number }> {
     const res = await this.fetch<{ success: boolean; data: { imageBase64: string; mimeType: string; model: string; cost: number; durationMs: number } }>("generatePosterImage", {
       method: "POST",
       body: JSON.stringify(params),
+      signal: opts?.signal,
     });
     if (!res.success) throw new Error((res as any).error || "Görsel üretimi başarısız");
     return res.data;

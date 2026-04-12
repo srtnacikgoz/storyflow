@@ -1,4 +1,4 @@
-import { createHttpFunction } from "./shared";
+import { createHttpFunction, createAbortSignal, isAbortError } from "./shared";
 import { getConfig } from "../../config/environment";
 import { getSystemSettings } from "../../services/configService";
 
@@ -21,6 +21,9 @@ export const generatePosterImage = createHttpFunction(async (req, res) => {
     res.status(405).json({ success: false, error: "Use POST" });
     return;
   }
+
+  // Client disconnect'te Gemini çağrısını gerçekten iptal et (Level 2 cancel)
+  const signal = createAbortSignal(req);
 
   const {
     prompt,
@@ -105,7 +108,7 @@ Return ONLY the final poster image.`;
   console.log(`[PosterImage] Görsel üretimi başlıyor: model=${imageModel}, referans=${referenceImageBase64 ? "VAR" : "YOK"}`);
 
   try {
-    const result = await genModel.generateContent(contentParts);
+    const result = await genModel.generateContent(contentParts, { signal });
     const response = result.response;
 
     // Blok kontrolü
@@ -155,6 +158,11 @@ Return ONLY the final poster image.`;
       },
     });
   } catch (err: any) {
+    // Client abort edildiyse 500 yazma — zaten kimse dinlemiyor.
+    if (isAbortError(err)) {
+      console.log("[PosterImage] Client disconnected, Gemini çağrısı iptal edildi");
+      return;
+    }
     console.error("[PosterImage] Hata:", err.message);
     res.status(500).json({ success: false, error: err.message || "Görsel üretimi başarısız." });
   }

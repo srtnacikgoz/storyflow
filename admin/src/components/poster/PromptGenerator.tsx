@@ -45,6 +45,9 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
   const [logsCopied, setLogsCopied] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
+  // Durdurma — aktif istek için AbortController
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Sürükleme
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -68,8 +71,29 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
     window.addEventListener("mouseup", onUp);
   }, [position]);
 
+  /**
+   * Aktif isteği durdur — hem frontend'i hem backend'i (Level 2).
+   * AbortController'ı tetikleyince fetch kesilir, backend req.on('close')
+   * ile signal abort eder ve upstream API (Anthropic/Gemini) çağrısı
+   * da gerçekten iptal edilir, token yakmaya devam etmez.
+   */
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setGenerating(false);
+    setGeneratingImage(false);
+    setError("Durduruldu");
+  };
+
   const handleGenerate = async () => {
     if (!props.productImageBase64) return;
+    // Önceki kalıntı varsa iptal et
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setGenerating(true);
     setError(null);
     setResult(null);
@@ -98,17 +122,24 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
         negativePrompt: props.negativePrompt || undefined,
         removeBackground: removeBackground || undefined,
         keepObjects: removeBackground && keepObjects.trim() ? keepObjects.trim() : undefined,
-      });
+      }, { signal: controller.signal });
       setResult(res);
     } catch (err: any) {
+      // Kullanıcı durdurmuşsa error gösterme — handleStop zaten "Durduruldu" yazdı
+      if (err.name === "AbortError") return;
       setError(err.message || "Prompt üretimi başarısız");
     } finally {
+      if (abortControllerRef.current === controller) abortControllerRef.current = null;
       setGenerating(false);
     }
   };
 
   const handleGenerateImage = async () => {
     if (!result || !props.productImageBase64) return;
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setGeneratingImage(true);
     setGeneratedImage(null);
     setError(null);
@@ -119,11 +150,13 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
         productMimeType: props.productMimeType,
         referenceImageBase64: props.referenceImageBase64 || undefined,
         referenceImageMimeType: props.referenceImageMimeType || undefined,
-      });
+      }, { signal: controller.signal });
       setGeneratedImage({ base64: img.imageBase64, mimeType: img.mimeType, cost: img.cost, durationMs: img.durationMs });
     } catch (err: any) {
+      if (err.name === "AbortError") return;
       setError(err.message || "Görsel üretimi başarısız");
     } finally {
+      if (abortControllerRef.current === controller) abortControllerRef.current = null;
       setGeneratingImage(false);
     }
   };
@@ -215,7 +248,7 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
             <h3 className="text-lg font-bold">Prompt Üret</h3>
             <p className="text-xs text-gray-500">Hedef model için optimize edilmiş prompt — kopyala, yapıştır</p>
           </div>
-          <button onClick={() => { setIsOpen(false); setPosition({ x: 0, y: 0 }); }} className="text-gray-400 hover:text-gray-600 text-2xl" onMouseDown={e => e.stopPropagation()}>&times;</button>
+          <button onClick={() => { if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; } setIsOpen(false); setPosition({ x: 0, y: 0 }); }} className="text-gray-400 hover:text-gray-600 text-2xl" onMouseDown={e => e.stopPropagation()}>&times;</button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -304,19 +337,26 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
             </div>
           )}
 
-          {/* Üret butonu */}
+          {/* Üret / Durdur butonu */}
           {!result && (
-            <button
-              onClick={handleGenerate}
-              disabled={generating || !props.productImageBase64}
-              className="w-full bg-gradient-to-r from-gray-800 to-gray-900 text-white py-3 rounded-xl font-medium hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {generating ? (
-                <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Prompt üretiliyor...</>
-              ) : (
-                `${targetModel.toUpperCase()} Prompt'u Üret`
-              )}
-            </button>
+            generating ? (
+              <button
+                onClick={handleStop}
+                className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-medium transition flex items-center justify-center gap-2"
+              >
+                <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                <span>Prompt üretiliyor —</span>
+                <span className="font-semibold underline">Durdur</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleGenerate}
+                disabled={!props.productImageBase64}
+                className="w-full bg-gradient-to-r from-gray-800 to-gray-900 text-white py-3 rounded-xl font-medium hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {`${targetModel.toUpperCase()} Prompt'u Üret`}
+              </button>
+            )
           )}
 
           {error && <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{error}</div>}
@@ -380,17 +420,23 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
               {/* Gemini ile doğrudan görsel üret — sadece gemini modelinde */}
               {result.targetModel === "gemini" && (
                 <div className="border-t border-gray-100 pt-3 space-y-3">
-                  <button
-                    onClick={handleGenerateImage}
-                    disabled={generatingImage}
-                    className="w-full bg-gradient-to-r from-blue-600 to-violet-600 text-white py-2.5 rounded-xl font-medium text-sm hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {generatingImage ? (
-                      <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Gemini üretiyor...</>
-                    ) : (
-                      "Gemini ile Direkt Üret"
-                    )}
-                  </button>
+                  {generatingImage ? (
+                    <button
+                      onClick={handleStop}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-medium text-sm transition flex items-center justify-center gap-2"
+                    >
+                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      <span>Gemini üretiyor —</span>
+                      <span className="font-semibold underline">Durdur</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleGenerateImage}
+                      className="w-full bg-gradient-to-r from-blue-600 to-violet-600 text-white py-2.5 rounded-xl font-medium text-sm hover:shadow-lg transition flex items-center justify-center gap-2"
+                    >
+                      Gemini ile Direkt Üret
+                    </button>
+                  )}
                   <p className="text-xs text-gray-400 text-center">
                     Prompt + ürün görseli{props.referenceImageBase64 ? " + referans poster" : ""} Gemini'ye gönderilir
                   </p>

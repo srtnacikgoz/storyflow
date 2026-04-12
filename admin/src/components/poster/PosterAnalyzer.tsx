@@ -373,15 +373,6 @@ export default function PosterAnalyzer({ onStyleSaved }: PosterAnalyzerProps) {
                               <span className="font-medium text-gray-800">{dna.typographyName}</span>
                             </div>
                           )}
-                          {dna.reproducibility?.score && (
-                            <div className="flex justify-between text-xs items-center">
-                              <span className="text-gray-500">Yeniden üretilebilirlik</span>
-                              <span className={`font-semibold ${
-                                dna.reproducibility.score >= 80 ? "text-emerald-600" :
-                                dna.reproducibility.score >= 60 ? "text-amber-600" : "text-red-500"
-                              }`}>{dna.reproducibility.score}%</span>
-                            </div>
-                          )}
                           {dna._analysisModel && (
                             <div className="flex justify-between text-xs items-center">
                               <span className="text-gray-500">Model</span>
@@ -454,10 +445,6 @@ export default function PosterAnalyzer({ onStyleSaved }: PosterAnalyzerProps) {
                     </div>
                   )}
 
-                  {/* Reproducibility uyarısı */}
-                  {dna.reproducibility?.comment && (
-                    <p className="text-xs text-gray-400 leading-relaxed">{dna.reproducibility.comment}</p>
-                  )}
                 </div>
               )}
 

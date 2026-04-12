@@ -3,7 +3,7 @@
  * Kombinasyon kontrolü, stil CRUD, görsel analizi
  */
 
-import { createHttpFunction, errorResponse, db } from "./shared";
+import { createHttpFunction, errorResponse, db, createAbortSignal } from "./shared";
 import { getSystemSettings } from "../../services/configService";
 import { clearConfigCache } from "../../services/config/configCache";
 import { getPosterStyleById, getPosterMoodById, getPosterAspectRatioById, getPosterTypographyById, getPosterLayoutById } from "../../services/config/posterConfig";
@@ -283,16 +283,40 @@ REQUIRED: Return ONLY valid JSON. No markdown fences, no preamble, no explanatio
     "negativeGuide": "What to explicitly avoid: e.g. 'avoid flat lighting, avoid saturated colors, avoid centered symmetry, avoid heavy drop shadows'"
   },
 
-  "reproducibility": {
-    "score": 85,
-    "comment": "One sentence on overall fidelity expectation",
-    "highFidelity": ["background color", "lighting direction", "composition structure"],
-    "mediumFidelity": ["typography weight (no exact font match)", "texture intensity"],
-    "lowFidelity": ["exact font name", "product-specific reflections"]
-  },
-
   "technicalNotes": "2-3 sentences: what specific choices make this poster uniquely effective, and what would break if changed."
-}`;
+}
+
+GOLD STANDARD EXAMPLE (calibration reference — your analyses should match this level of specificity):
+
+Input: a café morning poster with egg sandwich, cortado glass, mixed-typography headline "tasty MORNING joy" on dark café photography background.
+
+Expected level of detail (partial, for calibration):
+  "colorDNA": {
+    "dominantColors": [
+      { "role": "dark café interior background", "hex": "#1E1610", "percentage": 42, "temperature": "warm 2800K lifted blacks, not true black", "saturation": "desaturated with amber cast" },
+      { "role": "countertop surface", "hex": "#8C7A68", "percentage": 18 },
+      { "role": "food hero egg yolk", "hex": "#D4A830", "percentage": 8 },
+      { "role": "cream headline text", "hex": "#F5F0E6", "percentage": 6 },
+      { "role": "warm bokeh highlights", "hex": "#C47820", "percentage": 5 }
+    ],
+    "harmonyType": "analogous (amber-brown-cream within 30° hue range)",
+    "overallTemperature": "warm 2800-3200K tungsten café",
+    "saturationLevel": "muted with selective amber saturation in highlights",
+    "contrastRatio": "medium 4.5:1 (cream text over dark background)",
+    "colorGrade": "faded blacks lifted to #1E1610, warm amber push across all tonal ranges, no cool tones present, slight orange cast in highlights reminiscent of tungsten film stock"
+  },
+  "lightingDNA": {
+    "pattern": "natural-window",
+    "quality": "soft diffused through large window",
+    "direction": "side-left 90°",
+    "colorTemperature": "3000K window daylight blended with 2600K tungsten café ambient",
+    "keyToFillRatio": "medium 4:1",
+    "shadowDescription": "graduated warm amber shadows falling to right, no neutral darks anywhere",
+    "rimLight": "subtle warm rim on glass edges from café interior bounce",
+    "promptDescription": "soft diffused natural window light from left at 90 degrees, 3000K daylight mixing with 2600K tungsten café ambient, 4:1 key-to-fill ratio, graduated warm amber shadows falling rightward, subtle rim from interior bounce"
+  }
+
+Notice: every value is a measurement, a ratio, a hex, or a Kelvin. Zero vague terms. This is the bar.`;
 
   const userText = `Analyze this poster image with full forensic precision. Every field must be actionable for an AI image generator.
 
@@ -467,6 +491,9 @@ export const generatePosterPrompt = createHttpFunction(async (req, res) => {
     res.status(405).json({ success: false, error: "Use POST" });
     return;
   }
+
+  // Client disconnect'te upstream API çağrılarını gerçekten iptal et (Level 2 cancel)
+  const signal = createAbortSignal(req);
 
   // ═══ LOG SİSTEMİ ═══
   const logs: Array<{ ts: number; phase: string; level: string; message: string; data?: any }> = [];
@@ -711,12 +738,24 @@ PROMPT:
       kullanıcıMesajı: userText,
     });
 
-    const claudeResult = await anthropic.messages.create({
-      model: promptModel,
-      max_tokens: 1500,
-      system: systemPrompt,
-      messages: [{ role: "user", content: messageContent }],
-    });
+    let claudeResult;
+    try {
+      claudeResult = await anthropic.messages.create({
+        model: promptModel,
+        max_tokens: 1500,
+        system: systemPrompt,
+        messages: [{ role: "user", content: messageContent }],
+      }, { signal });
+    } catch (claudeErr: any) {
+      log("CLAUDE", "Anthropic SDK hatası", {
+        errorName: claudeErr?.name,
+        errorMessage: claudeErr?.message,
+        errorConstructor: claudeErr?.constructor?.name,
+        signalAborted: signal.aborted,
+        signalReason: (signal as any)?.reason?.message,
+      }, "error");
+      throw claudeErr;
+    }
 
     fullResponse = claudeResult.content
       .filter((b): b is { type: "text"; text: string } => b.type === "text")
@@ -755,6 +794,7 @@ PROMPT:
           { role: "user", content: orContent },
         ],
       }),
+      signal,
     });
     const orData = await orResponse.json() as any;
     if (!orResponse.ok) {
