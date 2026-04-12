@@ -10,6 +10,8 @@ interface PosterStyle {
   id: string; name: string; nameTr: string; description: string;
   thumbnailUrl?: string; isActive: boolean; sortOrder: number;
   examplePromptFragment?: string;
+  defaultBackgroundHex?: string;
+  backgroundHex?: string;
   promptDirections?: {
     background?: string;
     typography?: string;
@@ -386,10 +388,6 @@ const BACKGROUND_DIAGRAMS: Record<string, React.ReactElement> = {
   ),
 };
 
-const RATIO_ICONS: Record<string, string> = {
-  "2-3": "▯", "4-5": "▯", "1-1": "▢", "9-16": "▏",
-};
-
 export default function Poster() {
   // Firestore verileri
   const [styles, setStyles] = useState<PosterStyle[]>([]);
@@ -414,6 +412,7 @@ export default function Poster() {
   const [selectedLightingType, setSelectedLightingType] = useState("");
   const [selectedBackground, setSelectedBackground] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Stil açıklama detayı (hover/click ile full açıklama)
   const [expandedStyleDesc, setExpandedStyleDesc] = useState<string | null>(null);
@@ -428,7 +427,8 @@ export default function Poster() {
     name: string; nameTr: string; description: string; examplePromptFragment: string;
     background: string; typography: string; layout: string;
     colorPalette: string; productPlacement: string; lighting: string; overallFeel: string;
-  }>({ name: "", nameTr: "", description: "", examplePromptFragment: "", background: "", typography: "", layout: "", colorPalette: "", productPlacement: "", lighting: "", overallFeel: "" });
+    backgroundHex: string;
+  }>({ name: "", nameTr: "", description: "", examplePromptFragment: "", background: "", typography: "", layout: "", colorPalette: "", productPlacement: "", lighting: "", overallFeel: "", backgroundHex: "" });
   const [styleEditSaving, setStyleEditSaving] = useState(false);
   const [styleEditError, setStyleEditError] = useState<string | null>(null);
   // Form
@@ -519,6 +519,7 @@ export default function Poster() {
         nameTr: styleEditForm.nameTr,
         description: styleEditForm.description,
         examplePromptFragment: styleEditForm.examplePromptFragment,
+        backgroundHex: styleEditForm.backgroundHex || null,
         promptDirections: {
           background: styleEditForm.background,
           typography: styleEditForm.typography,
@@ -538,6 +539,7 @@ export default function Poster() {
               nameTr: styleEditForm.nameTr,
               description: styleEditForm.description,
               examplePromptFragment: styleEditForm.examplePromptFragment,
+              backgroundHex: styleEditForm.backgroundHex || undefined,
               promptDirections: {
                 background: styleEditForm.background,
                 typography: styleEditForm.typography,
@@ -740,6 +742,7 @@ export default function Poster() {
                           productPlacement: s.promptDirections?.productPlacement || "",
                           lighting: s.promptDirections?.lighting || "",
                           overallFeel: s.promptDirections?.overallFeel || "",
+                          backgroundHex: s.backgroundHex || s.defaultBackgroundHex || "",
                         });
                         setStyleEditError(null);
                       }}
@@ -796,61 +799,46 @@ export default function Poster() {
         {/* Mood Seçimi */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Mood</label>
-          <div className="grid grid-cols-3 gap-2">
+          <select
+            value={selectedMood}
+            onChange={e => setSelectedMood(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 focus:border-amber-400"
+          >
             {moods.map(m => (
-              <div
-                key={m.id}
-                className={`relative group border rounded-xl transition ${
-                  selectedMood === m.id
-                    ? "border-amber-500 bg-amber-50 ring-1 ring-amber-500"
-                    : "border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                <button onClick={() => setSelectedMood(m.id)} className="w-full p-2.5 text-left pr-8">
-                  <span className="font-medium text-xs">{m.nameTr}</span>
-                </button>
-                <button
-                  onClick={async e => {
-                    e.stopPropagation();
-                    const backup = [...moods];
-                    setMoods(prev => prev.filter(x => x.id !== m.id));
-                    if (selectedMood === m.id) setSelectedMood("");
-                    try { await api.deletePosterMood(m.id); }
-                    catch { setMoods(backup); alert("Silinemedi"); }
-                  }}
-                  className="absolute top-2 right-2 w-5 h-5 rounded-md bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Sil"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+              <option key={m.id} value={m.id}>{m.nameTr}</option>
             ))}
-          </div>
+          </select>
         </div>
 
         {/* Aspect Ratio */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Boyut</label>
-          <div className="flex gap-2">
+          <select
+            value={selectedRatio}
+            onChange={e => setSelectedRatio(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+          >
             {ratios.map(r => (
-              <button
-                key={r.id}
-                onClick={() => setSelectedRatio(r.id)}
-                className={`flex-1 py-2.5 px-3 border rounded-xl text-center transition ${
-                  selectedRatio === r.id
-                    ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
-                    : "border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                <span className="text-lg block">{RATIO_ICONS[r.id] || "▯"}</span>
-                <span className="text-xs font-medium">{r.label}</span>
-              </button>
+              <option key={r.id} value={r.id}>{r.label} — {r.useCase}</option>
             ))}
-          </div>
+          </select>
         </div>
 
+        {/* Gelişmiş Ayarlar — toggle */}
+        <div>
+          <button
+            onClick={() => setShowAdvanced(v => !v)}
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition"
+          >
+            <svg className={`w-4 h-4 transition-transform ${showAdvanced ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="font-medium">Gelişmiş Ayarlar</span>
+            <span className="text-xs text-gray-400">(Çekim açısı, aydınlatma, arka plan, yerleşim)</span>
+          </button>
+        </div>
+
+        {showAdvanced && <>
         {/* Çekim Açısı */}
         {cameraAngles.length > 0 && (
           <div>
@@ -1084,6 +1072,7 @@ export default function Poster() {
             <p className="text-[10px] text-gray-400 mt-1">Her satır bir katman. En alttaki malzeme ilk satır, en üstteki son satır.</p>
           </div>
         )}
+        </>}
 
         {/* Metin Alanları */}
         <div className="grid grid-cols-2 gap-3">
@@ -1253,6 +1242,42 @@ export default function Poster() {
                   placeholder="photorealistic, ultra-detailed, golden hour lighting..."
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-violet-400 resize-none font-mono"
                 />
+              </div>
+
+              {/* Arka Plan Rengi */}
+              <div className="border-t border-gray-100 pt-4">
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Arka Plan Rengi (opsiyonel)</label>
+                <p className="text-[11px] text-gray-400 mb-2">Seçersen poster bu rengi arka plan olarak kullanır. Boş bırakırsan AI kendi seçer.</p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={styleEditForm.backgroundHex || "#ffffff"}
+                    onChange={e => setStyleEditForm(f => ({ ...f, backgroundHex: e.target.value }))}
+                    className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={styleEditForm.backgroundHex}
+                    onChange={e => setStyleEditForm(f => ({ ...f, backgroundHex: e.target.value }))}
+                    placeholder="#RRGGBB"
+                    className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-400"
+                  />
+                  {styleEditForm.backgroundHex && (
+                    <button
+                      onClick={() => setStyleEditForm(f => ({ ...f, backgroundHex: "" }))}
+                      className="text-xs text-gray-400 hover:text-red-500 transition"
+                      title="Rengi kaldır"
+                    >
+                      Temizle
+                    </button>
+                  )}
+                  {styleEditForm.backgroundHex && (
+                    <div
+                      className="w-10 h-10 rounded-lg border border-gray-200 shadow-inner"
+                      style={{ backgroundColor: styleEditForm.backgroundHex }}
+                    />
+                  )}
+                </div>
               </div>
 
               {/* Prompt Directions */}

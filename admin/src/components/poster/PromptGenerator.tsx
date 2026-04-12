@@ -194,10 +194,18 @@ export default function PromptGenerator(props: PromptGeneratorProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50" style={{ pointerEvents: "none" }}>
+    <div
+      className="fixed inset-0 z-50 bg-black/20"
+      onClick={e => {
+        if (e.target === e.currentTarget) {
+          setIsOpen(false);
+          setPosition({ x: 0, y: 0 });
+        }
+      }}
+    >
       <div
         className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto absolute"
-        style={{ pointerEvents: "auto", left: `calc(50% + ${position.x}px - 336px)`, top: `calc(50% + ${position.y}px - 300px)` }}
+        style={{ left: `calc(50% + ${position.x}px - 336px)`, top: `calc(50% + ${position.y}px - 300px)` }}
       >
         <div
           className="p-5 border-b flex items-center justify-between cursor-grab active:cursor-grabbing select-none"

@@ -15,6 +15,7 @@
 4. **YAPARIM DEDİĞİM HER ŞEYİ GERÇEKTEN YAPACAĞIM.** Bir düzeltme söz verdimse, o satırı yazacağım, build edeceğim, doğrulayacağım. "Çözüm basit" deyip geçmeyeceğim — çözümü uygulayacağım.
 5. **YAPAMAYACAKLARIMI DÜRÜSTÇE BELİRTECEĞİM.** Bilmediğimi "bilmiyorum" diyeceğim. Emin olmadığımı "emin değilim, kontrol edeyim" diyeceğim. Tahmini gerçekmiş gibi sunmayacağım.
 6. **SÖYLEDİĞİM İLE YAPTIĞIM AYNI OLACAK.** "preferredTags'i Gemini'ye aktaracağım" dediysem, o kodu yazacağım — bir sonraki oturumda "aslında aktarılmamış" durumu KABUL EDİLEMEZ.
+7. **KULLANICIDAN ONAY ALMADAN BİLGİSAYARA MÜDAHALE YOK.** Kullanıcının bilgisayarına dosya indirme, program yükleme, dosya silme veya proje dışı dosya düzenleme gibi hiçbir işlem kullanıcıdan açık onay alınmadan YAPILMAZ. Önce ne yapacağını açıkla, onay al, sonra yap.
 
 ---
 

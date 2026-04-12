@@ -626,7 +626,13 @@ ASPECT RATIO: ${aspectRatio.promptInstruction}
 ${typography ? `\nTITLE TYPOGRAPHY: ${typography.promptInstruction}` : ""}
 ${subtitleTypography ? `\nSUBTITLE TYPOGRAPHY: ${subtitleTypography.promptInstruction}` : ""}
 ${layout ? `\nLAYOUT: ${layout.promptInstruction}` : ""}
-${rulesText}${correctionsText}
+${rulesText}${correctionsText}${style.backgroundHex ? `
+
+⚠️ MANDATORY BACKGROUND COLOR OVERRIDE:
+The user has explicitly chosen background color: ${style.backgroundHex}
+You MUST use this exact color as the dominant background color of the poster.
+Do NOT use white, cream, or any other background color — use ${style.backgroundHex} and its tonal variations.
+This overrides any background color described in the style directions above.` : ""}
 
 ${textInstruction}
 ${referenceImageBase64 ? `
