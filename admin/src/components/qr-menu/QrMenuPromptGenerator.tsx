@@ -11,12 +11,20 @@ const TEXTURES = [
   { id: "fine-linen", label: "İnce Keten", prompt: "fine linen fabric" },
 ] as const;
 
+// Boyut seçenekleri
+const RATIOS = [
+  { id: "1-1", label: "1:1 Kare", prompt: "1:1 square aspect ratio" },
+  { id: "4-5", label: "4:5 Portrait", prompt: "4:5 portrait aspect ratio (slightly taller than wide)" },
+  { id: "2-3", label: "2:3 Dikey", prompt: "2:3 tall portrait aspect ratio" },
+] as const;
+
 /** Sabit şablondan prompt oluştur — API çağrısı yok */
 function buildPrompt(
   productName: string,
   texturePrompt: string,
   scattered: string,
   onPlate: boolean,
+  ratioPrompt: string,
 ): string {
   const lines = [
     `Professional product photo of "${productName}" on a warm cream (${BG_COLOR}) ${texturePrompt} surface.`,
@@ -28,6 +36,7 @@ function buildPrompt(
       : "Product placed directly on surface, no plate, no dish.",
     `Overhead soft diffused lighting, 5000K neutral daylight, 2:1 key-to-fill ratio, minimal soft shadow beneath product.`,
     `Clean, minimal, catalog-quality food photography. No text, no watermark, no branding.`,
+    `Generate this image in ${ratioPrompt}.`,
   ];
   return lines.filter(Boolean).join("\n");
 }
@@ -35,6 +44,7 @@ function buildPrompt(
 export default function QrMenuPromptGenerator() {
   const [productName, setProductName] = useState("");
   const [selectedTexture, setSelectedTexture] = useState(TEXTURES[0].id);
+  const [selectedRatio, setSelectedRatio] = useState(RATIOS[0].id);
   const [scattered, setScattered] = useState("");
   const [onPlate, setOnPlate] = useState(false);
 
@@ -44,7 +54,8 @@ export default function QrMenuPromptGenerator() {
   const handleBuild = () => {
     if (!productName.trim()) return;
     const tex = TEXTURES.find(t => t.id === selectedTexture) || TEXTURES[0];
-    setPrompt(buildPrompt(productName.trim(), tex.prompt, scattered, onPlate));
+    const ratio = RATIOS.find(r => r.id === selectedRatio) || RATIOS[0];
+    setPrompt(buildPrompt(productName.trim(), tex.prompt, scattered, onPlate, ratio.prompt));
     setPromptCopied(false);
   };
 
@@ -84,6 +95,20 @@ export default function QrMenuPromptGenerator() {
           >
             {TEXTURES.map(t => (
               <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Boyut */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Boyut</label>
+          <select
+            value={selectedRatio}
+            onChange={e => setSelectedRatio(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-teal-400 focus:border-teal-400"
+          >
+            {RATIOS.map(r => (
+              <option key={r.id} value={r.id}>{r.label}</option>
             ))}
           </select>
         </div>
