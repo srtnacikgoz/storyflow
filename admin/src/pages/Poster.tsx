@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../services/api";
 import PosterAnalyzer from "../components/poster/PosterAnalyzer";
-import PromptGenerator from "../components/poster/PromptGenerator";
 import ProductImageUpload from "../components/ProductImageUpload";
 import InputWithRecent from "../components/InputWithRecent";
 
@@ -42,10 +41,19 @@ function toStyleDirective(dirs: PosterStyle["promptDirections"]): string {
 interface PosterMood {
   id: string; name: string; nameTr: string;
   isActive: boolean; sortOrder: number;
+  promptModifiers?: {
+    productClarity?: string;
+    background?: string;
+    surroundings?: string;
+    lighting?: string;
+    colorPalette?: string;
+    compositionStyle?: string;
+  };
 }
 interface PosterAspectRatio {
   id: string; label: string; width: number; height: number;
   useCase: string; isActive: boolean;
+  promptInstruction?: string;
 }
 interface PosterTypography {
   id: string; name: string; nameTr: string; description: string;
@@ -87,6 +95,68 @@ export default function Poster() {
   }>({ name: "", nameTr: "", description: "", styleDirective: "", dallEPrompt: "", backgroundHex: "" });
   const [styleEditSaving, setStyleEditSaving] = useState(false);
   const [styleEditError, setStyleEditError] = useState<string | null>(null);
+
+  // Prompt oluştur (API'siz)
+  const [generatedPrompt, setGeneratedPrompt] = useState("");
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  /** Stilin dallEPrompt veya styleDirective'inden prompt oluşturur + mood ekler */
+  const buildPromptFromStyle = () => {
+    const style = styles.find(s => s.id === selectedStyle);
+    if (!style) return;
+
+    // dallEPrompt varsa onu kullan, yoksa styleDirective'den oluştur
+    const dallE = style.dallEPrompt || style.promptDirections?.dallEPrompt || "";
+    const directive = style.promptDirections?.styleDirective || toStyleDirective(style.promptDirections);
+
+    let prompt: string;
+    if (dallE) {
+      // dallEPrompt varsa placeholder'ları değiştir
+      prompt = dallE
+        .replace(/\{PRODUCT\}/g, title || "the product")
+        .replace(/\{TITLE\}/g, title || "")
+        .replace(/\{SUBTITLE\}/g, subtitle || "")
+        .replace(/\{PRICE\}/g, price || "");
+    } else if (directive) {
+      // dallEPrompt yoksa styleDirective'den prompt oluştur
+      prompt = `A professional product poster featuring ${title || "the product"}.${subtitle ? ` Subtitle: "${subtitle}".` : ""}${price ? ` Price: "${price}".` : ""}\n\n${directive}`;
+    } else {
+      setGeneratedPrompt("");
+      return;
+    }
+
+    // Mood modifiers ekle
+    const mood = moods.find(m => m.id === selectedMood);
+    if (mood?.promptModifiers) {
+      const mods = mood.promptModifiers;
+      const moodLines = [
+        mods.productClarity && `Product clarity: ${mods.productClarity}`,
+        mods.background && `Background mood: ${mods.background}`,
+        mods.surroundings && `Surroundings: ${mods.surroundings}`,
+        mods.lighting && `Lighting mood: ${mods.lighting}`,
+        mods.colorPalette && `Color mood: ${mods.colorPalette}`,
+        mods.compositionStyle && `Composition mood: ${mods.compositionStyle}`,
+      ].filter(Boolean);
+      if (moodLines.length > 0) {
+        prompt += `\n\nMOOD — ${mood.name}:\n${moodLines.join("\n")}`;
+      }
+    }
+
+    // Aspect ratio ekle
+    const ratio = ratios.find(r => r.id === selectedRatio);
+    if (ratio?.promptInstruction) {
+      prompt += `\n\nASPECT RATIO: ${ratio.promptInstruction}`;
+    } else if (ratio) {
+      prompt += `\n\nASPECT RATIO: ${ratio.width}:${ratio.height} ${ratio.label}`;
+    }
+
+    // Ek notlar varsa sona ekle
+    if (combinedAdditionalNotes.trim()) {
+      prompt += `\n\nAdditional notes: ${combinedAdditionalNotes.trim()}`;
+    }
+    setGeneratedPrompt(prompt);
+    setPromptCopied(false);
+  };
 
   /** Claude analiz çıktısını parse edip form alanlarına doldurur */
   const handlePasteAnalysis = (text: string) => {
@@ -608,20 +678,44 @@ export default function Poster() {
           <InputWithRecent storageKey="poster_notes" value={additionalNotes} onChange={setAdditionalNotes} placeholder="Bahar temalı..." label="Ek Notlar (opsiyonel)" />
         </div>
 
-        {/* Prompt Üret */}
-        <PromptGenerator
-          productImageBase64={productImageBase64}
-          productMimeType={productMimeType}
-          styleId={selectedStyle}
-          moodId={selectedMood}
-          aspectRatioId={selectedRatio}
-          typographyId={selectedTitleTypography || undefined}
-          subtitleTypographyId={selectedSubtitleTypography || undefined}
-          title={title}
-          subtitle={subtitle}
-          price={price}
-          additionalNotes={combinedAdditionalNotes}
-        />
+        {/* Promptu Oluştur (API'siz) */}
+        {(() => {
+          const style = styles.find(s => s.id === selectedStyle);
+          const hasPromptSource = !!(style?.dallEPrompt || style?.promptDirections?.dallEPrompt || style?.promptDirections?.styleDirective || toStyleDirective(style?.promptDirections));
+          return (
+            <div className="space-y-3">
+              {!hasPromptSource && selectedStyle && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Bu stilin prompt bilgisi tanımlı değil. Stili düzenleyip Stil Tarifi veya DALL-E Prompt alanını doldurun.
+                </p>
+              )}
+              <button
+                onClick={buildPromptFromStyle}
+                disabled={!selectedStyle || !hasPromptSource}
+                className="w-full py-3 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Promptu Oluştur
+              </button>
+              {generatedPrompt && (
+                <div className="relative">
+                  <div className="bg-gray-900 rounded-xl p-4 max-h-60 overflow-y-auto">
+                    <pre className="text-sm text-gray-100 whitespace-pre-wrap font-mono leading-relaxed">{generatedPrompt}</pre>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedPrompt);
+                      setPromptCopied(true);
+                      setTimeout(() => setPromptCopied(false), 2000);
+                    }}
+                    className="absolute top-2 right-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs rounded-lg transition backdrop-blur-sm"
+                  >
+                    {promptCopied ? "Kopyalandı" : "Kopyala"}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Stil kartı görsel hover önizleme */}
