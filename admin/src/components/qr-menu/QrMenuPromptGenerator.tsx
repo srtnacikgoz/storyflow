@@ -21,7 +21,7 @@ function buildPrompt(
   const lines = [
     `Professional product photo of "${productName}" on a warm cream (${BG_COLOR}) ${texturePrompt} surface.`,
     scattered.trim()
-      ? `Scattered around the base: ${scattered.trim()}.`
+      ? `Scattered around the base in minimal quantity (2-3 pieces for solid items like fruit or candy, light dusting for powders/crumbs): ${scattered.trim()}.`
       : "",
     onPlate
       ? "Served on an appropriate ceramic plate or dish that suits the product's form and size. The plate's color and material must harmonize with the warm cream background tone."
