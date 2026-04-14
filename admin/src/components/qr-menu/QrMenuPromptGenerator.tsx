@@ -27,7 +27,7 @@ function buildPrompt(
   ratioPrompt: string,
 ): string {
   const lines = [
-    `Professional product photo of "${productName}" on a warm cream (${BG_COLOR}) ${texturePrompt} surface.`,
+    `Professional product photo of "${productName}" on a warm cream (EXACTLY ${BG_COLOR} — no pink cast, no yellow shift, no cool tones, neutral warm cream only) ${texturePrompt} surface.`,
     scattered.trim()
       ? `Scattered around the base in minimal quantity (2-3 pieces for solid items like fruit or candy, light dusting for powders/crumbs): ${scattered.trim()}.`
       : "",
