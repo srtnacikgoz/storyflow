@@ -185,10 +185,17 @@ Overall Feel: fresh energetic inviting urban-casual, no grain, flat depth (all e
 - Font stili, rengi, konumu, boyutu belirt
 - Tüm elemanların konumunu belirt
 - Teknik: aspect ratio, lens, f-stop belirt
+- Referans posterdeki marka/logo adını YAZMA → "brand logo" kullan
+- Referans posterdeki spesifik aksesuar adını YAZMA → "accent prop" kullan
+- Referans posterdeki spesifik yemek detayını YAZMA → ürün fotoğrafı zaten yüklenecek
+- Referans posterdeki başlık metnini YAZMA → `{TITLE}` placeholder kullan
+- Referans posterdeki alt başlık metnini YAZMA → `{SUBTITLE}` placeholder kullan
+- Referans posterdeki fiyatı YAZMA → `{PRICE}` placeholder kullan
+- Yapısal tarif KAL: konum, boyut, font stili, renk, ışık, katman sırası — bunlar genel
 
 **Örnek:**
 ```
-A professional product poster featuring {PRODUCT} placed in center-right position, filling approximately 45% of the 2:3 portrait frame. Background is solid matte dark green (#3D5A3E). A large bold geometric sans-serif headline "POT'SOUP" in ALL-CAPS white spans the top 15% of the frame, centered. Directly below, "SOUP BY ITSU" in medium weight white at 40% of headline size. Left side at 35-50% height: product name in white, left-aligned, stacked in 3 lines. Below that, price "£4.49" in white bold, then "458CAL" in smaller white text. A female hand with red nails enters from the top-right edge, sprinkling seeds downward onto the product bowl. Bottom-left: a pair of dark chopsticks at diagonal angle. Bottom-center: small dish with scattered seeds. Bottom-left corner: small "itsu" script logo in white. Bottom-right: small Japanese characters in white. Lighting is soft natural from top-left at 45 degrees, 5500K daylight, 4:1 key-to-fill ratio. Overall mood is fresh, energetic, and inviting. Contemporary flat style, no grain, no vignette.
+A professional product poster featuring {PRODUCT} placed in center-right position, filling approximately 45% of the 2:3 portrait frame. Background is solid matte dark green (#3D5A3E) with no texture or grain. At the top, a large bold geometric sans-serif headline "{TITLE}" in ALL-CAPS white with very tight letter-spacing spans 80% of frame width, centered. Directly below, "{SUBTITLE}" in medium weight white at 40% of headline size. Left side at 35-50% height: product description text in white, left-aligned. Below that, "{PRICE}" in white bold. A hand enters from the top-right edge of the frame, adding garnish onto {PRODUCT}. Bottom-left: accent prop at 30-degree diagonal angle. Bottom-center: small dish with garnish elements. Bottom-left corner: small brand logo in white. Lighting is soft natural from top-left at 45 degrees, 5500K daylight, 4:1 key-to-fill ratio, soft shadows falling lower-right. Overall mood is fresh, energetic, and inviting. Contemporary flat style, no film grain, no vignette.
 ```
 
 ---
