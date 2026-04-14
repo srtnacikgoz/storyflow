@@ -102,7 +102,11 @@ export async function getPosterStyles(skipCache = false): Promise<PosterStyle[]>
   // Self-healing backfill — defaultBackgroundHex eksik stilleri tamamla
   for (const style of styles) {
     if (style.defaultBackgroundHex && style.defaultBackgroundHex.trim()) continue;
-    const extracted = extractHexFromBackgroundText(style.promptDirections?.background);
+    const extracted = extractHexFromBackgroundText(
+      style.promptDirections?.styleDirective
+      || style.promptDirections?.colorPalette
+      || style.promptDirections?.background
+    );
     if (!extracted) continue;
 
     // Bellekteki kopyayı hemen güncelle — bu isteğin sonucu anchor kullanır

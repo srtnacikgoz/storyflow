@@ -9,6 +9,7 @@ interface PosterStyle {
   defaultBackgroundHex?: string; // Stilin doğal rengi — DNA'dan gelir, standart olarak yaşar
   backgroundHex?: string;        // Kullanıcının opsiyonel override'ı
   promptDirections?: {
+    styleDirective?: string;
     background?: string;
     lighting?: string;
     colorPalette?: string;
@@ -47,15 +48,17 @@ function buildPrompt(
     ? `SERVING OVERRIDE (MANDATORY): Present this product on an appropriate plate or dish that suits its form, size and eating method (a round ceramic plate for a slice, a shallow bowl for a dessert with sauce, a wooden board for a sandwich, etc.). A plate or dish IS required for this specific generation. Any instructions below that forbid plates, dishes, trays or props DO NOT apply to this product — plating is mandatory here and part of the composition. The plate's color and material must harmonize with the background tone described above, never compete with the product.`
     : null;
 
-  // Standart 6 alan
-  const standardSections = [
-    dirs.background,
-    dirs.lighting,
-    dirs.colorPalette,
-    dirs.layout,
-    dirs.productPlacement,
-    dirs.overallFeel,
-  ].filter(Boolean);
+  // styleDirective varsa tek blok, yoksa eski 6 alan (backward compat)
+  const standardSections = dirs.styleDirective
+    ? [dirs.styleDirective]
+    : [
+        dirs.background,
+        dirs.lighting,
+        dirs.colorPalette,
+        dirs.layout,
+        dirs.productPlacement,
+        dirs.overallFeel,
+      ].filter(Boolean);
 
   // Kullanıcı-tanımlı ekstra bölümler (CRUD'dan gelen)
   const customSections = (style.customSections || [])

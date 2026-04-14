@@ -9,32 +9,20 @@ interface VisualStyleForm {
   name: string;
   nameTr: string;
   description: string;
-  examplePromptFragment: string;
-  background: string;
-  lighting: string;
-  colorPalette: string;
-  layout: string;
-  productPlacement: string;
-  overallFeel: string;
+  styleDirective: string;
+  dallEPrompt: string;
 }
 
 const EMPTY_FORM: VisualStyleForm = {
-  name: "", nameTr: "", description: "", examplePromptFragment: "",
-  background: "", lighting: "", colorPalette: "", layout: "",
-  productPlacement: "", overallFeel: "",
+  name: "", nameTr: "", description: "", styleDirective: "", dallEPrompt: "",
 };
 
 const VISUAL_FIELDS: { key: keyof VisualStyleForm; label: string; rows: number }[] = [
   { key: "name", label: "Stil Adı (EN)", rows: 1 },
   { key: "nameTr", label: "Stil Adı (TR)", rows: 1 },
   { key: "description", label: "Açıklama / Teknik Notlar", rows: 2 },
-  { key: "colorPalette", label: "Renk Paleti", rows: 2 },
-  { key: "background", label: "Arka Plan & Yüzey", rows: 2 },
-  { key: "lighting", label: "Işık", rows: 2 },
-  { key: "layout", label: "Kompozisyon & Açı", rows: 2 },
-  { key: "productPlacement", label: "Ürün Yerleşimi & Ölçek", rows: 2 },
-  { key: "overallFeel", label: "Genel Atmosfer", rows: 2 },
-  { key: "examplePromptFragment", label: "Görsel Prompt Parçası", rows: 3 },
+  { key: "styleDirective", label: "Stil Tarifi (renk, ışık, layout, atmosfer — hepsi burada)", rows: 8 },
+  { key: "dallEPrompt", label: "DALL-E Prompt Şablonu ({PRODUCT} placeholder)", rows: 4 },
 ];
 
 /** DNA'nın dominant colors listesinden background rolündeki hex'i bulur (yoksa ilk hex'i döner) */
@@ -105,12 +93,26 @@ function dnaToVisualForm(dna: any): VisualStyleForm {
     atm.depthEffect, atm.styleEra,
   ].filter(Boolean).join(", ");
 
+  // Tüm alanları tek styleDirective'e birleştir
+  const styleDirective = [
+    background && `Background: ${background}`,
+    lighting && `Lighting: ${lighting}`,
+    colorPalette && `Color Palette: ${colorPalette}`,
+    layout && `Layout: ${layout}`,
+    productPlacement && `Product: ${productPlacement}`,
+    overallFeel && `Overall Feel: ${overallFeel}`,
+  ].filter(Boolean).join("\n");
+
+  const dallEPrompt = gen.lowLevel
+    ? `A professional product poster featuring {PRODUCT}. ${gen.lowLevel}`
+    : "";
+
   return {
     name: dna.styleName || "",
     nameTr: dna.styleName || "",
     description: dna.technicalNotes || "",
-    examplePromptFragment: gen.lowLevel || gen.highLevel || "",
-    background, lighting, colorPalette, layout, productPlacement, overallFeel,
+    styleDirective,
+    dallEPrompt,
   };
 }
 
@@ -215,16 +217,11 @@ export default function QrMenu() {
         name: styleForm.name,
         nameTr: styleForm.nameTr || styleForm.name,
         description: styleForm.description,
-        examplePromptFragment: styleForm.examplePromptFragment,
+        dallEPrompt: styleForm.dallEPrompt,
         ...(defaultBackgroundHex ? { defaultBackgroundHex } : {}),
         promptDirections: {
-          background: styleForm.background,
-          typography: "", // QR menüde tipografi yok
-          layout: styleForm.layout,
-          colorPalette: styleForm.colorPalette,
-          productPlacement: styleForm.productPlacement,
-          lighting: styleForm.lighting,
-          overallFeel: styleForm.overallFeel,
+          styleDirective: styleForm.styleDirective,
+          dallEPrompt: styleForm.dallEPrompt,
         },
       });
       setSaved(true);
@@ -569,22 +566,6 @@ export default function QrMenu() {
 }
 
 /* ──── Stil Kartı ──── */
-type StandardFieldKey =
-  | "background"
-  | "lighting"
-  | "colorPalette"
-  | "layout"
-  | "productPlacement"
-  | "overallFeel";
-
-const EDITABLE_FIELDS: { key: StandardFieldKey; label: string }[] = [
-  { key: "background", label: "Arka Plan & Yüzey" },
-  { key: "lighting", label: "Işık" },
-  { key: "colorPalette", label: "Renk Paleti" },
-  { key: "layout", label: "Kompozisyon & Açı" },
-  { key: "productPlacement", label: "Ürün Yerleşimi" },
-  { key: "overallFeel", label: "Genel Atmosfer" },
-];
 
 interface CustomSection {
   id: string;
@@ -596,25 +577,28 @@ interface StyleDraft {
   nameTr: string;
   description: string;
   backgroundHex: string;
-  background: string;
-  lighting: string;
-  colorPalette: string;
-  layout: string;
-  productPlacement: string;
-  overallFeel: string;
+  styleDirective: string;
   customSections: CustomSection[];
+}
+
+/** Eski format (6 alan) → styleDirective birleştirme fallback */
+function buildStyleDirective(dirs: any): string {
+  if (dirs?.styleDirective) return dirs.styleDirective;
+  return [
+    dirs?.background && `Background: ${dirs.background}`,
+    dirs?.lighting && `Lighting: ${dirs.lighting}`,
+    dirs?.colorPalette && `Color Palette: ${dirs.colorPalette}`,
+    dirs?.layout && `Layout: ${dirs.layout}`,
+    dirs?.productPlacement && `Product: ${dirs.productPlacement}`,
+    dirs?.overallFeel && `Overall Feel: ${dirs.overallFeel}`,
+  ].filter(Boolean).join("\n");
 }
 
 const makeDraft = (style: any): StyleDraft => ({
   nameTr: style.nameTr || style.name || "",
   description: style.description || "",
   backgroundHex: style.backgroundHex || "",
-  background: style.promptDirections?.background || "",
-  lighting: style.promptDirections?.lighting || "",
-  colorPalette: style.promptDirections?.colorPalette || "",
-  layout: style.promptDirections?.layout || "",
-  productPlacement: style.promptDirections?.productPlacement || "",
-  overallFeel: style.promptDirections?.overallFeel || "",
+  styleDirective: buildStyleDirective(style.promptDirections),
   customSections: Array.isArray(style.customSections)
     ? style.customSections.map((s: any) => ({
         id: s.id || `cs_${Math.random().toString(36).slice(2, 9)}`,
@@ -649,14 +633,17 @@ function StyleCard({ style, onChanged }: { style: any; onChanged: () => void }) 
     ? `BACKGROUND COLOR (MANDATORY): Exactly ${effectiveHex} — this hex is the authoritative background tone for the entire scene. Override any other color or tonal description mentioned below if there is any conflict.`
     : null;
 
-  const standardSections = [
-    dirs.background,
-    dirs.lighting,
-    dirs.colorPalette,
-    dirs.layout,
-    dirs.productPlacement,
-    dirs.overallFeel,
-  ].filter(Boolean);
+  // styleDirective varsa tek blok, yoksa eski 6 alan (backward compat)
+  const standardSections = dirs.styleDirective
+    ? [dirs.styleDirective]
+    : [
+        dirs.background,
+        dirs.lighting,
+        dirs.colorPalette,
+        dirs.layout,
+        dirs.productPlacement,
+        dirs.overallFeel,
+      ].filter(Boolean);
 
   const extraSections = (Array.isArray(style.customSections) ? style.customSections : [])
     .filter((s: any) => s && s.value && s.value.trim())
@@ -733,12 +720,7 @@ function StyleCard({ style, onChanged }: { style: any; onChanged: () => void }) 
         backgroundHex: hexTrimmed || "",
         promptDirections: {
           ...(style.promptDirections || {}),
-          background: draft.background,
-          lighting: draft.lighting,
-          colorPalette: draft.colorPalette,
-          layout: draft.layout,
-          productPlacement: draft.productPlacement,
-          overallFeel: draft.overallFeel,
+          styleDirective: draft.styleDirective,
         },
         customSections: draft.customSections
           .filter(s => s.label.trim() || s.value.trim())
@@ -934,19 +916,15 @@ function StyleCard({ style, onChanged }: { style: any; onChanged: () => void }) 
 
           {/* Standart alanlar */}
           <div className="pt-2 border-t border-gray-100">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Standart Alanlar</p>
-            <div className="space-y-3">
-              {EDITABLE_FIELDS.map(({ key, label }) => (
-                <div key={key}>
-                  <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</label>
-                  <textarea
-                    rows={3}
-                    value={draft[key]}
-                    onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-400 resize-none leading-relaxed"
-                  />
-                </div>
-              ))}
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Stil Tarifi</p>
+            <div>
+              <textarea
+                rows={10}
+                value={draft.styleDirective}
+                onChange={e => setDraft(d => ({ ...d, styleDirective: e.target.value }))}
+                placeholder="Background: ... Lighting: ... Color Palette: ... Layout: ... Overall Feel: ..."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-400 resize-none leading-relaxed"
+              />
             </div>
           </div>
 
