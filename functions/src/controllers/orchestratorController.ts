@@ -201,6 +201,19 @@ export {
   updatePosterGlobalRules,
   triggerPosterLearning,
 
+  // Ingredient Controller (Malzeme Görsel Prompt Üretici)
+  generateIngredientPrompt,
+  seedIngredientData,
+  listIngredientProfiles,
+  listIngredientItems,
+  createIngredientProfile,
+  updateIngredientProfile,
+  deleteIngredientProfile,
+  createIngredientItem,
+  updateIngredientItem,
+  deleteIngredientItem,
+  listIngredientPromptHistory,
+
   // Style Studio Controller v2 (Stil Stüdyosu)
   listVisualStandards,
   createVisualStandard,
