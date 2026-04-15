@@ -3286,6 +3286,88 @@ class ApiService {
       method: "DELETE",
     });
   }
+
+  // ─── Malzeme Görsel Prompt Üretici ───
+
+  async generateIngredientPrompt(params: {
+    ingredientId: string;
+    styleProfileId: string;
+    referenceImageBase64?: string;
+    referenceImageMimeType?: string;
+  }): Promise<{ prompt: string; sceneDetail: string; ingredientName: string; styleProfileName: string; cost: number; model: string; historyId: string }> {
+    const res = await this.fetch<{ success: boolean; data: any }>("generateIngredientPrompt", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+    return res.data;
+  }
+
+  async seedIngredientData(): Promise<{ profileCount: number; itemCount: number }> {
+    const res = await this.fetch<{ success: boolean; data: any }>("seedIngredientData", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    return res.data;
+  }
+
+  async listIngredientProfiles(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listIngredientProfiles");
+    return res.data;
+  }
+
+  async listIngredientItems(): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>("listIngredientItems");
+    return res.data;
+  }
+
+  async createIngredientProfile(data: any): Promise<{ id: string }> {
+    const res = await this.fetch<{ success: boolean; data: { id: string } }>("createIngredientProfile", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  }
+
+  async updateIngredientProfile(id: string, updates: any): Promise<void> {
+    await this.fetch("updateIngredientProfile", {
+      method: "POST",
+      body: JSON.stringify({ id, ...updates }),
+    });
+  }
+
+  async deleteIngredientProfile(id: string): Promise<void> {
+    await this.fetch("deleteIngredientProfile", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  async createIngredientItem(data: any): Promise<{ id: string }> {
+    const res = await this.fetch<{ success: boolean; data: { id: string } }>("createIngredientItem", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  }
+
+  async updateIngredientItem(id: string, updates: any): Promise<void> {
+    await this.fetch("updateIngredientItem", {
+      method: "POST",
+      body: JSON.stringify({ id, ...updates }),
+    });
+  }
+
+  async deleteIngredientItem(id: string): Promise<void> {
+    await this.fetch("deleteIngredientItem", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  async listIngredientPromptHistory(limit = 20): Promise<any[]> {
+    const res = await this.fetch<{ success: boolean; data: any[] }>(`listIngredientPromptHistory?limit=${limit}`);
+    return res.data;
+  }
 }
 
 // Coffee Menu types

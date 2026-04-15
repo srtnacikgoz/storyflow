@@ -39,6 +39,7 @@ const AmerikanServis = lazy(() => import("./pages/AmerikanServis"));
 const QrMenu = lazy(() => import("./pages/QrMenu"));
 const ImageUpscale = lazy(() => import("./pages/ImageUpscale"));
 const AnnouncementPoster = lazy(() => import("./pages/AnnouncementPoster"));
+const IngredientPrompt = lazy(() => import("./pages/IngredientPrompt"));
 
 // Loading fallback component
 function PageLoader() {
@@ -87,6 +88,7 @@ function App() {
             <Route path="poster/qr-menu" element={<Suspense fallback={<PageLoader />}><QrMenu /></Suspense>} />
             <Route path="poster/upscale" element={<Suspense fallback={<PageLoader />}><ImageUpscale /></Suspense>} />
             <Route path="poster/duyuru" element={<Suspense fallback={<PageLoader />}><AnnouncementPoster /></Suspense>} />
+            <Route path="poster/malzeme-gorsel" element={<Suspense fallback={<PageLoader />}><IngredientPrompt /></Suspense>} />
             <Route path="poster-gallery" element={<Suspense fallback={<PageLoader />}><PosterGallery /></Suspense>} />
             <Route path="qr-code" element={<Suspense fallback={<PageLoader />}><QRCode /></Suspense>} />
             <Route path="style-studio" element={<Suspense fallback={<PageLoader />}><StyleStudio /></Suspense>} />

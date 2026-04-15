@@ -148,7 +148,7 @@ export const listPosterStyles = createHttpFunction(async (req, res) => {
 /**
  * Poster stilini güncelle
  * POST /updatePosterStyle
- * Body: { id, name?, nameTr?, description?, examplePromptFragment?, promptDirections?: { background?, typography?, layout?, colorPalette?, productPlacement?, lighting?, overallFeel? } }
+ * Body: { id, name?, nameTr?, description?, dallEPrompt?, promptDirections?: { styleDirective?, dallEPrompt?, background?, typography?, layout?, colorPalette?, lighting?, overallFeel? } }
  */
 export const updatePosterStyle = createHttpFunction(async (req, res) => {
   if (req.method !== "POST") {

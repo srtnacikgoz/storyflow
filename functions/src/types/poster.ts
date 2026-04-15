@@ -4,21 +4,26 @@
 
 // Stil prompt talimatları — her stil için farklı
 export interface PosterPromptDirections {
-  background: string;        // Arka plan tarzı
-  typography: string;        // Tipografi stili
-  layout: string;            // Layout / kompozisyon kuralları
-  colorPalette: string;      // Renk paleti
-  productPlacement: string;  // Ürün yerleşimi
-  lighting: string;          // Işık tarzı
-  overallFeel: string;       // Genel atmosfer
+  styleDirective?: string;     // Stilin tüm tarifi — tek metin (yeni format)
+  dallEPrompt?: string;        // Doğrudan ChatGPT'ye yapıştırılabilir DALL-E şablon promptu ({PRODUCT} placeholder)
+  // Backward compat — eski stiller için, yeni stiller bunları kullanmaz
+  background?: string;
+  typography?: string;
+  layout?: string;
+  colorPalette?: string;
+  lighting?: string;
+  overallFeel?: string;
+  productPlacement?: string;
 }
 
 // Mood prompt modifikatörleri
 export interface PosterMoodModifiers {
-  colorShift: string;        // Renk kaydırma talimatı
-  lightingAdjust: string;    // Işık ayarı
-  textureNote: string;       // Doku notu
-  atmosphereNote: string;    // Atmosfer notu
+  productClarity: string;    // Ürün ne kadar net/stilize olacak
+  background: string;        // Arka plan nasıl olacak
+  surroundings: string;      // Çevrede ne olacak (veya olmayacak)
+  lighting: string;          // Işık tipi ve yönü
+  colorPalette: string;      // Renk paleti talimatı
+  compositionStyle: string;  // Kompozisyon/yerleşim yaklaşımı
 }
 
 // Poster Stil — Firestore'da yaşar
@@ -28,7 +33,8 @@ export interface PosterStyle {
   nameTr: string;            // "Cesur Minimal"
   description: string;
   promptDirections: PosterPromptDirections;
-  examplePromptFragment: string;
+  dallEPrompt?: string;          // Doğrudan yapıştırılabilir DALL-E şablon promptu
+  examplePromptFragment?: string; // DEPRECATED — eski stiller için, yeni stiller dallEPrompt kullanır
   thumbnailUrl?: string;
   isActive: boolean;
   sortOrder: number;
@@ -47,7 +53,6 @@ export interface PosterMood {
   name: string;              // "Warm & Intimate"
   nameTr: string;            // "Sıcak & Samimi"
   promptModifiers: PosterMoodModifiers;
-  compatibleStyles: string[];
   isActive: boolean;
   sortOrder: number;
 }

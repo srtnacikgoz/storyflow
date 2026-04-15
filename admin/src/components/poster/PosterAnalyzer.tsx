@@ -9,14 +9,8 @@ interface StyleForm {
   name: string;
   nameTr: string;
   description: string;
-  examplePromptFragment: string;
-  background: string;
-  typography: string;
-  layout: string;
-  colorPalette: string;
-  productPlacement: string;
-  lighting: string;
-  overallFeel: string;
+  styleDirective: string;
+  dallEPrompt: string;
 }
 
 /**
@@ -71,20 +65,37 @@ function dnaToStyleForm(dna: any): StyleForm {
     ].filter(Boolean).join(", ");
   })();
 
-  // layout: kompozisyon promptu
-  const layout = comp.promptDescription || [
-    comp.gridType,
-    comp.balance,
-    comp.negativeSpaceRatio && `${comp.negativeSpaceRatio} negative space`,
-    comp.visualFlow && `${comp.visualFlow} visual flow`,
-  ].filter(Boolean).join(", ");
-
-  // productPlacement: ürün yerleşimi + ölçek
-  const productPlacement = [
-    comp.productPlacement,
-    comp.productScale,
-    comp.textZone && `text ${comp.textZone}`,
-  ].filter(Boolean).join(", ");
+  // layout: layoutMap varsa detaylı element-bazlı yerleşim, yoksa compositionDNA fallback
+  const lm = dna.layoutMap || {};
+  const layout = (() => {
+    // layoutMap.promptDescription varsa onu kullan (en detaylı)
+    if (lm.promptDescription) return lm.promptDescription;
+    // layoutMap.elements varsa her elementi satır satır yaz
+    if (lm.elements?.length) {
+      const lines = (lm.elements as any[]).map((el: any) => {
+        const parts = [
+          el.zone,
+          el.bounds && `(x:${el.bounds.xStart}-${el.bounds.xEnd}% y:${el.bounds.yStart}-${el.bounds.yEnd}%)`,
+          el.content,
+          el.scale,
+          el.relatedTo && `→ ${el.relatedTo}`,
+        ].filter(Boolean);
+        return `${el.id}: ${parts.join(", ")}`;
+      });
+      const extras = [
+        lm.canvasAspectRatio && `Canvas: ${lm.canvasAspectRatio}`,
+        lm.layerOrder && `Layers: ${lm.layerOrder}`,
+      ].filter(Boolean);
+      return [...extras, ...lines].join(". ");
+    }
+    // fallback: eski compositionDNA
+    return comp.promptDescription || [
+      comp.gridType,
+      comp.balance,
+      comp.negativeSpaceRatio && `${comp.negativeSpaceRatio} negative space`,
+      comp.visualFlow && `${comp.visualFlow} visual flow`,
+    ].filter(Boolean).join(", ");
+  })();
 
   // lighting: ışık promptu
   const lighting = light.promptDescription || [
@@ -104,21 +115,35 @@ function dnaToStyleForm(dna: any): StyleForm {
     atm.styleEra,
   ].filter(Boolean).join(", ");
 
-  // examplePromptFragment: lowLevel teknik paragraf (direkt Gemini'ye yazılabilir)
-  const examplePromptFragment = gen.lowLevel || gen.highLevel || "";
+  // dallEPrompt: tüm alanları birleştiren, doğrudan ChatGPT'ye yapıştırılabilir şablon
+  const dallEPrompt = gen.lowLevel
+    ? `A professional product poster featuring {PRODUCT}. ${gen.lowLevel}`
+    : [
+      "A professional product poster featuring {PRODUCT}.",
+      background && `Background: ${background}.`,
+      lighting && `Lighting: ${lighting}.`,
+      typography && `Typography: ${typography}.`,
+      colorPalette && `Colors: ${colorPalette}.`,
+      layout && `Layout: ${layout}.`,
+      overallFeel && `Mood: ${overallFeel}.`,
+    ].filter(Boolean).join(" ");
+
+  // styleDirective: tüm alanları tek metinde birleştir
+  const styleDirective = [
+    background && `Background: ${background}`,
+    typography && `Typography: ${typography}`,
+    layout && `Layout: ${layout}`,
+    colorPalette && `Color Palette: ${colorPalette}`,
+    lighting && `Lighting: ${lighting}`,
+    overallFeel && `Overall Feel: ${overallFeel}`,
+  ].filter(Boolean).join("\n");
 
   return {
     name: dna.styleName || "",
     nameTr: dna.styleName || "",
     description: dna.technicalNotes || "",
-    examplePromptFragment,
-    background,
-    typography,
-    layout,
-    colorPalette,
-    productPlacement,
-    lighting,
-    overallFeel,
+    styleDirective,
+    dallEPrompt,
   };
 }
 
@@ -126,14 +151,8 @@ const FORM_FIELDS: { key: keyof StyleForm; label: string; rows: number; mono?: b
   { key: "name", label: "Stil Adı (EN)", rows: 1 },
   { key: "nameTr", label: "Stil Adı (TR)", rows: 1 },
   { key: "description", label: "Açıklama / Teknik Notlar", rows: 2 },
-  { key: "colorPalette", label: "Renk Paleti", rows: 2, mono: true },
-  { key: "background", label: "Arka Plan", rows: 2, mono: true },
-  { key: "typography", label: "Tipografi", rows: 2, mono: true },
-  { key: "layout", label: "Kompozisyon (layout)", rows: 2, mono: true },
-  { key: "productPlacement", label: "Ürün Yerleşimi", rows: 2, mono: true },
-  { key: "lighting", label: "Işık", rows: 2, mono: true },
-  { key: "overallFeel", label: "Genel Hava", rows: 2, mono: true },
-  { key: "examplePromptFragment", label: "Örnek Prompt Parçası (lowLevel)", rows: 3, mono: true },
+  { key: "styleDirective", label: "Stil Tarifi (renk, ışık, tipografi, layout, atmosfer — hepsi burada)", rows: 10, mono: true },
+  { key: "dallEPrompt", label: "DALL-E Prompt Şablonu ({PRODUCT} placeholder)", rows: 5, mono: true },
 ];
 
 export default function PosterAnalyzer({ onStyleSaved }: PosterAnalyzerProps) {
@@ -148,9 +167,7 @@ export default function PosterAnalyzer({ onStyleSaved }: PosterAnalyzerProps) {
   // Adım 2: stil formu
   const [step, setStep] = useState<1 | 2>(1);
   const [styleForm, setStyleForm] = useState<StyleForm>({
-    name: "", nameTr: "", description: "", examplePromptFragment: "",
-    background: "", typography: "", layout: "", colorPalette: "",
-    productPlacement: "", lighting: "", overallFeel: "",
+    name: "", nameTr: "", description: "", styleDirective: "", dallEPrompt: "",
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -229,15 +246,10 @@ export default function PosterAnalyzer({ onStyleSaved }: PosterAnalyzerProps) {
         name: styleForm.name,
         nameTr: styleForm.nameTr || styleForm.name,
         description: styleForm.description,
-        examplePromptFragment: styleForm.examplePromptFragment,
+        dallEPrompt: styleForm.dallEPrompt,
         promptDirections: {
-          background: styleForm.background,
-          typography: styleForm.typography,
-          layout: styleForm.layout,
-          colorPalette: styleForm.colorPalette,
-          productPlacement: styleForm.productPlacement,
-          lighting: styleForm.lighting,
-          overallFeel: styleForm.overallFeel,
+          styleDirective: styleForm.styleDirective,
+          dallEPrompt: styleForm.dallEPrompt,
         },
       });
       setSaved(true);
@@ -251,12 +263,19 @@ export default function PosterAnalyzer({ onStyleSaved }: PosterAnalyzerProps) {
 
   if (!isOpen) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="text-xs text-violet-600 hover:text-violet-800 font-medium"
-      >
-        Referans poster analiz et
-      </button>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Referans Poster Analiz</label>
+        <button
+          onClick={() => setIsOpen(true)}
+          className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-200 hover:border-violet-400 hover:bg-violet-50/30 rounded-xl p-6 cursor-pointer transition"
+        >
+          <svg className="w-8 h-8 mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <p className="text-xs text-gray-500">Stil DNA'sı çıkar</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Tıkla ve poster yükle</p>
+        </button>
+      </div>
     );
   }
 

@@ -265,6 +265,21 @@ export {
   upscaleImage,
 } from "./upscaleController";
 
+// Ingredient Controller (Malzeme Görsel Prompt Üretici)
+export {
+  generateIngredientPrompt,
+  seedIngredientData,
+  listIngredientProfiles,
+  listIngredientItems,
+  createIngredientProfile,
+  updateIngredientProfile,
+  deleteIngredientProfile,
+  createIngredientItem,
+  updateIngredientItem,
+  deleteIngredientItem,
+  listIngredientPromptHistory,
+} from "./ingredientController";
+
 // Style Studio Controller v2 (Stil Stüdyosu)
 export {
   listVisualStandards,

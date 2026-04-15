@@ -256,6 +256,31 @@ REQUIRED: Return ONLY valid JSON. No markdown fences, no preamble, no explanatio
     "promptDescription": "Write as image-gen phrase: e.g. 'asymmetric rule-of-thirds composition, product in upper-left quadrant at 40% frame height, generous white space on right, text anchored to lower-third'"
   },
 
+  "layoutMap": {
+    "canvasAspectRatio": "2:3 portrait | 1:1 square | 3:2 landscape | 4:5 portrait",
+    "elements": [
+      {
+        "id": "unique-slug, e.g. headline, subtitle, hero-product, brand-logo, accent-prop",
+        "type": "text | product | decorative | logo | human-element | prop | accent",
+        "content": "Describe exactly what this element IS — e.g. 'Large bold white headline POT SOUP' or 'Female hand entering from top-right, sprinkling seeds'",
+        "zone": "top-left | top-center | top-right | center-left | center | center-right | bottom-left | bottom-center | bottom-right | full-width-top | full-width-bottom",
+        "bounds": {
+          "xStart": "% from left edge (0-100)",
+          "yStart": "% from top edge (0-100)",
+          "xEnd": "% from left edge (0-100)",
+          "yEnd": "% from top edge (0-100)"
+        },
+        "scale": "element fills approximately X% of frame height or width — be specific",
+        "zIndex": "layer order number (1=backmost, higher=front)",
+        "style": "visual style details — font, color, weight for text; angle, crop for images",
+        "relatedTo": "which other element(s) this relates to spatially — e.g. 'headline — directly below, same center axis' or 'hero-product — hand reaches over bowl from above'"
+      }
+    ],
+    "layerOrder": "describe front-to-back stacking — e.g. 'background color → product photo → text overlays → hand (topmost)'",
+    "elementCount": "total number of distinct visual elements",
+    "promptDescription": "Write the COMPLETE layout as a single image-gen paragraph. Describe every element's position, size, and spatial relationship. This must be detailed enough to reconstruct the exact poster layout without seeing the original. 100-200 words."
+  },
+
   "lightingDNA": {
     "pattern": "rembrandt | butterfly | split | loop | broad | short | flat | rim | backlit | natural-window | overhead | under-lit",
     "quality": "hard (sharp shadow edges) | soft (graduated shadows) | diffused (shadowless) | specular (hot spots)",
@@ -314,9 +339,60 @@ Expected level of detail (partial, for calibration):
     "shadowDescription": "graduated warm amber shadows falling to right, no neutral darks anywhere",
     "rimLight": "subtle warm rim on glass edges from café interior bounce",
     "promptDescription": "soft diffused natural window light from left at 90 degrees, 3000K daylight mixing with 2600K tungsten café ambient, 4:1 key-to-fill ratio, graduated warm amber shadows falling rightward, subtle rim from interior bounce"
+  },
+  "layoutMap": {
+    "canvasAspectRatio": "3:4 portrait",
+    "elements": [
+      {
+        "id": "headline",
+        "type": "text",
+        "content": "Mixed-case headline 'tasty MORNING joy' — three words stacked vertically",
+        "zone": "center-left",
+        "bounds": { "xStart": 5, "yStart": 25, "xEnd": 45, "yEnd": 60 },
+        "scale": "each word ~10% of frame height, total text block ~35% of frame height",
+        "zIndex": 3,
+        "style": "'tasty' in italic script #F5F0E6, 'MORNING' in bold condensed sans ALL-CAPS #F5F0E6, 'joy' in italic script #F5F0E6",
+        "relatedTo": "overlays the left edge of the countertop scene"
+      },
+      {
+        "id": "hero-sandwich",
+        "type": "product",
+        "content": "Egg sandwich cut in half showing runny yolk, stacked on parchment paper",
+        "zone": "center-right",
+        "bounds": { "xStart": 40, "yStart": 30, "xEnd": 85, "yEnd": 75 },
+        "scale": "fills ~45% of frame height",
+        "zIndex": 2,
+        "style": "shot from 30° above, slightly angled, warm yolk as color accent",
+        "relatedTo": "sits on countertop surface, cortado glass behind-right"
+      },
+      {
+        "id": "cortado-glass",
+        "type": "prop",
+        "content": "Small cortado glass with latte art, partially visible",
+        "zone": "center-right",
+        "bounds": { "xStart": 70, "yStart": 20, "xEnd": 90, "yEnd": 45 },
+        "scale": "~25% of frame height, secondary to sandwich",
+        "zIndex": 1,
+        "style": "slightly out of focus, warm glass edge highlights",
+        "relatedTo": "hero-sandwich — behind and to the right, depth layering"
+      },
+      {
+        "id": "brand-badge",
+        "type": "logo",
+        "content": "Small circular café logo or brand mark",
+        "zone": "bottom-left",
+        "bounds": { "xStart": 5, "yStart": 88, "xEnd": 18, "yEnd": 96 },
+        "scale": "~8% of frame height, subtle",
+        "zIndex": 3,
+        "style": "cream #F5F0E6, semi-transparent or knockout"
+      }
+    ],
+    "layerOrder": "dark café background → countertop surface → cortado glass → sandwich → text overlay → logo",
+    "elementCount": 4,
+    "promptDescription": "Portrait 3:4 poster. Dark warm café interior background (#1E1610). Center-right: egg sandwich hero at 45% frame height, shot from 30° above on parchment, runny yolk visible. Behind-right of sandwich: small cortado glass at 25% frame height, slightly soft focus. Center-left: vertically stacked three-word headline 'tasty MORNING joy' with mixed typography (script italic + bold condensed sans), cream colored, overlaying the scene edge. Bottom-left corner: small subtle brand logo. Visual flow is Z-pattern: headline pulls eye left, sandwich anchors center-right, glass provides depth, logo closes at bottom-left."
   }
 
-Notice: every value is a measurement, a ratio, a hex, or a Kelvin. Zero vague terms. This is the bar.`;
+Notice: every value is a measurement, a ratio, a hex, or a Kelvin. Zero vague terms. Every element has a position, size, and relationship. This is the bar.`;
 
   const userText = `Analyze this poster image with full forensic precision. Every field must be actionable for an AI image generator.
 
@@ -493,7 +569,7 @@ export const generatePosterPrompt = createHttpFunction(async (req, res) => {
   }
 
   // Client disconnect'te upstream API çağrılarını gerçekten iptal et (Level 2 cancel)
-  const signal = createAbortSignal(req);
+  const signal = createAbortSignal(req, res);
 
   // ═══ LOG SİSTEMİ ═══
   const logs: Array<{ ts: number; phase: string; level: string; message: string; data?: any }> = [];
@@ -629,25 +705,38 @@ export const generatePosterPrompt = createHttpFunction(async (req, res) => {
     ? `\n\nLEARNED CORRECTIONS:\n${Object.entries(style.learnedCorrections).map(([k, v]) => `- ${k}: ${v}`).join("\n")}`
     : "";
 
+  // styleDirective varsa tek blok, yoksa eski 6 alanı birleştir (backward compat)
+  const dirs = style.promptDirections || {};
+  const styleBlock = dirs.styleDirective
+    ? dirs.styleDirective
+    : [
+        dirs.background && `Background: ${dirs.background}`,
+        dirs.typography && `Typography: ${dirs.typography}`,
+        dirs.layout && `Layout: ${dirs.layout}${dirs.productPlacement ? ` | Product: ${dirs.productPlacement}` : ""}`,
+        dirs.colorPalette && `Color Palette: ${dirs.colorPalette}`,
+        dirs.lighting && `Lighting: ${dirs.lighting}`,
+        dirs.overallFeel && `Overall Feel: ${dirs.overallFeel}`,
+      ].filter(Boolean).join("\n");
+  const dallEBlock = dirs.dallEPrompt
+    ? `\nDALL-E TEMPLATE PROMPT (use as base when target is DALL-E):\n${dirs.dallEPrompt}`
+    : "";
+
   const systemPrompt = `You are an elite poster prompt engineer. You write optimized image generation prompts for different AI models.
 
 TARGET MODEL: ${targetModel.toUpperCase()}
 FORMAT INSTRUCTIONS: ${modelInstruction}
 
 DESIGN STYLE: ${style.name} — ${style.description}
-Background: ${style.promptDirections.background}
-Typography: ${style.promptDirections.typography}
-Layout: ${style.promptDirections.layout}
-Color Palette: ${style.promptDirections.colorPalette}
-Product Placement: ${style.promptDirections.productPlacement}
-Lighting: ${style.promptDirections.lighting}
-Overall Feel: ${style.promptDirections.overallFeel}
+${styleBlock}
+${dallEBlock}
 
 MOOD: ${mood.name}
-Color Shift: ${mood.promptModifiers.colorShift}
-Lighting: ${mood.promptModifiers.lightingAdjust}
-Texture: ${mood.promptModifiers.textureNote}
-Atmosphere: ${mood.promptModifiers.atmosphereNote}
+Product Clarity: ${mood.promptModifiers.productClarity}
+Background: ${mood.promptModifiers.background}
+Surroundings: ${mood.promptModifiers.surroundings}
+Lighting: ${mood.promptModifiers.lighting}
+Color Palette: ${mood.promptModifiers.colorPalette}
+Composition: ${mood.promptModifiers.compositionStyle}
 
 ASPECT RATIO: ${aspectRatio.promptInstruction}
 ${typography ? `\nTITLE TYPOGRAPHY: ${typography.promptInstruction}` : ""}
