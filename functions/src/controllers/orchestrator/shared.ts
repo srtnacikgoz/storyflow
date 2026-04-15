@@ -88,15 +88,6 @@ export function createHttpFunction(
       try {
         await handler(req, res);
       } catch (error) {
-        // DEBUG: abort teşhisi için her zaman error detayını yaz
-        const err = error as { name?: string; message?: string; constructor?: { name?: string } };
-        console.log("[v2 Handler DEBUG]", {
-          isAbort: isAbortError(error),
-          errorName: err?.name,
-          errorMessage: err?.message,
-          errorConstructor: err?.constructor?.name,
-          headersSent: res.headersSent,
-        });
         // Client abort edildiyse sessizce çık — zaten kimse dinlemiyor,
         // 500 cevabı yazmaya çalışmak "cannot set headers after sent" hatası verebilir.
         if (isAbortError(error)) {

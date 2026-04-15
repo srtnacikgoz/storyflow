@@ -738,24 +738,12 @@ PROMPT:
       kullanıcıMesajı: userText,
     });
 
-    let claudeResult;
-    try {
-      claudeResult = await anthropic.messages.create({
-        model: promptModel,
-        max_tokens: 1500,
-        system: systemPrompt,
-        messages: [{ role: "user", content: messageContent }],
-      }, { signal });
-    } catch (claudeErr: any) {
-      log("CLAUDE", "Anthropic SDK hatası", {
-        errorName: claudeErr?.name,
-        errorMessage: claudeErr?.message,
-        errorConstructor: claudeErr?.constructor?.name,
-        signalAborted: signal.aborted,
-        signalReason: (signal as any)?.reason?.message,
-      }, "error");
-      throw claudeErr;
-    }
+    const claudeResult = await anthropic.messages.create({
+      model: promptModel,
+      max_tokens: 1500,
+      system: systemPrompt,
+      messages: [{ role: "user", content: messageContent }],
+    }, { signal });
 
     fullResponse = claudeResult.content
       .filter((b): b is { type: "text"; text: string } => b.type === "text")
