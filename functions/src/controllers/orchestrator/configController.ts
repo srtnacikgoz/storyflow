@@ -31,6 +31,8 @@ import {
   clearPromptStudioCache,
   getProductSlotDefaults,
   updateProductSlotDefaults,
+  getLandingHeroConfig as fetchLandingHeroConfig,
+  updateLandingHeroConfig as updateLandingHeroConfigService,
 } from "../../services/configService";
 import { DEFAULT_DIVERSITY_RULES, DEFAULT_WEEKLY_THEMES_CONFIG } from "../../orchestrator/seed/defaultData";
 
@@ -1212,5 +1214,37 @@ export const updateProductSlotDefaultsEndpoint = createHttpFunction(async (reque
   response.json({
     success: true,
     message: "Product slot defaults updated",
+  });
+});
+
+// ==========================================
+// LANDING HERO CONFIG ENDPOINTS
+// ==========================================
+
+/**
+ * Landing page hero görsel config'ini getir
+ * GET /getLandingHeroConfig
+ */
+export const getLandingHeroConfigEndpoint = createHttpFunction(async (_request, response) => {
+  const config = await fetchLandingHeroConfig();
+
+  response.json({
+    success: true,
+    data: config,
+  });
+});
+
+/**
+ * Landing page hero görsel config'ini güncelle
+ * POST /updateLandingHeroConfig
+ */
+export const updateLandingHeroConfigEndpoint = createHttpFunction(async (request, response) => {
+  const { collageSlots, resultImage } = request.body;
+
+  await updateLandingHeroConfigService({ collageSlots, resultImage });
+
+  response.json({
+    success: true,
+    message: "Landing hero config updated",
   });
 });

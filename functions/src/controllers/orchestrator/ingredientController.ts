@@ -18,6 +18,7 @@
 import { createHttpFunction, db } from "./shared";
 import { getConfig } from "../../config/environment";
 import { getSystemSettings } from "../../services/configService";
+import { getModelById } from "../../services/config/modelRegistry";
 import type {
   IngredientStyleProfile,
   IngredientItem,
@@ -98,8 +99,17 @@ export const generateIngredientPrompt = createHttpFunction(async (req, res) => {
   }
 
   const systemSettings = await getSystemSettings();
-  // Metin üretimi için Flash modeli yeterli — görsel üretmiyoruz
-  const textModel = (systemSettings.promptOptimizerModel || "gemini-2.0-flash") as string;
+  const configuredModel = (systemSettings.promptOptimizerModel || "gemini-2.0-flash") as string;
+
+  // Bu endpoint sadece Gemini SDK kullanıyor — Claude/OpenAI model gelirse fallback yap
+  const GEMINI_FALLBACK = "gemini-2.0-flash";
+  let textModel = GEMINI_FALLBACK;
+  const modelEntry = await getModelById(configuredModel);
+  if (modelEntry && modelEntry.provider === "google") {
+    textModel = configuredModel;
+  } else {
+    console.log(`[IngredientPrompt] ${configuredModel} Gemini modeli değil (provider: ${modelEntry?.provider || "bilinmiyor"}), fallback: ${GEMINI_FALLBACK}`);
+  }
 
   // Gemini SDK
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
@@ -172,7 +182,7 @@ Professional food photography, high detail, shallow depth of field, 8K resolutio
       styleProfileName: profile.name,
       generatedPrompt: fullPrompt,
       sceneDetail,
-      referenceImageUrl: profile.referenceImageUrl,
+      referenceImageUrl: profile.referenceImageUrl || null,
       cost,
       model: textModel,
       createdAt: Date.now(),
@@ -324,7 +334,7 @@ export const createIngredientProfile = createHttpFunction(async (req, res) => {
     colorPalette: data.colorPalette || "",
     atmosphere: data.atmosphere || "",
     framing: data.framing || "",
-    referenceImageUrl: data.referenceImageUrl || undefined,
+    referenceImageUrl: data.referenceImageUrl || null,
     isActive: data.isActive ?? true,
     createdAt: now,
     updatedAt: now,

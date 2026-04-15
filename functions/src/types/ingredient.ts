@@ -15,7 +15,7 @@ export interface IngredientStyleProfile {
   colorPalette: string;        // "Pastel, sıcak tonlar"
   atmosphere: string;          // "Minimal, temiz, profesyonel"
   framing: string;             // "Yakın çekim, nefes payı"
-  referenceImageUrl?: string;  // Beğenilen DALL-E çıktısı referansı
+  referenceImageUrl?: string | null;  // Beğenilen DALL-E çıktısı referansı
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -43,7 +43,7 @@ export interface IngredientPromptHistory {
   styleProfileName: string;    // Denormalize
   generatedPrompt: string;     // Birleştirilmiş DALL-E prompt'u
   sceneDetail: string;         // Gemini'nin yazdığı sahne kısmı
-  referenceImageUrl?: string;
+  referenceImageUrl?: string | null;
   cost: number;                // Gemini API maliyeti
   model: string;               // Kullanılan Gemini modeli
   createdAt: number;

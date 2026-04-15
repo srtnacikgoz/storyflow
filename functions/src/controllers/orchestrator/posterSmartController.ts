@@ -569,7 +569,7 @@ export const generatePosterPrompt = createHttpFunction(async (req, res) => {
   }
 
   // Client disconnect'te upstream API çağrılarını gerçekten iptal et (Level 2 cancel)
-  const signal = createAbortSignal(req, res);
+  const signal = createAbortSignal(req);
 
   // ═══ LOG SİSTEMİ ═══
   const logs: Array<{ ts: number; phase: string; level: string; message: string; data?: any }> = [];

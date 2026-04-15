@@ -98,8 +98,9 @@ export {
   // Product Slot Defaults
   getProductSlotDefaultsEndpoint,
   updateProductSlotDefaultsEndpoint,
-  // Hand Styles — configController'dan taşındı, standalone endpoint olarak kaldı
-  // getLandingHeroConfig — configController'dan taşındı, standalone endpoint olarak kaldı
+  // Landing Hero Config
+  getLandingHeroConfigEndpoint,
+  updateLandingHeroConfigEndpoint,
   // Prompt Studio
   getPromptStudioConfig,
   getPromptTemplateById,

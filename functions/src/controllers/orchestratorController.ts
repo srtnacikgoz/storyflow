@@ -93,6 +93,8 @@ export {
   updateAssetSelectionConfigEndpoint,
   getProductSlotDefaultsEndpoint,
   updateProductSlotDefaultsEndpoint,
+  getLandingHeroConfigEndpoint as getLandingHeroConfig,
+  updateLandingHeroConfigEndpoint as updateLandingHeroConfig,
 
   // Feedback Controller
   createFeedback,
