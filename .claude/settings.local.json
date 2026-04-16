@@ -109,7 +109,9 @@
       "Bash(FUNCTIONS_DISCOVERY_TIMEOUT=120000 firebase deploy --only functions:generatePoster)",
       "WebFetch(domain:apps.apple.com)",
       "Bash([ -f \"$WT1/functions/src/controllers/orchestrator/$f\" ])",
-      "Bash(cp /Users/sertanacikgoz/Desktop/InstagramPaylaşımOtomosyonu/.claude/worktrees/agent-ad0d2a3f/functions/src/controllers/orchestrator/__TRACKED_VAR__ /Users/sertanacikgoz/Desktop/InstagramPaylaşımOtomosyonu/functions/src/controllers/orchestrator/__TRACKED_VAR__)"
+      "Bash(cp /Users/sertanacikgoz/Desktop/InstagramPaylaşımOtomosyonu/.claude/worktrees/agent-ad0d2a3f/functions/src/controllers/orchestrator/__TRACKED_VAR__ /Users/sertanacikgoz/Desktop/InstagramPaylaşımOtomosyonu/functions/src/controllers/orchestrator/__TRACKED_VAR__)",
+      "Bash(claude plugins:*)",
+      "Bash(/Users/sertanacikgoz/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh --project-dir /Users/sertanacikgoz/Desktop/InstagramPaylaşımOtomosyonu)"
     ]
   },
   "hooks": {}

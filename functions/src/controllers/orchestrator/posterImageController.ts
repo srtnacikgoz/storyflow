@@ -23,7 +23,7 @@ export const generatePosterImage = createHttpFunction(async (req, res) => {
   }
 
   // Client disconnect'te Gemini çağrısını gerçekten iptal et (Level 2 cancel)
-  const signal = createAbortSignal(req);
+  const signal = createAbortSignal(req, res);
 
   const {
     prompt,

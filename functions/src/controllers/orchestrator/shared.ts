@@ -43,9 +43,11 @@ export { functions };
  *   await fetch(url, { ..., signal });
  *   await geminiModel.generateContent(parts, { signal });
  */
-export function createAbortSignal(req: Request): AbortSignal {
+export function createAbortSignal(req: Request, res?: import("express").Response): AbortSignal {
   const controller = new AbortController();
-  req.on("close", () => {
+  // res.on("close") kullan — req.on("close") Cloud Run'da false positive tetikliyor
+  const target = res || req;
+  target.on("close", () => {
     if (!controller.signal.aborted) {
       controller.abort(new Error("Client disconnected"));
     }
