@@ -51,7 +51,10 @@ const GRID_TEMPLATES = [
   { key: "2x1", label: "2×1", cols: 2, rows: 1, count: 2, desc: "Öne çıkan ikili" },
   { key: "2x2", label: "2×2", cols: 2, rows: 2, count: 4, desc: "Küçük koleksiyon" },
   { key: "3x2", label: "3×2", cols: 3, rows: 2, count: 6, desc: "Orta koleksiyon" },
+  { key: "3x3", label: "3×3", cols: 3, rows: 3, count: 9, desc: "Kare koleksiyon" },
   { key: "4x2", label: "4×2", cols: 4, rows: 2, count: 8, desc: "Tam katalog sayfası" },
+  { key: "4x3", label: "4×3", cols: 4, rows: 3, count: 12, desc: "Büyük koleksiyon" },
+  { key: "4x4", label: "4×4", cols: 4, rows: 4, count: 16, desc: "Geniş koleksiyon" },
 ] as const;
 
 type GridKey = (typeof GRID_TEMPLATES)[number]["key"];
@@ -103,6 +106,8 @@ export default function CikolataPoster() {
   );
   const [gridTitle, setGridTitle] = useState("Individual Chocolates");
   const [gridSubtitle, setGridSubtitle] = useState("Chocolats Individuelle");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Ortak
   const [styleKey, setStyleKey] = useState<StyleKey>("klasik-koyu");
@@ -140,24 +145,50 @@ export default function CikolataPoster() {
     setGridItems((prev) => prev.map((item, i) => (i === index ? { ...item, imageBase64: base64 } : item)));
   }, []);
 
-  // Export
+  // Export — geçici olarak preview'ı gerçek export boyutuna büyüt
   const handleDownload = useCallback(async () => {
-    if (!previewRef.current) return;
+    const el = previewRef.current;
+    if (!el) return;
     setDownloading(true);
     const formats = mode === "single" ? SINGLE_FORMATS : GRID_FORMATS;
     const formatKey = mode === "single" ? singleFormat : gridFormat;
     const fmt = formats.find((f) => f.key === formatKey)!;
+
+    // Mevcut boyutu kaydet
+    const originalWidth = el.offsetWidth;
+    const scale = fmt.width / originalWidth;
+
+    // Orijinal elementi geçici olarak export boyutuna genişlet
+    const parent = el.parentElement;
+    const origEl = {
+      width: el.style.width,
+      height: el.style.height,
+      fontSize: el.style.fontSize,
+    };
+    const origParent = parent ? parent.style.overflow : "";
+
+    // Parent taşmayı engellemesin
+    if (parent) parent.style.overflow = "visible";
+    el.style.width = fmt.width + "px";
+    el.style.height = fmt.height + "px";
+    el.style.fontSize = (16 * scale) + "px";
+
     try {
-      const dataUrl = await toPng(previewRef.current, {
+      const dataUrl = await toPng(el, {
         width: fmt.width,
         height: fmt.height,
-        pixelRatio: 2,
+        pixelRatio: 1,
       });
       const link = document.createElement("a");
       link.href = dataUrl;
       link.download = `cikolata-${mode}-${formatKey}.png`;
       link.click();
     } finally {
+      // Geri al
+      el.style.width = origEl.width;
+      el.style.height = origEl.height;
+      el.style.fontSize = origEl.fontSize;
+      if (parent) parent.style.overflow = origParent;
       setDownloading(false);
     }
   }, [mode, singleFormat, gridFormat]);
@@ -330,11 +361,42 @@ export default function CikolataPoster() {
                   />
                 </div>
               </div>
-              {/* Ürün listesi */}
+              {/* Ürün listesi — sürükle-bırak ile sıralama */}
               <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                 {gridItems.map((item, idx) => (
-                  <div key={item.id} className="p-3 border border-gray-200 rounded-lg bg-gray-50">
-                    <p className="text-xs font-medium text-gray-500 mb-2">Ürün {idx + 1}</p>
+                  <div
+                    key={item.id}
+                    draggable
+                    onDragStart={() => setDragIndex(idx)}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverIndex(idx); }}
+                    onDragLeave={() => setDragOverIndex(null)}
+                    onDrop={() => {
+                      if (dragIndex === null || dragIndex === idx) return;
+                      setGridItems((prev) => {
+                        const arr = [...prev];
+                        const [moved] = arr.splice(dragIndex, 1);
+                        arr.splice(idx, 0, moved);
+                        return arr;
+                      });
+                      setDragIndex(null);
+                      setDragOverIndex(null);
+                    }}
+                    onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                    className={`p-3 border rounded-lg transition-colors cursor-grab active:cursor-grabbing ${
+                      dragOverIndex === idx ? "border-amber-400 bg-amber-50" :
+                      dragIndex === idx ? "opacity-50 border-gray-300 bg-gray-100" :
+                      "border-gray-200 bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      {/* Drag handle */}
+                      <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                        <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                        <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+                      </svg>
+                      <p className="text-xs font-medium text-gray-500">Ürün {idx + 1}</p>
+                    </div>
                     <div className="flex gap-3">
                       {/* Mini fotoğraf */}
                       <div className="w-16 h-16 flex-shrink-0 border border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
